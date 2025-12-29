@@ -30,11 +30,16 @@ class CustomerAdmin(admin.ModelAdmin):
 
 @admin.register(Process)
 class ProcessAdmin(admin.ModelAdmin):
-    list_display = ['code', 'name', 'standard_duration', 'sort_order', 'is_active', 'created_at']
+    list_display = ['code', 'name', 'category_display', 'standard_duration', 'sort_order', 'is_active', 'created_at']
     search_fields = ['code', 'name']
-    list_filter = ['is_active', 'created_at']
+    list_filter = ['category', 'is_active', 'created_at']
     list_editable = ['sort_order', 'is_active']
     ordering = ['sort_order', 'code']
+    
+    def category_display(self, obj):
+        """工序类别显示"""
+        return obj.get_category_display()
+    category_display.short_description = '工序类别'
 
 
 @admin.register(Product)
@@ -44,6 +49,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ['is_active', 'unit', 'paper_type', 'created_at']
     list_editable = ['unit_price', 'is_active']
     ordering = ['code']
+    filter_horizontal = ['default_processes']
     
     fieldsets = (
         ('基本信息', {
@@ -53,9 +59,9 @@ class ProductAdmin(admin.ModelAdmin):
             'fields': ('paper_type', 'paper_weight', 'paper_brand', 'board_thickness'),
             'description': '创建施工单时将自动带入这些默认值'
         }),
-        ('默认工艺信息', {
-            'fields': ('printing_method', 'surface_treatment', 'post_processing'),
-            'description': '创建施工单时将自动带入这些默认值'
+        ('默认工序', {
+            'fields': ('default_processes',),
+            'description': '创建施工单时将自动添加这些工序'
         }),
         ('其他', {
             'fields': ('description', 'is_active')
@@ -129,13 +135,6 @@ class WorkOrderAdmin(admin.ModelAdmin):
             'fields': (
                 'paper_type', 'paper_weight', 'paper_brand',
                 'board_thickness', 'material_notes'
-            ),
-            'classes': ('collapse',)
-        }),
-        ('工艺明细', {
-            'fields': (
-                'printing_method', 'surface_treatment', 
-                'post_processing', 'process_notes'
             ),
             'classes': ('collapse',)
         }),

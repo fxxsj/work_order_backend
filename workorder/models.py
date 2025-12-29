@@ -27,8 +27,19 @@ class Customer(models.Model):
 
 class Process(models.Model):
     """工序定义"""
+    CATEGORY_CHOICES = [
+        ('prepress', '印前'),
+        ('printing', '印刷'),
+        ('surface', '表面处理'),
+        ('postpress', '后道加工'),
+        ('laminating', '复合/裱合'),
+        ('forming', '成型/包装'),
+        ('other', '其他'),
+    ]
+    
     name = models.CharField('工序名称', max_length=100)
     code = models.CharField('工序编码', max_length=50, unique=True)
+    category = models.CharField('工序类别', max_length=20, choices=CATEGORY_CHOICES, default='other')
     description = models.TextField('工序描述', blank=True)
     standard_duration = models.IntegerField('标准工时(小时)', default=0)
     sort_order = models.IntegerField('排序', default=0)
@@ -58,10 +69,9 @@ class Product(models.Model):
     paper_brand = models.CharField('默认纸张品牌', max_length=100, blank=True)
     board_thickness = models.CharField('默认板材厚度', max_length=50, blank=True)
     
-    # 默认工艺信息
-    printing_method = models.CharField('默认印刷方式/色数', max_length=100, blank=True)
-    surface_treatment = models.CharField('默认表面处理', max_length=100, blank=True)
-    post_processing = models.CharField('默认后道工艺', max_length=200, blank=True)
+    # 默认工序（多对多关系）
+    default_processes = models.ManyToManyField('Process', blank=True, verbose_name='默认工序',
+                                               help_text='创建施工单时将自动添加这些工序')
     
     description = models.TextField('产品描述', blank=True)
     is_active = models.BooleanField('是否启用', default=True)
@@ -128,15 +138,6 @@ class WorkOrder(models.Model):
     paper_brand = models.CharField('纸张品牌', max_length=100, blank=True, help_text='如：金东、晨鸣等')
     board_thickness = models.CharField('板材厚度', max_length=50, blank=True, help_text='如：3mm、5mm等')
     material_notes = models.TextField('主材备注', blank=True, help_text='其他主材信息说明')
-    
-    # 工艺明细
-    printing_method = models.CharField('印刷方式/色数', max_length=100, blank=True, 
-                                      help_text='如：单面四色、双面四色、单色印刷等')
-    surface_treatment = models.CharField('表面处理', max_length=100, blank=True,
-                                        help_text='如：UV、覆亮膜、覆哑膜、过油等')
-    post_processing = models.CharField('后道工艺', max_length=200, blank=True,
-                                      help_text='如：烫金、烫银、模切、压痕、打孔等')
-    process_notes = models.TextField('工艺备注', blank=True, help_text='其他工艺要求说明')
     
     status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='pending')
     priority = models.CharField('优先级', max_length=20, choices=PRIORITY_CHOICES, default='normal')

@@ -22,6 +22,8 @@ class CustomerSerializer(serializers.ModelSerializer):
 
 class ProcessSerializer(serializers.ModelSerializer):
     """工序序列化器"""
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+    
     class Meta:
         model = Process
         fields = '__all__'
@@ -131,8 +133,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'specification', 'quantity', 'unit', 'status', 'priority',
             'order_date', 'delivery_date', 'actual_delivery_date',
             'total_amount', 'design_file', 'notes',
-            'paper_type', 'paper_weight', 'paper_brand', 'board_thickness', 'material_notes',
-            'printing_method', 'surface_treatment', 'post_processing', 'process_notes'
+            'paper_type', 'paper_weight', 'paper_brand', 'board_thickness', 'material_notes'
         ]
         read_only_fields = ['order_number']
     
@@ -154,14 +155,6 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                 data['paper_brand'] = product.paper_brand
             if not data.get('board_thickness') and product.board_thickness:
                 data['board_thickness'] = product.board_thickness
-            
-            # 自动填充工艺信息（如果产品有默认值且用户未提供）
-            if not data.get('printing_method') and product.printing_method:
-                data['printing_method'] = product.printing_method
-            if not data.get('surface_treatment') and product.surface_treatment:
-                data['surface_treatment'] = product.surface_treatment
-            if not data.get('post_processing') and product.post_processing:
-                data['post_processing'] = product.post_processing
             
             # 如果没有提供总价，根据产品单价和数量计算
             if 'total_amount' not in data or data['total_amount'] == 0:
