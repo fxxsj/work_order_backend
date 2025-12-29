@@ -31,8 +31,9 @@ class ProcessCategoryViewSet(viewsets.ModelViewSet):
     """工序分类视图集"""
     queryset = ProcessCategory.objects.all()
     serializer_class = ProcessCategorySerializer
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['is_active']
+    search_fields = ['name', 'code']
     ordering_fields = ['sort_order', 'code']
     ordering = ['sort_order', 'code']
 
