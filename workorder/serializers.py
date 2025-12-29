@@ -123,17 +123,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'order_date', 'delivery_date', 'actual_delivery_date',
             'total_amount', 'design_file', 'manager', 'notes'
         ]
-        
-    def validate_order_number(self, value):
-        """验证施工单号唯一性"""
-        instance = self.instance
-        if instance is None:  # 创建
-            if WorkOrder.objects.filter(order_number=value).exists():
-                raise serializers.ValidationError('施工单号已存在')
-        else:  # 更新
-            if WorkOrder.objects.filter(order_number=value).exclude(id=instance.id).exists():
-                raise serializers.ValidationError('施工单号已存在')
-        return value
+        read_only_fields = ['order_number']
 
 
 class WorkOrderProcessUpdateSerializer(serializers.ModelSerializer):

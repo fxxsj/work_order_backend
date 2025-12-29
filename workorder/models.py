@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.db import transaction
+from datetime import datetime
 
 
 class Customer(models.Model):
@@ -79,7 +81,7 @@ class WorkOrder(models.Model):
         ('urgent', '紧急'),
     ]
 
-    order_number = models.CharField('施工单号', max_length=50, unique=True)
+    order_number = models.CharField('施工单号', max_length=50, unique=True, editable=False)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, verbose_name='客户')
     product_name = models.CharField('产品名称', max_length=200)
     specification = models.TextField('产品规格', blank=True)
@@ -124,6 +126,37 @@ class WorkOrder(models.Model):
             return 0
         completed_processes = self.order_processes.filter(status='completed').count()
         return int((completed_processes / total_processes) * 100)
+    
+    @classmethod
+    def generate_order_number(cls):
+        """生成施工单号：格式 yyyymm + 3位自增序号"""
+        now = datetime.now()
+        prefix = now.strftime('%Y%m')
+        
+        # 获取当月最大的单号
+        with transaction.atomic():
+            last_order = cls.objects.filter(
+                order_number__startswith=prefix
+            ).order_by('-order_number').select_for_update().first()
+            
+            if last_order:
+                # 提取序号部分并加1
+                last_number = int(last_order.order_number[6:])
+                new_number = last_number + 1
+            else:
+                # 当月第一单
+                new_number = 1
+            
+            # 生成新单号，序号部分补齐3位
+            order_number = f"{prefix}{new_number:03d}"
+            
+            return order_number
+    
+    def save(self, *args, **kwargs):
+        """保存时自动生成施工单号"""
+        if not self.order_number:
+            self.order_number = self.generate_order_number()
+        super().save(*args, **kwargs)
 
 
 class WorkOrderProcess(models.Model):
