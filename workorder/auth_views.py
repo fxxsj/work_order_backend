@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.views.decorators.csrf import ensure_csrf_cookie
+import re
 
 
 @api_view(['POST'])
@@ -83,6 +84,13 @@ def register_view(request):
     if not username or not password:
         return Response(
             {'error': '请提供用户名和密码'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # 验证用户名格式（允许中文、字母、数字、下划线、连字符）
+    if not re.match(r'^[\w\u4e00-\u9fa5-]+$', username):
+        return Response(
+            {'error': '用户名只能包含字母、数字、下划线、连字符和中文字符'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
