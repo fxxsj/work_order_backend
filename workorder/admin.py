@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.db.models import Count, Q
 from .models import (
-    Customer, ProcessCategory, Process, Product, Material, WorkOrder, 
+    Customer, ProcessCategory, Process, Product, ProductMaterial, Material, WorkOrder, 
     WorkOrderProcess, WorkOrderMaterial, ProcessLog
 )
 
@@ -47,6 +47,13 @@ class ProcessAdmin(admin.ModelAdmin):
     autocomplete_fields = ['category']
 
 
+class ProductMaterialInline(admin.TabularInline):
+    model = ProductMaterial
+    extra = 1
+    fields = ['material', 'material_size', 'material_usage', 'sort_order']
+    autocomplete_fields = ['material']
+
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = ['code', 'name', 'specification', 'unit', 'unit_price', 'is_active', 'created_at']
@@ -55,6 +62,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_editable = ['unit_price', 'is_active']
     ordering = ['code']
     filter_horizontal = ['default_processes']
+    inlines = [ProductMaterialInline]
     
     fieldsets = (
         ('基本信息', {

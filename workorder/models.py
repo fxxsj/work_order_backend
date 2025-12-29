@@ -97,6 +97,26 @@ class Product(models.Model):
         return f"{self.code} - {self.name}"
 
 
+class ProductMaterial(models.Model):
+    """产品默认物料配置"""
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, 
+                               related_name='default_materials', verbose_name='产品')
+    material = models.ForeignKey('Material', on_delete=models.PROTECT, verbose_name='物料')
+    material_size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：A4、210x297mm等')
+    material_usage = models.CharField('用量', max_length=100, blank=True, help_text='如：1000张、50平方米等')
+    sort_order = models.IntegerField('排序', default=0)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '产品默认物料'
+        verbose_name_plural = '产品默认物料管理'
+        ordering = ['product', 'sort_order']
+        unique_together = ['product', 'material']
+
+    def __str__(self):
+        return f"{self.product.name} - {self.material.name}"
+
+
 class Material(models.Model):
     """物料信息"""
     name = models.CharField('物料名称', max_length=200)
