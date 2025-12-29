@@ -1,0 +1,117 @@
+[
+  {
+    "model": "workorder.product",
+    "pk": 1,
+    "fields": {
+      "name": "宣传册",
+      "code": "PR001",
+      "specification": "A4 竖版 骑马订",
+      "unit": "本",
+      "unit_price": "15.00",
+      "paper_type": "铜版纸",
+      "paper_weight": "157g",
+      "paper_brand": "金东",
+      "board_thickness": "",
+      "description": "标准宣传册，适用于企业宣传",
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "workorder.product",
+    "pk": 2,
+    "fields": {
+      "name": "名片",
+      "code": "PR002",
+      "specification": "90mm×54mm",
+      "unit": "盒",
+      "unit_price": "25.00",
+      "paper_type": "铜版纸",
+      "paper_weight": "300g",
+      "paper_brand": "晨鸣",
+      "board_thickness": "",
+      "description": "标准名片尺寸，100张/盒",
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "workorder.product",
+    "pk": 3,
+    "fields": {
+      "name": "海报",
+      "code": "PR003",
+      "specification": "420mm×594mm (A2)",
+      "unit": "张",
+      "unit_price": "8.00",
+      "paper_type": "写真布",
+      "paper_weight": "",
+      "paper_brand": "",
+      "board_thickness": "",
+      "description": "室内海报，适用于展示宣传",
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "workorder.product",
+    "pk": 4,
+    "fields": {
+      "name": "画册",
+      "code": "PR004",
+      "specification": "210mm×285mm 精装",
+      "unit": "本",
+      "unit_price": "45.00",
+      "paper_type": "哑粉纸",
+      "paper_weight": "200g",
+      "paper_brand": "金东",
+      "board_thickness": "",
+      "description": "高端画册，封面覆哑膜，内页双面印刷",
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "workorder.product",
+    "pk": 5,
+    "fields": {
+      "name": "包装盒",
+      "code": "PR005",
+      "specification": "自定义尺寸",
+      "unit": "个",
+      "unit_price": "12.00",
+      "paper_type": "白卡纸",
+      "paper_weight": "350g",
+      "paper_brand": "晨鸣",
+      "board_thickness": "",
+      "description": "定制包装盒，可覆膜、烫金",
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "workorder.product",
+    "pk": 6,
+    "fields": {
+      "name": "展示牌",
+      "code": "PR006",
+      "specification": "300mm×400mm",
+      "unit": "块",
+      "unit_price": "35.00",
+      "paper_type": "",
+      "paper_weight": "",
+      "paper_brand": "",
+      "board_thickness": "5mm",
+      "description": "KT板展示牌，适用于展会、门店",
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  }
+]
+
