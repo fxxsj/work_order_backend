@@ -229,7 +229,7 @@ class ArtworkSerializer(serializers.ModelSerializer):
     class Meta:
         model = Artwork
         fields = '__all__'
-        read_only_fields = ['code']
+        # code 字段不在 read_only_fields 中，允许自定义输入
     
     def create(self, validated_data):
         """创建图稿，如果编码为空则自动生成，并创建关联产品"""
