@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from django.db.models import Count, Q
 from .models import (
     Customer, ProcessCategory, Process, Product, ProductMaterial, Material, WorkOrder, 
-    WorkOrderProcess, WorkOrderMaterial, ProcessLog
+    WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct
 )
 
 
@@ -363,4 +363,36 @@ class ProcessLogAdmin(admin.ModelAdmin):
             return obj.content[:50] + '...'
         return obj.content
     content_preview.short_description = '内容'
+
+
+class ArtworkProductInline(admin.TabularInline):
+    model = ArtworkProduct
+    extra = 1
+    fields = ['product', 'imposition_quantity', 'sort_order']
+    autocomplete_fields = ['product']
+
+
+@admin.register(Artwork)
+class ArtworkAdmin(admin.ModelAdmin):
+    list_display = ['code', 'name', 'color_count', 'imposition_size', 'created_at']
+    search_fields = ['code', 'name', 'imposition_size']
+    list_filter = ['color_count', 'created_at']
+    ordering = ['-created_at']
+    readonly_fields = ['code', 'created_at', 'updated_at']
+    inlines = [ArtworkProductInline]
+    
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('code', 'name', 'color_count', 'imposition_size')
+        }),
+        ('其他', {
+            'fields': ('notes', 'created_at', 'updated_at')
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        """保存时自动生成编码"""
+        if not obj.code:
+            obj.code = Artwork.generate_code()
+        super().save_model(request, obj, form, change)
 

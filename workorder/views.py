@@ -6,7 +6,7 @@ from django.db.models import Q, Count, Sum
 from django.utils import timezone
 from .models import (
     Customer, ProcessCategory, Process, Product, ProductMaterial, Material, WorkOrder,
-    WorkOrderProcess, WorkOrderMaterial, ProcessLog
+    WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct
 )
 from .serializers import (
     CustomerSerializer, ProcessCategorySerializer, ProcessSerializer, ProductSerializer, 
@@ -14,7 +14,8 @@ from .serializers import (
     WorkOrderListSerializer, WorkOrderDetailSerializer,
     WorkOrderCreateUpdateSerializer, WorkOrderProcessSerializer,
     WorkOrderMaterialSerializer, ProcessLogSerializer,
-    WorkOrderProcessUpdateSerializer
+    WorkOrderProcessUpdateSerializer,
+    ArtworkSerializer, ArtworkProductSerializer
 )
 
 
@@ -339,4 +340,29 @@ class ProcessLogViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['work_order_process', 'log_type', 'operator']
     ordering_fields = ['created_at']
     ordering = ['-created_at']
+
+
+class ArtworkViewSet(viewsets.ModelViewSet):
+    """图稿视图集"""
+    queryset = Artwork.objects.all()
+    serializer_class = ArtworkSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['color_count']
+    search_fields = ['code', 'name', 'imposition_size']
+    ordering_fields = ['created_at', 'code', 'name']
+    ordering = ['-created_at']
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return queryset.prefetch_related('products__product')
+
+
+class ArtworkProductViewSet(viewsets.ModelViewSet):
+    """图稿产品视图集"""
+    queryset = ArtworkProduct.objects.all()
+    serializer_class = ArtworkProductSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['artwork', 'product']
+    ordering_fields = ['sort_order']
+    ordering = ['artwork', 'sort_order']
 

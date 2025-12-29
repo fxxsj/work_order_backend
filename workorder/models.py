@@ -137,6 +137,72 @@ class Material(models.Model):
         return f"{self.code} - {self.name}"
 
 
+class Artwork(models.Model):
+    """图稿信息"""
+    code = models.CharField('图稿编码', max_length=50, unique=True, blank=True, editable=False)
+    name = models.CharField('图稿名称', max_length=200)
+    color_count = models.IntegerField('色数', default=4, help_text='如：1色、2色、4色等')
+    imposition_size = models.CharField('拼版尺寸', max_length=100, blank=True, help_text='如：420x594mm、889x1194mm等')
+    notes = models.TextField('备注', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '图稿'
+        verbose_name_plural = '图稿管理'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+    
+    @classmethod
+    def generate_code(cls):
+        """生成图稿编码：格式 ART + yyyymm + 3位自增序号"""
+        now = timezone.now()
+        prefix = f"ART{now.strftime('%Y%m')}"
+        
+        with transaction.atomic():
+            last_artwork = cls.objects.filter(
+                code__startswith=prefix
+            ).order_by('-code').select_for_update().first()
+            
+            if last_artwork and len(last_artwork.code) >= 12:
+                try:
+                    last_number = int(last_artwork.code[9:])  # ART + yyyymm = 9位
+                    new_number = last_number + 1
+                except (ValueError, IndexError):
+                    new_number = 1
+            else:
+                new_number = 1
+            
+            return f"{prefix}{new_number:03d}"
+    
+    def save(self, *args, **kwargs):
+        """保存时自动生成图稿编码"""
+        if not self.code:
+            self.code = self.generate_code()
+        super().save(*args, **kwargs)
+
+
+class ArtworkProduct(models.Model):
+    """图稿产品关联（包含拼版数量）"""
+    artwork = models.ForeignKey(Artwork, on_delete=models.CASCADE,
+                               related_name='products', verbose_name='图稿')
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, verbose_name='产品')
+    imposition_quantity = models.IntegerField('拼版数量', default=1, help_text='该产品在图稿中的拼版数量')
+    sort_order = models.IntegerField('排序', default=0)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '图稿产品'
+        verbose_name_plural = '图稿产品管理'
+        ordering = ['artwork', 'sort_order']
+        unique_together = ['artwork', 'product']
+
+    def __str__(self):
+        return f"{self.artwork.name} - {self.product.name} ({self.imposition_quantity}拼)"
+
+
 class WorkOrder(models.Model):
     """印刷施工单"""
     STATUS_CHOICES = [

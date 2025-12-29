@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
     Customer, ProcessCategory, Process, Product, ProductMaterial, Material, WorkOrder,
-    WorkOrderProcess, WorkOrderMaterial, ProcessLog
+    WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct
 )
 
 
@@ -203,4 +203,73 @@ class WorkOrderProcessUpdateSerializer(serializers.ModelSerializer):
             'id', 'status', 'operator', 'actual_start_time',
             'actual_end_time', 'quantity_completed', 'quantity_defective', 'notes'
         ]
+
+
+class ArtworkProductSerializer(serializers.ModelSerializer):
+    """图稿产品序列化器"""
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_code = serializers.CharField(source='product.code', read_only=True)
+    
+    class Meta:
+        model = ArtworkProduct
+        fields = '__all__'
+
+
+class ArtworkSerializer(serializers.ModelSerializer):
+    """图稿序列化器"""
+    products = ArtworkProductSerializer(source='products', many=True, read_only=True)
+    products_data = serializers.ListField(
+        child=serializers.DictField(),
+        write_only=True,
+        required=False,
+        help_text='产品列表数据，格式：[{"product": 1, "imposition_quantity": 2}]'
+    )
+    
+    class Meta:
+        model = Artwork
+        fields = '__all__'
+        read_only_fields = ['code']
+    
+    def create(self, validated_data):
+        """创建图稿，如果编码为空则自动生成，并创建关联产品"""
+        products_data = validated_data.pop('products_data', [])
+        
+        # 如果编码为空，自动生成
+        if not validated_data.get('code'):
+            validated_data['code'] = Artwork.generate_code()
+        
+        artwork = super().create(validated_data)
+        
+        # 创建关联产品
+        for idx, product_data in enumerate(products_data):
+            ArtworkProduct.objects.create(
+                artwork=artwork,
+                product_id=product_data.get('product'),
+                imposition_quantity=product_data.get('imposition_quantity', 1),
+                sort_order=idx
+            )
+        
+        return artwork
+    
+    def update(self, instance, validated_data):
+        """更新图稿，处理产品列表"""
+        products_data = validated_data.pop('products_data', None)
+        
+        artwork = super().update(instance, validated_data)
+        
+        # 如果提供了产品数据，更新产品列表
+        if products_data is not None:
+            # 删除现有产品关联
+            ArtworkProduct.objects.filter(artwork=artwork).delete()
+            
+            # 创建新的产品关联
+            for idx, product_data in enumerate(products_data):
+                ArtworkProduct.objects.create(
+                    artwork=artwork,
+                    product_id=product_data.get('product'),
+                    imposition_quantity=product_data.get('imposition_quantity', 1),
+                    sort_order=idx
+                )
+        
+        return artwork
 
