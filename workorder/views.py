@@ -66,7 +66,10 @@ class ProductViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         queryset = super().get_queryset()
-        return queryset.prefetch_related('default_materials__material', 'default_processes').select_related()
+        return queryset.prefetch_related(
+            'default_materials__material',
+            'default_processes'
+        )
 
 
 class ProductMaterialViewSet(viewsets.ModelViewSet):

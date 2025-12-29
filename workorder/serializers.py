@@ -55,7 +55,7 @@ class ProductMaterialSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     """产品序列化器"""
-    default_materials = ProductMaterialSerializer(source='default_materials', many=True, read_only=True)
+    default_materials = ProductMaterialSerializer(many=True, read_only=True)
     
     class Meta:
         model = Product
