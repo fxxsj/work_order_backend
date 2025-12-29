@@ -306,7 +306,3 @@ class ProcessLogAdmin(admin.ModelAdmin):
         return obj.content
     content_preview.short_description = '内容'
 
-
-# 自定义Admin首页统计
-admin.site.index_template = 'admin/custom_index.html'
-
