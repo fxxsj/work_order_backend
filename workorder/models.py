@@ -51,6 +51,13 @@ class Product(models.Model):
     specification = models.CharField('规格', max_length=200, blank=True)
     unit = models.CharField('单位', max_length=20, default='件')
     unit_price = models.DecimalField('单价', max_digits=10, decimal_places=2, default=0)
+    
+    # 默认主材信息
+    paper_type = models.CharField('默认纸张类型', max_length=100, blank=True)
+    paper_weight = models.CharField('默认纸张克数', max_length=50, blank=True)
+    paper_brand = models.CharField('默认纸张品牌', max_length=100, blank=True)
+    board_thickness = models.CharField('默认板材厚度', max_length=50, blank=True)
+    
     description = models.TextField('产品描述', blank=True)
     is_active = models.BooleanField('是否启用', default=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
@@ -109,6 +116,13 @@ class WorkOrder(models.Model):
     specification = models.TextField('产品规格', blank=True)
     quantity = models.IntegerField('数量', default=1)
     unit = models.CharField('单位', max_length=20, default='件')
+    
+    # 主材信息
+    paper_type = models.CharField('纸张类型', max_length=100, blank=True, help_text='如：铜版纸、哑粉纸、白卡纸等')
+    paper_weight = models.CharField('纸张克数', max_length=50, blank=True, help_text='如：157g、200g、250g等')
+    paper_brand = models.CharField('纸张品牌', max_length=100, blank=True, help_text='如：金东、晨鸣等')
+    board_thickness = models.CharField('板材厚度', max_length=50, blank=True, help_text='如：3mm、5mm等')
+    material_notes = models.TextField('主材备注', blank=True, help_text='其他主材信息说明')
     
     status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='pending')
     priority = models.CharField('优先级', max_length=20, choices=PRIORITY_CHOICES, default='normal')
