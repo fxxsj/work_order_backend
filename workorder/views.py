@@ -6,7 +6,8 @@ from django.db.models import Q, Count, Sum
 from django.utils import timezone
 from .models import (
     Customer, ProcessCategory, Process, Product, ProductMaterial, Material, WorkOrder,
-    WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct
+    WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct,
+    Die, DieProduct
 )
 from .serializers import (
     CustomerSerializer, ProcessCategorySerializer, ProcessSerializer, ProductSerializer, 
@@ -15,7 +16,8 @@ from .serializers import (
     WorkOrderCreateUpdateSerializer, WorkOrderProcessSerializer,
     WorkOrderMaterialSerializer, ProcessLogSerializer,
     WorkOrderProcessUpdateSerializer,
-    ArtworkSerializer, ArtworkProductSerializer
+    ArtworkSerializer, ArtworkProductSerializer,
+    DieSerializer, DieProductSerializer
 )
 
 
@@ -365,4 +367,29 @@ class ArtworkProductViewSet(viewsets.ModelViewSet):
     filterset_fields = ['artwork', 'product']
     ordering_fields = ['sort_order']
     ordering = ['artwork', 'sort_order']
+
+
+class DieViewSet(viewsets.ModelViewSet):
+    """刀模视图集"""
+    queryset = Die.objects.all()
+    serializer_class = DieSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = []
+    search_fields = ['code', 'name', 'size', 'material']
+    ordering_fields = ['created_at', 'code', 'name']
+    ordering = ['-created_at']
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return queryset.prefetch_related('products__product')
+
+
+class DieProductViewSet(viewsets.ModelViewSet):
+    """刀模产品视图集"""
+    queryset = DieProduct.objects.all()
+    serializer_class = DieProductSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['die', 'product']
+    ordering_fields = ['sort_order']
+    ordering = ['die', 'sort_order']
 

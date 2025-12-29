@@ -203,6 +203,73 @@ class ArtworkProduct(models.Model):
         return f"{self.artwork.name} - {self.product.name} ({self.imposition_quantity}拼)"
 
 
+class Die(models.Model):
+    """刀模信息"""
+    code = models.CharField('刀模编码', max_length=50, unique=True, blank=True, editable=False)
+    name = models.CharField('刀模名称', max_length=200)
+    size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：420x594mm、889x1194mm等')
+    material = models.CharField('材质', max_length=100, blank=True, help_text='如：木板、胶板等')
+    thickness = models.CharField('厚度', max_length=50, blank=True, help_text='如：3mm、5mm等')
+    notes = models.TextField('备注', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '刀模'
+        verbose_name_plural = '刀模管理'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+    
+    @classmethod
+    def generate_code(cls):
+        """生成刀模编码：格式 DIE + yyyymm + 3位自增序号"""
+        now = timezone.now()
+        prefix = f"DIE{now.strftime('%Y%m')}"
+        
+        with transaction.atomic():
+            last_die = cls.objects.filter(
+                code__startswith=prefix
+            ).order_by('-code').select_for_update().first()
+            
+            if last_die and len(last_die.code) >= 12:
+                try:
+                    last_number = int(last_die.code[9:])  # DIE + yyyymm = 9位
+                    new_number = last_number + 1
+                except (ValueError, IndexError):
+                    new_number = 1
+            else:
+                new_number = 1
+            
+            return f"{prefix}{new_number:03d}"
+    
+    def save(self, *args, **kwargs):
+        """保存时自动生成刀模编码"""
+        if not self.code:
+            self.code = self.generate_code()
+        super().save(*args, **kwargs)
+
+
+class DieProduct(models.Model):
+    """刀模产品关联"""
+    die = models.ForeignKey(Die, on_delete=models.CASCADE,
+                           related_name='products', verbose_name='刀模')
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, verbose_name='产品')
+    quantity = models.IntegerField('数量', default=1, help_text='该产品在刀模中的数量')
+    sort_order = models.IntegerField('排序', default=0)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '刀模产品'
+        verbose_name_plural = '刀模产品管理'
+        ordering = ['die', 'sort_order']
+        unique_together = ['die', 'product']
+
+    def __str__(self):
+        return f"{self.die.name} - {self.product.name} ({self.quantity}个)"
+
+
 class WorkOrder(models.Model):
     """印刷施工单"""
     STATUS_CHOICES = [

@@ -3,7 +3,8 @@ from django.utils.html import format_html
 from django.db.models import Count, Q
 from .models import (
     Customer, ProcessCategory, Process, Product, ProductMaterial, Material, WorkOrder, 
-    WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct
+    WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct,
+    Die, DieProduct
 )
 
 
@@ -394,5 +395,37 @@ class ArtworkAdmin(admin.ModelAdmin):
         """保存时自动生成编码"""
         if not obj.code:
             obj.code = Artwork.generate_code()
+        super().save_model(request, obj, form, change)
+
+
+class DieProductInline(admin.TabularInline):
+    model = DieProduct
+    extra = 1
+    fields = ['product', 'quantity', 'sort_order']
+    autocomplete_fields = ['product']
+
+
+@admin.register(Die)
+class DieAdmin(admin.ModelAdmin):
+    list_display = ['code', 'name', 'size', 'material', 'thickness', 'created_at']
+    search_fields = ['code', 'name', 'size', 'material']
+    list_filter = ['material', 'created_at']
+    ordering = ['-created_at']
+    readonly_fields = ['code', 'created_at', 'updated_at']
+    inlines = [DieProductInline]
+    
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('code', 'name', 'size', 'material', 'thickness')
+        }),
+        ('其他', {
+            'fields': ('notes', 'created_at', 'updated_at')
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        """保存时自动生成编码"""
+        if not obj.code:
+            obj.code = Die.generate_code()
         super().save_model(request, obj, form, change)
 

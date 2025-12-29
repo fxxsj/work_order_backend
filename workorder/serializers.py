@@ -2,7 +2,8 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
     Customer, ProcessCategory, Process, Product, ProductMaterial, Material, WorkOrder,
-    WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct
+    WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct,
+    Die, DieProduct
 )
 
 
@@ -272,4 +273,79 @@ class ArtworkSerializer(serializers.ModelSerializer):
                 )
         
         return artwork
+
+
+class DieProductSerializer(serializers.ModelSerializer):
+    """刀模产品序列化器"""
+    product_name = serializers.SerializerMethodField()
+    product_code = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = DieProduct
+        fields = '__all__'
+    
+    def get_product_name(self, obj):
+        return obj.product.name if obj.product else None
+    
+    def get_product_code(self, obj):
+        return obj.product.code if obj.product else None
+
+
+class DieSerializer(serializers.ModelSerializer):
+    """刀模序列化器"""
+    products = DieProductSerializer(many=True, read_only=True)
+    products_data = serializers.ListField(
+        child=serializers.DictField(),
+        write_only=True,
+        required=False,
+        help_text='产品列表数据，格式：[{"product": 1, "quantity": 2}]'
+    )
+    
+    class Meta:
+        model = Die
+        fields = '__all__'
+        read_only_fields = ['code']
+    
+    def create(self, validated_data):
+        """创建刀模，如果编码为空则自动生成，并创建关联产品"""
+        products_data = validated_data.pop('products_data', [])
+        
+        # 如果编码为空，自动生成
+        if not validated_data.get('code'):
+            validated_data['code'] = Die.generate_code()
+        
+        die = super().create(validated_data)
+        
+        # 创建关联产品
+        for idx, product_data in enumerate(products_data):
+            DieProduct.objects.create(
+                die=die,
+                product_id=product_data.get('product'),
+                quantity=product_data.get('quantity', 1),
+                sort_order=idx
+            )
+        
+        return die
+    
+    def update(self, instance, validated_data):
+        """更新刀模，处理产品列表"""
+        products_data = validated_data.pop('products_data', None)
+        
+        die = super().update(instance, validated_data)
+        
+        # 如果提供了产品数据，更新产品列表
+        if products_data is not None:
+            # 删除现有产品关联
+            DieProduct.objects.filter(die=die).delete()
+            
+            # 创建新的产品关联
+            for idx, product_data in enumerate(products_data):
+                DieProduct.objects.create(
+                    die=die,
+                    product_id=product_data.get('product'),
+                    quantity=product_data.get('quantity', 1),
+                    sort_order=idx
+                )
+        
+        return die
 
