@@ -217,7 +217,7 @@ class ArtworkProductSerializer(serializers.ModelSerializer):
 
 class ArtworkSerializer(serializers.ModelSerializer):
     """图稿序列化器"""
-    products = ArtworkProductSerializer(source='products', many=True, read_only=True)
+    products = ArtworkProductSerializer(many=True, read_only=True)
     products_data = serializers.ListField(
         child=serializers.DictField(),
         write_only=True,
