@@ -205,7 +205,7 @@ class ArtworkProduct(models.Model):
 
 class Die(models.Model):
     """刀模信息"""
-    code = models.CharField('刀模编码', max_length=50, unique=True, blank=True, editable=False)
+    code = models.CharField('刀模编码', max_length=50, unique=True, blank=True)
     name = models.CharField('刀模名称', max_length=200)
     size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：420x594mm、889x1194mm等')
     material = models.CharField('材质', max_length=100, blank=True, help_text='如：木板、胶板等')
