@@ -39,12 +39,18 @@ class ProcessSerializer(serializers.ModelSerializer):
 
 class ProductMaterialSerializer(serializers.ModelSerializer):
     """产品物料序列化器"""
-    material_name = serializers.CharField(source='material.name', read_only=True)
-    material_code = serializers.CharField(source='material.code', read_only=True)
+    material_name = serializers.SerializerMethodField()
+    material_code = serializers.SerializerMethodField()
     
     class Meta:
         model = ProductMaterial
         fields = '__all__'
+    
+    def get_material_name(self, obj):
+        return obj.material.name if obj.material else None
+    
+    def get_material_code(self, obj):
+        return obj.material.code if obj.material else None
 
 
 class ProductSerializer(serializers.ModelSerializer):
