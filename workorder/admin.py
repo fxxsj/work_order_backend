@@ -53,6 +53,10 @@ class ProductAdmin(admin.ModelAdmin):
             'fields': ('paper_type', 'paper_weight', 'paper_brand', 'board_thickness'),
             'description': '创建施工单时将自动带入这些默认值'
         }),
+        ('默认工艺信息', {
+            'fields': ('printing_method', 'surface_treatment', 'post_processing'),
+            'description': '创建施工单时将自动带入这些默认值'
+        }),
         ('其他', {
             'fields': ('description', 'is_active')
         }),
@@ -125,6 +129,13 @@ class WorkOrderAdmin(admin.ModelAdmin):
             'fields': (
                 'paper_type', 'paper_weight', 'paper_brand',
                 'board_thickness', 'material_notes'
+            ),
+            'classes': ('collapse',)
+        }),
+        ('工艺明细', {
+            'fields': (
+                'printing_method', 'surface_treatment', 
+                'post_processing', 'process_notes'
             ),
             'classes': ('collapse',)
         }),

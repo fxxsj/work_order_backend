@@ -58,6 +58,11 @@ class Product(models.Model):
     paper_brand = models.CharField('默认纸张品牌', max_length=100, blank=True)
     board_thickness = models.CharField('默认板材厚度', max_length=50, blank=True)
     
+    # 默认工艺信息
+    printing_method = models.CharField('默认印刷方式/色数', max_length=100, blank=True)
+    surface_treatment = models.CharField('默认表面处理', max_length=100, blank=True)
+    post_processing = models.CharField('默认后道工艺', max_length=200, blank=True)
+    
     description = models.TextField('产品描述', blank=True)
     is_active = models.BooleanField('是否启用', default=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
@@ -123,6 +128,15 @@ class WorkOrder(models.Model):
     paper_brand = models.CharField('纸张品牌', max_length=100, blank=True, help_text='如：金东、晨鸣等')
     board_thickness = models.CharField('板材厚度', max_length=50, blank=True, help_text='如：3mm、5mm等')
     material_notes = models.TextField('主材备注', blank=True, help_text='其他主材信息说明')
+    
+    # 工艺明细
+    printing_method = models.CharField('印刷方式/色数', max_length=100, blank=True, 
+                                      help_text='如：单面四色、双面四色、单色印刷等')
+    surface_treatment = models.CharField('表面处理', max_length=100, blank=True,
+                                        help_text='如：UV、覆亮膜、覆哑膜、过油等')
+    post_processing = models.CharField('后道工艺', max_length=200, blank=True,
+                                      help_text='如：烫金、烫银、模切、压痕、打孔等')
+    process_notes = models.TextField('工艺备注', blank=True, help_text='其他工艺要求说明')
     
     status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='pending')
     priority = models.CharField('优先级', max_length=20, choices=PRIORITY_CHOICES, default='normal')
