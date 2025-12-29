@@ -96,7 +96,7 @@ class WorkOrderProcessInline(admin.TabularInline):
 class WorkOrderMaterialInline(admin.TabularInline):
     model = WorkOrderMaterial
     extra = 1
-    fields = ['material', 'planned_quantity', 'actual_quantity', 'notes']
+    fields = ['material', 'material_size', 'material_usage', 'planned_quantity', 'actual_quantity', 'notes']
     autocomplete_fields = ['material']
 
 

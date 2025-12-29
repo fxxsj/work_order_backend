@@ -281,6 +281,9 @@ class WorkOrderMaterial(models.Model):
                                    related_name='materials', verbose_name='施工单')
     material = models.ForeignKey(Material, on_delete=models.PROTECT, verbose_name='物料')
     
+    material_size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：A4、210x297mm等')
+    material_usage = models.CharField('用量', max_length=100, blank=True, help_text='如：1000张、50平方米等')
+    
     planned_quantity = models.DecimalField('计划用量', max_digits=10, decimal_places=2, default=0)
     actual_quantity = models.DecimalField('实际用量', max_digits=10, decimal_places=2, default=0)
     
