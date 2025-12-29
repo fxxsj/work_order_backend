@@ -50,6 +50,7 @@ def logout_view(request):
 
 @api_view(['GET'])
 @ensure_csrf_cookie
+@permission_classes([AllowAny])
 def get_current_user(request):
     """获取当前登录用户信息"""
     if request.user.is_authenticated:
