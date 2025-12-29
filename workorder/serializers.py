@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
-    Customer, Process, Material, WorkOrder,
+    Customer, Process, Product, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, ProcessLog
 )
 
@@ -24,6 +24,13 @@ class ProcessSerializer(serializers.ModelSerializer):
     """工序序列化器"""
     class Meta:
         model = Process
+        fields = '__all__'
+
+
+class ProductSerializer(serializers.ModelSerializer):
+    """产品序列化器"""
+    class Meta:
+        model = Product
         fields = '__all__'
 
 
@@ -71,6 +78,7 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
 class WorkOrderListSerializer(serializers.ModelSerializer):
     """施工单列表序列化器（精简版）"""
     customer_name = serializers.CharField(source='customer.name', read_only=True)
+    product_code = serializers.CharField(source='product.code', read_only=True, allow_null=True)
     manager_name = serializers.CharField(source='manager.username', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
@@ -80,7 +88,7 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
         model = WorkOrder
         fields = [
             'id', 'order_number', 'customer', 'customer_name',
-            'product_name', 'quantity', 'unit', 'status', 'status_display',
+            'product', 'product_code', 'product_name', 'quantity', 'unit', 'status', 'status_display',
             'priority', 'priority_display', 'order_date', 'delivery_date',
             'total_amount', 'manager', 'manager_name', 'progress_percentage',
             'created_at'
@@ -94,6 +102,7 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     """施工单详情序列化器（完整版）"""
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     customer_detail = CustomerSerializer(source='customer', read_only=True)
+    product_detail = ProductSerializer(source='product', read_only=True)
     manager_name = serializers.CharField(source='manager.username', read_only=True)
     created_by_name = serializers.CharField(source='created_by.username', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
@@ -118,12 +127,26 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkOrder
         fields = [
-            'id', 'order_number', 'customer', 'product_name',
+            'id', 'order_number', 'customer', 'product', 'product_name',
             'specification', 'quantity', 'unit', 'status', 'priority',
             'order_date', 'delivery_date', 'actual_delivery_date',
             'total_amount', 'design_file', 'manager', 'notes'
         ]
         read_only_fields = ['order_number']
+    
+    def validate(self, data):
+        """验证数据，自动从产品中填充信息"""
+        product = data.get('product')
+        if product and not self.instance:  # 创建时
+            # 自动填充产品相关信息
+            data['product_name'] = product.name
+            data['specification'] = product.specification
+            data['unit'] = product.unit
+            # 如果没有提供总价，根据产品单价和数量计算
+            if 'total_amount' not in data or data['total_amount'] == 0:
+                quantity = data.get('quantity', 1)
+                data['total_amount'] = product.unit_price * quantity
+        return data
 
 
 class WorkOrderProcessUpdateSerializer(serializers.ModelSerializer):

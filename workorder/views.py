@@ -5,11 +5,11 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Count, Sum
 from django.utils import timezone
 from .models import (
-    Customer, Process, Material, WorkOrder,
+    Customer, Process, Product, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, ProcessLog
 )
 from .serializers import (
-    CustomerSerializer, ProcessSerializer, MaterialSerializer,
+    CustomerSerializer, ProcessSerializer, ProductSerializer, MaterialSerializer,
     WorkOrderListSerializer, WorkOrderDetailSerializer,
     WorkOrderCreateUpdateSerializer, WorkOrderProcessSerializer,
     WorkOrderMaterialSerializer, ProcessLogSerializer,
@@ -36,6 +36,17 @@ class ProcessViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'code']
     ordering_fields = ['sort_order', 'code', 'created_at']
     ordering = ['sort_order', 'code']
+
+
+class ProductViewSet(viewsets.ModelViewSet):
+    """产品视图集"""
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['is_active']
+    search_fields = ['name', 'code', 'specification']
+    ordering_fields = ['code', 'created_at']
+    ordering = ['code']
 
 
 class MaterialViewSet(viewsets.ModelViewSet):

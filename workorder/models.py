@@ -44,6 +44,27 @@ class Process(models.Model):
         return f"{self.code} - {self.name}"
 
 
+class Product(models.Model):
+    """产品信息"""
+    name = models.CharField('产品名称', max_length=200)
+    code = models.CharField('产品编码', max_length=50, unique=True)
+    specification = models.CharField('规格', max_length=200, blank=True)
+    unit = models.CharField('单位', max_length=20, default='件')
+    unit_price = models.DecimalField('单价', max_digits=10, decimal_places=2, default=0)
+    description = models.TextField('产品描述', blank=True)
+    is_active = models.BooleanField('是否启用', default=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '产品'
+        verbose_name_plural = '产品管理'
+        ordering = ['code']
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+
 class Material(models.Model):
     """物料信息"""
     name = models.CharField('物料名称', max_length=200)
@@ -83,7 +104,8 @@ class WorkOrder(models.Model):
 
     order_number = models.CharField('施工单号', max_length=50, unique=True, editable=False)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, verbose_name='客户')
-    product_name = models.CharField('产品名称', max_length=200)
+    product = models.ForeignKey('Product', on_delete=models.PROTECT, verbose_name='产品', null=True, blank=True)
+    product_name = models.CharField('产品名称', max_length=200)  # 保留字段用于兼容
     specification = models.TextField('产品规格', blank=True)
     quantity = models.IntegerField('数量', default=1)
     unit = models.CharField('单位', max_length=20, default='件')

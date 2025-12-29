@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.db.models import Count, Q
 from .models import (
-    Customer, Process, Material, WorkOrder, 
+    Customer, Process, Product, Material, WorkOrder, 
     WorkOrderProcess, WorkOrderMaterial, ProcessLog
 )
 
@@ -35,6 +35,15 @@ class ProcessAdmin(admin.ModelAdmin):
     list_filter = ['is_active', 'created_at']
     list_editable = ['sort_order', 'is_active']
     ordering = ['sort_order', 'code']
+
+
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    list_display = ['code', 'name', 'specification', 'unit', 'unit_price', 'is_active', 'created_at']
+    search_fields = ['code', 'name', 'specification']
+    list_filter = ['is_active', 'unit', 'created_at']
+    list_editable = ['unit_price', 'is_active']
+    ordering = ['code']
 
 
 @admin.register(Material)
