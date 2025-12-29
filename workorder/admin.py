@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.db.models import Count, Q
 from .models import (
-    Customer, Process, Product, Material, WorkOrder, 
+    Customer, ProcessCategory, Process, Product, Material, WorkOrder, 
     WorkOrderProcess, WorkOrderMaterial, ProcessLog
 )
 
@@ -28,18 +28,23 @@ class CustomerAdmin(admin.ModelAdmin):
     )
 
 
+@admin.register(ProcessCategory)
+class ProcessCategoryAdmin(admin.ModelAdmin):
+    list_display = ['code', 'name', 'sort_order', 'is_active', 'created_at']
+    search_fields = ['code', 'name']
+    list_filter = ['is_active', 'created_at']
+    list_editable = ['sort_order', 'is_active']
+    ordering = ['sort_order', 'code']
+
+
 @admin.register(Process)
 class ProcessAdmin(admin.ModelAdmin):
-    list_display = ['code', 'name', 'category_display', 'standard_duration', 'sort_order', 'is_active', 'created_at']
+    list_display = ['code', 'name', 'category', 'standard_duration', 'sort_order', 'is_active', 'created_at']
     search_fields = ['code', 'name']
     list_filter = ['category', 'is_active', 'created_at']
     list_editable = ['sort_order', 'is_active']
     ordering = ['sort_order', 'code']
-    
-    def category_display(self, obj):
-        """工序类别显示"""
-        return obj.get_category_display()
-    category_display.short_description = '工序类别'
+    autocomplete_fields = ['category']
 
 
 @admin.register(Product)

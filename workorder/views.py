@@ -5,11 +5,11 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Count, Sum
 from django.utils import timezone
 from .models import (
-    Customer, Process, Product, Material, WorkOrder,
+    Customer, ProcessCategory, Process, Product, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, ProcessLog
 )
 from .serializers import (
-    CustomerSerializer, ProcessSerializer, ProductSerializer, MaterialSerializer,
+    CustomerSerializer, ProcessCategorySerializer, ProcessSerializer, ProductSerializer, MaterialSerializer,
     WorkOrderListSerializer, WorkOrderDetailSerializer,
     WorkOrderCreateUpdateSerializer, WorkOrderProcessSerializer,
     WorkOrderMaterialSerializer, ProcessLogSerializer,
@@ -27,6 +27,16 @@ class CustomerViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
 
+class ProcessCategoryViewSet(viewsets.ModelViewSet):
+    """工序分类视图集"""
+    queryset = ProcessCategory.objects.all()
+    serializer_class = ProcessCategorySerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['is_active']
+    ordering_fields = ['sort_order', 'code']
+    ordering = ['sort_order', 'code']
+
+
 class ProcessViewSet(viewsets.ModelViewSet):
     """工序视图集"""
     queryset = Process.objects.all()
@@ -36,6 +46,10 @@ class ProcessViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'code']
     ordering_fields = ['sort_order', 'code', 'created_at']
     ordering = ['sort_order', 'code']
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return queryset.select_related('category')
 
 
 class ProductViewSet(viewsets.ModelViewSet):
