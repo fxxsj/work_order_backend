@@ -61,7 +61,8 @@ class ProductAdmin(admin.ModelAdmin):
             'fields': ('code', 'name', 'specification', 'unit', 'unit_price')
         }),
         ('默认主材信息', {
-            'fields': ('paper_type', 'paper_weight', 'paper_brand', 'board_thickness'),
+            'fields': ('paper_type', 'paper_weight', 'paper_brand', 'board_thickness',
+                      'material_size', 'material_usage'),
             'description': '创建施工单时将自动带入这些默认值'
         }),
         ('默认工序', {
@@ -139,7 +140,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
         ('主材信息', {
             'fields': (
                 'paper_type', 'paper_weight', 'paper_brand',
-                'board_thickness', 'material_notes'
+                'board_thickness', 'material_size', 'material_usage', 'material_notes'
             ),
             'classes': ('collapse',)
         }),

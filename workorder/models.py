@@ -76,6 +76,8 @@ class Product(models.Model):
     paper_weight = models.CharField('默认纸张克数', max_length=50, blank=True)
     paper_brand = models.CharField('默认纸张品牌', max_length=100, blank=True)
     board_thickness = models.CharField('默认板材厚度', max_length=50, blank=True)
+    material_size = models.CharField('默认尺寸', max_length=100, blank=True, help_text='如：A4、210x297mm等')
+    material_usage = models.CharField('默认用量', max_length=100, blank=True, help_text='如：1000张、50平方米等')
     
     # 默认工序（多对多关系）
     default_processes = models.ManyToManyField('Process', blank=True, verbose_name='默认工序',
@@ -145,6 +147,8 @@ class WorkOrder(models.Model):
     paper_weight = models.CharField('纸张克数', max_length=50, blank=True, help_text='如：157g、200g、250g等')
     paper_brand = models.CharField('纸张品牌', max_length=100, blank=True, help_text='如：金东、晨鸣等')
     board_thickness = models.CharField('板材厚度', max_length=50, blank=True, help_text='如：3mm、5mm等')
+    material_size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：A4、210x297mm等')
+    material_usage = models.CharField('用量', max_length=100, blank=True, help_text='如：1000张、50平方米等')
     material_notes = models.TextField('主材备注', blank=True, help_text='其他主材信息说明')
     
     status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='pending')
