@@ -138,8 +138,12 @@ class WorkOrderAdmin(admin.ModelAdmin):
         ('基本信息', {
             'fields': (
                 'order_number', 'customer', 'product', 'product_name', 
-                'specification', 'quantity', 'unit'
+                'specification', 'quantity', 'unit', 'imposition_quantity'
             )
+        }),
+        ('图稿和刀模', {
+            'fields': ('artwork', 'die'),
+            'description': '关联的图稿（CTP版）和刀模（模切）'
         }),
         ('状态与优先级', {
             'fields': ('status', 'priority', 'manager')
@@ -307,13 +311,31 @@ class WorkOrderProcessAdmin(admin.ModelAdmin):
 @admin.register(WorkOrderMaterial)
 class WorkOrderMaterialAdmin(admin.ModelAdmin):
     list_display = [
-        'work_order', 'material', 
-        'planned_quantity', 'actual_quantity', 'created_at'
+        'work_order', 'material', 'material_size', 'material_usage',
+        'planned_quantity', 'actual_quantity', 'purchase_status_badge',
+        'purchase_date', 'received_date', 'cut_date', 'created_at'
     ]
     
-    list_filter = ['material', 'created_at']
+    list_filter = ['purchase_status', 'purchase_date', 'received_date', 'cut_date', 'material', 'created_at']
     search_fields = ['work_order__order_number', 'material__name', 'material__code']
     autocomplete_fields = ['work_order', 'material']
+    
+    def purchase_status_badge(self, obj):
+        """采购状态徽章"""
+        colors = {
+            'pending': '#909399',
+            'ordered': '#409EFF',
+            'received': '#67C23A',
+            'cut': '#E6A23C',
+            'completed': '#67C23A',
+        }
+        return format_html(
+            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
+            'background-color: {};">{}</span>',
+            colors.get(obj.purchase_status, '#909399'),
+            obj.get_purchase_status_display()
+        )
+    purchase_status_badge.short_description = '采购状态'
 
 
 @admin.register(ProcessLog)

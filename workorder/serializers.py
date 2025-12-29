@@ -98,6 +98,7 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
     material_name = serializers.CharField(source='material.name', read_only=True)
     material_code = serializers.CharField(source='material.code', read_only=True)
     material_unit = serializers.CharField(source='material.unit', read_only=True)
+    purchase_status_display = serializers.CharField(source='get_purchase_status_display', read_only=True)
     
     class Meta:
         model = WorkOrderMaterial
@@ -135,6 +136,10 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     manager_name = serializers.CharField(source='manager.username', read_only=True, allow_null=True)
     created_by_name = serializers.CharField(source='created_by.username', read_only=True, allow_null=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    artwork_name = serializers.CharField(source='artwork.name', read_only=True, allow_null=True)
+    artwork_code = serializers.CharField(source='artwork.code', read_only=True, allow_null=True)
+    die_name = serializers.CharField(source='die.name', read_only=True, allow_null=True)
+    die_code = serializers.CharField(source='die.code', read_only=True, allow_null=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     
     order_processes = WorkOrderProcessSerializer(many=True, read_only=True)
@@ -160,6 +165,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'specification', 'quantity', 'unit', 'status', 'priority',
             'order_date', 'delivery_date', 'actual_delivery_date',
             'total_amount', 'design_file', 'notes',
+            'artwork', 'die', 'imposition_quantity'
         ]
         read_only_fields = ['order_number']
     

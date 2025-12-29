@@ -287,6 +287,15 @@ class WorkOrder(models.Model):
     quantity = models.IntegerField('数量', default=1)
     unit = models.CharField('单位', max_length=20, default='件')
     
+    # 图稿和刀模关联
+    artwork = models.ForeignKey('Artwork', on_delete=models.SET_NULL, null=True, blank=True,
+                               related_name='work_orders', verbose_name='图稿（CTP版）',
+                               help_text='关联的图稿，用于CTP制版')
+    die = models.ForeignKey('Die', on_delete=models.SET_NULL, null=True, blank=True,
+                           related_name='work_orders', verbose_name='刀模',
+                           help_text='关联的刀模，用于模切工序')
+    imposition_quantity = models.IntegerField('拼版数量', default=1, help_text='如：2拼、4拼等')
+    
     status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='pending')
     priority = models.CharField('优先级', max_length=20, choices=PRIORITY_CHOICES, default='normal')
     
@@ -413,6 +422,14 @@ class WorkOrderProcess(models.Model):
 
 class WorkOrderMaterial(models.Model):
     """施工单物料使用记录"""
+    PURCHASE_STATUS_CHOICES = [
+        ('pending', '待采购'),
+        ('ordered', '已下单'),
+        ('received', '已回料'),
+        ('cut', '已开料'),
+        ('completed', '已完成'),
+    ]
+    
     work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE,
                                    related_name='materials', verbose_name='施工单')
     material = models.ForeignKey(Material, on_delete=models.PROTECT, verbose_name='物料')
@@ -422,6 +439,13 @@ class WorkOrderMaterial(models.Model):
     
     planned_quantity = models.DecimalField('计划用量', max_digits=10, decimal_places=2, default=0)
     actual_quantity = models.DecimalField('实际用量', max_digits=10, decimal_places=2, default=0)
+    
+    # 采购和开料状态
+    purchase_status = models.CharField('采购状态', max_length=20, choices=PURCHASE_STATUS_CHOICES,
+                                      default='pending', help_text='物料的采购和开料状态')
+    purchase_date = models.DateField('采购日期', null=True, blank=True, help_text='采购下单日期')
+    received_date = models.DateField('回料日期', null=True, blank=True, help_text='物料回料日期')
+    cut_date = models.DateField('开料日期', null=True, blank=True, help_text='切料组开料日期')
     
     notes = models.TextField('备注', blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
