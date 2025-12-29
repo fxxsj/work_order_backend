@@ -82,7 +82,11 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         return queryset
     
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        # 自动设置创建人和制表人为当前用户
+        serializer.save(
+            created_by=self.request.user,
+            manager=self.request.user
+        )
     
     @action(detail=True, methods=['post'])
     def add_process(self, request, pk=None):

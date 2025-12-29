@@ -79,7 +79,7 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
     """施工单列表序列化器（精简版）"""
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     product_code = serializers.CharField(source='product.code', read_only=True, allow_null=True)
-    manager_name = serializers.CharField(source='manager.username', read_only=True)
+    manager_name = serializers.CharField(source='manager.username', read_only=True, allow_null=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     progress_percentage = serializers.SerializerMethodField()
@@ -103,8 +103,8 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     customer_detail = CustomerSerializer(source='customer', read_only=True)
     product_detail = ProductSerializer(source='product', read_only=True)
-    manager_name = serializers.CharField(source='manager.username', read_only=True)
-    created_by_name = serializers.CharField(source='created_by.username', read_only=True)
+    manager_name = serializers.CharField(source='manager.username', read_only=True, allow_null=True)
+    created_by_name = serializers.CharField(source='created_by.username', read_only=True, allow_null=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     
@@ -130,7 +130,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'id', 'order_number', 'customer', 'product', 'product_name',
             'specification', 'quantity', 'unit', 'status', 'priority',
             'order_date', 'delivery_date', 'actual_delivery_date',
-            'total_amount', 'design_file', 'manager', 'notes'
+            'total_amount', 'design_file', 'notes'
         ]
         read_only_fields = ['order_number']
     

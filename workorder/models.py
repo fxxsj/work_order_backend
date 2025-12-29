@@ -122,13 +122,13 @@ class WorkOrder(models.Model):
     # 文件附件
     design_file = models.FileField('设计文件', upload_to='designs/', blank=True, null=True)
     
-    # 负责人
+    # 制表人（创建者）
     manager = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, 
-                                related_name='managed_orders', verbose_name='负责人')
+                                related_name='managed_orders', verbose_name='制表人')
     
     notes = models.TextField('备注', blank=True)
     
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, 
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
                                    related_name='created_orders', verbose_name='创建人')
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)

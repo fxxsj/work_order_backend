@@ -76,13 +76,18 @@ class WorkOrderAdmin(admin.ModelAdmin):
     list_display = [
         'order_number', 'customer', 'product_name', 
         'quantity', 'status_badge', 'priority_badge',
-        'order_date', 'delivery_date', 'progress_bar', 'manager'
+        'order_date', 'delivery_date', 'progress_bar', 'manager_display'
     ]
     
     list_filter = [
         'status', 'priority', 'order_date', 'delivery_date', 
         'created_at', 'manager'
     ]
+    
+    def manager_display(self, obj):
+        """制表人显示"""
+        return obj.manager.username if obj.manager else '-'
+    manager_display.short_description = '制表人'
     
     search_fields = [
         'order_number', 'customer__name', 'product_name', 'specification'
