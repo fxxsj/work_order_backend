@@ -58,8 +58,8 @@ class ProductMaterialInline(admin.TabularInline):
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = ['code', 'name', 'specification', 'unit', 'unit_price', 'is_active', 'created_at']
-    search_fields = ['code', 'name', 'specification', 'paper_type']
-    list_filter = ['is_active', 'unit', 'paper_type', 'created_at']
+    search_fields = ['code', 'name', 'specification']
+    list_filter = ['is_active', 'unit', 'created_at']
     list_editable = ['unit_price', 'is_active']
     ordering = ['code']
     filter_horizontal = ['default_processes']
@@ -68,11 +68,6 @@ class ProductAdmin(admin.ModelAdmin):
     fieldsets = (
         ('基本信息', {
             'fields': ('code', 'name', 'specification', 'unit', 'unit_price')
-        }),
-        ('默认主材信息', {
-            'fields': ('paper_type', 'paper_weight', 'paper_brand', 'board_thickness',
-                      'material_size', 'material_usage'),
-            'description': '创建施工单时将自动带入这些默认值'
         }),
         ('默认工序', {
             'fields': ('default_processes',),
@@ -145,13 +140,6 @@ class WorkOrderAdmin(admin.ModelAdmin):
                 'order_number', 'customer', 'product', 'product_name', 
                 'specification', 'quantity', 'unit'
             )
-        }),
-        ('主材信息', {
-            'fields': (
-                'paper_type', 'paper_weight', 'paper_brand',
-                'board_thickness', 'material_size', 'material_usage', 'material_notes'
-            ),
-            'classes': ('collapse',)
         }),
         ('状态与优先级', {
             'fields': ('status', 'priority', 'manager')

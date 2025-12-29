@@ -160,8 +160,6 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'specification', 'quantity', 'unit', 'status', 'priority',
             'order_date', 'delivery_date', 'actual_delivery_date',
             'total_amount', 'design_file', 'notes',
-            'paper_type', 'paper_weight', 'paper_brand', 'board_thickness',
-            'material_size', 'material_usage', 'material_notes'
         ]
         read_only_fields = ['order_number']
     
@@ -173,20 +171,6 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             data['product_name'] = product.name
             data['specification'] = product.specification
             data['unit'] = product.unit
-            
-            # 自动填充主材信息（如果产品有默认值且用户未提供）
-            if not data.get('paper_type') and product.paper_type:
-                data['paper_type'] = product.paper_type
-            if not data.get('paper_weight') and product.paper_weight:
-                data['paper_weight'] = product.paper_weight
-            if not data.get('paper_brand') and product.paper_brand:
-                data['paper_brand'] = product.paper_brand
-            if not data.get('board_thickness') and product.board_thickness:
-                data['board_thickness'] = product.board_thickness
-            if not data.get('material_size') and product.material_size:
-                data['material_size'] = product.material_size
-            if not data.get('material_usage') and product.material_usage:
-                data['material_usage'] = product.material_usage
             
             # 如果没有提供总价，根据产品单价和数量计算
             if 'total_amount' not in data or data['total_amount'] == 0:
