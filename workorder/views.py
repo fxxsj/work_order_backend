@@ -205,8 +205,20 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         queryset = self.filter_queryset(self.get_queryset())
         
         total_count = queryset.count()
-        status_stats = queryset.values('status').annotate(count=Count('id'))
-        priority_stats = queryset.values('priority').annotate(count=Count('id'))
+        
+        # 状态统计：确保所有状态都有数据，即使数量为0
+        status_stats = list(queryset.values('status').annotate(count=Count('id')).order_by('status'))
+        # 确保所有状态都包含在内
+        all_statuses = ['pending', 'in_progress', 'paused', 'completed', 'cancelled']
+        status_dict = {item['status']: item['count'] for item in status_stats}
+        status_statistics = [{'status': status, 'count': status_dict.get(status, 0)} for status in all_statuses]
+        
+        # 优先级统计：确保所有优先级都有数据，即使数量为0
+        priority_stats = list(queryset.values('priority').annotate(count=Count('id')).order_by('priority'))
+        # 确保所有优先级都包含在内
+        all_priorities = ['low', 'normal', 'high', 'urgent']
+        priority_dict = {item['priority']: item['count'] for item in priority_stats}
+        priority_statistics = [{'priority': priority, 'count': priority_dict.get(priority, 0)} for priority in all_priorities]
         
         # 即将到期的订单（7天内）
         upcoming_deadline = queryset.filter(
@@ -216,8 +228,8 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         
         return Response({
             'total_count': total_count,
-            'status_statistics': list(status_stats),
-            'priority_statistics': list(priority_stats),
+            'status_statistics': status_statistics,
+            'priority_statistics': priority_statistics,
             'upcoming_deadline_count': upcoming_deadline,
         })
 
