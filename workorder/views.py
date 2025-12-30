@@ -47,14 +47,10 @@ class ProcessViewSet(viewsets.ModelViewSet):
     queryset = Process.objects.all()
     serializer_class = ProcessSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['is_active', 'department']
+    filterset_fields = ['is_active']
     search_fields = ['name', 'code']
     ordering_fields = ['sort_order', 'code', 'created_at']
     ordering = ['sort_order', 'code']
-    
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        return queryset.select_related('department')
 
 
 class ProductViewSet(viewsets.ModelViewSet):

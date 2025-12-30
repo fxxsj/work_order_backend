@@ -30,9 +30,6 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
 class ProcessSerializer(serializers.ModelSerializer):
     """工序序列化器"""
-    department_name = serializers.CharField(source='department.name', read_only=True)
-    department_code = serializers.CharField(source='department.code', read_only=True)
-    
     class Meta:
         model = Process
         fields = '__all__'

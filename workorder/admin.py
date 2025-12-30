@@ -40,12 +40,11 @@ class DepartmentAdmin(admin.ModelAdmin):
 
 @admin.register(Process)
 class ProcessAdmin(admin.ModelAdmin):
-    list_display = ['code', 'name', 'department', 'standard_duration', 'sort_order', 'is_active', 'created_at']
+    list_display = ['code', 'name', 'standard_duration', 'sort_order', 'is_active', 'created_at']
     search_fields = ['code', 'name']
-    list_filter = ['department', 'is_active', 'created_at']
+    list_filter = ['is_active', 'created_at']
     list_editable = ['sort_order', 'is_active']
     ordering = ['sort_order', 'code']
-    autocomplete_fields = ['department']
 
 
 class ProductMaterialInline(admin.TabularInline):

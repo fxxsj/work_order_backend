@@ -46,8 +46,6 @@ class Process(models.Model):
     """工序定义"""
     name = models.CharField('工序名称', max_length=100)
     code = models.CharField('工序编码', max_length=50, unique=True)
-    department = models.ForeignKey('Department', on_delete=models.PROTECT, 
-                                   verbose_name='所属部门', related_name='processes', null=True, blank=True)
     description = models.TextField('工序描述', blank=True)
     standard_duration = models.IntegerField('标准工时(小时)', default=0)
     sort_order = models.IntegerField('排序', default=0)
