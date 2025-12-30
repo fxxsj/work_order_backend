@@ -178,7 +178,9 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
         if products.count() > 1:
             return f'{products.count()}款拼版'
         elif products.count() == 1:
-            return products.first().product_name
+            # WorkOrderProduct 通过 product 关联获取产品名称
+            first_product = products.first()
+            return first_product.product.name if first_product.product else None
         else:
             # 如果没有关联产品，使用旧的单个产品字段
             return obj.product_name
@@ -239,7 +241,9 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         if products.count() > 1:
             return f'{products.count()}款拼版'
         elif products.count() == 1:
-            return products.first().product_name
+            # WorkOrderProduct 通过 product 关联获取产品名称
+            first_product = products.first()
+            return first_product.product.name if first_product.product else None
         else:
             # 如果没有关联产品，使用旧的单个产品字段
             return obj.product_name
