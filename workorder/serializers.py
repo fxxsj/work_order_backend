@@ -267,6 +267,14 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         else:
             # 如果没有关联产品，使用旧的单个产品单位
             return obj.unit or '件'
+    
+    def get_artwork_names(self, obj):
+        """获取所有图稿名称"""
+        return [artwork.name for artwork in obj.artworks.all()]
+    
+    def get_artwork_codes(self, obj):
+        """获取所有图稿编码"""
+        return [artwork.code for artwork in obj.artworks.all()]
 
 
 class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
