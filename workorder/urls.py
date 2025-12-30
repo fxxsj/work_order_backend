@@ -4,9 +4,10 @@ from .views import (
     CustomerViewSet, DepartmentViewSet, ProcessViewSet, ProductViewSet, 
     ProductMaterialViewSet, MaterialViewSet,
     WorkOrderViewSet, WorkOrderProcessViewSet,
-    WorkOrderMaterialViewSet, ProcessLogViewSet,
+    WorkOrderProductViewSet, WorkOrderMaterialViewSet, ProcessLogViewSet,
     ArtworkViewSet, ArtworkProductViewSet,
-    DieViewSet, DieProductViewSet, WorkOrderTaskViewSet
+    DieViewSet, DieProductViewSet, WorkOrderTaskViewSet,
+    ProductGroupViewSet, ProductGroupItemViewSet
 )
 from .auth_views import login_view, logout_view, get_current_user, register_view
 
@@ -19,8 +20,11 @@ router.register(r'product-materials', ProductMaterialViewSet)
 router.register(r'materials', MaterialViewSet)
 router.register(r'workorders', WorkOrderViewSet)
 router.register(r'workorder-processes', WorkOrderProcessViewSet)
+router.register(r'workorder-products', WorkOrderProductViewSet)
 router.register(r'workorder-materials', WorkOrderMaterialViewSet)
 router.register(r'workorder-tasks', WorkOrderTaskViewSet)
+router.register(r'product-groups', ProductGroupViewSet)
+router.register(r'product-group-items', ProductGroupItemViewSet)
 router.register(r'process-logs', ProcessLogViewSet)
 router.register(r'artworks', ArtworkViewSet)
 router.register(r'artwork-products', ArtworkProductViewSet)

@@ -2,8 +2,8 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
-    WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct,
-    Die, DieProduct, WorkOrderTask
+    WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
+    Die, DieProduct, WorkOrderTask, ProductGroup, ProductGroupItem
 )
 
 
@@ -102,6 +102,38 @@ class WorkOrderProcessSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class ProductGroupItemSerializer(serializers.ModelSerializer):
+    """产品组子项序列化器"""
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_code = serializers.CharField(source='product.code', read_only=True)
+    product_group_name = serializers.CharField(source='product_group.name', read_only=True)
+    product_group_code = serializers.CharField(source='product_group.code', read_only=True)
+    
+    class Meta:
+        model = ProductGroupItem
+        fields = '__all__'
+
+
+class ProductGroupSerializer(serializers.ModelSerializer):
+    """产品组序列化器"""
+    items = ProductGroupItemSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = ProductGroup
+        fields = '__all__'
+
+
+class WorkOrderProductSerializer(serializers.ModelSerializer):
+    """施工单产品序列化器"""
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_code = serializers.CharField(source='product.code', read_only=True)
+    product_detail = ProductSerializer(source='product', read_only=True)
+    
+    class Meta:
+        model = WorkOrderProduct
+        fields = '__all__'
+
+
 class WorkOrderMaterialSerializer(serializers.ModelSerializer):
     """施工单物料序列化器"""
     material_name = serializers.CharField(source='material.name', read_only=True)
@@ -151,7 +183,12 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     die_code = serializers.CharField(source='die.code', read_only=True, allow_null=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     
+    # 产品组信息
+    product_group_item_detail = ProductGroupItemSerializer(source='product_group_item', read_only=True)
+    product_group_name = serializers.SerializerMethodField()
+    
     order_processes = WorkOrderProcessSerializer(many=True, read_only=True)
+    products = WorkOrderProductSerializer(many=True, read_only=True)  # 一个施工单包含的多个产品
     materials = WorkOrderMaterialSerializer(many=True, read_only=True)
     
     progress_percentage = serializers.SerializerMethodField()
@@ -162,10 +199,23 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     
     def get_progress_percentage(self, obj):
         return obj.get_progress_percentage()
+    
+    def get_product_group_name(self, obj):
+        """获取产品组名称"""
+        if obj.product_group_item and obj.product_group_item.product_group:
+            return obj.product_group_item.product_group.name
+        return None
 
 
 class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
     """施工单创建/更新序列化器"""
+    # 支持多个产品（一个施工单包含多个产品）
+    products_data = serializers.ListField(
+        child=serializers.DictField(),
+        write_only=True,
+        required=False,
+        help_text='产品列表数据，格式：[{"product": id, "quantity": 1, "unit": "件", "specification": "", "sort_order": 0}]'
+    )
     
     class Meta:
         model = WorkOrder
@@ -174,14 +224,32 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'specification', 'quantity', 'unit', 'status', 'priority',
             'order_date', 'delivery_date', 'actual_delivery_date',
             'total_amount', 'design_file', 'notes',
-            'artwork', 'die', 'imposition_quantity'
+            'artwork', 'die', 'imposition_quantity', 'product_group_item',
+            'products_data'
         ]
         read_only_fields = ['order_number']
     
     def validate(self, data):
         """验证数据，自动从产品中填充信息"""
         product = data.get('product')
-        if product and not self.instance:  # 创建时
+        products_data = data.get('products_data', [])
+        
+        # 如果提供了 products_data，优先使用多产品模式
+        if products_data:
+            # 计算总金额
+            total = 0
+            for item in products_data:
+                product_id = item.get('product')
+                if product_id:
+                    try:
+                        product_obj = Product.objects.get(id=product_id)
+                        quantity = item.get('quantity', 1)
+                        total += product_obj.unit_price * quantity
+                    except Product.DoesNotExist:
+                        pass
+            if total > 0:
+                data['total_amount'] = total
+        elif product and not self.instance:  # 创建时，单个产品模式
             # 自动填充产品相关信息
             data['product_name'] = product.name
             data['specification'] = product.specification
@@ -192,6 +260,52 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                 quantity = data.get('quantity', 1)
                 data['total_amount'] = product.unit_price * quantity
         return data
+    
+    def create(self, validated_data):
+        """创建施工单并处理多个产品"""
+        products_data = validated_data.pop('products_data', [])
+        work_order = WorkOrder.objects.create(**validated_data)
+        
+        # 创建关联的产品记录
+        if products_data:
+            for item in products_data:
+                WorkOrderProduct.objects.create(
+                    work_order=work_order,
+                    product_id=item.get('product'),
+                    quantity=item.get('quantity', 1),
+                    unit=item.get('unit', '件'),
+                    specification=item.get('specification', ''),
+                    sort_order=item.get('sort_order', 0)
+                )
+        
+        return work_order
+    
+    def update(self, instance, validated_data):
+        """更新施工单并处理多个产品"""
+        products_data = validated_data.pop('products_data', None)
+        
+        # 更新施工单基本信息
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # 如果提供了 products_data，更新产品列表
+        if products_data is not None:
+            # 删除现有产品关联
+            WorkOrderProduct.objects.filter(work_order=instance).delete()
+            
+            # 创建新的产品关联
+            for item in products_data:
+                WorkOrderProduct.objects.create(
+                    work_order=instance,
+                    product_id=item.get('product'),
+                    quantity=item.get('quantity', 1),
+                    unit=item.get('unit', '件'),
+                    specification=item.get('specification', ''),
+                    sort_order=item.get('sort_order', 0)
+                )
+        
+        return instance
 
 
 class WorkOrderProcessUpdateSerializer(serializers.ModelSerializer):

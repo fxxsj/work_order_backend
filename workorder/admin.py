@@ -3,8 +3,8 @@ from django.utils.html import format_html
 from django.db.models import Count, Q
 from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder, 
-    WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct,
-    Die, DieProduct, WorkOrderTask
+    WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
+    Die, DieProduct, WorkOrderTask, ProductGroup, ProductGroupItem
 )
 
 
@@ -131,7 +131,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
     
     date_hierarchy = 'order_date'
     
-    inlines = [WorkOrderProcessInline, WorkOrderMaterialInline]
+    inlines = [WorkOrderProductInline, WorkOrderProcessInline, WorkOrderMaterialInline]
     
     fieldsets = (
         ('基本信息', {

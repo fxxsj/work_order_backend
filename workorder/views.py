@@ -6,8 +6,8 @@ from django.db.models import Q, Count, Sum
 from django.utils import timezone
 from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
-    WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct,
-    Die, DieProduct, WorkOrderTask
+    WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
+    Die, DieProduct, WorkOrderTask, ProductGroup, ProductGroupItem
 )
 from .serializers import (
     CustomerSerializer, DepartmentSerializer, ProcessSerializer, ProductSerializer, 

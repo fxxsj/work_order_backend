@@ -260,6 +260,43 @@ class DieProduct(models.Model):
         return f"{self.die.name} - {self.product.name} ({self.quantity}个)"
 
 
+class ProductGroup(models.Model):
+    """产品组（如：天地盒、套装等，一个产品组可能需要多个施工单完成）"""
+    name = models.CharField('产品组名称', max_length=200)
+    code = models.CharField('产品组编码', max_length=50, unique=True)
+    description = models.TextField('描述', blank=True)
+    is_active = models.BooleanField('是否启用', default=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '产品组'
+        verbose_name_plural = '产品组管理'
+        ordering = ['code']
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+
+class ProductGroupItem(models.Model):
+    """产品组中的子产品（如：天地盒中的天盒、地盒）"""
+    product_group = models.ForeignKey(ProductGroup, on_delete=models.CASCADE,
+                                     related_name='items', verbose_name='产品组')
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, verbose_name='产品')
+    item_name = models.CharField('子产品名称', max_length=200, help_text='如：天盒、地盒')
+    sort_order = models.IntegerField('排序', default=0)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '产品组子项'
+        verbose_name_plural = '产品组子项管理'
+        ordering = ['product_group', 'sort_order']
+        unique_together = ['product_group', 'product']
+
+    def __str__(self):
+        return f"{self.product_group.name} - {self.item_name} ({self.product.name})"
+
+
 class WorkOrder(models.Model):
     """印刷施工单"""
     STATUS_CHOICES = [
@@ -279,11 +316,19 @@ class WorkOrder(models.Model):
 
     order_number = models.CharField('施工单号', max_length=50, unique=True, editable=False)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, verbose_name='客户')
-    product = models.ForeignKey('Product', on_delete=models.PROTECT, verbose_name='产品', null=True, blank=True)
-    product_name = models.CharField('产品名称', max_length=200)  # 保留字段用于兼容
+    
+    # 产品关联（兼容旧数据，保留单个产品字段）
+    product = models.ForeignKey('Product', on_delete=models.PROTECT, verbose_name='产品', null=True, blank=True,
+                               help_text='单个产品（兼容旧数据，建议使用 products 关联）')
+    product_name = models.CharField('产品名称', max_length=200, blank=True)  # 保留字段用于兼容
     specification = models.TextField('产品规格', blank=True)
     quantity = models.IntegerField('数量', default=1)
     unit = models.CharField('单位', max_length=20, default='件')
+    
+    # 产品组关联（支持一个产品需要多个施工单的场景）
+    product_group_item = models.ForeignKey('ProductGroupItem', on_delete=models.SET_NULL, null=True, blank=True,
+                                          related_name='work_orders', verbose_name='产品组子项',
+                                          help_text='如果该施工单是产品组的一部分，关联到对应的子产品')
     
     # 图稿和刀模关联
     artwork = models.ForeignKey('Artwork', on_delete=models.SET_NULL, null=True, blank=True,
@@ -418,6 +463,27 @@ class WorkOrderProcess(models.Model):
             duration = self.actual_end_time - self.actual_start_time
             self.duration_hours = round(duration.total_seconds() / 3600, 2)
             self.save(update_fields=['duration_hours'])
+
+
+class WorkOrderProduct(models.Model):
+    """施工单产品关联（支持一个施工单包含多个产品，如一套图稿中拼版了多个产品）"""
+    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE,
+                                   related_name='products', verbose_name='施工单')
+    product = models.ForeignKey('Product', on_delete=models.PROTECT, verbose_name='产品')
+    quantity = models.IntegerField('数量', default=1)
+    unit = models.CharField('单位', max_length=20, default='件')
+    specification = models.TextField('产品规格', blank=True)
+    sort_order = models.IntegerField('排序', default=0)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '施工单产品'
+        verbose_name_plural = '施工单产品管理'
+        ordering = ['work_order', 'sort_order']
+        unique_together = ['work_order', 'product', 'sort_order']
+
+    def __str__(self):
+        return f"{self.work_order.order_number} - {self.product.name} ({self.quantity}{self.unit})"
 
 
 class WorkOrderMaterial(models.Model):
