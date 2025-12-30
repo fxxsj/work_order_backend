@@ -6,12 +6,27 @@ from django.db import migrations, models
 def migrate_artwork_data_forward(apps, schema_editor):
     """将单个 artwork 数据迁移到 artworks ManyToMany 字段"""
     WorkOrder = apps.get_model('workorder', 'WorkOrder')
+    Artwork = apps.get_model('workorder', 'Artwork')
     
     # 在删除 artwork 字段之前，先迁移数据
-    for work_order in WorkOrder.objects.all():
-        # 此时 artwork 字段还存在，可以访问
-        if work_order.artwork_id:
-            work_order.artworks.add(work_order.artwork_id)
+    # 使用原始 SQL 查询，因为此时 artwork 字段还存在但可能无法直接访问
+    from django.db import connection
+    with connection.cursor() as cursor:
+        # 查询所有有 artwork 的施工单
+        cursor.execute("""
+            SELECT id, artwork_id 
+            FROM workorder_workorder 
+            WHERE artwork_id IS NOT NULL
+        """)
+        for row in cursor.fetchall():
+            work_order_id, artwork_id = row
+            try:
+                work_order = WorkOrder.objects.get(id=work_order_id)
+                artwork = Artwork.objects.get(id=artwork_id)
+                work_order.artworks.add(artwork)
+            except (WorkOrder.DoesNotExist, Artwork.DoesNotExist):
+                # 如果对象不存在，跳过
+                pass
 
 
 def migrate_artwork_data_reverse(apps, schema_editor):
