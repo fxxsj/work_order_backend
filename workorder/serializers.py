@@ -183,10 +183,6 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     die_code = serializers.CharField(source='die.code', read_only=True, allow_null=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     
-    # 产品组信息
-    product_group_item_detail = ProductGroupItemSerializer(source='product_group_item', read_only=True)
-    product_group_name = serializers.SerializerMethodField()
-    
     order_processes = WorkOrderProcessSerializer(many=True, read_only=True)
     products = WorkOrderProductSerializer(many=True, read_only=True)  # 一个施工单包含的多个产品
     materials = WorkOrderMaterialSerializer(many=True, read_only=True)
@@ -199,12 +195,6 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     
     def get_progress_percentage(self, obj):
         return obj.get_progress_percentage()
-    
-    def get_product_group_name(self, obj):
-        """获取产品组名称"""
-        if obj.product_group_item and obj.product_group_item.product_group:
-            return obj.product_group_item.product_group.name
-        return None
 
 
 class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
@@ -224,7 +214,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'specification', 'quantity', 'unit', 'status', 'priority',
             'order_date', 'delivery_date', 'actual_delivery_date',
             'total_amount', 'design_file', 'notes',
-            'artwork', 'die', 'imposition_quantity', 'product_group_item',
+            'artwork', 'die', 'imposition_quantity',
             'products_data'
         ]
         read_only_fields = ['order_number']
