@@ -111,7 +111,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         queryset = queryset.select_related('customer', 'manager', 'created_by')
-        queryset = queryset.prefetch_related('order_processes', 'materials')
+        queryset = queryset.prefetch_related('order_processes', 'materials', 'products__product')
         return queryset
     
     def perform_create(self, serializer):

@@ -154,6 +154,10 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     progress_percentage = serializers.SerializerMethodField()
+    # 多产品合并显示字段
+    product_name = serializers.SerializerMethodField()
+    quantity = serializers.SerializerMethodField()
+    unit = serializers.SerializerMethodField()
     
     class Meta:
         model = WorkOrder
@@ -167,6 +171,35 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
     
     def get_progress_percentage(self, obj):
         return obj.get_progress_percentage()
+    
+    def get_product_name(self, obj):
+        """如果有多个产品，显示为 'xx款拼版'，否则显示单个产品名称"""
+        products = obj.products.all()
+        if products.count() > 1:
+            return f'{products.count()}款拼版'
+        elif products.count() == 1:
+            return products.first().product_name
+        else:
+            # 如果没有关联产品，使用旧的单个产品字段
+            return obj.product_name
+    
+    def get_quantity(self, obj):
+        """如果有多个产品，返回所有产品的数量总和"""
+        products = obj.products.all()
+        if products.count() > 0:
+            return sum(p.quantity for p in products)
+        else:
+            # 如果没有关联产品，使用旧的单个产品数量
+            return obj.quantity or 0
+    
+    def get_unit(self, obj):
+        """如果有多个产品，返回第一个产品的单位"""
+        products = obj.products.all()
+        if products.count() > 0:
+            return products.first().unit
+        else:
+            # 如果没有关联产品，使用旧的单个产品单位
+            return obj.unit or '件'
 
 
 class WorkOrderDetailSerializer(serializers.ModelSerializer):
