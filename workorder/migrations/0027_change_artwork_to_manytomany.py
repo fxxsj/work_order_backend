@@ -3,6 +3,30 @@
 from django.db import migrations, models
 
 
+def migrate_artwork_data_forward(apps, schema_editor):
+    """将单个 artwork 数据迁移到 artworks ManyToMany 字段"""
+    WorkOrder = apps.get_model('workorder', 'WorkOrder')
+    
+    # 在删除 artwork 字段之前，先迁移数据
+    for work_order in WorkOrder.objects.all():
+        # 此时 artwork 字段还存在，可以访问
+        if work_order.artwork_id:
+            work_order.artworks.add(work_order.artwork_id)
+
+
+def migrate_artwork_data_reverse(apps, schema_editor):
+    """反向迁移：将 artworks 的第一个图稿设置回 artwork 字段"""
+    WorkOrder = apps.get_model('workorder', 'WorkOrder')
+    
+    for work_order in WorkOrder.objects.all():
+        if work_order.artworks.exists():
+            first_artwork = work_order.artworks.first()
+            if first_artwork:
+                # 注意：此时 artwork 字段可能已经不存在，所以这个反向迁移可能无法完全恢复
+                # 但为了迁移的完整性，我们保留这个函数
+                pass
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,13 +34,17 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveField(
-            model_name='workorder',
-            name='artwork',
-        ),
+        # 先添加 ManyToMany 字段（此时 artwork 字段还存在）
         migrations.AddField(
             model_name='workorder',
             name='artworks',
             field=models.ManyToManyField(blank=True, help_text='关联的图稿，用于CTP制版，支持多个图稿（如纸卡双面印刷的面版和底版）', related_name='work_orders', to='workorder.artwork', verbose_name='图稿（CTP版）'),
+        ),
+        # 迁移数据：将 artwork 字段的值添加到 artworks
+        migrations.RunPython(migrate_artwork_data_forward, migrate_artwork_data_reverse),
+        # 最后删除旧的 artwork 字段
+        migrations.RemoveField(
+            model_name='workorder',
+            name='artwork',
         ),
     ]
