@@ -6,6 +6,15 @@ from django.db import migrations
 def reset_processes(apps, schema_editor):
     """清空工序表并插入预设工序"""
     Process = apps.get_model('workorder', 'Process')
+    WorkOrderProcess = apps.get_model('workorder', 'WorkOrderProcess')
+    Product = apps.get_model('workorder', 'Product')
+    
+    # 先删除所有关联的 WorkOrderProcess 记录（因为 Process 有 PROTECT 外键）
+    WorkOrderProcess.objects.all().delete()
+    
+    # 清除产品与工序的多对多关系
+    for product in Product.objects.all():
+        product.default_processes.clear()
     
     # 清空所有现有工序
     Process.objects.all().delete()
