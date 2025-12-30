@@ -2,6 +2,25 @@
 from django.db import migrations, models
 
 
+def migrate_die_data(apps, schema_editor):
+    """将 die ForeignKey 数据迁移到 dies ManyToMany"""
+    WorkOrder = apps.get_model('workorder', 'WorkOrder')
+    for work_order in WorkOrder.objects.all():
+        if hasattr(work_order, 'die_id') and work_order.die_id:  # 如果有关联的刀模
+            work_order.dies.add(work_order.die_id)
+
+
+def reverse_migrate_die_data(apps, schema_editor):
+    """反向迁移：从 dies ManyToMany 恢复到 die ForeignKey（取第一个）"""
+    WorkOrder = apps.get_model('workorder', 'WorkOrder')
+    for work_order in WorkOrder.objects.all():
+        dies = work_order.dies.all()
+        if dies.exists():
+            # 取第一个刀模作为 ForeignKey 值
+            work_order.die_id = dies.first().id
+            work_order.save()
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -17,8 +36,8 @@ class Migration(migrations.Migration):
         ),
         # 第二步：迁移数据（从 die ForeignKey 到 dies ManyToMany）
         migrations.RunPython(
-            code=lambda apps, schema_editor: migrate_die_data(apps, schema_editor),
-            reverse_code=lambda apps, schema_editor: reverse_migrate_die_data(apps, schema_editor),
+            code=migrate_die_data,
+            reverse_code=reverse_migrate_die_data,
         ),
         # 第三步：删除旧的 die ForeignKey 字段
         migrations.RemoveField(
@@ -26,23 +45,4 @@ class Migration(migrations.Migration):
             name='die',
         ),
     ]
-
-
-def migrate_die_data(apps, schema_editor):
-    """将 die ForeignKey 数据迁移到 dies ManyToMany"""
-    WorkOrder = apps.get_model('workorder', 'WorkOrder')
-    for work_order in WorkOrder.objects.all():
-        if work_order.die_id:  # 如果有关联的刀模
-            work_order.dies.add(work_order.die_id)
-
-
-def reverse_migrate_die_data(apps, schema_editor):
-    """反向迁移：从 dies ManyToMany 恢复到 die ForeignKey（取第一个）"""
-    WorkOrder = apps.get_model('workorder', 'WorkOrder')
-    for work_order in WorkOrder.objects.all():
-        dies = work_order.dies.all()
-        if dies.exists():
-            # 取第一个刀模作为 ForeignKey 值
-            work_order.die_id = dies.first().id
-            work_order.save()
 
