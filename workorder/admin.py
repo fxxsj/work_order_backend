@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.db.models import Count, Q
 from .models import (
-    Customer, ProcessCategory, Process, Product, ProductMaterial, Material, WorkOrder, 
+    Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder, 
     WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct,
     Die, DieProduct
 )
@@ -29,8 +29,8 @@ class CustomerAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(ProcessCategory)
-class ProcessCategoryAdmin(admin.ModelAdmin):
+@admin.register(Department)
+class DepartmentAdmin(admin.ModelAdmin):
     list_display = ['code', 'name', 'sort_order', 'is_active', 'created_at']
     search_fields = ['code', 'name']
     list_filter = ['is_active', 'created_at']
@@ -40,12 +40,12 @@ class ProcessCategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Process)
 class ProcessAdmin(admin.ModelAdmin):
-    list_display = ['code', 'name', 'category', 'standard_duration', 'sort_order', 'is_active', 'created_at']
+    list_display = ['code', 'name', 'department', 'standard_duration', 'sort_order', 'is_active', 'created_at']
     search_fields = ['code', 'name']
-    list_filter = ['category', 'is_active', 'created_at']
+    list_filter = ['department', 'is_active', 'created_at']
     list_editable = ['sort_order', 'is_active']
     ordering = ['sort_order', 'code']
-    autocomplete_fields = ['category']
+    autocomplete_fields = ['department']
 
 
 class ProductMaterialInline(admin.TabularInline):

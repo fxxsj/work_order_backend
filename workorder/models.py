@@ -25,17 +25,17 @@ class Customer(models.Model):
         return self.name
 
 
-class ProcessCategory(models.Model):
-    """工序分类"""
-    name = models.CharField('分类名称', max_length=50, unique=True)
-    code = models.CharField('分类编码', max_length=20, unique=True)
+class Department(models.Model):
+    """部门"""
+    name = models.CharField('部门名称', max_length=50, unique=True)
+    code = models.CharField('部门编码', max_length=20, unique=True)
     sort_order = models.IntegerField('排序', default=0)
     is_active = models.BooleanField('是否启用', default=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
 
     class Meta:
-        verbose_name = '工序分类'
-        verbose_name_plural = '工序分类管理'
+        verbose_name = '部门'
+        verbose_name_plural = '部门管理'
         ordering = ['sort_order', 'code']
 
     def __str__(self):
@@ -46,8 +46,8 @@ class Process(models.Model):
     """工序定义"""
     name = models.CharField('工序名称', max_length=100)
     code = models.CharField('工序编码', max_length=50, unique=True)
-    category = models.ForeignKey(ProcessCategory, on_delete=models.PROTECT, 
-                                 verbose_name='工序分类', related_name='processes')
+    department = models.ForeignKey('Department', on_delete=models.PROTECT, 
+                                   verbose_name='所属部门', related_name='processes', null=True, blank=True)
     description = models.TextField('工序描述', blank=True)
     standard_duration = models.IntegerField('标准工时(小时)', default=0)
     sort_order = models.IntegerField('排序', default=0)

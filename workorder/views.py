@@ -5,12 +5,12 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Count, Sum
 from django.utils import timezone
 from .models import (
-    Customer, ProcessCategory, Process, Product, ProductMaterial, Material, WorkOrder,
+    Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct,
     Die, DieProduct
 )
 from .serializers import (
-    CustomerSerializer, ProcessCategorySerializer, ProcessSerializer, ProductSerializer, 
+    CustomerSerializer, DepartmentSerializer, ProcessSerializer, ProductSerializer, 
     ProductMaterialSerializer, MaterialSerializer,
     WorkOrderListSerializer, WorkOrderDetailSerializer,
     WorkOrderCreateUpdateSerializer, WorkOrderProcessSerializer,
@@ -31,10 +31,10 @@ class CustomerViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
 
-class ProcessCategoryViewSet(viewsets.ModelViewSet):
-    """工序分类视图集"""
-    queryset = ProcessCategory.objects.all()
-    serializer_class = ProcessCategorySerializer
+class DepartmentViewSet(viewsets.ModelViewSet):
+    """部门视图集"""
+    queryset = Department.objects.all()
+    serializer_class = DepartmentSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['is_active']
     search_fields = ['name', 'code']
@@ -47,14 +47,14 @@ class ProcessViewSet(viewsets.ModelViewSet):
     queryset = Process.objects.all()
     serializer_class = ProcessSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['is_active', 'category']
+    filterset_fields = ['is_active', 'department']
     search_fields = ['name', 'code']
     ordering_fields = ['sort_order', 'code', 'created_at']
     ordering = ['sort_order', 'code']
     
     def get_queryset(self):
         queryset = super().get_queryset()
-        return queryset.select_related('category')
+        return queryset.select_related('department')
 
 
 class ProductViewSet(viewsets.ModelViewSet):

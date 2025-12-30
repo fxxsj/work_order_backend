@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
-    Customer, ProcessCategory, Process, Product, ProductMaterial, Material, WorkOrder,
+    Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct,
     Die, DieProduct
 )
@@ -21,17 +21,17 @@ class CustomerSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class ProcessCategorySerializer(serializers.ModelSerializer):
-    """工序分类序列化器"""
+class DepartmentSerializer(serializers.ModelSerializer):
+    """部门序列化器"""
     class Meta:
-        model = ProcessCategory
+        model = Department
         fields = '__all__'
 
 
 class ProcessSerializer(serializers.ModelSerializer):
     """工序序列化器"""
-    category_name = serializers.CharField(source='category.name', read_only=True)
-    category_code = serializers.CharField(source='category.code', read_only=True)
+    department_name = serializers.CharField(source='department.name', read_only=True)
+    department_code = serializers.CharField(source='department.code', read_only=True)
     
     class Meta:
         model = Process

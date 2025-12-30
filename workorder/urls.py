@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    CustomerViewSet, ProcessCategoryViewSet, ProcessViewSet, ProductViewSet, 
+    CustomerViewSet, DepartmentViewSet, ProcessViewSet, ProductViewSet, 
     ProductMaterialViewSet, MaterialViewSet,
     WorkOrderViewSet, WorkOrderProcessViewSet,
     WorkOrderMaterialViewSet, ProcessLogViewSet,
@@ -12,7 +12,7 @@ from .auth_views import login_view, logout_view, get_current_user, register_view
 
 router = DefaultRouter()
 router.register(r'customers', CustomerViewSet)
-router.register(r'process-categories', ProcessCategoryViewSet)
+router.register(r'departments', DepartmentViewSet)
 router.register(r'processes', ProcessViewSet)
 router.register(r'products', ProductViewSet)
 router.register(r'product-materials', ProductMaterialViewSet)
