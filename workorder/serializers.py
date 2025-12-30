@@ -324,9 +324,15 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         return data
     
     def create(self, validated_data):
-        """创建施工单并处理多个产品"""
+        """创建施工单并处理多个产品和图稿"""
         products_data = validated_data.pop('products_data', [])
+        artworks = validated_data.pop('artworks', [])
+        
         work_order = WorkOrder.objects.create(**validated_data)
+        
+        # 设置图稿（ManyToMany 字段需要在对象创建后设置）
+        if artworks:
+            work_order.artworks.set(artworks)
         
         # 创建关联的产品记录
         if products_data:
@@ -343,13 +349,18 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         return work_order
     
     def update(self, instance, validated_data):
-        """更新施工单并处理多个产品"""
+        """更新施工单并处理多个产品和图稿"""
         products_data = validated_data.pop('products_data', None)
+        artworks = validated_data.pop('artworks', None)
         
         # 更新施工单基本信息
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+        
+        # 更新图稿（ManyToMany 字段）
+        if artworks is not None:
+            instance.artworks.set(artworks)
         
         # 如果提供了 products_data，更新产品列表
         if products_data is not None:
