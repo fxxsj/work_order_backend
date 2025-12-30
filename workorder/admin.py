@@ -148,8 +148,8 @@ class WorkOrderAdmin(admin.ModelAdmin):
             )
         }),
         ('图稿和刀模', {
-            'fields': ('artworks', 'die'),
-            'description': '关联的图稿（CTP版）和刀模（模切），支持多个图稿'
+            'fields': ('artworks', 'dies'),
+            'description': '关联的图稿（CTP版）和刀模（模切），支持多个图稿和多个刀模'
         }),
         ('状态与优先级', {
             'fields': ('status', 'priority', 'manager')

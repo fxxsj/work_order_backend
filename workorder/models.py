@@ -334,9 +334,9 @@ class WorkOrder(models.Model):
     artworks = models.ManyToManyField('Artwork', blank=True,
                                       related_name='work_orders', verbose_name='图稿（CTP版）',
                                       help_text='关联的图稿，用于CTP制版，支持多个图稿（如纸卡双面印刷的面版和底版）')
-    die = models.ForeignKey('Die', on_delete=models.SET_NULL, null=True, blank=True,
-                           related_name='work_orders', verbose_name='刀模',
-                           help_text='关联的刀模，用于模切工序')
+    dies = models.ManyToManyField('Die', blank=True,
+                                  related_name='work_orders', verbose_name='刀模',
+                                  help_text='关联的刀模，用于模切工序，支持多个刀模')
     imposition_quantity = models.IntegerField('拼版数量', default=1, help_text='如：2拼、4拼等')
     
     status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='pending')

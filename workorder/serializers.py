@@ -216,8 +216,10 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     artworks = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     artwork_names = serializers.SerializerMethodField()
     artwork_codes = serializers.SerializerMethodField()
-    die_name = serializers.CharField(source='die.name', read_only=True, allow_null=True)
-    die_code = serializers.CharField(source='die.code', read_only=True, allow_null=True)
+    # 刀模信息：支持多个刀模
+    dies = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    die_names = serializers.SerializerMethodField()
+    die_codes = serializers.SerializerMethodField()
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     
     order_processes = WorkOrderProcessSerializer(many=True, read_only=True)
@@ -275,6 +277,14 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     def get_artwork_codes(self, obj):
         """获取所有图稿编码"""
         return [artwork.code for artwork in obj.artworks.all()]
+    
+    def get_die_names(self, obj):
+        """获取所有刀模名称"""
+        return [die.name for die in obj.dies.all()]
+    
+    def get_die_codes(self, obj):
+        """获取所有刀模编码"""
+        return [die.code for die in obj.dies.all()]
 
 
 class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
@@ -294,7 +304,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'specification', 'quantity', 'unit', 'status', 'priority',
             'order_date', 'delivery_date', 'actual_delivery_date',
             'total_amount', 'design_file', 'notes',
-            'artworks', 'die', 'imposition_quantity',
+            'artworks', 'dies', 'imposition_quantity',
             'products_data'
         ]
         read_only_fields = ['order_number']
@@ -335,12 +345,17 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         """创建施工单并处理多个产品和图稿"""
         products_data = validated_data.pop('products_data', [])
         artworks = validated_data.pop('artworks', [])
+        dies = validated_data.pop('dies', [])
         
         work_order = WorkOrder.objects.create(**validated_data)
         
         # 设置图稿（ManyToMany 字段需要在对象创建后设置）
         if artworks:
             work_order.artworks.set(artworks)
+        
+        # 设置刀模（ManyToMany 字段需要在对象创建后设置）
+        if dies:
+            work_order.dies.set(dies)
         
         # 创建关联的产品记录
         if products_data:
@@ -360,6 +375,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         """更新施工单并处理多个产品和图稿"""
         products_data = validated_data.pop('products_data', None)
         artworks = validated_data.pop('artworks', None)
+        dies = validated_data.pop('dies', None)
         
         # 更新施工单基本信息
         for attr, value in validated_data.items():
@@ -369,6 +385,10 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         # 更新图稿（ManyToMany 字段）
         if artworks is not None:
             instance.artworks.set(artworks)
+        
+        # 更新刀模（ManyToMany 字段）
+        if dies is not None:
+            instance.dies.set(dies)
         
         # 如果提供了 products_data，更新产品列表
         if products_data is not None:
