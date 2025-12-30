@@ -4,7 +4,7 @@ from django.db.models import Count, Q
 from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder, 
     WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct,
-    Die, DieProduct
+    Die, DieProduct, WorkOrderTask
 )
 
 
@@ -247,22 +247,22 @@ class WorkOrderAdmin(admin.ModelAdmin):
 @admin.register(WorkOrderProcess)
 class WorkOrderProcessAdmin(admin.ModelAdmin):
     list_display = [
-        'work_order', 'sequence', 'process', 'status_badge',
+        'work_order', 'sequence', 'process', 'department', 'status_badge',
         'operator', 'actual_start_time', 'actual_end_time',
         'duration_hours', 'quantity_completed', 'quantity_defective'
     ]
     
     list_filter = [
-        'status', 'process', 'operator', 
+        'status', 'process', 'department', 'operator', 
         'actual_start_time', 'created_at'
     ]
     
     search_fields = [
         'work_order__order_number', 'process__name', 
-        'process__code', 'operator__username'
+        'process__code', 'operator__username', 'department__name'
     ]
     
-    autocomplete_fields = ['work_order', 'process', 'operator']
+    autocomplete_fields = ['work_order', 'process', 'operator', 'department']
     
     readonly_fields = ['created_at', 'updated_at', 'duration_hours']
     
@@ -270,7 +270,7 @@ class WorkOrderProcessAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('基本信息', {
-            'fields': ('work_order', 'process', 'sequence', 'status', 'operator')
+            'fields': ('work_order', 'process', 'department', 'sequence', 'status', 'operator')
         }),
         ('计划时间', {
             'fields': ('planned_start_time', 'planned_end_time')

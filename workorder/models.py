@@ -377,6 +377,8 @@ class WorkOrderProcess(models.Model):
     work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, 
                                    related_name='order_processes', verbose_name='施工单')
     process = models.ForeignKey(Process, on_delete=models.PROTECT, verbose_name='工序')
+    department = models.ForeignKey(Department, on_delete=models.PROTECT, null=True, blank=True,
+                                  verbose_name='生产部门', help_text='指定该工序由哪个部门生产')
     
     sequence = models.IntegerField('工序顺序', default=0)
     status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='pending')
@@ -481,4 +483,27 @@ class ProcessLog(models.Model):
 
     def __str__(self):
         return f"{self.work_order_process} - {self.get_log_type_display()}"
+
+
+class WorkOrderTask(models.Model):
+    """施工单任务（为工序生成的具体任务）"""
+    work_order_process = models.ForeignKey(WorkOrderProcess, on_delete=models.CASCADE,
+                                          related_name='tasks', verbose_name='工序')
+    work_content = models.TextField('施工内容', help_text='具体的施工内容描述')
+    production_quantity = models.IntegerField('生产数量', default=0, help_text='该任务需要生产的数量')
+    production_requirements = models.TextField('生产要求', blank=True, help_text='生产过程中的特殊要求')
+    status = models.CharField('状态', max_length=20, 
+                             choices=[('pending', '待开始'), ('in_progress', '进行中'), 
+                                     ('completed', '已完成'), ('cancelled', '已取消')],
+                             default='pending')
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '施工单任务'
+        verbose_name_plural = '施工单任务管理'
+        ordering = ['work_order_process', 'created_at']
+
+    def __str__(self):
+        return f"{self.work_order_process} - {self.work_content[:50]}"
 

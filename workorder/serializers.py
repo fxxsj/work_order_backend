@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct,
-    Die, DieProduct
+    Die, DieProduct, WorkOrderTask
 )
 
 
@@ -77,13 +77,25 @@ class ProcessLogSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class WorkOrderTaskSerializer(serializers.ModelSerializer):
+    """施工单任务序列化器"""
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = WorkOrderTask
+        fields = '__all__'
+
+
 class WorkOrderProcessSerializer(serializers.ModelSerializer):
     """施工单工序序列化器"""
     process_name = serializers.CharField(source='process.name', read_only=True)
     process_code = serializers.CharField(source='process.code', read_only=True)
     operator_name = serializers.CharField(source='operator.username', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    department_name = serializers.CharField(source='department.name', read_only=True, allow_null=True)
+    department_code = serializers.CharField(source='department.code', read_only=True, allow_null=True)
     logs = ProcessLogSerializer(many=True, read_only=True)
+    tasks = WorkOrderTaskSerializer(many=True, read_only=True)
     
     class Meta:
         model = WorkOrderProcess

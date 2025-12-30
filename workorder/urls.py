@@ -6,7 +6,7 @@ from .views import (
     WorkOrderViewSet, WorkOrderProcessViewSet,
     WorkOrderMaterialViewSet, ProcessLogViewSet,
     ArtworkViewSet, ArtworkProductViewSet,
-    DieViewSet, DieProductViewSet
+    DieViewSet, DieProductViewSet, WorkOrderTaskViewSet
 )
 from .auth_views import login_view, logout_view, get_current_user, register_view
 
@@ -20,6 +20,7 @@ router.register(r'materials', MaterialViewSet)
 router.register(r'workorders', WorkOrderViewSet)
 router.register(r'workorder-processes', WorkOrderProcessViewSet)
 router.register(r'workorder-materials', WorkOrderMaterialViewSet)
+router.register(r'workorder-tasks', WorkOrderTaskViewSet)
 router.register(r'process-logs', ProcessLogViewSet)
 router.register(r'artworks', ArtworkViewSet)
 router.register(r'artwork-products', ArtworkProductViewSet)

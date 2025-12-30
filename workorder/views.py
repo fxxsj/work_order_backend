@@ -7,7 +7,7 @@ from django.utils import timezone
 from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, ProcessLog, Artwork, ArtworkProduct,
-    Die, DieProduct
+    Die, DieProduct, WorkOrderTask
 )
 from .serializers import (
     CustomerSerializer, DepartmentSerializer, ProcessSerializer, ProductSerializer, 
@@ -17,7 +17,7 @@ from .serializers import (
     WorkOrderMaterialSerializer, ProcessLogSerializer,
     WorkOrderProcessUpdateSerializer,
     ArtworkSerializer, ArtworkProductSerializer,
-    DieSerializer, DieProductSerializer
+    DieSerializer, DieProductSerializer, WorkOrderTaskSerializer
 )
 
 
@@ -223,11 +223,11 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
 
 class WorkOrderProcessViewSet(viewsets.ModelViewSet):
     """施工单工序视图集"""
-    queryset = WorkOrderProcess.objects.all()
+    queryset = WorkOrderProcess.objects.select_related('process', 'department', 'operator', 'work_order')
     serializer_class = WorkOrderProcessSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['work_order', 'process', 'status', 'operator']
-    search_fields = ['work_order__order_number', 'process__name']
+    filterset_fields = ['work_order', 'process', 'status', 'operator', 'department']
+    search_fields = ['work_order__order_number', 'process__name', 'department__name']
     ordering_fields = ['sequence', 'actual_start_time', 'created_at']
     ordering = ['work_order', 'sequence']
     
@@ -235,6 +235,17 @@ class WorkOrderProcessViewSet(viewsets.ModelViewSet):
         if self.action in ['update', 'partial_update']:
             return WorkOrderProcessUpdateSerializer
         return WorkOrderProcessSerializer
+
+
+class WorkOrderTaskViewSet(viewsets.ModelViewSet):
+    """施工单任务视图集"""
+    queryset = WorkOrderTask.objects.select_related('work_order_process')
+    serializer_class = WorkOrderTaskSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['work_order_process', 'status']
+    search_fields = ['work_content', 'production_requirements']
+    ordering_fields = ['created_at', 'updated_at']
+    ordering = ['-created_at']
     
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
@@ -320,6 +331,17 @@ class WorkOrderProcessViewSet(viewsets.ModelViewSet):
         
         serializer = ProcessLogSerializer(log)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class WorkOrderTaskViewSet(viewsets.ModelViewSet):
+    """施工单任务视图集"""
+    queryset = WorkOrderTask.objects.select_related('work_order_process')
+    serializer_class = WorkOrderTaskSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['work_order_process', 'status']
+    search_fields = ['work_content', 'production_requirements']
+    ordering_fields = ['created_at', 'updated_at']
+    ordering = ['-created_at']
 
 
 class WorkOrderMaterialViewSet(viewsets.ModelViewSet):
