@@ -14,10 +14,11 @@ from .serializers import (
     ProductMaterialSerializer, MaterialSerializer,
     WorkOrderListSerializer, WorkOrderDetailSerializer,
     WorkOrderCreateUpdateSerializer, WorkOrderProcessSerializer,
-    WorkOrderMaterialSerializer, ProcessLogSerializer,
+    WorkOrderMaterialSerializer, WorkOrderProductSerializer, ProcessLogSerializer,
     WorkOrderProcessUpdateSerializer,
     ArtworkSerializer, ArtworkProductSerializer,
-    DieSerializer, DieProductSerializer, WorkOrderTaskSerializer
+    DieSerializer, DieProductSerializer, WorkOrderTaskSerializer,
+    ProductGroupSerializer, ProductGroupItemSerializer
 )
 
 
@@ -342,6 +343,37 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
     search_fields = ['work_content', 'production_requirements']
     ordering_fields = ['created_at', 'updated_at']
     ordering = ['-created_at']
+
+
+class WorkOrderProductViewSet(viewsets.ModelViewSet):
+    """施工单产品视图集"""
+    queryset = WorkOrderProduct.objects.select_related('product', 'work_order')
+    serializer_class = WorkOrderProductSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['work_order', 'product']
+    ordering_fields = ['sort_order', 'created_at']
+    ordering = ['work_order', 'sort_order']
+
+
+class ProductGroupViewSet(viewsets.ModelViewSet):
+    """产品组视图集"""
+    queryset = ProductGroup.objects.prefetch_related('items__product')
+    serializer_class = ProductGroupSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['is_active']
+    search_fields = ['name', 'code']
+    ordering_fields = ['code', 'created_at']
+    ordering = ['code']
+
+
+class ProductGroupItemViewSet(viewsets.ModelViewSet):
+    """产品组子项视图集"""
+    queryset = ProductGroupItem.objects.select_related('product_group', 'product')
+    serializer_class = ProductGroupItemSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['product_group', 'product']
+    ordering_fields = ['sort_order', 'created_at']
+    ordering = ['product_group', 'sort_order']
 
 
 class WorkOrderMaterialViewSet(viewsets.ModelViewSet):

@@ -96,6 +96,13 @@ class WorkOrderProcessInline(admin.TabularInline):
     autocomplete_fields = ['process', 'operator']
 
 
+class WorkOrderProductInline(admin.TabularInline):
+    model = WorkOrderProduct
+    extra = 1
+    autocomplete_fields = ['product']
+    fields = ['product', 'quantity', 'unit', 'specification', 'sort_order']
+
+
 class WorkOrderMaterialInline(admin.TabularInline):
     model = WorkOrderMaterial
     extra = 1
