@@ -331,9 +331,9 @@ class WorkOrder(models.Model):
                                           help_text='如果该施工单是产品组的一部分，关联到对应的子产品')
     
     # 图稿和刀模关联
-    artwork = models.ForeignKey('Artwork', on_delete=models.SET_NULL, null=True, blank=True,
-                               related_name='work_orders', verbose_name='图稿（CTP版）',
-                               help_text='关联的图稿，用于CTP制版')
+    artworks = models.ManyToManyField('Artwork', blank=True,
+                                      related_name='work_orders', verbose_name='图稿（CTP版）',
+                                      help_text='关联的图稿，用于CTP制版，支持多个图稿（如纸卡双面印刷的面版和底版）')
     die = models.ForeignKey('Die', on_delete=models.SET_NULL, null=True, blank=True,
                            related_name='work_orders', verbose_name='刀模',
                            help_text='关联的刀模，用于模切工序')
