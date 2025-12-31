@@ -128,7 +128,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     queryset = WorkOrder.objects.all()
     # permission_classes 继承自 settings 中的 DEFAULT_PERMISSION_CLASSES (DjangoModelPermissions)
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'priority', 'customer', 'manager']
+    filterset_fields = ['status', 'priority', 'customer', 'manager', 'approval_status']
     search_fields = ['order_number', 'product_name', 'customer__name']
     ordering_fields = ['created_at', 'order_date', 'delivery_date', 'order_number']
     ordering = ['-created_at']
@@ -289,11 +289,17 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             status__in=['pending', 'in_progress']
         ).count()
         
+        # 未审核施工单数量（仅业务员可见）
+        pending_approval_count = 0
+        if request.user.groups.filter(name='业务员').exists():
+            pending_approval_count = queryset.filter(approval_status='pending').count()
+        
         return Response({
             'total_count': total_count,
             'status_statistics': status_statistics,
             'priority_statistics': priority_statistics,
             'upcoming_deadline_count': upcoming_deadline,
+            'pending_approval_count': pending_approval_count,
         })
 
 
