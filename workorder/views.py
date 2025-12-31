@@ -442,6 +442,7 @@ class ProcessLogViewSet(viewsets.ReadOnlyModelViewSet):
 
 class ArtworkViewSet(viewsets.ModelViewSet):
     """图稿视图集"""
+    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
     queryset = Artwork.objects.all()
     serializer_class = ArtworkSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
