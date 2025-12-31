@@ -243,6 +243,13 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
+        # 检查业务员是否负责该施工单的客户
+        if work_order.customer.salesperson != request.user:
+            return Response(
+                {'error': '只能审核自己负责的施工单'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         approval_status = request.data.get('approval_status')  # 'approved' 或 'rejected'
         approval_comment = request.data.get('approval_comment', '')
         
@@ -289,10 +296,13 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             status__in=['pending', 'in_progress']
         ).count()
         
-        # 未审核施工单数量（仅业务员可见）
+        # 未审核施工单数量（仅业务员可见，只统计自己负责的）
         pending_approval_count = 0
         if request.user.groups.filter(name='业务员').exists():
-            pending_approval_count = queryset.filter(approval_status='pending').count()
+            pending_approval_count = queryset.filter(
+                approval_status='pending',
+                customer__salesperson=request.user
+            ).count()
         
         return Response({
             'total_count': total_count,
