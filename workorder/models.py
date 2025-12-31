@@ -369,8 +369,7 @@ class WorkOrder(models.Model):
         ('approved', '已通过'),
         ('rejected', '已拒绝'),
     ]
-    approval_status = models.CharField('审核状态', max_length=20, choices=APPROVAL_STATUS_CHOICES, 
-                                       default='pending')
+    approval_status = models.CharField('审核状态', max_length=20, choices=APPROVAL_STATUS_CHOICES, default='pending')
     approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
                                    related_name='approved_orders', verbose_name='审核人',
                                    help_text='业务员审核人')
