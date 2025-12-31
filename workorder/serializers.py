@@ -193,7 +193,13 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = WorkOrderMaterial
-        fields = '__all__'
+        fields = [
+            'id', 'work_order', 'material', 'material_name', 'material_code', 'material_unit',
+            'material_size', 'material_usage', 'notes',
+            'purchase_status', 'purchase_status_display',
+            'purchase_date', 'received_date', 'cut_date',
+            'created_at'
+        ]
 
 
 class WorkOrderListSerializer(serializers.ModelSerializer):
@@ -362,7 +368,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'order_date', 'delivery_date', 'actual_delivery_date',
             'production_quantity', 'defective_quantity',
             'total_amount', 'design_file', 'notes',
-            'artworks', 'dies', 'imposition_quantity',
+            'artworks', 'dies',
             'products_data'
         ]
         read_only_fields = ['order_number']

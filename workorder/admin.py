@@ -148,7 +148,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
         ('基本信息', {
             'fields': (
                 'order_number', 'customer', 'product', 'product_name', 
-                'specification', 'quantity', 'unit', 'imposition_quantity'
+                'specification', 'quantity', 'unit'
             )
         }),
         ('图稿和刀模', {
@@ -323,7 +323,7 @@ class WorkOrderProcessAdmin(admin.ModelAdmin):
 class WorkOrderMaterialAdmin(admin.ModelAdmin):
     list_display = [
         'work_order', 'material', 'material_size', 'material_usage',
-        'planned_quantity', 'actual_quantity', 'purchase_status_badge',
+        'notes', 'purchase_status_badge',
         'purchase_date', 'received_date', 'cut_date', 'created_at'
     ]
     

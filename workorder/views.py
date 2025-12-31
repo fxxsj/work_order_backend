@@ -202,7 +202,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         """为施工单添加物料"""
         work_order = self.get_object()
         material_id = request.data.get('material_id')
-        planned_quantity = request.data.get('planned_quantity', 0)
+        notes = request.data.get('notes', '')
         
         if not material_id:
             return Response(
@@ -221,7 +221,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         work_order_material = WorkOrderMaterial.objects.create(
             work_order=work_order,
             material=material,
-            planned_quantity=planned_quantity
+            notes=notes
         )
         
         serializer = WorkOrderMaterialSerializer(work_order_material)

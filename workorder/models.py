@@ -342,7 +342,6 @@ class WorkOrder(models.Model):
     dies = models.ManyToManyField('Die', blank=True,
                                   related_name='work_orders', verbose_name='刀模',
                                   help_text='关联的刀模，用于模切工序，支持多个刀模')
-    imposition_quantity = models.IntegerField('拼版数量', default=1, help_text='如：2拼、4拼等')
     
     status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='pending')
     priority = models.CharField('优先级', max_length=20, choices=PRIORITY_CHOICES, default='normal')
@@ -523,9 +522,6 @@ class WorkOrderMaterial(models.Model):
     
     material_size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：A4、210x297mm等')
     material_usage = models.CharField('用量', max_length=100, blank=True, help_text='如：1000张、50平方米等')
-    
-    planned_quantity = models.DecimalField('计划用量', max_digits=10, decimal_places=2, default=0)
-    actual_quantity = models.DecimalField('实际用量', max_digits=10, decimal_places=2, default=0)
     
     # 采购和开料状态
     purchase_status = models.CharField('采购状态', max_length=20, choices=PURCHASE_STATUS_CHOICES,
