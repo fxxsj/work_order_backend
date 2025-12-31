@@ -150,10 +150,38 @@ class WorkOrderProductSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_code = serializers.CharField(source='product.code', read_only=True)
     product_detail = ProductSerializer(source='product', read_only=True)
+    imposition_quantity = serializers.SerializerMethodField()
     
     class Meta:
         model = WorkOrderProduct
         fields = '__all__'
+    
+    def get_imposition_quantity(self, obj):
+        """从图稿产品关联中获取拼版数量"""
+        # 获取施工单的图稿
+        work_order = obj.work_order
+        if not work_order:
+            return 1
+        
+        # 获取施工单关联的图稿
+        artworks = work_order.artworks.all()
+        if not artworks:
+            return 1
+        
+        # 遍历图稿，查找该产品的拼版数量
+        for artwork in artworks:
+            try:
+                artwork_product = ArtworkProduct.objects.filter(
+                    artwork=artwork,
+                    product=obj.product
+                ).first()
+                if artwork_product:
+                    return artwork_product.imposition_quantity
+            except:
+                continue
+        
+        # 如果找不到，返回默认值1
+        return 1
 
 
 class WorkOrderMaterialSerializer(serializers.ModelSerializer):
