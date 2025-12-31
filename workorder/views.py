@@ -468,6 +468,7 @@ class ArtworkProductViewSet(viewsets.ModelViewSet):
 
 class DieViewSet(viewsets.ModelViewSet):
     """刀模视图集"""
+    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
     queryset = Die.objects.all()
     serializer_class = DieSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
