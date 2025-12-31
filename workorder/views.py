@@ -73,6 +73,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
 class ProcessViewSet(viewsets.ModelViewSet):
     """工序视图集"""
+    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
     queryset = Process.objects.all()
     serializer_class = ProcessSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
