@@ -34,6 +34,8 @@ class Department(models.Model):
     code = models.CharField('部门编码', max_length=20, unique=True)
     sort_order = models.IntegerField('排序', default=0)
     is_active = models.BooleanField('是否启用', default=True)
+    processes = models.ManyToManyField('Process', blank=True, verbose_name='工序',
+                                       help_text='该部门负责的工序')
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
 
     class Meta:

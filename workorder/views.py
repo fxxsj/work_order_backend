@@ -70,6 +70,10 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'code']
     ordering_fields = ['sort_order', 'code']
     ordering = ['sort_order', 'code']
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return queryset.prefetch_related('processes')
 
 
 class ProcessViewSet(viewsets.ModelViewSet):

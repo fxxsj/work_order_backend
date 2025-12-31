@@ -36,9 +36,18 @@ class CustomerSerializer(serializers.ModelSerializer):
 
 class DepartmentSerializer(serializers.ModelSerializer):
     """部门序列化器"""
+    processes = serializers.PrimaryKeyRelatedField(many=True, queryset=Process.objects.all(), required=False)
+    process_names = serializers.SerializerMethodField()
+    
     class Meta:
         model = Department
         fields = '__all__'
+    
+    def get_process_names(self, obj):
+        """获取工序名称列表"""
+        if hasattr(obj, 'processes'):
+            return [f"{p.code} - {p.name}" for p in obj.processes.all()]
+        return []
 
 
 class ProcessSerializer(serializers.ModelSerializer):
