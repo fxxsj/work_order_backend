@@ -19,7 +19,7 @@ class Command(BaseCommand):
                 'customer': ['add', 'view', 'change'],  # 可以创建、查看、修改客户（与施工单权限逻辑一致）
                 'department': ['add', 'view', 'change'],  # 可以创建、查看、修改部门（与客户管理权限逻辑一致）
                 'process': ['add', 'view', 'change'],  # 可以创建、查看、修改工序（与客户管理权限逻辑一致）
-                'product': ['view'],  # 可以查看产品
+                'product': ['add', 'view', 'change'],  # 可以创建、查看、修改产品（与客户管理权限逻辑一致）
                 'material': ['view'],  # 可以查看物料
             },
             # 可以在这里添加更多角色
