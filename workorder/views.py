@@ -2,6 +2,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from django_filters import FilterSet, NumberFilter
 from django.db.models import Q, Count, Sum
 from django.utils import timezone
 from .permissions import WorkOrderProcessPermission, WorkOrderMaterialPermission
@@ -123,12 +124,21 @@ class MaterialViewSet(viewsets.ModelViewSet):
     ordering = ['code']
 
 
+class WorkOrderFilter(FilterSet):
+    """施工单筛选器"""
+    customer__salesperson = NumberFilter(field_name='customer__salesperson', lookup_expr='exact')
+    
+    class Meta:
+        model = WorkOrder
+        fields = ['status', 'priority', 'customer', 'manager', 'approval_status', 'customer__salesperson']
+
+
 class WorkOrderViewSet(viewsets.ModelViewSet):
     """施工单视图集"""
     queryset = WorkOrder.objects.all()
     # permission_classes 继承自 settings 中的 DEFAULT_PERMISSION_CLASSES (DjangoModelPermissions)
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'priority', 'customer', 'manager', 'approval_status']
+    filterset_class = WorkOrderFilter
     search_fields = ['order_number', 'product_name', 'customer__name']
     ordering_fields = ['created_at', 'order_date', 'delivery_date', 'order_number']
     ordering = ['-created_at']
