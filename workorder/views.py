@@ -114,6 +114,7 @@ class ProductMaterialViewSet(viewsets.ModelViewSet):
 
 class MaterialViewSet(viewsets.ModelViewSet):
     """物料视图集"""
+    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
     queryset = Material.objects.all()
     serializer_class = MaterialSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
