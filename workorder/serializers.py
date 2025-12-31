@@ -9,9 +9,20 @@ from .models import (
 
 class UserSerializer(serializers.ModelSerializer):
     """用户序列化器"""
+    groups = serializers.SerializerMethodField()
+    is_salesperson = serializers.SerializerMethodField()
+    
     class Meta:
         model = User
-        fields = ['id', 'username', 'first_name', 'last_name', 'email']
+        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'groups', 'is_salesperson']
+    
+    def get_groups(self, obj):
+        """获取用户所属的组"""
+        return list(obj.groups.values_list('name', flat=True))
+    
+    def get_is_salesperson(self, obj):
+        """判断用户是否为业务员"""
+        return obj.groups.filter(name='业务员').exists()
 
 
 class CustomerSerializer(serializers.ModelSerializer):

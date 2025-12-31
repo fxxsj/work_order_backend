@@ -25,6 +25,8 @@ def login_view(request):
     
     if user is not None:
         login(request, user)
+        # 获取用户所属的组
+        groups = list(user.groups.values_list('name', flat=True))
         return Response({
             'id': user.id,
             'username': user.username,
@@ -33,6 +35,8 @@ def login_view(request):
             'last_name': user.last_name,
             'is_staff': user.is_staff,
             'is_superuser': user.is_superuser,
+            'groups': groups,
+            'is_salesperson': '业务员' in groups,
         })
     else:
         return Response(
@@ -55,6 +59,8 @@ def logout_view(request):
 def get_current_user(request):
     """获取当前登录用户信息"""
     if request.user.is_authenticated:
+        # 获取用户所属的组
+        groups = list(request.user.groups.values_list('name', flat=True))
         return Response({
             'id': request.user.id,
             'username': request.user.username,
@@ -63,6 +69,8 @@ def get_current_user(request):
             'last_name': request.user.last_name,
             'is_staff': request.user.is_staff,
             'is_superuser': request.user.is_superuser,
+            'groups': groups,
+            'is_salesperson': '业务员' in groups,
         })
     else:
         return Response(
