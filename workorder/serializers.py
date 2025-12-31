@@ -162,6 +162,7 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
 class WorkOrderListSerializer(serializers.ModelSerializer):
     """施工单列表序列化器（精简版）"""
     customer_name = serializers.CharField(source='customer.name', read_only=True)
+    salesperson_name = serializers.CharField(source='customer.salesperson.username', read_only=True, allow_null=True)
     product_code = serializers.CharField(source='product.code', read_only=True, allow_null=True)
     manager_name = serializers.CharField(source='manager.username', read_only=True, allow_null=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
@@ -175,7 +176,7 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkOrder
         fields = [
-            'id', 'order_number', 'customer', 'customer_name',
+            'id', 'order_number', 'customer', 'customer_name', 'salesperson_name',
             'product', 'product_code', 'product_name', 'quantity', 'unit', 'status', 'status_display',
             'priority', 'priority_display', 'order_date', 'delivery_date',
             'production_quantity', 'defective_quantity',
