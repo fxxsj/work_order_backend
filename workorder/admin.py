@@ -156,7 +156,8 @@ class WorkOrderAdmin(admin.ModelAdmin):
         }),
         ('日期信息', {
             'fields': (
-                'order_date', 'delivery_date', 'actual_delivery_date'
+                'order_date', 'delivery_date', 'actual_delivery_date',
+                'production_quantity', 'defective_quantity'
             )
         }),
         ('财务信息', {

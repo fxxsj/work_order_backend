@@ -346,6 +346,9 @@ class WorkOrder(models.Model):
     delivery_date = models.DateField('交货日期')
     actual_delivery_date = models.DateField('实际交货日期', null=True, blank=True)
     
+    production_quantity = models.IntegerField('生产数量', null=True, blank=True, help_text='单位：车')
+    defective_quantity = models.IntegerField('预损数量', null=True, blank=True, help_text='单位：车')
+    
     total_amount = models.DecimalField('总金额', max_digits=12, decimal_places=2, default=0)
     
     # 文件附件

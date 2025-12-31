@@ -165,6 +165,7 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
             'id', 'order_number', 'customer', 'customer_name',
             'product', 'product_code', 'product_name', 'quantity', 'unit', 'status', 'status_display',
             'priority', 'priority_display', 'order_date', 'delivery_date',
+            'production_quantity', 'defective_quantity',
             'total_amount', 'manager', 'manager_name', 'progress_percentage',
             'created_at'
         ]
@@ -303,6 +304,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'id', 'order_number', 'customer', 'product', 'product_name',
             'specification', 'quantity', 'unit', 'status', 'priority',
             'order_date', 'delivery_date', 'actual_delivery_date',
+            'production_quantity', 'defective_quantity',
             'total_amount', 'design_file', 'notes',
             'artworks', 'dies', 'imposition_quantity',
             'products_data'
