@@ -5,7 +5,7 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
-from workorder.models import WorkOrder, Customer, Product, Material, Process, Department, Artwork, Die
+from workorder.models import WorkOrder, Customer, Product, Material, Process, Department, Artwork, Die, ProductGroup
 
 
 class Command(BaseCommand):
@@ -23,6 +23,7 @@ class Command(BaseCommand):
                 'material': ['add', 'view', 'change'],  # 可以创建、查看、修改物料（与客户管理权限逻辑一致）
                 'artwork': ['add', 'view', 'change'],  # 可以创建、查看、修改图稿（与客户管理权限逻辑一致）
                 'die': ['add', 'view', 'change'],  # 可以创建、查看、修改刀模（与客户管理权限逻辑一致）
+                'productgroup': ['add', 'view', 'change'],  # 可以创建、查看、修改产品组（与客户管理权限逻辑一致）
             },
             # 可以在这里添加更多角色
             # '生产管理员': {
@@ -57,6 +58,7 @@ class Command(BaseCommand):
                     'material': Material,
                     'artwork': Artwork,
                     'die': Die,
+                    'productgroup': ProductGroup,
                 }
                 
                 if model_name not in model_map:
