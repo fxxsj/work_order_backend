@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Count, Sum
 from django.utils import timezone
+from .permissions import WorkOrderProcessPermission, WorkOrderMaterialPermission
 from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
@@ -95,6 +96,7 @@ class MaterialViewSet(viewsets.ModelViewSet):
 class WorkOrderViewSet(viewsets.ModelViewSet):
     """施工单视图集"""
     queryset = WorkOrder.objects.all()
+    # permission_classes 继承自 settings 中的 DEFAULT_PERMISSION_CLASSES (DjangoModelPermissions)
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'priority', 'customer', 'manager']
     search_fields = ['order_number', 'product_name', 'customer__name']
@@ -237,6 +239,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
 class WorkOrderProcessViewSet(viewsets.ModelViewSet):
     """施工单工序视图集"""
     queryset = WorkOrderProcess.objects.select_related('process', 'department', 'operator', 'work_order')
+    permission_classes = [WorkOrderProcessPermission]  # 使用自定义权限：如果有编辑施工单权限，就可以编辑其工序
     serializer_class = WorkOrderProcessSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['work_order', 'process', 'status', 'operator', 'department']
@@ -391,6 +394,7 @@ class ProductGroupItemViewSet(viewsets.ModelViewSet):
 class WorkOrderMaterialViewSet(viewsets.ModelViewSet):
     """施工单物料视图集"""
     queryset = WorkOrderMaterial.objects.all()
+    permission_classes = [WorkOrderMaterialPermission]  # 使用自定义权限：如果有编辑施工单权限，就可以编辑其物料
     serializer_class = WorkOrderMaterialSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['work_order', 'material']

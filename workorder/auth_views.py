@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User, Group
+from django.contrib.auth.models import User, Group, Permission
 from django.views.decorators.csrf import ensure_csrf_cookie
 from .serializers import UserSerializer
 import re
@@ -28,6 +28,14 @@ def login_view(request):
         login(request, user)
         # 获取用户所属的组
         groups = list(user.groups.values_list('name', flat=True))
+        
+        # 获取用户权限（用于前端权限控制）
+        permissions = []
+        if user.is_superuser:
+            permissions = ['*']
+        else:
+            permissions = list(user.get_all_permissions())
+        
         return Response({
             'id': user.id,
             'username': user.username,
@@ -38,6 +46,7 @@ def login_view(request):
             'is_superuser': user.is_superuser,
             'groups': groups,
             'is_salesperson': '业务员' in groups,
+            'permissions': permissions,  # 添加权限列表
         })
     else:
         return Response(
@@ -62,6 +71,17 @@ def get_current_user(request):
     if request.user.is_authenticated:
         # 获取用户所属的组
         groups = list(request.user.groups.values_list('name', flat=True))
+        
+        # 获取用户权限（用于前端权限控制）
+        permissions = []
+        if request.user.is_superuser:
+            # 超级用户拥有所有权限
+            permissions = ['*']
+        else:
+            # 获取用户的所有权限（包括通过组获得的权限）
+            # 使用 get_all_permissions() 获取所有权限字符串（格式：app_label.codename）
+            permissions = list(request.user.get_all_permissions())
+        
         return Response({
             'id': request.user.id,
             'username': request.user.username,
@@ -72,6 +92,7 @@ def get_current_user(request):
             'is_superuser': request.user.is_superuser,
             'groups': groups,
             'is_salesperson': '业务员' in groups,
+            'permissions': permissions,  # 添加权限列表
         })
     else:
         return Response(
