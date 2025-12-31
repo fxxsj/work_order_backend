@@ -183,6 +183,7 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
             'priority', 'priority_display', 'order_date', 'delivery_date',
             'production_quantity', 'defective_quantity',
             'total_amount', 'manager', 'manager_name', 'progress_percentage',
+            'approval_status', 'approval_status_display', 'approved_by_name', 'approved_at', 'approval_comment',
             'created_at'
         ]
     
