@@ -16,7 +16,7 @@ class Command(BaseCommand):
         role_permissions = {
             '业务员': {
                 'workorder': ['add', 'view', 'change'],  # 可以创建、查看、修改施工单
-                'customer': ['view'],  # 可以查看客户
+                'customer': ['add', 'view', 'change'],  # 可以创建、查看、修改客户（与施工单权限逻辑一致）
                 'product': ['view'],  # 可以查看产品
                 'material': ['view'],  # 可以查看物料
                 'process': ['view'],  # 可以查看工序

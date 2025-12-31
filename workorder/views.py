@@ -5,6 +5,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Count, Sum
 from django.utils import timezone
 from .permissions import WorkOrderProcessPermission, WorkOrderMaterialPermission
+from rest_framework.permissions import DjangoModelPermissions
 from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
@@ -26,11 +27,36 @@ from .serializers import (
 class CustomerViewSet(viewsets.ModelViewSet):
     """客户视图集"""
     queryset = Customer.objects.all()
+    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与施工单权限逻辑一致
     serializer_class = CustomerSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'contact_person', 'phone']
     ordering_fields = ['created_at', 'name']
     ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """
+        根据用户权限过滤查询集：
+        - 如果有 change_customer 权限，返回所有客户
+        - 如果是业务员，只返回自己负责的客户
+        - 如果有 view_customer 权限，返回所有客户（只读）
+        """
+        queryset = super().get_queryset()
+        
+        # 如果有编辑客户权限，返回所有客户
+        if self.request.user.has_perm('workorder.change_customer'):
+            return queryset.select_related('salesperson')
+        
+        # 如果是业务员，只返回自己负责的客户
+        if self.request.user.groups.filter(name='业务员').exists():
+            return queryset.filter(salesperson=self.request.user).select_related('salesperson')
+        
+        # 如果有查看客户权限，返回所有客户（只读）
+        if self.request.user.has_perm('workorder.view_customer'):
+            return queryset.select_related('salesperson')
+        
+        # 否则返回空查询集
+        return queryset.none()
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):
