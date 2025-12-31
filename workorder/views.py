@@ -142,7 +142,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         queryset = super().get_queryset()
-        queryset = queryset.select_related('customer', 'customer__salesperson', 'manager', 'created_by')
+        queryset = queryset.select_related('customer', 'customer__salesperson', 'manager', 'created_by', 'approved_by')
         queryset = queryset.prefetch_related('order_processes', 'materials', 'products__product', 'artworks', 'dies')
         return queryset
     
@@ -226,6 +226,37 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             )
         
         work_order.status = new_status
+        work_order.save()
+        
+        serializer = self.get_serializer(work_order)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """业务员审核施工单"""
+        work_order = self.get_object()
+        
+        # 检查用户是否为业务员
+        if not request.user.groups.filter(name='业务员').exists():
+            return Response(
+                {'error': '只有业务员可以审核施工单'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        approval_status = request.data.get('approval_status')  # 'approved' 或 'rejected'
+        approval_comment = request.data.get('approval_comment', '')
+        
+        if approval_status not in ['approved', 'rejected']:
+            return Response(
+                {'error': '审核状态必须是 approved 或 rejected'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 更新审核信息
+        work_order.approval_status = approval_status
+        work_order.approved_by = request.user
+        work_order.approved_at = timezone.now()
+        work_order.approval_comment = approval_comment
         work_order.save()
         
         serializer = self.get_serializer(work_order)

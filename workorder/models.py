@@ -363,6 +363,20 @@ class WorkOrder(models.Model):
     
     notes = models.TextField('备注', blank=True)
     
+    # 业务员审核相关字段
+    APPROVAL_STATUS_CHOICES = [
+        ('pending', '待审核'),
+        ('approved', '已通过'),
+        ('rejected', '已拒绝'),
+    ]
+    approval_status = models.CharField('审核状态', max_length=20, choices=APPROVAL_STATUS_CHOICES, 
+                                       default='pending')
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='approved_orders', verbose_name='审核人',
+                                   help_text='业务员审核人')
+    approved_at = models.DateTimeField('审核时间', null=True, blank=True)
+    approval_comment = models.TextField('审核意见', blank=True, help_text='业务员审核意见')
+    
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
                                    related_name='created_orders', verbose_name='创建人')
     created_at = models.DateTimeField('创建时间', auto_now_add=True)

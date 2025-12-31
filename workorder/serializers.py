@@ -165,6 +165,8 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
     salesperson_name = serializers.CharField(source='customer.salesperson.username', read_only=True, allow_null=True)
     product_code = serializers.CharField(source='product.code', read_only=True, allow_null=True)
     manager_name = serializers.CharField(source='manager.username', read_only=True, allow_null=True)
+    approved_by_name = serializers.CharField(source='approved_by.username', read_only=True, allow_null=True)
+    approval_status_display = serializers.CharField(source='get_approval_status_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     progress_percentage = serializers.SerializerMethodField()
@@ -226,6 +228,8 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     product_detail = ProductSerializer(source='product', read_only=True)
     manager_name = serializers.CharField(source='manager.username', read_only=True, allow_null=True)
     created_by_name = serializers.CharField(source='created_by.username', read_only=True, allow_null=True)
+    approved_by_name = serializers.CharField(source='approved_by.username', read_only=True, allow_null=True)
+    approval_status_display = serializers.CharField(source='get_approval_status_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     # 图稿信息：支持多个图稿
     artworks = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
