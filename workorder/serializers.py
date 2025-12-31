@@ -27,6 +27,8 @@ class UserSerializer(serializers.ModelSerializer):
 
 class CustomerSerializer(serializers.ModelSerializer):
     """客户序列化器"""
+    salesperson_name = serializers.CharField(source='salesperson.username', read_only=True, allow_null=True)
+    
     class Meta:
         model = Customer
         fields = '__all__'

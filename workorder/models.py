@@ -12,6 +12,9 @@ class Customer(models.Model):
     phone = models.CharField('联系电话', max_length=50, blank=True)
     email = models.EmailField('邮箱', blank=True)
     address = models.TextField('地址', blank=True)
+    salesperson = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='customers', verbose_name='业务员',
+                                    help_text='负责该客户的业务员')
     notes = models.TextField('备注', blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)

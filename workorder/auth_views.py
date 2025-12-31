@@ -3,8 +3,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 from django.views.decorators.csrf import ensure_csrf_cookie
+from .serializers import UserSerializer
 import re
 
 
@@ -126,4 +127,28 @@ def register_view(request):
         'first_name': user.first_name,
         'last_name': user.last_name,
     }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_salespersons(request):
+    """获取业务员列表"""
+    try:
+        # 获取"业务员"组
+        salesperson_group = Group.objects.filter(name='业务员').first()
+        
+        if salesperson_group:
+            # 获取属于业务员组的用户
+            salespersons = salesperson_group.user_set.filter(is_active=True).order_by('username')
+        else:
+            # 如果业务员组不存在，返回空列表
+            salespersons = User.objects.none()
+        
+        serializer = UserSerializer(salespersons, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 

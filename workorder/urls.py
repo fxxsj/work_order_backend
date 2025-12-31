@@ -9,7 +9,7 @@ from .views import (
     DieViewSet, DieProductViewSet, WorkOrderTaskViewSet,
     ProductGroupViewSet, ProductGroupItemViewSet
 )
-from .auth_views import login_view, logout_view, get_current_user, register_view
+from .auth_views import login_view, logout_view, get_current_user, register_view, get_salespersons
 
 router = DefaultRouter()
 router.register(r'customers', CustomerViewSet)
@@ -37,5 +37,6 @@ urlpatterns = [
     path('auth/logout/', logout_view, name='logout'),
     path('auth/user/', get_current_user, name='current-user'),
     path('auth/register/', register_view, name='register'),
+    path('auth/salespersons/', get_salespersons, name='salespersons'),
 ]
 

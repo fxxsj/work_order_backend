@@ -10,14 +10,18 @@ from .models import (
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ['name', 'contact_person', 'phone', 'email', 'created_at']
-    search_fields = ['name', 'contact_person', 'phone', 'email']
-    list_filter = ['created_at']
+    list_display = ['name', 'contact_person', 'phone', 'email', 'salesperson', 'created_at']
+    search_fields = ['name', 'contact_person', 'phone', 'email', 'salesperson__username']
+    list_filter = ['created_at', 'salesperson']
     readonly_fields = ['created_at', 'updated_at']
+    autocomplete_fields = ['salesperson']
     
     fieldsets = (
         ('基本信息', {
             'fields': ('name', 'contact_person', 'phone', 'email')
+        }),
+        ('业务信息', {
+            'fields': ('salesperson',)
         }),
         ('详细信息', {
             'fields': ('address', 'notes')
