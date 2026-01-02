@@ -607,6 +607,9 @@ class ArtworkSerializer(serializers.ModelSerializer):
     )
     # 色数显示（计算字段）
     color_display = serializers.SerializerMethodField()
+    # 刀模信息
+    die_names = serializers.SerializerMethodField()
+    die_codes = serializers.SerializerMethodField()
     
     class Meta:
         model = Artwork
@@ -648,6 +651,14 @@ class ArtworkSerializer(serializers.ModelSerializer):
             result += f'（{total_count}色）'
         
         return result
+    
+    def get_die_names(self, obj):
+        """获取所有刀模名称"""
+        return [die.name for die in obj.dies.all()]
+    
+    def get_die_codes(self, obj):
+        """获取所有刀模编码"""
+        return [die.code for die in obj.dies.all()]
     
     def create(self, validated_data):
         """创建图稿，如果编码为空则自动生成，并创建关联产品"""

@@ -143,6 +143,9 @@ class Artwork(models.Model):
     other_colors = models.JSONField('其他颜色', default=list, blank=True, 
                                    help_text='其他颜色列表，如：["528C", "金色"]')
     imposition_size = models.CharField('拼版尺寸', max_length=100, blank=True, help_text='如：420x594mm、889x1194mm等')
+    # 关联刀模（多对多关系）
+    dies = models.ManyToManyField('Die', blank=True, verbose_name='关联刀模',
+                                 help_text='该图稿关联的刀模')
     notes = models.TextField('备注', blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
