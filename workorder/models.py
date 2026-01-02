@@ -50,12 +50,24 @@ class Department(models.Model):
 
 class Process(models.Model):
     """工序定义"""
+    TASK_GENERATION_RULE_CHOICES = [
+        ('artwork', '按图稿生成任务（每个图稿一个任务，数量为1）'),
+        ('die', '按刀模生成任务（每个刀模一个任务，数量为1）'),
+        ('product', '按产品生成任务（每个产品一个任务）'),
+        ('material', '按物料生成任务（每个物料一个任务）'),
+        ('general', '生成通用任务（一个工序一个任务）'),
+    ]
+    
     name = models.CharField('工序名称', max_length=100)
     code = models.CharField('工序编码', max_length=50, unique=True)
     description = models.TextField('工序描述', blank=True)
     standard_duration = models.IntegerField('标准工时(小时)', default=0)
     sort_order = models.IntegerField('排序', default=0)
     is_active = models.BooleanField('是否启用', default=True)
+    task_generation_rule = models.CharField('任务生成规则', max_length=20, 
+                                           choices=TASK_GENERATION_RULE_CHOICES,
+                                           default='general',
+                                           help_text='该工序如何生成任务')
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
 
     class Meta:
@@ -121,6 +133,8 @@ class Material(models.Model):
     unit = models.CharField('单位', max_length=20, default='个')
     unit_price = models.DecimalField('单价', max_digits=10, decimal_places=2, default=0)
     stock_quantity = models.DecimalField('库存数量', max_digits=10, decimal_places=2, default=0)
+    need_cutting = models.BooleanField('需要开料', default=False, 
+                                      help_text='该物料是否需要开料工序处理')
     notes = models.TextField('备注', blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
 
@@ -149,6 +163,11 @@ class Artwork(models.Model):
     # 关联刀模（多对多关系）
     dies = models.ManyToManyField('Die', blank=True, verbose_name='关联刀模',
                                  help_text='该图稿关联的刀模')
+    # 图稿确认相关字段
+    confirmed = models.BooleanField('已确认', default=False, help_text='设计部是否已确认该图稿')
+    confirmed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name='confirmed_artworks', verbose_name='确认人')
+    confirmed_at = models.DateTimeField('确认时间', null=True, blank=True)
     notes = models.TextField('备注', blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
@@ -521,6 +540,268 @@ class WorkOrderProcess(models.Model):
 
     def __str__(self):
         return f"{self.work_order.order_number} - {self.process.name}"
+    
+    def can_start(self):
+        """判断该工序是否可以开始"""
+        # 制版、刀模和采购可以并行（通过工序名称识别）
+        process_name = self.process.name.lower()
+        parallel_keywords = ['制版', '设计', '刀模', '模切', '采购']
+        
+        if any(keyword in process_name for keyword in parallel_keywords):
+            # 这些工序可以并行，只要没有其他限制就可以开始
+            return True
+        
+        # 其他工序需要前一个工序完成
+        # 获取所有非并行工序，按 sequence 排序
+        non_parallel_processes = WorkOrderProcess.objects.filter(
+            work_order=self.work_order
+        ).exclude(
+            process__name__icontains='制版'
+        ).exclude(
+            process__name__icontains='设计'
+        ).exclude(
+            process__name__icontains='刀模'
+        ).exclude(
+            process__name__icontains='模切'
+        ).exclude(
+            process__name__icontains='采购'
+        ).order_by('sequence')
+        
+        # 找到当前工序在非并行工序中的位置
+        current_idx = None
+        for idx, wp in enumerate(non_parallel_processes):
+            if wp.id == self.id:
+                current_idx = idx
+                break
+        
+        # 如果是第一个非并行工序，可以开始
+        if current_idx == 0:
+            return True
+        
+        # 检查前一个非并行工序是否完成
+        if current_idx and current_idx > 0:
+            previous_process = non_parallel_processes[current_idx - 1]
+            return previous_process.status == 'completed'
+        
+        return True
+    
+    def check_and_update_status(self):
+        """根据任务状态自动判断工序是否完成"""
+        all_tasks = self.tasks.all()
+        if not all_tasks.exists():
+            return False
+        
+        process_name = self.process.name.lower()
+        rule = self.process.task_generation_rule
+        
+        # 根据任务生成规则和工序名称判断完成条件
+        if rule == 'artwork':
+            # 图稿任务：制版需要图稿确认+任务完成，印刷只需要任务完成
+            if '制版' in process_name or '设计' in process_name:
+                # 制版：检查所有图稿是否已确认且任务完成
+                for task in all_tasks:
+                    if task.artwork and not task.artwork.confirmed:
+                        return False
+                    if task.status != 'completed':
+                        return False
+            else:
+                # 印刷等其他图稿任务：只需要任务完成
+                for task in all_tasks:
+                    if task.status != 'completed':
+                        return False
+        
+        elif rule == 'material':
+            # 物料任务：根据工序名称判断完成条件
+            if '采购' in process_name:
+                # 采购：检查所有物料是否已回料（purchase_status='received'）
+                for task in all_tasks:
+                    if task.material:
+                        try:
+                            material_record = WorkOrderMaterial.objects.get(
+                                work_order=self.work_order,
+                                material=task.material
+                            )
+                            if material_record.purchase_status != 'received':
+                                return False
+                        except WorkOrderMaterial.DoesNotExist:
+                            return False
+            elif '开料' in process_name or '裁切' in process_name:
+                # 开料：检查所有物料是否已开料（purchase_status='cut'）
+                for task in all_tasks:
+                    if task.material:
+                        try:
+                            material_record = WorkOrderMaterial.objects.get(
+                                work_order=self.work_order,
+                                material=task.material
+                            )
+                            if material_record.purchase_status != 'cut':
+                                return False
+                        except WorkOrderMaterial.DoesNotExist:
+                            return False
+            else:
+                # 其他物料任务：检查任务状态
+                for task in all_tasks:
+                    if task.status != 'completed':
+                        return False
+        
+        elif rule == 'die':
+            # 刀模任务（模切）：检查所有任务是否完成
+            for task in all_tasks:
+                if task.status != 'completed':
+                    return False
+        
+        elif rule == 'product':
+            # 产品任务（包装）：检查所有任务是否完成
+            for task in all_tasks:
+                if task.status != 'completed':
+                    return False
+        
+        else:  # general
+            # 通用任务（裱坑、打钉等）：检查所有任务是否完成
+            for task in all_tasks:
+                if task.status != 'completed':
+                    return False
+        
+        # 如果所有任务完成，设置工序状态为 completed
+        if all(task.status == 'completed' for task in all_tasks):
+            self.status = 'completed'
+            self.actual_end_time = timezone.now()
+            self.save()
+            return True
+        return False
+    
+    def generate_tasks(self):
+        """为工序生成任务（在工序开始时调用）"""
+        # 如果已经有任务，不再生成
+        if self.tasks.exists():
+            return
+        
+        process = self.process
+        work_order = self.work_order
+        rule = process.task_generation_rule
+        process_name = process.name.lower()
+        
+        # 根据任务生成规则生成任务
+        if rule == 'artwork':
+            # 按图稿生成任务（每个图稿一个任务，数量为1）
+            # 用于：制版、印刷
+            for artwork in work_order.artworks.all():
+                # 根据工序名称确定任务内容
+                if '制版' in process_name or '设计' in process_name:
+                    work_content = f'制版：{artwork.get_full_code()} - {artwork.name}'
+                elif '印刷' in process_name:
+                    work_content = f'印刷：{artwork.get_full_code()} - {artwork.name}'
+                else:
+                    work_content = f'{process.name}：{artwork.get_full_code()} - {artwork.name}'
+                
+                WorkOrderTask.objects.create(
+                    work_order_process=self,
+                    task_type='artwork',
+                    artwork=artwork,
+                    work_content=work_content,
+                    production_quantity=1,
+                    quantity_completed=0,
+                    auto_calculate_quantity=False  # 图稿任务固定为1
+                )
+        
+        elif rule == 'die':
+            # 按刀模生成任务（每个刀模一个任务，数量为1）
+            # 用于：模切
+            for die in work_order.dies.all():
+                WorkOrderTask.objects.create(
+                    work_order_process=self,
+                    task_type='die',
+                    die=die,
+                    work_content=f'模切：{die.code} - {die.name}',
+                    production_quantity=1,
+                    quantity_completed=0,
+                    auto_calculate_quantity=False  # 刀模任务固定为1
+                )
+        
+        elif rule == 'product':
+            # 按产品生成任务（每个产品一个任务）
+            # 用于：包装
+            for product_item in work_order.products.all():
+                WorkOrderTask.objects.create(
+                    work_order_process=self,
+                    task_type='product',
+                    product=product_item.product,
+                    work_content=f'包装：{product_item.product.name}',
+                    production_quantity=product_item.quantity,
+                    quantity_completed=0,
+                    auto_calculate_quantity=True
+                )
+        
+        elif rule == 'material':
+            # 按物料生成任务（每个物料一个任务）
+            # 用于：采购、开料
+            if '采购' in process_name:
+                # 采购任务：所有物料
+                for material_item in work_order.materials.all():
+                    quantity = self._parse_material_usage(material_item.material_usage)
+                    WorkOrderTask.objects.create(
+                        work_order_process=self,
+                        task_type='material',
+                        material=material_item.material,
+                        work_content=f'采购：{material_item.material.name}',
+                        production_quantity=quantity,
+                        quantity_completed=0,
+                        auto_calculate_quantity=True
+                    )
+            elif '开料' in process_name or '裁切' in process_name:
+                # 开料任务：只包含需要开料的物料（need_cutting=True）
+                for material_item in work_order.materials.all():
+                    if material_item.material.need_cutting:
+                        quantity = self._parse_material_usage(material_item.material_usage)
+                        WorkOrderTask.objects.create(
+                            work_order_process=self,
+                            task_type='material',
+                            material=material_item.material,
+                            work_content=f'开料：{material_item.material.name}',
+                            production_quantity=quantity,
+                            quantity_completed=0,
+                            auto_calculate_quantity=True
+                        )
+            else:
+                # 其他物料相关工序
+                for material_item in work_order.materials.all():
+                    quantity = self._parse_material_usage(material_item.material_usage)
+                    WorkOrderTask.objects.create(
+                        work_order_process=self,
+                        task_type='material',
+                        material=material_item.material,
+                        work_content=f'{process.name}：{material_item.material.name}',
+                        production_quantity=quantity,
+                        quantity_completed=0,
+                        auto_calculate_quantity=True
+                    )
+        
+        else:  # general
+            # 生成通用任务（一个工序一个任务）
+            # 用于：裱坑、打钉等其他工序
+            WorkOrderTask.objects.create(
+                work_order_process=self,
+                task_type='general',
+                work_content=f'{process.name}：{work_order.order_number}',
+                production_quantity=work_order.production_quantity or 0,
+                quantity_completed=0,
+                auto_calculate_quantity=True
+            )
+    
+    def _parse_material_usage(self, usage_str):
+        """解析物料用量字符串，提取数字部分"""
+        if not usage_str:
+            return 0
+        
+        import re
+        # 尝试提取数字（支持整数和小数）
+        numbers = re.findall(r'\d+\.?\d*', usage_str)
+        if numbers:
+            try:
+                return int(float(numbers[0]))
+            except (ValueError, IndexError):
+                return 0
+        return 0
 
     def calculate_duration(self):
         """计算工序耗时"""
@@ -615,10 +896,33 @@ class ProcessLog(models.Model):
 
 class WorkOrderTask(models.Model):
     """施工单任务（为工序生成的具体任务）"""
+    TASK_TYPE_CHOICES = [
+        ('artwork', '图稿任务'),
+        ('die', '刀模任务'),
+        ('product', '产品任务'),
+        ('material', '物料任务'),
+        ('general', '通用任务'),
+    ]
+    
     work_order_process = models.ForeignKey(WorkOrderProcess, on_delete=models.CASCADE,
                                           related_name='tasks', verbose_name='工序')
+    task_type = models.CharField('任务类型', max_length=20, choices=TASK_TYPE_CHOICES,
+                                default='general', help_text='任务类型，用于区分不同的任务生成规则')
     work_content = models.TextField('施工内容', help_text='具体的施工内容描述')
     production_quantity = models.IntegerField('生产数量', default=0, help_text='该任务需要生产的数量')
+    quantity_completed = models.IntegerField('完成数量', default=0, 
+                                           help_text='任务完成数量，可自动计算或手动输入')
+    auto_calculate_quantity = models.BooleanField('自动计算数量', default=True,
+                                                  help_text='是否自动计算完成数量')
+    # 关联对象（根据任务类型，只有一个字段会有值）
+    artwork = models.ForeignKey('Artwork', on_delete=models.CASCADE, null=True, blank=True,
+                               related_name='tasks', verbose_name='关联图稿')
+    die = models.ForeignKey('Die', on_delete=models.CASCADE, null=True, blank=True,
+                           related_name='tasks', verbose_name='关联刀模')
+    product = models.ForeignKey('Product', on_delete=models.CASCADE, null=True, blank=True,
+                                related_name='tasks', verbose_name='关联产品')
+    material = models.ForeignKey('Material', on_delete=models.CASCADE, null=True, blank=True,
+                                related_name='tasks', verbose_name='关联物料')
     production_requirements = models.TextField('生产要求', blank=True, help_text='生产过程中的特殊要求')
     status = models.CharField('状态', max_length=20, 
                              choices=[('pending', '待开始'), ('in_progress', '进行中'), 
@@ -634,4 +938,21 @@ class WorkOrderTask(models.Model):
 
     def __str__(self):
         return f"{self.work_order_process} - {self.work_content[:50]}"
+
+
+class UserProfile(models.Model):
+    """用户扩展信息"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile',
+                                verbose_name='用户')
+    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True,
+                                   verbose_name='所属部门', help_text='用户所属的部门')
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '用户扩展信息'
+        verbose_name_plural = '用户扩展信息管理'
+
+    def __str__(self):
+        return f"{self.user.username} - {self.department.name if self.department else '未分配部门'}"
 

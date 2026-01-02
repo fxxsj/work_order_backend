@@ -2,9 +2,9 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.db.models import Count, Q
 from .models import (
-    Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder, 
+    Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
-    Die, DieProduct, WorkOrderTask, ProductGroup, ProductGroupItem
+    Die, DieProduct, WorkOrderTask, ProductGroup, ProductGroupItem, UserProfile
 )
 
 
@@ -496,4 +496,14 @@ class DieAdmin(admin.ModelAdmin):
         if not obj.code:
             obj.code = Die.generate_code()
         super().save_model(request, obj, form, change)
+
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    """用户扩展信息管理"""
+    list_display = ['user', 'department', 'created_at']
+    list_filter = ['department', 'created_at']
+    search_fields = ['user__username', 'user__first_name', 'user__last_name', 'department__name']
+    raw_id_fields = ['user', 'department']
+    ordering = ['-created_at']
 

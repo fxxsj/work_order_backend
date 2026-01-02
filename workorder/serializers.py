@@ -102,10 +102,113 @@ class ProcessLogSerializer(serializers.ModelSerializer):
 class WorkOrderTaskSerializer(serializers.ModelSerializer):
     """施工单任务序列化器"""
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    task_type_display = serializers.CharField(source='get_task_type_display', read_only=True)
+    artwork_code = serializers.SerializerMethodField()
+    artwork_name = serializers.SerializerMethodField()
+    artwork_confirmed = serializers.SerializerMethodField()
+    die_code = serializers.SerializerMethodField()
+    die_name = serializers.SerializerMethodField()
+    product_code = serializers.SerializerMethodField()
+    product_name = serializers.SerializerMethodField()
+    material_code = serializers.SerializerMethodField()
+    material_name = serializers.SerializerMethodField()
+    # 物料状态（用于采购和开料任务）
+    material_purchase_status = serializers.SerializerMethodField()
+    # 工序和施工单信息
+    work_order_process_info = serializers.SerializerMethodField()
     
     class Meta:
         model = WorkOrderTask
         fields = '__all__'
+        # 在更新时，某些字段应该是只读的
+        read_only_fields = ['work_order_process', 'task_type', 'work_content', 'production_quantity', 
+                          'artwork', 'die', 'product', 'material', 'auto_calculate_quantity', 
+                          'production_requirements', 'created_at']
+    
+    def get_artwork_code(self, obj):
+        """获取图稿编码"""
+        if obj.artwork:
+            return obj.artwork.get_full_code()
+        return None
+    
+    def get_artwork_name(self, obj):
+        """获取图稿名称"""
+        if obj.artwork:
+            return obj.artwork.name
+        return None
+    
+    def get_artwork_confirmed(self, obj):
+        """获取图稿确认状态"""
+        if obj.artwork:
+            return obj.artwork.confirmed
+        return None
+    
+    def get_die_code(self, obj):
+        """获取刀模编码"""
+        if obj.die:
+            return obj.die.code
+        return None
+    
+    def get_die_name(self, obj):
+        """获取刀模名称"""
+        if obj.die:
+            return obj.die.name
+        return None
+    
+    def get_product_code(self, obj):
+        """获取产品编码"""
+        if obj.product:
+            return obj.product.code
+        return None
+    
+    def get_product_name(self, obj):
+        """获取产品名称"""
+        if obj.product:
+            return obj.product.name
+        return None
+    
+    def get_material_code(self, obj):
+        """获取物料编码"""
+        if obj.material:
+            return obj.material.code
+        return None
+    
+    def get_material_name(self, obj):
+        """获取物料名称"""
+        if obj.material:
+            return obj.material.name
+        return None
+    
+    def get_material_purchase_status(self, obj):
+        """获取物料采购状态"""
+        if obj.material and obj.work_order_process:
+            try:
+                material_record = WorkOrderMaterial.objects.get(
+                    work_order=obj.work_order_process.work_order,
+                    material=obj.material
+                )
+                return material_record.purchase_status
+            except WorkOrderMaterial.DoesNotExist:
+                return None
+        return None
+    
+    def get_work_order_process_info(self, obj):
+        """获取工序和施工单信息"""
+        if obj.work_order_process:
+            process = obj.work_order_process.process
+            work_order = obj.work_order_process.work_order
+            return {
+                'process': {
+                    'id': process.id if process else None,
+                    'name': process.name if process else None,
+                    'code': process.code if process else None
+                },
+                'work_order': {
+                    'id': work_order.id if work_order else None,
+                    'order_number': work_order.order_number if work_order else None
+                }
+            }
+        return None
 
 
 class WorkOrderProcessSerializer(serializers.ModelSerializer):
@@ -116,12 +219,17 @@ class WorkOrderProcessSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     department_name = serializers.CharField(source='department.name', read_only=True, allow_null=True)
     department_code = serializers.CharField(source='department.code', read_only=True, allow_null=True)
+    can_start = serializers.SerializerMethodField()
     logs = ProcessLogSerializer(many=True, read_only=True)
     tasks = WorkOrderTaskSerializer(many=True, read_only=True)
     
     class Meta:
         model = WorkOrderProcess
         fields = '__all__'
+    
+    def get_can_start(self, obj):
+        """判断工序是否可以开始"""
+        return obj.can_start()
 
 
 class ProductGroupItemSerializer(serializers.ModelSerializer):
@@ -279,10 +387,12 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     printing_cmyk_colors = serializers.JSONField(read_only=True)
     printing_other_colors = serializers.JSONField(read_only=True)
     printing_colors_display = serializers.SerializerMethodField()
-    # 图稿信息：支持多个图稿
+    # 图稿信息：支持多个图稿（使用 PrimaryKeyRelatedField，避免循环引用）
     artworks = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     artwork_names = serializers.SerializerMethodField()
     artwork_codes = serializers.SerializerMethodField()
+    # 图稿详细信息（包含确认状态）
+    artwork_details = serializers.SerializerMethodField()
     artwork_colors = serializers.SerializerMethodField()  # 图稿色数信息
     # 刀模信息：支持多个刀模
     dies = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
@@ -345,6 +455,21 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     def get_artwork_codes(self, obj):
         """获取所有图稿编码（完整编码，包含版本号）"""
         return [artwork.get_full_code() for artwork in obj.artworks.all()]
+    
+    def get_artwork_details(self, obj):
+        """获取图稿详细信息（包含确认状态）"""
+        artworks = obj.artworks.all()
+        return [
+            {
+                'id': artwork.id,
+                'code': artwork.get_full_code(),
+                'name': artwork.name,
+                'confirmed': artwork.confirmed,
+                'confirmed_by_name': artwork.confirmed_by.username if artwork.confirmed_by else None,
+                'confirmed_at': artwork.confirmed_at
+            }
+            for artwork in artworks
+        ]
     
     def get_artwork_colors(self, obj):
         """获取所有图稿的色数信息"""
@@ -529,6 +654,9 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                     sort_order=item.get('sort_order', 0)
                 )
         
+        # 自动创建工序
+        self._create_work_order_processes(work_order)
+        
         return work_order
     
     def update(self, instance, validated_data):
@@ -571,8 +699,50 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                     specification=item.get('specification', ''),
                     sort_order=item.get('sort_order', 0)
                 )
+            
+            # 如果产品列表发生变化，重新创建工序
+            self._recreate_work_order_processes(instance)
         
         return instance
+    
+    def _create_work_order_processes(self, work_order):
+        """为施工单自动创建工序"""
+        # 收集所有产品的默认工序
+        processes = set()
+        
+        # 从 products 关联中获取
+        for product_item in work_order.products.all():
+            processes.update(product_item.product.default_processes.all())
+        
+        # 兼容旧数据：如果使用单个 product 字段
+        if work_order.product:
+            processes.update(work_order.product.default_processes.all())
+        
+        # 为每个工序创建 WorkOrderProcess
+        for process in sorted(processes, key=lambda p: p.sort_order):
+            # 查找负责该工序的部门（可能有多个，选择第一个）
+            departments = Department.objects.filter(processes=process, is_active=True)
+            department = departments.first() if departments.exists() else None
+            
+            WorkOrderProcess.objects.get_or_create(
+                work_order=work_order,
+                process=process,
+                defaults={
+                    'department': department,
+                    'sequence': process.sort_order
+                }
+            )
+    
+    def _recreate_work_order_processes(self, work_order):
+        """重新创建施工单的工序（当产品列表变化时）"""
+        # 删除现有的工序（如果还没有开始）
+        WorkOrderProcess.objects.filter(
+            work_order=work_order,
+            status='pending'
+        ).delete()
+        
+        # 重新创建工序
+        self._create_work_order_processes(work_order)
 
 
 class WorkOrderProcessUpdateSerializer(serializers.ModelSerializer):
@@ -612,6 +782,8 @@ class ArtworkSerializer(serializers.ModelSerializer):
     die_codes = serializers.SerializerMethodField()
     # 完整编码（包含版本号），用于向后兼容
     code = serializers.SerializerMethodField()
+    # 确认信息
+    confirmed_by_name = serializers.CharField(source='confirmed_by.username', read_only=True, allow_null=True)
     
     class Meta:
         model = Artwork

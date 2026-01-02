@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters import FilterSet, NumberFilter
-from django.db.models import Q, Count, Sum
+from django.db.models import Q, Count, Sum, Max
 from django.utils import timezone
 from .permissions import WorkOrderProcessPermission, WorkOrderMaterialPermission
 from rest_framework.permissions import DjangoModelPermissions
@@ -188,6 +188,32 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
+        # 检查是否已存在相同 sequence 的工序
+        # 如果存在，自动调整 sequence 为下一个可用的值
+        existing_process = WorkOrderProcess.objects.filter(
+            work_order=work_order,
+            sequence=sequence
+        ).first()
+        
+        if existing_process:
+            # 找到该施工单中最大的 sequence，然后加1
+            max_sequence = WorkOrderProcess.objects.filter(
+                work_order=work_order
+            ).aggregate(Max('sequence'))['sequence__max'] or 0
+            sequence = max_sequence + 1
+        
+        # 检查是否已经存在相同的工序（同一个施工单和同一个工序）
+        existing_same_process = WorkOrderProcess.objects.filter(
+            work_order=work_order,
+            process=process
+        ).first()
+        
+        if existing_same_process:
+            return Response(
+                {'error': '该工序已经添加到施工单中'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         work_order_process = WorkOrderProcess.objects.create(
             work_order=work_order,
             process=process,
@@ -342,32 +368,36 @@ class WorkOrderProcessViewSet(viewsets.ModelViewSet):
         if self.action in ['update', 'partial_update']:
             return WorkOrderProcessUpdateSerializer
         return WorkOrderProcessSerializer
-
-
-class WorkOrderTaskViewSet(viewsets.ModelViewSet):
-    """施工单任务视图集"""
-    queryset = WorkOrderTask.objects.select_related('work_order_process')
-    serializer_class = WorkOrderTaskSerializer
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['work_order_process', 'status']
-    search_fields = ['work_content', 'production_requirements']
-    ordering_fields = ['created_at', 'updated_at']
-    ordering = ['-created_at']
     
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
-        """开始工序"""
+        """开始工序（生成任务）"""
         process = self.get_object()
         
-        if process.status == 'completed':
+        # 检查是否可以开始
+        if not process.can_start():
             return Response(
-                {'error': '工序已完成，无法开始'},
+                {'error': '该工序不能开始，请先完成前置工序'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # 如果状态不是 pending，不能重新开始
+        if process.status != 'pending':
+            return Response(
+                {'error': '该工序已经开始或完成，不能重新开始'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 生成任务
+        process.generate_tasks()
+        
+        # 更新工序状态
         process.status = 'in_progress'
         process.actual_start_time = timezone.now()
-        process.operator = request.user
+        if request.data.get('operator'):
+            process.operator_id = request.data.get('operator')
+        if request.data.get('department'):
+            process.department_id = request.data.get('department')
         process.save()
         
         # 记录日志
@@ -386,69 +416,56 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         """完成工序"""
         process = self.get_object()
         
-        if process.status == 'completed':
+        # 检查状态
+        if process.status != 'in_progress':
             return Response(
-                {'error': '工序已完成'},
+                {'error': '只有进行中的工序才能完成'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # 获取完成数量和不良品数量
+        quantity_completed = request.data.get('quantity_completed', 0)
+        quantity_defective = request.data.get('quantity_defective', 0)
+        
+        # 更新工序信息
+        process.quantity_completed = quantity_completed
+        process.quantity_defective = quantity_defective
         process.status = 'completed'
         process.actual_end_time = timezone.now()
-        
-        # 获取完成数量
-        quantity_completed = request.data.get('quantity_completed')
-        if quantity_completed:
-            process.quantity_completed = quantity_completed
-        
-        quantity_defective = request.data.get('quantity_defective', 0)
-        process.quantity_defective = quantity_defective
-        
-        process.calculate_duration()
         process.save()
         
         # 记录日志
         ProcessLog.objects.create(
             work_order_process=process,
             log_type='complete',
-            content=f'完成工序，完成数量：{process.quantity_completed}，不良品：{process.quantity_defective}',
+            content=f'完成工序，完成数量：{quantity_completed}，不良品数量：{quantity_defective}',
             operator=request.user
         )
         
         serializer = self.get_serializer(process)
         return Response(serializer.data)
-    
-    @action(detail=True, methods=['post'])
-    def add_log(self, request, pk=None):
-        """添加工序日志"""
-        process = self.get_object()
-        content = request.data.get('content')
-        
-        if not content:
-            return Response(
-                {'error': '请提供日志内容'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        log = ProcessLog.objects.create(
-            work_order_process=process,
-            log_type='note',
-            content=content,
-            operator=request.user
-        )
-        
-        serializer = ProcessLogSerializer(log)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class WorkOrderTaskViewSet(viewsets.ModelViewSet):
     """施工单任务视图集"""
-    queryset = WorkOrderTask.objects.select_related('work_order_process')
+    queryset = WorkOrderTask.objects.select_related(
+        'work_order_process', 'work_order_process__process', 
+        'work_order_process__work_order', 'artwork', 'die', 'product', 'material'
+    )
     serializer_class = WorkOrderTaskSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['work_order_process', 'status']
+    filterset_fields = ['work_order_process', 'status', 'task_type']
     search_fields = ['work_content', 'production_requirements']
     ordering_fields = ['created_at', 'updated_at']
     ordering = ['-created_at']
+    
+    def perform_update(self, serializer):
+        """更新任务时，检查工序是否完成"""
+        task = serializer.save()
+        
+        # 如果任务完成，检查工序是否完成
+        if task.status == 'completed':
+            task.work_order_process.check_and_update_status()
 
 
 class WorkOrderProductViewSet(viewsets.ModelViewSet):
@@ -546,6 +563,43 @@ class ArtworkViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(new_artwork)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['post'])
+    def confirm(self, request, pk=None):
+        """设计部确认图稿"""
+        artwork = self.get_object()
+        
+        if artwork.confirmed:
+            return Response(
+                {'error': '该图稿已经确认过了'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        artwork.confirmed = True
+        artwork.confirmed_by = request.user
+        artwork.confirmed_at = timezone.now()
+        artwork.save()
+        
+        # 检查相关的制版工序任务是否全部完成
+        # 找到所有包含该图稿的任务
+        tasks = WorkOrderTask.objects.filter(
+            artwork=artwork,
+            task_type='artwork',
+            work_order_process__status='in_progress'
+        )
+        
+        for task in tasks:
+            # 如果图稿已确认，可以标记任务为完成
+            if task.artwork.confirmed:
+                task.status = 'completed'
+                task.quantity_completed = 1
+                task.save()
+                
+                # 检查工序是否完成
+                task.work_order_process.check_and_update_status()
+        
+        serializer = self.get_serializer(artwork)
+        return Response(serializer.data)
     
     def get_queryset(self):
         queryset = super().get_queryset()
