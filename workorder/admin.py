@@ -396,21 +396,28 @@ class ArtworkProductInline(admin.TabularInline):
 
 @admin.register(Artwork)
 class ArtworkAdmin(admin.ModelAdmin):
-    list_display = ['code', 'name', 'color_display', 'imposition_size', 'created_at']
-    search_fields = ['code', 'name', 'imposition_size']
-    list_filter = ['created_at']
-    ordering = ['-created_at']
-    readonly_fields = ['code', 'created_at', 'updated_at']
+    list_display = ['full_code_display', 'name', 'color_display', 'imposition_size', 'created_at']
+    search_fields = ['base_code', 'name', 'imposition_size']
+    list_filter = ['created_at', 'version']
+    ordering = ['-base_code', '-version']
+    readonly_fields = ['base_code', 'version', 'full_code_display', 'created_at', 'updated_at']
     inlines = [ArtworkProductInline]
     
     fieldsets = (
         ('基本信息', {
-            'fields': ('code', 'name', 'cmyk_colors', 'other_colors', 'imposition_size')
+            'fields': ('base_code', 'version', 'full_code_display', 'name', 'cmyk_colors', 'other_colors', 'imposition_size')
         }),
         ('其他', {
             'fields': ('notes', 'created_at', 'updated_at')
         }),
     )
+    
+    def full_code_display(self, obj):
+        """显示完整编码（包含版本号）"""
+        if obj.pk:
+            return obj.get_full_code()
+        return '-'
+    full_code_display.short_description = '图稿编码'
     
     def color_display(self, obj):
         """显示颜色信息，格式：CMK+928C,金色（5色）"""
@@ -450,9 +457,12 @@ class ArtworkAdmin(admin.ModelAdmin):
     color_display.short_description = '色数'
     
     def save_model(self, request, obj, form, change):
-        """保存时自动生成编码"""
-        if not obj.code:
-            obj.code = Artwork.generate_code()
+        """保存时自动生成主编码"""
+        if not obj.base_code:
+            obj.base_code = Artwork.generate_base_code()
+        # 如果是新建且指定了 base_code，自动获取下一个版本号
+        if obj.base_code and not change and not obj.version:
+            obj.version = Artwork.get_next_version(obj.base_code)
         super().save_model(request, obj, form, change)
 
 

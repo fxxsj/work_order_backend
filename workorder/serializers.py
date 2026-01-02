@@ -343,8 +343,8 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         return [artwork.name for artwork in obj.artworks.all()]
     
     def get_artwork_codes(self, obj):
-        """获取所有图稿编码"""
-        return [artwork.code for artwork in obj.artworks.all()]
+        """获取所有图稿编码（完整编码，包含版本号）"""
+        return [artwork.get_full_code() for artwork in obj.artworks.all()]
     
     def get_artwork_colors(self, obj):
         """获取所有图稿的色数信息"""
@@ -610,11 +610,13 @@ class ArtworkSerializer(serializers.ModelSerializer):
     # 刀模信息
     die_names = serializers.SerializerMethodField()
     die_codes = serializers.SerializerMethodField()
+    # 完整编码（包含版本号），用于向后兼容
+    code = serializers.SerializerMethodField()
     
     class Meta:
         model = Artwork
         fields = '__all__'
-        # code 字段不在 read_only_fields 中，允许自定义输入
+        # base_code 字段不在 read_only_fields 中，允许自定义输入
     
     def get_color_display(self, obj):
         """生成色数显示文本，格式：CMK+928C,金色（5色）"""
@@ -660,13 +662,21 @@ class ArtworkSerializer(serializers.ModelSerializer):
         """获取所有刀模编码"""
         return [die.code for die in obj.dies.all()]
     
+    def get_code(self, obj):
+        """获取完整编码（包含版本号），用于向后兼容"""
+        return obj.get_full_code()
+    
     def create(self, validated_data):
-        """创建图稿，如果编码为空则自动生成，并创建关联产品"""
+        """创建图稿，如果主编码为空则自动生成，并创建关联产品"""
         products_data = validated_data.pop('products_data', [])
         
-        # 如果编码为空，自动生成
-        if not validated_data.get('code'):
-            validated_data['code'] = Artwork.generate_code()
+        # 如果主编码为空，自动生成
+        if not validated_data.get('base_code'):
+            validated_data['base_code'] = Artwork.generate_base_code()
+        
+        # 如果指定了 base_code 但没有指定 version，自动获取下一个版本号
+        if validated_data.get('base_code') and 'version' not in validated_data:
+            validated_data['version'] = Artwork.get_next_version(validated_data['base_code'])
         
         artwork = super().create(validated_data)
         

@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import Max
 from datetime import datetime
 
 
@@ -134,7 +135,9 @@ class Material(models.Model):
 
 class Artwork(models.Model):
     """图稿信息"""
-    code = models.CharField('图稿编码', max_length=50, unique=True, blank=True, editable=False)
+    base_code = models.CharField('图稿主编码', max_length=50, blank=True, editable=False,
+                                help_text='图稿的主编码，如：ART202412001，不包含版本号')
+    version = models.IntegerField('版本号', default=1, help_text='图稿版本号，从1开始递增')
     name = models.CharField('图稿名称', max_length=200)
     # CMYK颜色选择（多选）
     cmyk_colors = models.JSONField('CMYK颜色', default=list, blank=True, 
@@ -153,25 +156,33 @@ class Artwork(models.Model):
     class Meta:
         verbose_name = '图稿'
         verbose_name_plural = '图稿管理'
-        ordering = ['-created_at']
+        ordering = ['-base_code', '-version']
+        unique_together = [['base_code', 'version']]  # 主编码+版本号组合唯一
 
     def __str__(self):
-        return f"{self.code} - {self.name}"
+        return f"{self.get_full_code()} - {self.name}"
+    
+    def get_full_code(self):
+        """获取完整编码（包含版本号）"""
+        if self.version > 1:
+            return f"{self.base_code}-v{self.version}"
+        return self.base_code or ''
     
     @classmethod
-    def generate_code(cls):
-        """生成图稿编码：格式 ART + yyyymm + 3位自增序号"""
+    def generate_base_code(cls):
+        """生成图稿主编码：格式 ART + yyyymm + 3位自增序号"""
         now = timezone.now()
         prefix = f"ART{now.strftime('%Y%m')}"
         
         with transaction.atomic():
+            # 查找该前缀下的最大序号（不考虑版本号）
             last_artwork = cls.objects.filter(
-                code__startswith=prefix
-            ).order_by('-code').select_for_update().first()
+                base_code__startswith=prefix
+            ).order_by('-base_code').select_for_update().first()
             
-            if last_artwork and len(last_artwork.code) >= 12:
+            if last_artwork and last_artwork.base_code and len(last_artwork.base_code) >= 12:
                 try:
-                    last_number = int(last_artwork.code[9:])  # ART + yyyymm = 9位
+                    last_number = int(last_artwork.base_code[9:])  # ART + yyyymm = 9位
                     new_number = last_number + 1
                 except (ValueError, IndexError):
                     new_number = 1
@@ -180,10 +191,20 @@ class Artwork(models.Model):
             
             return f"{prefix}{new_number:03d}"
     
+    @classmethod
+    def get_next_version(cls, base_code):
+        """获取指定主编码的下一个版本号"""
+        if not base_code:
+            return 1
+        max_version = cls.objects.filter(base_code=base_code).aggregate(
+            max_version=Max('version')
+        )['max_version']
+        return (max_version or 0) + 1
+    
     def save(self, *args, **kwargs):
-        """保存时自动生成图稿编码"""
-        if not self.code:
-            self.code = self.generate_code()
+        """保存时自动生成图稿主编码"""
+        if not self.base_code:
+            self.base_code = self.generate_base_code()
         super().save(*args, **kwargs)
 
 

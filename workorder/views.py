@@ -508,10 +508,44 @@ class ArtworkViewSet(viewsets.ModelViewSet):
     queryset = Artwork.objects.all()
     serializer_class = ArtworkSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = []
-    search_fields = ['code', 'name', 'imposition_size']
-    ordering_fields = ['created_at', 'code', 'name']
-    ordering = ['-created_at']
+    filterset_fields = ['base_code', 'version']
+    search_fields = ['base_code', 'name', 'imposition_size']
+    ordering_fields = ['created_at', 'base_code', 'version', 'name']
+    ordering = ['-base_code', '-version']
+    
+    @action(detail=True, methods=['post'])
+    def create_version(self, request, pk=None):
+        """基于现有图稿创建新版本"""
+        original_artwork = self.get_object()
+        
+        # 获取下一个版本号
+        next_version = Artwork.get_next_version(original_artwork.base_code)
+        
+        # 创建新版本，复制原图稿的所有信息
+        new_artwork = Artwork.objects.create(
+            base_code=original_artwork.base_code,
+            version=next_version,
+            name=original_artwork.name,
+            cmyk_colors=original_artwork.cmyk_colors.copy() if original_artwork.cmyk_colors else [],
+            other_colors=original_artwork.other_colors.copy() if original_artwork.other_colors else [],
+            imposition_size=original_artwork.imposition_size,
+            notes=original_artwork.notes
+        )
+        
+        # 复制关联的刀模
+        new_artwork.dies.set(original_artwork.dies.all())
+        
+        # 复制关联的产品
+        for ap in original_artwork.products.all():
+            ArtworkProduct.objects.create(
+                artwork=new_artwork,
+                product=ap.product,
+                imposition_quantity=ap.imposition_quantity,
+                sort_order=ap.sort_order
+            )
+        
+        serializer = self.get_serializer(new_artwork)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
     
     def get_queryset(self):
         queryset = super().get_queryset()
