@@ -276,6 +276,9 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     approval_status_display = serializers.CharField(source='get_approval_status_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     printing_type_display = serializers.CharField(source='get_printing_type_display', read_only=True)
+    printing_cmyk_colors = serializers.JSONField(read_only=True)
+    printing_other_colors = serializers.JSONField(read_only=True)
+    printing_colors_display = serializers.SerializerMethodField()
     # 图稿信息：支持多个图稿
     artworks = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     artwork_names = serializers.SerializerMethodField()
@@ -389,6 +392,42 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         
         return ', '.join(color_displays) if color_displays else None
     
+    def get_printing_colors_display(self, obj):
+        """生成印刷色数显示格式"""
+        parts = []
+        total_count = 0
+        
+        # CMYK颜色：按照固定顺序C、M、Y、K排列
+        if obj.printing_cmyk_colors:
+            cmyk_order = ['C', 'M', 'Y', 'K']
+            cmyk_sorted = [c for c in cmyk_order if c in obj.printing_cmyk_colors]
+            if cmyk_sorted:
+                cmyk_str = ''.join(cmyk_sorted)
+                parts.append(cmyk_str)
+                total_count += len(obj.printing_cmyk_colors)
+        
+        # 其他颜色：用逗号分隔
+        if obj.printing_other_colors:
+            other_colors_list = [c.strip() for c in obj.printing_other_colors if c and c.strip()]
+            if other_colors_list:
+                other_colors_str = ','.join(other_colors_list)
+                parts.append(other_colors_str)
+                total_count += len(other_colors_list)
+        
+        # 组合显示
+        if len(parts) > 1:
+            result = '+'.join(parts)
+        elif len(parts) == 1:
+            result = parts[0]
+        else:
+            return None
+        
+        # 添加色数统计
+        if total_count > 0:
+            result += f'（{total_count}色）'
+        
+        return result
+    
     def get_die_names(self, obj):
         """获取所有刀模名称"""
         return [die.name for die in obj.dies.all()]
@@ -416,7 +455,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'order_date', 'delivery_date', 'actual_delivery_date',
             'production_quantity', 'defective_quantity',
             'total_amount', 'design_file', 'notes',
-            'artworks', 'dies', 'printing_type',
+            'artworks', 'dies', 'printing_type', 'printing_cmyk_colors', 'printing_other_colors',
             'products_data'
         ]
         read_only_fields = ['order_number']

@@ -359,6 +359,10 @@ class WorkOrder(models.Model):
     ]
     printing_type = models.CharField('印刷形式', max_length=20, choices=PRINTING_TYPE_CHOICES, 
                                     default='none', help_text='印刷形式，选择图稿时必选')
+    printing_cmyk_colors = models.JSONField('印刷CMYK颜色', default=list, blank=True,
+                                          help_text='选中的CMYK颜色，如：["C", "M", "K"]')
+    printing_other_colors = models.JSONField('印刷其他颜色', default=list, blank=True,
+                                           help_text='其他颜色列表，如：["528C", "金色"]')
     
     status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='pending')
     priority = models.CharField('优先级', max_length=20, choices=PRIORITY_CHOICES, default='normal')
