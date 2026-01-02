@@ -396,21 +396,58 @@ class ArtworkProductInline(admin.TabularInline):
 
 @admin.register(Artwork)
 class ArtworkAdmin(admin.ModelAdmin):
-    list_display = ['code', 'name', 'color_count', 'imposition_size', 'created_at']
+    list_display = ['code', 'name', 'color_display', 'imposition_size', 'created_at']
     search_fields = ['code', 'name', 'imposition_size']
-    list_filter = ['color_count', 'created_at']
+    list_filter = ['created_at']
     ordering = ['-created_at']
     readonly_fields = ['code', 'created_at', 'updated_at']
     inlines = [ArtworkProductInline]
     
     fieldsets = (
         ('基本信息', {
-            'fields': ('code', 'name', 'color_count', 'imposition_size')
+            'fields': ('code', 'name', 'cmyk_colors', 'other_colors', 'imposition_size')
         }),
         ('其他', {
             'fields': ('notes', 'created_at', 'updated_at')
         }),
     )
+    
+    def color_display(self, obj):
+        """显示颜色信息，格式：CMK+928C,金色（5色）"""
+        parts = []
+        total_count = 0
+        
+        # CMYK颜色：按照固定顺序C、M、Y、K排列
+        if obj.cmyk_colors:
+            cmyk_order = ['C', 'M', 'Y', 'K']  # 固定顺序：1C2M3Y4K
+            cmyk_sorted = [c for c in cmyk_order if c in obj.cmyk_colors]
+            if cmyk_sorted:
+                cmyk_str = ''.join(cmyk_sorted)  # 按固定顺序连接，如：CMK
+                parts.append(cmyk_str)
+                total_count += len(obj.cmyk_colors)
+        
+        # 其他颜色：用逗号分隔
+        if obj.other_colors:
+            other_colors_list = [c.strip() for c in obj.other_colors if c and c.strip()]
+            if other_colors_list:
+                other_colors_str = ','.join(other_colors_list)  # 用逗号分隔
+                parts.append(other_colors_str)
+                total_count += len(other_colors_list)
+        
+        # 组合显示：如果有CMYK和其他颜色，用+号连接
+        if len(parts) > 1:
+            result = '+'.join(parts)
+        elif len(parts) == 1:
+            result = parts[0]
+        else:
+            return '-'
+        
+        # 添加色数统计
+        if total_count > 0:
+            result += f'（{total_count}色）'
+        
+        return result
+    color_display.short_description = '色数'
     
     def save_model(self, request, obj, form, change):
         """保存时自动生成编码"""

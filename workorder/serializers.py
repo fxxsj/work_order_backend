@@ -280,6 +280,7 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     artworks = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     artwork_names = serializers.SerializerMethodField()
     artwork_codes = serializers.SerializerMethodField()
+    artwork_colors = serializers.SerializerMethodField()  # 图稿色数信息
     # 刀模信息：支持多个刀模
     dies = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     die_names = serializers.SerializerMethodField()
@@ -341,6 +342,52 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     def get_artwork_codes(self, obj):
         """获取所有图稿编码"""
         return [artwork.code for artwork in obj.artworks.all()]
+    
+    def get_artwork_colors(self, obj):
+        """获取所有图稿的色数信息"""
+        artworks = obj.artworks.all()
+        if not artworks:
+            return None
+        
+        # 获取所有图稿的色数显示，用逗号分隔
+        color_displays = []
+        for artwork in artworks:
+            # 使用与ArtworkSerializer相同的逻辑生成色数显示
+            parts = []
+            total_count = 0
+            
+            # CMYK颜色：按照固定顺序C、M、Y、K排列
+            if artwork.cmyk_colors:
+                cmyk_order = ['C', 'M', 'Y', 'K']
+                cmyk_sorted = [c for c in cmyk_order if c in artwork.cmyk_colors]
+                if cmyk_sorted:
+                    cmyk_str = ''.join(cmyk_sorted)
+                    parts.append(cmyk_str)
+                    total_count += len(artwork.cmyk_colors)
+            
+            # 其他颜色：用逗号分隔
+            if artwork.other_colors:
+                other_colors_list = [c.strip() for c in artwork.other_colors if c and c.strip()]
+                if other_colors_list:
+                    other_colors_str = ','.join(other_colors_list)
+                    parts.append(other_colors_str)
+                    total_count += len(other_colors_list)
+            
+            # 组合显示
+            if len(parts) > 1:
+                result = '+'.join(parts)
+            elif len(parts) == 1:
+                result = parts[0]
+            else:
+                continue
+            
+            # 添加色数统计
+            if total_count > 0:
+                result += f'（{total_count}色）'
+            
+            color_displays.append(result)
+        
+        return ', '.join(color_displays) if color_displays else None
     
     def get_die_names(self, obj):
         """获取所有刀模名称"""
@@ -519,11 +566,49 @@ class ArtworkSerializer(serializers.ModelSerializer):
         required=False,
         help_text='产品列表数据，格式：[{"product": 1, "imposition_quantity": 2}]'
     )
+    # 色数显示（计算字段）
+    color_display = serializers.SerializerMethodField()
     
     class Meta:
         model = Artwork
         fields = '__all__'
         # code 字段不在 read_only_fields 中，允许自定义输入
+    
+    def get_color_display(self, obj):
+        """生成色数显示文本，格式：CMK+928C,金色（5色）"""
+        parts = []
+        total_count = 0
+        
+        # CMYK颜色：按照固定顺序C、M、Y、K排列
+        if obj.cmyk_colors:
+            cmyk_order = ['C', 'M', 'Y', 'K']  # 固定顺序：1C2M3Y4K
+            cmyk_sorted = [c for c in cmyk_order if c in obj.cmyk_colors]
+            if cmyk_sorted:
+                cmyk_str = ''.join(cmyk_sorted)  # 按固定顺序连接，如：CMK
+                parts.append(cmyk_str)
+                total_count += len(obj.cmyk_colors)
+        
+        # 其他颜色：用逗号分隔
+        if obj.other_colors:
+            other_colors_list = [c.strip() for c in obj.other_colors if c and c.strip()]
+            if other_colors_list:
+                other_colors_str = ','.join(other_colors_list)  # 用逗号分隔
+                parts.append(other_colors_str)
+                total_count += len(other_colors_list)
+        
+        # 组合显示：如果有CMYK和其他颜色，用+号连接
+        if len(parts) > 1:
+            result = '+'.join(parts)
+        elif len(parts) == 1:
+            result = parts[0]
+        else:
+            return '-'
+        
+        # 添加色数统计
+        if total_count > 0:
+            result += f'（{total_count}色）'
+        
+        return result
     
     def create(self, validated_data):
         """创建图稿，如果编码为空则自动生成，并创建关联产品"""

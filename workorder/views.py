@@ -508,7 +508,7 @@ class ArtworkViewSet(viewsets.ModelViewSet):
     queryset = Artwork.objects.all()
     serializer_class = ArtworkSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['color_count']
+    filterset_fields = []
     search_fields = ['code', 'name', 'imposition_size']
     ordering_fields = ['created_at', 'code', 'name']
     ordering = ['-created_at']

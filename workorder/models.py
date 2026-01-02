@@ -136,7 +136,12 @@ class Artwork(models.Model):
     """图稿信息"""
     code = models.CharField('图稿编码', max_length=50, unique=True, blank=True, editable=False)
     name = models.CharField('图稿名称', max_length=200)
-    color_count = models.IntegerField('色数', default=4, help_text='如：1色、2色、4色等')
+    # CMYK颜色选择（多选）
+    cmyk_colors = models.JSONField('CMYK颜色', default=list, blank=True, 
+                                   help_text='选中的CMYK颜色，如：["C", "M", "K"]')
+    # 其他颜色（数组，每个颜色一个输入框）
+    other_colors = models.JSONField('其他颜色', default=list, blank=True, 
+                                   help_text='其他颜色列表，如：["528C", "金色"]')
     imposition_size = models.CharField('拼版尺寸', max_length=100, blank=True, help_text='如：420x594mm、889x1194mm等')
     notes = models.TextField('备注', blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
