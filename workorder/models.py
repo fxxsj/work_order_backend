@@ -343,6 +343,18 @@ class WorkOrder(models.Model):
                                   related_name='work_orders', verbose_name='刀模',
                                   help_text='关联的刀模，用于模切工序，支持多个刀模')
     
+    # 印刷形式
+    PRINTING_TYPE_CHOICES = [
+        ('none', '不需要印刷'),
+        ('front', '正面印刷'),
+        ('back', '背面印刷'),
+        ('self_reverse', '自反印刷'),
+        ('reverse_gripper', '反咬口印刷'),
+        ('register', '套版印刷'),
+    ]
+    printing_type = models.CharField('印刷形式', max_length=20, choices=PRINTING_TYPE_CHOICES, 
+                                    default='none', help_text='印刷形式，选择图稿时必选')
+    
     status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='pending')
     priority = models.CharField('优先级', max_length=20, choices=PRIORITY_CHOICES, default='normal')
     

@@ -275,6 +275,7 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     approved_by_name = serializers.CharField(source='approved_by.username', read_only=True, allow_null=True)
     approval_status_display = serializers.CharField(source='get_approval_status_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    printing_type_display = serializers.CharField(source='get_printing_type_display', read_only=True)
     # 图稿信息：支持多个图稿
     artworks = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     artwork_names = serializers.SerializerMethodField()
@@ -368,7 +369,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'order_date', 'delivery_date', 'actual_delivery_date',
             'production_quantity', 'defective_quantity',
             'total_amount', 'design_file', 'notes',
-            'artworks', 'dies',
+            'artworks', 'dies', 'printing_type',
             'products_data'
         ]
         read_only_fields = ['order_number']
@@ -377,6 +378,15 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         """验证数据，自动从产品中填充信息"""
         product = data.get('product')
         products_data = data.get('products_data', [])
+        artworks = data.get('artworks', [])
+        printing_type = data.get('printing_type')
+        
+        # 如果没有选择图稿，自动设置印刷形式为"不需要印刷"
+        if not artworks or len(artworks) == 0:
+            data['printing_type'] = 'none'
+        elif printing_type == 'none':
+            # 如果选择了图稿但印刷形式是"不需要印刷"，默认改为"正面印刷"
+            data['printing_type'] = 'front'
         
         # 如果提供了 products_data，优先使用多产品模式
         if products_data:
@@ -441,14 +451,20 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         artworks = validated_data.pop('artworks', None)
         dies = validated_data.pop('dies', None)
         
+        # 更新图稿（ManyToMany 字段）
+        if artworks is not None:
+            instance.artworks.set(artworks)
+            # 如果没有选择图稿，自动设置印刷形式为"不需要印刷"
+            if not artworks or len(artworks) == 0:
+                validated_data['printing_type'] = 'none'
+            elif validated_data.get('printing_type') == 'none':
+                # 如果选择了图稿但印刷形式是"不需要印刷"，默认改为"正面印刷"
+                validated_data['printing_type'] = 'front'
+        
         # 更新施工单基本信息
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-        
-        # 更新图稿（ManyToMany 字段）
-        if artworks is not None:
-            instance.artworks.set(artworks)
         
         # 更新刀模（ManyToMany 字段）
         if dies is not None:
