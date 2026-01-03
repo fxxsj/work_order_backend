@@ -112,6 +112,9 @@ class ProductMaterial(models.Model):
     material = models.ForeignKey('Material', on_delete=models.PROTECT, verbose_name='物料')
     material_size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：A4、210x297mm等')
     material_usage = models.CharField('用量', max_length=100, blank=True, help_text='如：1000张、50平方米等')
+    need_cutting = models.BooleanField('需要开料', default=False, 
+                                      help_text='该物料是否需要开料工序处理')
+    notes = models.TextField('备注', blank=True)
     sort_order = models.IntegerField('排序', default=0)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
 
@@ -868,6 +871,10 @@ class WorkOrderMaterial(models.Model):
     
     material_size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：A4、210x297mm等')
     material_usage = models.CharField('用量', max_length=100, blank=True, help_text='如：1000张、50平方米等')
+    
+    # 开料相关
+    need_cutting = models.BooleanField('需要开料', default=False, 
+                                      help_text='该物料是否需要开料工序处理')
     
     # 采购和开料状态
     purchase_status = models.CharField('采购状态', max_length=20, choices=PURCHASE_STATUS_CHOICES,

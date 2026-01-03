@@ -54,7 +54,7 @@ class ProcessAdmin(admin.ModelAdmin):
 class ProductMaterialInline(admin.TabularInline):
     model = ProductMaterial
     extra = 1
-    fields = ['material', 'material_size', 'material_usage', 'sort_order']
+    fields = ['material', 'material_size', 'material_usage', 'need_cutting', 'notes', 'sort_order']
     autocomplete_fields = ['material']
 
 
@@ -110,7 +110,8 @@ class WorkOrderProductInline(admin.TabularInline):
 class WorkOrderMaterialInline(admin.TabularInline):
     model = WorkOrderMaterial
     extra = 1
-    fields = ['material', 'material_size', 'material_usage', 'planned_quantity', 'actual_quantity', 'notes']
+    fields = ['material', 'material_size', 'material_usage', 'need_cutting', 'notes', 
+              'purchase_status', 'purchase_date', 'received_date', 'cut_date']
     autocomplete_fields = ['material']
 
 
@@ -138,7 +139,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
     
     autocomplete_fields = ['customer', 'manager', 'created_by']
     
-    readonly_fields = ['created_at', 'updated_at', 'created_by', 'progress_display']
+    readonly_fields = ['order_number', 'created_at', 'updated_at', 'created_by', 'progress_display']
     
     date_hierarchy = 'order_date'
     
@@ -152,7 +153,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
             )
         }),
         ('图稿和刀模', {
-            'fields': ('artworks', 'dies'),
+            'fields': ('artwork_type', 'artworks', 'die_type', 'dies'),
             'description': '关联的图稿（CTP版）和刀模（模切），支持多个图稿和多个刀模'
         }),
         ('状态与优先级', {
@@ -323,13 +324,29 @@ class WorkOrderProcessAdmin(admin.ModelAdmin):
 class WorkOrderMaterialAdmin(admin.ModelAdmin):
     list_display = [
         'work_order', 'material', 'material_size', 'material_usage',
-        'notes', 'purchase_status_badge',
+        'need_cutting', 'notes', 'purchase_status_badge',
         'purchase_date', 'received_date', 'cut_date', 'created_at'
     ]
     
-    list_filter = ['purchase_status', 'purchase_date', 'received_date', 'cut_date', 'material', 'created_at']
+    list_filter = ['purchase_status', 'need_cutting', 'purchase_date', 'received_date', 'cut_date', 'material', 'created_at']
     search_fields = ['work_order__order_number', 'material__name', 'material__code']
     autocomplete_fields = ['work_order', 'material']
+    
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('work_order', 'material', 'material_size', 'material_usage', 'need_cutting')
+        }),
+        ('采购和开料状态', {
+            'fields': ('purchase_status', 'purchase_date', 'received_date', 'cut_date')
+        }),
+        ('其他', {
+            'fields': ('notes',)
+        }),
+        ('系统信息', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
     
     def purchase_status_badge(self, obj):
         """采购状态徽章"""

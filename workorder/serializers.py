@@ -303,7 +303,7 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
         model = WorkOrderMaterial
         fields = [
             'id', 'work_order', 'material', 'material_name', 'material_code', 'material_unit',
-            'material_size', 'material_usage', 'notes',
+            'material_size', 'material_usage', 'need_cutting', 'notes',
             'purchase_status', 'purchase_status_display',
             'purchase_date', 'received_date', 'cut_date',
             'created_at'
