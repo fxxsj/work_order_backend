@@ -387,6 +387,9 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     printing_cmyk_colors = serializers.JSONField(read_only=True)
     printing_other_colors = serializers.JSONField(read_only=True)
     printing_colors_display = serializers.SerializerMethodField()
+    # 图稿类型
+    artwork_type = serializers.CharField(read_only=True)
+    artwork_type_display = serializers.CharField(source='get_artwork_type_display', read_only=True)
     # 图稿信息：支持多个图稿（使用 PrimaryKeyRelatedField，避免循环引用）
     artworks = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     artwork_names = serializers.SerializerMethodField()
@@ -394,6 +397,9 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     # 图稿详细信息（包含确认状态）
     artwork_details = serializers.SerializerMethodField()
     artwork_colors = serializers.SerializerMethodField()  # 图稿色数信息
+    # 刀模类型
+    die_type = serializers.CharField(read_only=True)
+    die_type_display = serializers.CharField(source='get_die_type_display', read_only=True)
     # 刀模信息：支持多个刀模
     dies = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     die_names = serializers.SerializerMethodField()
@@ -580,7 +586,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'order_date', 'delivery_date', 'actual_delivery_date',
             'production_quantity', 'defective_quantity',
             'total_amount', 'design_file', 'notes',
-            'artworks', 'dies', 'printing_type', 'printing_cmyk_colors', 'printing_other_colors',
+            'artwork_type', 'artworks', 'die_type', 'dies', 'printing_type', 'printing_cmyk_colors', 'printing_other_colors',
             'products_data'
         ]
         read_only_fields = ['order_number']
@@ -590,7 +596,26 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         product = data.get('product')
         products_data = data.get('products_data', [])
         artworks = data.get('artworks', [])
+        dies = data.get('dies', [])
         printing_type = data.get('printing_type')
+        artwork_type = data.get('artwork_type', 'no_artwork')
+        die_type = data.get('die_type', 'no_die')
+        
+        # 根据图稿类型验证图稿选择
+        if artwork_type in ['need_update', 'old_artwork']:
+            # 需更新图稿和旧图稿必须选择至少一个图稿
+            if not artworks or len(artworks) == 0:
+                raise serializers.ValidationError({
+                    'artworks': '选择"需更新图稿"或"旧图稿"时，请至少选择一个图稿'
+                })
+        
+        # 根据刀模类型验证刀模选择
+        if die_type in ['need_update', 'old_die']:
+            # 需更新刀模和旧刀模必须选择至少一个刀模
+            if not dies or len(dies) == 0:
+                raise serializers.ValidationError({
+                    'dies': '选择"需更新刀模"或"旧刀模"时，请至少选择一个刀模'
+                })
         
         # 如果没有选择图稿，自动设置印刷形式为"不需要印刷"
         if not artworks or len(artworks) == 0:

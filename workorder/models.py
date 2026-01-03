@@ -383,6 +383,26 @@ class WorkOrder(models.Model):
                                           related_name='work_orders', verbose_name='产品组子项',
                                           help_text='如果该施工单是产品组的一部分，关联到对应的子产品')
     
+    # 图稿类型选择
+    ARTWORK_TYPE_CHOICES = [
+        ('no_artwork', '不需要图稿'),
+        ('new_design', '新设计图稿'),
+        ('need_update', '需更新图稿'),
+        ('old_artwork', '旧图稿'),
+    ]
+    artwork_type = models.CharField('图稿（CTP版）', max_length=20, choices=ARTWORK_TYPE_CHOICES,
+                                    default='no_artwork', help_text='图稿类型选择')
+    
+    # 刀模类型选择
+    DIE_TYPE_CHOICES = [
+        ('no_die', '不需要刀模'),
+        ('new_design', '新设计刀模'),
+        ('need_update', '需更新刀模'),
+        ('old_die', '旧刀模'),
+    ]
+    die_type = models.CharField('刀模', max_length=20, choices=DIE_TYPE_CHOICES,
+                               default='no_die', help_text='刀模类型选择')
+    
     # 图稿和刀模关联
     artworks = models.ManyToManyField('Artwork', blank=True,
                                       related_name='work_orders', verbose_name='图稿（CTP版）',
