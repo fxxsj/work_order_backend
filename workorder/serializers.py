@@ -123,7 +123,7 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
         # 在更新时，某些字段应该是只读的
         read_only_fields = ['work_order_process', 'task_type', 'work_content', 'production_quantity', 
                           'artwork', 'die', 'product', 'material', 'auto_calculate_quantity', 
-                          'production_requirements', 'created_at']
+                          'created_at']
     
     def get_artwork_code(self, obj):
         """获取图稿编码"""

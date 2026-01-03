@@ -515,6 +515,72 @@ class DieAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
 
+@admin.register(WorkOrderTask)
+class WorkOrderTaskAdmin(admin.ModelAdmin):
+    """施工单任务管理"""
+    list_display = [
+        'work_order_process', 'task_type', 'work_content', 
+        'artwork', 'die', 'product', 'material',
+        'production_quantity', 'quantity_completed', 'status_badge', 'created_at'
+    ]
+    
+    list_filter = [
+        'task_type', 'status', 'work_order_process__work_order', 
+        'work_order_process__process', 'created_at'
+    ]
+    
+    search_fields = [
+        'work_content', 'work_order_process__work_order__order_number',
+        'artwork__name', 'artwork__base_code', 'die__code', 'die__name',
+        'product__name', 'product__code', 'material__name', 'material__code'
+    ]
+    
+    autocomplete_fields = ['work_order_process', 'artwork', 'die', 'product', 'material']
+    
+    readonly_fields = ['created_at', 'updated_at']
+    
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('work_order_process', 'task_type', 'work_content', 'status')
+        }),
+        ('关联对象', {
+            'fields': ('artwork', 'die', 'product', 'material'),
+            'description': '根据任务类型，关联相应的图稿、刀模、产品或物料'
+        }),
+        ('数量信息', {
+            'fields': ('production_quantity', 'quantity_completed', 'auto_calculate_quantity')
+        }),
+        ('系统信息', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def status_badge(self, obj):
+        """状态徽章"""
+        colors = {
+            'pending': '#909399',
+            'in_progress': '#409EFF',
+            'completed': '#67C23A',
+            'cancelled': '#F56C6C',
+        }
+        return format_html(
+            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
+            'background-color: {};">{}</span>',
+            colors.get(obj.status, '#909399'),
+            obj.get_status_display()
+        )
+    status_badge.short_description = '状态'
+    
+    def get_queryset(self, request):
+        """优化查询"""
+        qs = super().get_queryset(request)
+        return qs.select_related(
+            'work_order_process', 'work_order_process__work_order',
+            'work_order_process__process', 'artwork', 'die', 'product', 'material'
+        )
+
+
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     """用户扩展信息管理"""

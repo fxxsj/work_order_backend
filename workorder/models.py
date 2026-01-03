@@ -708,38 +708,105 @@ class WorkOrderProcess(models.Model):
         if rule == 'artwork':
             # 按图稿生成任务（每个图稿一个任务，数量为1）
             # 用于：制版、印刷
-            for artwork in work_order.artworks.all():
-                # 根据工序名称确定任务内容
-                if '制版' in process_name or '设计' in process_name:
-                    work_content = f'制版：{artwork.get_full_code()} - {artwork.name}'
-                elif '印刷' in process_name:
-                    work_content = f'印刷：{artwork.get_full_code()} - {artwork.name}'
-                else:
-                    work_content = f'{process.name}：{artwork.get_full_code()} - {artwork.name}'
+            if '制版' in process_name or '设计' in process_name:
+                # 制版工序：根据artwork_type生成任务
+                artwork_type = work_order.artwork_type
+                order_number = work_order.order_number
                 
-                WorkOrderTask.objects.create(
-                    work_order_process=self,
-                    task_type='artwork',
-                    artwork=artwork,
-                    work_content=work_content,
-                    production_quantity=1,
-                    quantity_completed=0,
-                    auto_calculate_quantity=False  # 图稿任务固定为1
-                )
+                if artwork_type == 'new_design':
+                    # 新设计图稿：生成一个任务，内容为"为{order_number}设计图稿"
+                    work_content = f'为{order_number}设计图稿'
+                    WorkOrderTask.objects.create(
+                        work_order_process=self,
+                        task_type='artwork',
+                        artwork=None,  # 新设计时还没有图稿
+                        work_content=work_content,
+                        production_quantity=1,
+                        quantity_completed=0,
+                        auto_calculate_quantity=False
+                    )
+                elif artwork_type == 'need_update':
+                    # 需要更新图稿：生成一个任务，内容为"为{order_number}更新图稿"
+                    work_content = f'为{order_number}更新图稿'
+                    WorkOrderTask.objects.create(
+                        work_order_process=self,
+                        task_type='artwork',
+                        artwork=None,  # 更新时可能还没有新图稿
+                        work_content=work_content,
+                        production_quantity=1,
+                        quantity_completed=0,
+                        auto_calculate_quantity=False
+                    )
+                elif artwork_type == 'old_artwork':
+                    # 旧图稿：为每个选中的图稿生成任务
+                    for artwork in work_order.artworks.all():
+                        work_content = f'制版：{artwork.get_full_code()} - {artwork.name}'
+                        WorkOrderTask.objects.create(
+                            work_order_process=self,
+                            task_type='artwork',
+                            artwork=artwork,
+                            work_content=work_content,
+                            production_quantity=1,
+                            quantity_completed=0,
+                            auto_calculate_quantity=False
+                        )
+            else:
+                # 其他工序（如印刷）：为每个图稿生成任务
+                for artwork in work_order.artworks.all():
+                    work_content = f'印刷：{artwork.get_full_code()} - {artwork.name}'
+                    WorkOrderTask.objects.create(
+                        work_order_process=self,
+                        task_type='artwork',
+                        artwork=artwork,
+                        work_content=work_content,
+                        production_quantity=1,
+                        quantity_completed=0,
+                        auto_calculate_quantity=False  # 图稿任务固定为1
+                    )
         
         elif rule == 'die':
             # 按刀模生成任务（每个刀模一个任务，数量为1）
             # 用于：模切
-            for die in work_order.dies.all():
+            die_type = work_order.die_type
+            order_number = work_order.order_number
+            
+            if die_type == 'new_design':
+                # 新设计刀模：生成一个任务，内容为"为{order_number}设计刀模"
+                work_content = f'为{order_number}设计刀模'
                 WorkOrderTask.objects.create(
                     work_order_process=self,
                     task_type='die',
-                    die=die,
-                    work_content=f'模切：{die.code} - {die.name}',
+                    die=None,  # 新设计时还没有刀模
+                    work_content=work_content,
                     production_quantity=1,
                     quantity_completed=0,
-                    auto_calculate_quantity=False  # 刀模任务固定为1
+                    auto_calculate_quantity=False
                 )
+            elif die_type == 'need_update':
+                # 需要更新刀模：生成一个任务，内容为"为{order_number}更新刀模"
+                work_content = f'为{order_number}更新刀模'
+                WorkOrderTask.objects.create(
+                    work_order_process=self,
+                    task_type='die',
+                    die=None,  # 更新时可能还没有新刀模
+                    work_content=work_content,
+                    production_quantity=1,
+                    quantity_completed=0,
+                    auto_calculate_quantity=False
+                )
+            elif die_type == 'old_die':
+                # 旧刀模：为每个选中的刀模生成任务
+                for die in work_order.dies.all():
+                    work_content = f'模切：{die.code} - {die.name}'
+                    WorkOrderTask.objects.create(
+                        work_order_process=self,
+                        task_type='die',
+                        die=die,
+                        work_content=work_content,
+                        production_quantity=1,
+                        quantity_completed=0,
+                        auto_calculate_quantity=False  # 刀模任务固定为1
+                    )
         
         elif rule == 'product':
             # 按产品生成任务（每个产品一个任务）
@@ -774,7 +841,7 @@ class WorkOrderProcess(models.Model):
             elif '开料' in process_name or '裁切' in process_name:
                 # 开料任务：只包含需要开料的物料（need_cutting=True）
                 for material_item in work_order.materials.all():
-                    if material_item.material.need_cutting:
+                    if material_item.need_cutting:
                         quantity = self._parse_material_usage(material_item.material_usage)
                         WorkOrderTask.objects.create(
                             work_order_process=self,
@@ -802,14 +869,103 @@ class WorkOrderProcess(models.Model):
         else:  # general
             # 生成通用任务（一个工序一个任务）
             # 用于：裱坑、打钉等其他工序
-            WorkOrderTask.objects.create(
-                work_order_process=self,
-                task_type='general',
-                work_content=f'{process.name}：{work_order.order_number}',
-                production_quantity=work_order.production_quantity or 0,
-                quantity_completed=0,
-                auto_calculate_quantity=True
-            )
+            # 但是，如果制版工序的任务生成规则是 general，也需要根据 artwork_type 生成任务
+            if ('制版' in process_name or '设计' in process_name) and rule == 'general':
+                # 制版工序：根据artwork_type生成任务
+                artwork_type = work_order.artwork_type
+                order_number = work_order.order_number
+                
+                if artwork_type == 'new_design':
+                    # 新设计图稿：生成一个任务，内容为"为{order_number}设计图稿"
+                    work_content = f'为{order_number}设计图稿'
+                    WorkOrderTask.objects.create(
+                        work_order_process=self,
+                        task_type='artwork',
+                        artwork=None,  # 新设计时还没有图稿
+                        work_content=work_content,
+                        production_quantity=1,
+                        quantity_completed=0,
+                        auto_calculate_quantity=False
+                    )
+                elif artwork_type == 'need_update':
+                    # 需要更新图稿：生成一个任务，内容为"为{order_number}更新图稿"
+                    work_content = f'为{order_number}更新图稿'
+                    WorkOrderTask.objects.create(
+                        work_order_process=self,
+                        task_type='artwork',
+                        artwork=None,  # 更新时可能还没有新图稿
+                        work_content=work_content,
+                        production_quantity=1,
+                        quantity_completed=0,
+                        auto_calculate_quantity=False
+                    )
+                elif artwork_type == 'old_artwork':
+                    # 旧图稿：为每个选中的图稿生成任务
+                    for artwork in work_order.artworks.all():
+                        work_content = f'制版：{artwork.get_full_code()} - {artwork.name}'
+                        WorkOrderTask.objects.create(
+                            work_order_process=self,
+                            task_type='artwork',
+                            artwork=artwork,
+                            work_content=work_content,
+                            production_quantity=1,
+                            quantity_completed=0,
+                            auto_calculate_quantity=False
+                        )
+                # 如果 artwork_type 是 'no_artwork'，不生成任务
+            elif ('模切' in process_name) and rule == 'general':
+                # 模切工序：根据die_type生成任务
+                die_type = work_order.die_type
+                order_number = work_order.order_number
+                
+                if die_type == 'new_design':
+                    # 新设计刀模：生成一个任务，内容为"为{order_number}设计刀模"
+                    work_content = f'为{order_number}设计刀模'
+                    WorkOrderTask.objects.create(
+                        work_order_process=self,
+                        task_type='die',
+                        die=None,  # 新设计时还没有刀模
+                        work_content=work_content,
+                        production_quantity=1,
+                        quantity_completed=0,
+                        auto_calculate_quantity=False
+                    )
+                elif die_type == 'need_update':
+                    # 需要更新刀模：生成一个任务，内容为"为{order_number}更新刀模"
+                    work_content = f'为{order_number}更新刀模'
+                    WorkOrderTask.objects.create(
+                        work_order_process=self,
+                        task_type='die',
+                        die=None,  # 更新时可能还没有新刀模
+                        work_content=work_content,
+                        production_quantity=1,
+                        quantity_completed=0,
+                        auto_calculate_quantity=False
+                    )
+                elif die_type == 'old_die':
+                    # 旧刀模：为每个选中的刀模生成任务
+                    for die in work_order.dies.all():
+                        work_content = f'模切：{die.code} - {die.name}'
+                        WorkOrderTask.objects.create(
+                            work_order_process=self,
+                            task_type='die',
+                            die=die,
+                            work_content=work_content,
+                            production_quantity=1,
+                            quantity_completed=0,
+                            auto_calculate_quantity=False
+                        )
+                # 如果 die_type 是 'no_die'，不生成任务
+            else:
+                # 其他通用任务
+                WorkOrderTask.objects.create(
+                    work_order_process=self,
+                    task_type='general',
+                    work_content=f'{process.name}：{work_order.order_number}',
+                    production_quantity=work_order.production_quantity or 0,
+                    quantity_completed=0,
+                    auto_calculate_quantity=True
+                )
     
     def _parse_material_usage(self, usage_str):
         """解析物料用量字符串，提取数字部分"""

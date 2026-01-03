@@ -408,6 +408,9 @@ class WorkOrderProcessViewSet(viewsets.ModelViewSet):
             operator=request.user
         )
         
+        # 生成任务（在工序开始时自动生成）
+        process.generate_tasks()
+        
         serializer = self.get_serializer(process)
         return Response(serializer.data)
     
@@ -466,6 +469,105 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         # 如果任务完成，检查工序是否完成
         if task.status == 'completed':
             task.work_order_process.check_and_update_status()
+    
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """完成任务（支持设计图稿任务时选择图稿）"""
+        task = self.get_object()
+        work_order = task.work_order_process.work_order
+        
+        # 检查任务内容是否包含"设计图稿"或"更新图稿"
+        is_design_task = '设计图稿' in task.work_content or '更新图稿' in task.work_content
+        is_die_design_task = '设计刀模' in task.work_content or '更新刀模' in task.work_content
+        
+        if is_design_task:
+            # 设计图稿任务：需要选择图稿
+            artwork_ids = request.data.get('artwork_ids', [])
+            notes = request.data.get('notes', '')
+            
+            if not artwork_ids or len(artwork_ids) == 0:
+                return Response(
+                    {'error': '请至少选择一个图稿'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 验证图稿是否存在
+            from .models import Artwork
+            artworks = Artwork.objects.filter(id__in=artwork_ids)
+            if artworks.count() != len(artwork_ids):
+                return Response(
+                    {'error': '部分图稿不存在'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 将图稿关联到施工单
+            work_order.artworks.set(artworks)
+            
+            # 更新任务：关联第一个图稿（如果有多个图稿，关联第一个）
+            task.artwork = artworks.first()
+            task.production_requirements = notes  # 将备注保存到生产要求字段
+            task.status = 'completed'
+            if task.quantity_completed == 0:
+                task.quantity_completed = task.production_quantity
+            task.save()
+            
+            # 检查工序是否完成
+            task.work_order_process.check_and_update_status()
+            
+            serializer = self.get_serializer(task)
+            return Response(serializer.data)
+        
+        elif is_die_design_task:
+            # 设计刀模任务：需要选择刀模
+            die_ids = request.data.get('die_ids', [])
+            notes = request.data.get('notes', '')
+            
+            if not die_ids or len(die_ids) == 0:
+                return Response(
+                    {'error': '请至少选择一个刀模'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 验证刀模是否存在
+            from .models import Die
+            dies = Die.objects.filter(id__in=die_ids)
+            if dies.count() != len(die_ids):
+                return Response(
+                    {'error': '部分刀模不存在'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 将刀模关联到施工单
+            work_order.dies.set(dies)
+            
+            # 更新任务：关联第一个刀模（如果有多个刀模，关联第一个）
+            task.die = dies.first()
+            task.production_requirements = notes  # 将备注保存到生产要求字段
+            task.status = 'completed'
+            if task.quantity_completed == 0:
+                task.quantity_completed = task.production_quantity
+            task.save()
+            
+            # 检查工序是否完成
+            task.work_order_process.check_and_update_status()
+            
+            serializer = self.get_serializer(task)
+            return Response(serializer.data)
+        
+        else:
+            # 普通任务：直接完成
+            notes = request.data.get('notes', '')
+            task.production_requirements = notes  # 将备注保存到生产要求字段
+            task.status = 'completed'
+            if task.quantity_completed == 0:
+                task.quantity_completed = task.production_quantity
+            task.save()
+            
+            # 检查工序是否完成
+            task.work_order_process.check_and_update_status()
+            
+            serializer = self.get_serializer(task)
+            return Response(serializer.data)
 
 
 class WorkOrderProductViewSet(viewsets.ModelViewSet):
