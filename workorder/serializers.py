@@ -314,7 +314,6 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
     """施工单列表序列化器（精简版）"""
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     salesperson_name = serializers.CharField(source='customer.salesperson.username', read_only=True, allow_null=True)
-    product_code = serializers.CharField(source='product.code', read_only=True, allow_null=True)
     manager_name = serializers.CharField(source='manager.username', read_only=True, allow_null=True)
     approved_by_name = serializers.CharField(source='approved_by.username', read_only=True, allow_null=True)
     approval_status_display = serializers.CharField(source='get_approval_status_display', read_only=True)
@@ -330,7 +329,7 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
         model = WorkOrder
         fields = [
             'id', 'order_number', 'customer', 'customer_name', 'salesperson_name',
-            'product', 'product_code', 'product_name', 'quantity', 'unit', 'status', 'status_display',
+            'product_name', 'quantity', 'unit', 'status', 'status_display',
             'priority', 'priority_display', 'order_date', 'delivery_date',
             'production_quantity', 'defective_quantity',
             'total_amount', 'manager', 'manager_name', 'progress_percentage',
@@ -347,37 +346,29 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
         if products.count() > 1:
             return f'{products.count()}款拼版'
         elif products.count() == 1:
-            # WorkOrderProduct 通过 product 关联获取产品名称
             first_product = products.first()
             return first_product.product.name if first_product.product else None
-        else:
-            # 如果没有关联产品，使用旧的单个产品字段
-            return obj.product_name
+        return None
     
     def get_quantity(self, obj):
-        """如果有多个产品，返回所有产品的数量总和"""
+        """返回所有产品的数量总和"""
         products = obj.products.all()
-        if products.count() > 0:
+        if products.exists():
             return sum(p.quantity for p in products)
-        else:
-            # 如果没有关联产品，使用旧的单个产品数量
-            return obj.quantity or 0
+        return 0
     
     def get_unit(self, obj):
-        """如果有多个产品，返回第一个产品的单位"""
+        """返回第一个产品的单位"""
         products = obj.products.all()
-        if products.count() > 0:
+        if products.exists():
             return products.first().unit
-        else:
-            # 如果没有关联产品，使用旧的单个产品单位
-            return obj.unit or '件'
+        return '件'
 
 
 class WorkOrderDetailSerializer(serializers.ModelSerializer):
     """施工单详情序列化器（完整版）"""
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     customer_detail = CustomerSerializer(source='customer', read_only=True)
-    product_detail = ProductSerializer(source='product', read_only=True)
     manager_name = serializers.CharField(source='manager.username', read_only=True, allow_null=True)
     created_by_name = serializers.CharField(source='created_by.username', read_only=True, allow_null=True)
     approved_by_name = serializers.CharField(source='approved_by.username', read_only=True, allow_null=True)
@@ -429,30 +420,23 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         if products.count() > 1:
             return f'{products.count()}款拼版'
         elif products.count() == 1:
-            # WorkOrderProduct 通过 product 关联获取产品名称
             first_product = products.first()
             return first_product.product.name if first_product.product else None
-        else:
-            # 如果没有关联产品，使用旧的单个产品字段
-            return obj.product_name
+        return None
     
     def get_quantity(self, obj):
-        """如果有多个产品，返回所有产品的数量总和"""
+        """返回所有产品的数量总和"""
         products = obj.products.all()
-        if products.count() > 0:
+        if products.exists():
             return sum(p.quantity for p in products)
-        else:
-            # 如果没有关联产品，使用旧的单个产品数量
-            return obj.quantity or 0
+        return 0
     
     def get_unit(self, obj):
-        """如果有多个产品，返回第一个产品的单位"""
+        """返回第一个产品的单位"""
         products = obj.products.all()
-        if products.count() > 0:
+        if products.exists():
             return products.first().unit
-        else:
-            # 如果没有关联产品，使用旧的单个产品单位
-            return obj.unit or '件'
+        return '件'
     
     def get_artwork_names(self, obj):
         """获取所有图稿名称"""
@@ -581,8 +565,8 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkOrder
         fields = [
-            'id', 'order_number', 'customer', 'product', 'product_name',
-            'specification', 'quantity', 'unit', 'status', 'priority',
+            'id', 'order_number', 'customer',
+            'status', 'priority',
             'order_date', 'delivery_date', 'actual_delivery_date',
             'production_quantity', 'defective_quantity',
             'total_amount', 'design_file', 'notes',
@@ -593,7 +577,6 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         """验证数据，自动从产品中填充信息"""
-        product = data.get('product')
         products_data = data.get('products_data', [])
         artworks = data.get('artworks', [])
         dies = data.get('dies', [])
@@ -624,9 +607,8 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             # 如果选择了图稿但印刷形式是"不需要印刷"，默认改为"正面印刷"
             data['printing_type'] = 'front'
         
-        # 如果提供了 products_data，优先使用多产品模式
+        # 如果提供了 products_data，计算总金额
         if products_data:
-            # 计算总金额
             total = 0
             for item in products_data:
                 product_id = item.get('product')
@@ -639,16 +621,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                         pass
             if total > 0:
                 data['total_amount'] = total
-        elif product and not self.instance:  # 创建时，单个产品模式
-            # 自动填充产品相关信息
-            data['product_name'] = product.name
-            data['specification'] = product.specification
-            data['unit'] = product.unit
-            
-            # 如果没有提供总价，根据产品单价和数量计算
-            if 'total_amount' not in data or data['total_amount'] == 0:
-                quantity = data.get('quantity', 1)
-                data['total_amount'] = product.unit_price * quantity
+        
         return data
     
     def create(self, validated_data):
@@ -738,10 +711,6 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         # 从 products 关联中获取
         for product_item in work_order.products.all():
             processes.update(product_item.product.default_processes.all())
-        
-        # 兼容旧数据：如果使用单个 product 字段
-        if work_order.product:
-            processes.update(work_order.product.default_processes.all())
         
         # 为每个工序创建 WorkOrderProcess
         for process in sorted(processes, key=lambda p: p.sort_order):

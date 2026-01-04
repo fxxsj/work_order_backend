@@ -373,14 +373,6 @@ class WorkOrder(models.Model):
     order_number = models.CharField('施工单号', max_length=50, unique=True, editable=False)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, verbose_name='客户')
     
-    # 产品关联（兼容旧数据，保留单个产品字段）
-    product = models.ForeignKey('Product', on_delete=models.PROTECT, verbose_name='产品', null=True, blank=True,
-                               help_text='单个产品（兼容旧数据，建议使用 products 关联）')
-    product_name = models.CharField('产品名称', max_length=200, blank=True)  # 保留字段用于兼容
-    specification = models.TextField('产品规格', blank=True)
-    quantity = models.IntegerField('数量', default=1)
-    unit = models.CharField('单位', max_length=20, default='件')
-    
     # 产品组关联（支持一个产品需要多个施工单的场景）
     product_group_item = models.ForeignKey('ProductGroupItem', on_delete=models.SET_NULL, null=True, blank=True,
                                           related_name='work_orders', verbose_name='产品组子项',
@@ -475,7 +467,14 @@ class WorkOrder(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.order_number} - {self.product_name}"
+        # 显示第一个产品的名称，如果有多个产品则显示数量
+        products = self.products.all()
+        if products.exists():
+            first_product = products.first()
+            if products.count() > 1:
+                return f"{self.order_number} - {first_product.product.name} 等{products.count()}款"
+            return f"{self.order_number} - {first_product.product.name}"
+        return f"{self.order_number}"
 
     def get_progress_percentage(self):
         """计算进度百分比"""

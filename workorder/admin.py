@@ -118,8 +118,8 @@ class WorkOrderMaterialInline(admin.TabularInline):
 @admin.register(WorkOrder)
 class WorkOrderAdmin(admin.ModelAdmin):
     list_display = [
-        'order_number', 'customer', 'product_name', 
-        'quantity', 'status_badge', 'priority_badge',
+        'order_number', 'customer', 'product_name_display', 
+        'quantity_display', 'status_badge', 'priority_badge',
         'order_date', 'delivery_date', 'progress_bar', 'manager_display'
     ]
     
@@ -133,8 +133,28 @@ class WorkOrderAdmin(admin.ModelAdmin):
         return obj.manager.username if obj.manager else '-'
     manager_display.short_description = '制表人'
     
+    def product_name_display(self, obj):
+        """显示产品名称（从 products 关联中获取）"""
+        products = obj.products.all()
+        if products.count() > 1:
+            return f'{products.count()}款拼版'
+        elif products.count() == 1:
+            first_product = products.first()
+            return first_product.product.name if first_product.product else '-'
+        return '-'
+    product_name_display.short_description = '产品'
+    
+    def quantity_display(self, obj):
+        """显示数量（从 products 关联中计算总和）"""
+        products = obj.products.all()
+        if products.exists():
+            total = sum(p.quantity for p in products)
+            return total
+        return 0
+    quantity_display.short_description = '数量'
+    
     search_fields = [
-        'order_number', 'customer__name', 'product_name', 'specification'
+        'order_number', 'customer__name', 'products__product__name', 'products__product__code'
     ]
     
     autocomplete_fields = ['customer', 'manager', 'created_by']
@@ -148,8 +168,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
     fieldsets = (
         ('基本信息', {
             'fields': (
-                'order_number', 'customer', 'product', 'product_name', 
-                'specification', 'quantity', 'unit'
+                'order_number', 'customer'
             )
         }),
         ('图稿和刀模', {
@@ -254,7 +273,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """优化查询"""
         qs = super().get_queryset(request)
-        return qs.select_related('customer', 'manager', 'created_by')
+        return qs.select_related('customer', 'manager', 'created_by').prefetch_related('products__product')
 
 
 @admin.register(WorkOrderProcess)
