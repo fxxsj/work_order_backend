@@ -476,9 +476,9 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         task = self.get_object()
         work_order = task.work_order_process.work_order
         
-        # 检查任务内容是否包含"设计图稿"或"更新图稿"
-        is_design_task = '设计图稿' in task.work_content or '更新图稿' in task.work_content
-        is_die_design_task = '设计刀模' in task.work_content or '更新刀模' in task.work_content
+        # 检查任务内容是否包含"设计图稿"
+        is_design_task = '设计图稿' in task.work_content
+        is_die_design_task = '设计刀模' in task.work_content
         
         if is_design_task:
             # 设计图稿任务：需要选择图稿

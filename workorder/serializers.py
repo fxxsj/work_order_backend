@@ -585,20 +585,12 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         die_type = data.get('die_type', 'no_die')
         
         # 根据图稿类型验证图稿选择
-        if artwork_type in ['need_update', 'old_artwork']:
-            # 需更新图稿和旧图稿必须选择至少一个图稿
-            if not artworks or len(artworks) == 0:
-                raise serializers.ValidationError({
-                    'artworks': '选择"需更新图稿"或"旧图稿"时，请至少选择一个图稿'
-                })
+        # 如果需要图稿，可以选择图稿（可选），如果不选择则生成设计任务
+        # 不需要图稿时，不验证图稿选择
         
         # 根据刀模类型验证刀模选择
-        if die_type in ['need_update', 'old_die']:
-            # 需更新刀模和旧刀模必须选择至少一个刀模
-            if not dies or len(dies) == 0:
-                raise serializers.ValidationError({
-                    'dies': '选择"需更新刀模"或"旧刀模"时，请至少选择一个刀模'
-                })
+        # 如果需要刀模，可以选择刀模（可选），如果不选择则生成设计任务
+        # 不需要刀模时，不验证刀模选择
         
         # 如果没有选择图稿，自动设置印刷形式为"不需要印刷"
         if not artworks or len(artworks) == 0:
