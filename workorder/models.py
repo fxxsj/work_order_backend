@@ -64,6 +64,8 @@ class Process(models.Model):
     standard_duration = models.IntegerField('标准工时(小时)', default=0)
     sort_order = models.IntegerField('排序', default=0)
     is_active = models.BooleanField('是否启用', default=True)
+    is_builtin = models.BooleanField('是否内置', default=False, 
+                                    help_text='内置工序不可删除，code字段不可编辑')
     task_generation_rule = models.CharField('任务生成规则', max_length=20, 
                                            choices=TASK_GENERATION_RULE_CHOICES,
                                            default='general',

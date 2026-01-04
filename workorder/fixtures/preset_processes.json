@@ -1,0 +1,317 @@
+[
+  {
+    "model": "workorder.process",
+    "pk": 1,
+    "fields": {
+      "name": "制版",
+      "code": "CTP",
+      "description": "CTP制版",
+      "standard_duration": 0,
+      "sort_order": 1,
+      "is_active": true,
+      "is_builtin": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 2,
+    "fields": {
+      "name": "开料",
+      "code": "CUT",
+      "description": "材料开料",
+      "standard_duration": 0,
+      "sort_order": 2,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 3,
+    "fields": {
+      "name": "印刷",
+      "code": "PRT",
+      "description": "印刷",
+      "standard_duration": 0,
+      "sort_order": 3,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 4,
+    "fields": {
+      "name": "过油",
+      "code": "VAN",
+      "description": "过油",
+      "standard_duration": 0,
+      "sort_order": 4,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 5,
+    "fields": {
+      "name": "覆光膜",
+      "code": "LAM_G",
+      "description": "覆光膜",
+      "standard_duration": 0,
+      "sort_order": 5,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 6,
+    "fields": {
+      "name": "覆哑膜",
+      "code": "LAM_M",
+      "description": "覆哑膜",
+      "standard_duration": 0,
+      "sort_order": 6,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 7,
+    "fields": {
+      "name": "UV",
+      "code": "UV",
+      "description": "UV工艺",
+      "standard_duration": 0,
+      "sort_order": 7,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 8,
+    "fields": {
+      "name": "烫金",
+      "code": "FOIL_G",
+      "description": "烫金",
+      "standard_duration": 0,
+      "sort_order": 8,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 9,
+    "fields": {
+      "name": "烫银",
+      "code": "FOIL_S",
+      "description": "烫银",
+      "standard_duration": 0,
+      "sort_order": 9,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 10,
+    "fields": {
+      "name": "压凸",
+      "code": "EMB",
+      "description": "压凸",
+      "standard_duration": 0,
+      "sort_order": 10,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 11,
+    "fields": {
+      "name": "压纹",
+      "code": "TEX",
+      "description": "压纹",
+      "standard_duration": 0,
+      "sort_order": 11,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 12,
+    "fields": {
+      "name": "压线",
+      "code": "SCORE",
+      "description": "压线",
+      "standard_duration": 0,
+      "sort_order": 12,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 13,
+    "fields": {
+      "name": "模切",
+      "code": "DIE",
+      "description": "模切",
+      "standard_duration": 0,
+      "sort_order": 13,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 14,
+    "fields": {
+      "name": "切成品",
+      "code": "TRIM",
+      "description": "切成品",
+      "standard_duration": 0,
+      "sort_order": 14,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 15,
+    "fields": {
+      "name": "对裱",
+      "code": "LAM_B",
+      "description": "对裱",
+      "standard_duration": 0,
+      "sort_order": 15,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 16,
+    "fields": {
+      "name": "裱坑",
+      "code": "MOUNT",
+      "description": "裱坑",
+      "standard_duration": 0,
+      "sort_order": 16,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 17,
+    "fields": {
+      "name": "粘胶",
+      "code": "GLUE",
+      "description": "粘胶",
+      "standard_duration": 0,
+      "sort_order": 17,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 18,
+    "fields": {
+      "name": "粘盒",
+      "code": "BOX",
+      "description": "粘盒",
+      "standard_duration": 0,
+      "sort_order": 18,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 19,
+    "fields": {
+      "name": "粘窗口",
+      "code": "WINDOW",
+      "description": "粘窗口",
+      "standard_duration": 0,
+      "sort_order": 19,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 20,
+    "fields": {
+      "name": "打钉",
+      "code": "STAPLE",
+      "description": "打钉",
+      "standard_duration": 0,
+      "sort_order": 20,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  },
+  {
+    "model": "workorder.process",
+    "pk": 21,
+    "fields": {
+      "name": "包装",
+      "code": "PACK",
+      "description": "包装",
+      "standard_duration": 0,
+      "sort_order": 21,
+      "is_active": true,
+      "task_generation_rule": "general",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_builtin": true
+    }
+  }
+]

@@ -82,10 +82,20 @@ class ProcessViewSet(viewsets.ModelViewSet):
     queryset = Process.objects.all()
     serializer_class = ProcessSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['is_active']
+    filterset_fields = ['is_active', 'is_builtin']
     search_fields = ['name', 'code']
     ordering_fields = ['sort_order', 'code', 'created_at']
     ordering = ['sort_order', 'code']
+    
+    def destroy(self, request, *args, **kwargs):
+        """删除工序，内置工序不可删除"""
+        instance = self.get_object()
+        if instance.is_builtin:
+            return Response(
+                {'error': '内置工序不可删除'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        return super().destroy(request, *args, **kwargs)
 
 
 class ProductViewSet(viewsets.ModelViewSet):

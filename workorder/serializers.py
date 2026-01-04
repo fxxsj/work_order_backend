@@ -55,6 +55,24 @@ class ProcessSerializer(serializers.ModelSerializer):
     class Meta:
         model = Process
         fields = '__all__'
+    
+    def validate(self, data):
+        """验证内置工序的code字段不可修改"""
+        if self.instance and self.instance.is_builtin:
+            # 如果是内置工序，检查是否尝试修改code字段
+            if 'code' in data and data['code'] != self.instance.code:
+                raise serializers.ValidationError({
+                    'code': '内置工序的编码不可修改'
+                })
+        return data
+    
+    def validate_code(self, value):
+        """验证code字段"""
+        # 如果是更新操作且是内置工序，code字段应该保持不变
+        if self.instance and self.instance.is_builtin:
+            if value != self.instance.code:
+                raise serializers.ValidationError('内置工序的编码不可修改')
+        return value
 
 
 class ProductMaterialSerializer(serializers.ModelSerializer):

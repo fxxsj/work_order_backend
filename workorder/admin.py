@@ -44,11 +44,30 @@ class DepartmentAdmin(admin.ModelAdmin):
 
 @admin.register(Process)
 class ProcessAdmin(admin.ModelAdmin):
-    list_display = ['code', 'name', 'standard_duration', 'sort_order', 'is_active', 'created_at']
+    list_display = ['code', 'name', 'is_builtin', 'standard_duration', 'sort_order', 'is_active', 'created_at']
     search_fields = ['code', 'name']
-    list_filter = ['is_active', 'created_at']
+    list_filter = ['is_builtin', 'is_active', 'created_at']
     list_editable = ['sort_order', 'is_active']
     ordering = ['sort_order', 'code']
+    readonly_fields = ['is_builtin', 'created_at']  # is_builtin字段只读
+    
+    def get_readonly_fields(self, request, obj=None):
+        """根据is_builtin字段动态设置code字段为只读"""
+        readonly = list(self.readonly_fields)
+        if obj and obj.is_builtin:
+            # 内置工序的code字段不可编辑
+            readonly.append('code')
+        return readonly
+    
+    def has_delete_permission(self, request, obj=None):
+        """内置工序不可删除"""
+        if obj and obj.is_builtin:
+            return False
+        return super().has_delete_permission(request, obj)
+    
+    def get_queryset(self, request):
+        """优化查询"""
+        return super().get_queryset(request).select_related()
 
 
 class ProductMaterialInline(admin.TabularInline):
