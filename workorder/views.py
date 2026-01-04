@@ -10,7 +10,7 @@ from rest_framework.permissions import DjangoModelPermissions
 from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
-    Die, DieProduct, WorkOrderTask, ProductGroup, ProductGroupItem
+    Die, DieProduct, FoilingPlate, FoilingPlateProduct, WorkOrderTask, ProductGroup, ProductGroupItem
 )
 from .serializers import (
     CustomerSerializer, DepartmentSerializer, ProcessSerializer, ProductSerializer, 
@@ -20,8 +20,8 @@ from .serializers import (
     WorkOrderMaterialSerializer, WorkOrderProductSerializer, ProcessLogSerializer,
     WorkOrderProcessUpdateSerializer,
     ArtworkSerializer, ArtworkProductSerializer,
-    DieSerializer, DieProductSerializer, WorkOrderTaskSerializer,
-    ProductGroupSerializer, ProductGroupItemSerializer
+    DieSerializer, DieProductSerializer, FoilingPlateSerializer, FoilingPlateProductSerializer,
+    WorkOrderTaskSerializer, ProductGroupSerializer, ProductGroupItemSerializer
 )
 
 
@@ -752,4 +752,30 @@ class DieProductViewSet(viewsets.ModelViewSet):
     filterset_fields = ['die', 'product']
     ordering_fields = ['sort_order']
     ordering = ['die', 'sort_order']
+
+
+class FoilingPlateViewSet(viewsets.ModelViewSet):
+    """烫金版视图集"""
+    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
+    queryset = FoilingPlate.objects.all()
+    serializer_class = FoilingPlateSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = []
+    search_fields = ['code', 'name', 'size', 'material']
+    ordering_fields = ['created_at', 'code', 'name']
+    ordering = ['-created_at']
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return queryset.prefetch_related('products__product')
+
+
+class FoilingPlateProductViewSet(viewsets.ModelViewSet):
+    """烫金版产品视图集"""
+    queryset = FoilingPlateProduct.objects.all()
+    serializer_class = FoilingPlateProductSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['foiling_plate', 'product']
+    ordering_fields = ['sort_order']
+    ordering = ['foiling_plate', 'sort_order']
 

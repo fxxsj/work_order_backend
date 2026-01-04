@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
-    Die, DieProduct, WorkOrderTask, ProductGroup, ProductGroupItem
+    Die, DieProduct, FoilingPlate, FoilingPlateProduct, WorkOrderTask, ProductGroup, ProductGroupItem
 )
 
 
@@ -963,4 +963,79 @@ class DieSerializer(serializers.ModelSerializer):
                 )
         
         return die
+
+
+class FoilingPlateProductSerializer(serializers.ModelSerializer):
+    """烫金版产品序列化器"""
+    product_name = serializers.SerializerMethodField()
+    product_code = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = FoilingPlateProduct
+        fields = '__all__'
+    
+    def get_product_name(self, obj):
+        return obj.product.name if obj.product else None
+    
+    def get_product_code(self, obj):
+        return obj.product.code if obj.product else None
+
+
+class FoilingPlateSerializer(serializers.ModelSerializer):
+    """烫金版序列化器"""
+    products = FoilingPlateProductSerializer(many=True, read_only=True)
+    products_data = serializers.ListField(
+        child=serializers.DictField(),
+        write_only=True,
+        required=False,
+        help_text='产品列表数据，格式：[{"product": 1, "quantity": 2}]'
+    )
+    
+    class Meta:
+        model = FoilingPlate
+        fields = '__all__'
+        # code 字段不在 read_only_fields 中，允许自定义输入
+    
+    def create(self, validated_data):
+        """创建烫金版，如果编码为空则自动生成，并创建关联产品"""
+        products_data = validated_data.pop('products_data', [])
+        
+        # 如果编码为空，自动生成
+        if not validated_data.get('code'):
+            validated_data['code'] = FoilingPlate.generate_code()
+        
+        foiling_plate = super().create(validated_data)
+        
+        # 创建关联产品
+        for idx, product_data in enumerate(products_data):
+            FoilingPlateProduct.objects.create(
+                foiling_plate=foiling_plate,
+                product_id=product_data.get('product'),
+                quantity=product_data.get('quantity', 1),
+                sort_order=idx
+            )
+        
+        return foiling_plate
+    
+    def update(self, instance, validated_data):
+        """更新烫金版，处理产品列表"""
+        products_data = validated_data.pop('products_data', None)
+        
+        foiling_plate = super().update(instance, validated_data)
+        
+        # 如果提供了产品数据，更新产品列表
+        if products_data is not None:
+            # 删除现有产品关联
+            FoilingPlateProduct.objects.filter(foiling_plate=foiling_plate).delete()
+            
+            # 创建新的产品关联
+            for idx, product_data in enumerate(products_data):
+                FoilingPlateProduct.objects.create(
+                    foiling_plate=foiling_plate,
+                    product_id=product_data.get('product'),
+                    quantity=product_data.get('quantity', 1),
+                    sort_order=idx
+                )
+        
+        return foiling_plate
 

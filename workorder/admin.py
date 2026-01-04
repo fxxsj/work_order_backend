@@ -4,7 +4,7 @@ from django.db.models import Count, Q
 from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
-    Die, DieProduct, WorkOrderTask, ProductGroup, ProductGroupItem, UserProfile
+    Die, DieProduct, FoilingPlate, FoilingPlateProduct, WorkOrderTask, ProductGroup, ProductGroupItem, UserProfile
 )
 
 
@@ -550,6 +550,38 @@ class DieAdmin(admin.ModelAdmin):
         """保存时自动生成编码"""
         if not obj.code:
             obj.code = Die.generate_code()
+        super().save_model(request, obj, form, change)
+
+
+class FoilingPlateProductInline(admin.TabularInline):
+    model = FoilingPlateProduct
+    extra = 1
+    fields = ['product', 'quantity', 'sort_order']
+    autocomplete_fields = ['product']
+
+
+@admin.register(FoilingPlate)
+class FoilingPlateAdmin(admin.ModelAdmin):
+    list_display = ['code', 'name', 'size', 'material', 'thickness', 'created_at']
+    search_fields = ['code', 'name', 'size', 'material']
+    list_filter = ['material', 'created_at']
+    ordering = ['-created_at']
+    readonly_fields = ['code', 'created_at', 'updated_at']
+    inlines = [FoilingPlateProductInline]
+    
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('code', 'name', 'size', 'material', 'thickness')
+        }),
+        ('其他', {
+            'fields': ('notes', 'created_at', 'updated_at')
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        """保存时自动生成编码"""
+        if not obj.code:
+            obj.code = FoilingPlate.generate_code()
         super().save_model(request, obj, form, change)
 
 
