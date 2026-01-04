@@ -10,7 +10,8 @@ from rest_framework.permissions import DjangoModelPermissions
 from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
-    Die, DieProduct, FoilingPlate, FoilingPlateProduct, WorkOrderTask, ProductGroup, ProductGroupItem
+    Die, DieProduct, FoilingPlate, FoilingPlateProduct, EmbossingPlate, EmbossingPlateProduct,
+    WorkOrderTask, ProductGroup, ProductGroupItem
 )
 from .serializers import (
     CustomerSerializer, DepartmentSerializer, ProcessSerializer, ProductSerializer, 
@@ -21,6 +22,7 @@ from .serializers import (
     WorkOrderProcessUpdateSerializer,
     ArtworkSerializer, ArtworkProductSerializer,
     DieSerializer, DieProductSerializer, FoilingPlateSerializer, FoilingPlateProductSerializer,
+    EmbossingPlateSerializer, EmbossingPlateProductSerializer,
     WorkOrderTaskSerializer, ProductGroupSerializer, ProductGroupItemSerializer
 )
 
@@ -778,4 +780,30 @@ class FoilingPlateProductViewSet(viewsets.ModelViewSet):
     filterset_fields = ['foiling_plate', 'product']
     ordering_fields = ['sort_order']
     ordering = ['foiling_plate', 'sort_order']
+
+
+class EmbossingPlateViewSet(viewsets.ModelViewSet):
+    """压凸版视图集"""
+    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
+    queryset = EmbossingPlate.objects.all()
+    serializer_class = EmbossingPlateSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = []
+    search_fields = ['code', 'name', 'size', 'material']
+    ordering_fields = ['created_at', 'code', 'name']
+    ordering = ['-created_at']
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return queryset.prefetch_related('products__product')
+
+
+class EmbossingPlateProductViewSet(viewsets.ModelViewSet):
+    """压凸版产品视图集"""
+    queryset = EmbossingPlateProduct.objects.all()
+    serializer_class = EmbossingPlateProductSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['embossing_plate', 'product']
+    ordering_fields = ['sort_order']
+    ordering = ['embossing_plate', 'sort_order']
 

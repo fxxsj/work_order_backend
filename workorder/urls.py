@@ -7,6 +7,7 @@ from .views import (
     WorkOrderProductViewSet, WorkOrderMaterialViewSet, ProcessLogViewSet,
     ArtworkViewSet, ArtworkProductViewSet,
     DieViewSet, DieProductViewSet, FoilingPlateViewSet, FoilingPlateProductViewSet,
+    EmbossingPlateViewSet, EmbossingPlateProductViewSet,
     WorkOrderTaskViewSet, ProductGroupViewSet, ProductGroupItemViewSet
 )
 from .auth_views import login_view, logout_view, get_current_user, register_view, get_salespersons
@@ -32,6 +33,8 @@ router.register(r'dies', DieViewSet)
 router.register(r'die-products', DieProductViewSet)
 router.register(r'foiling-plates', FoilingPlateViewSet)
 router.register(r'foiling-plate-products', FoilingPlateProductViewSet)
+router.register(r'embossing-plates', EmbossingPlateViewSet)
+router.register(r'embossing-plate-products', EmbossingPlateProductViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

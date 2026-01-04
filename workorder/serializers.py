@@ -3,7 +3,8 @@ from django.contrib.auth.models import User
 from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
-    Die, DieProduct, FoilingPlate, FoilingPlateProduct, WorkOrderTask, ProductGroup, ProductGroupItem
+    Die, DieProduct, FoilingPlate, FoilingPlateProduct, EmbossingPlate, EmbossingPlateProduct,
+    WorkOrderTask, ProductGroup, ProductGroupItem
 )
 
 
@@ -1016,6 +1017,81 @@ class FoilingPlateSerializer(serializers.ModelSerializer):
             )
         
         return foiling_plate
+
+
+class EmbossingPlateProductSerializer(serializers.ModelSerializer):
+    """压凸版产品序列化器"""
+    product_name = serializers.SerializerMethodField()
+    product_code = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = EmbossingPlateProduct
+        fields = '__all__'
+    
+    def get_product_name(self, obj):
+        return obj.product.name if obj.product else None
+    
+    def get_product_code(self, obj):
+        return obj.product.code if obj.product else None
+
+
+class EmbossingPlateSerializer(serializers.ModelSerializer):
+    """压凸版序列化器"""
+    products = EmbossingPlateProductSerializer(many=True, read_only=True)
+    products_data = serializers.ListField(
+        child=serializers.DictField(),
+        write_only=True,
+        required=False,
+        help_text='产品列表数据，格式：[{"product": 1, "quantity": 2}]'
+    )
+    
+    class Meta:
+        model = EmbossingPlate
+        fields = '__all__'
+        # code 字段不在 read_only_fields 中，允许自定义输入
+    
+    def create(self, validated_data):
+        """创建压凸版，如果编码为空则自动生成，并创建关联产品"""
+        products_data = validated_data.pop('products_data', [])
+        
+        # 如果编码为空，自动生成
+        if not validated_data.get('code'):
+            validated_data['code'] = EmbossingPlate.generate_code()
+        
+        embossing_plate = super().create(validated_data)
+        
+        # 创建关联产品
+        for idx, product_data in enumerate(products_data):
+            EmbossingPlateProduct.objects.create(
+                embossing_plate=embossing_plate,
+                product_id=product_data.get('product'),
+                quantity=product_data.get('quantity', 1),
+                sort_order=idx
+            )
+        
+        return embossing_plate
+    
+    def update(self, instance, validated_data):
+        """更新压凸版，处理产品列表"""
+        products_data = validated_data.pop('products_data', None)
+        
+        embossing_plate = super().update(instance, validated_data)
+        
+        # 如果提供了产品数据，更新产品列表
+        if products_data is not None:
+            # 删除现有产品关联
+            EmbossingPlateProduct.objects.filter(embossing_plate=embossing_plate).delete()
+            
+            # 创建新的产品关联
+            for idx, product_data in enumerate(products_data):
+                EmbossingPlateProduct.objects.create(
+                    embossing_plate=embossing_plate,
+                    product_id=product_data.get('product'),
+                    quantity=product_data.get('quantity', 1),
+                    sort_order=idx
+                )
+        
+        return embossing_plate
     
     def update(self, instance, validated_data):
         """更新烫金版，处理产品列表"""
@@ -1038,4 +1114,79 @@ class FoilingPlateSerializer(serializers.ModelSerializer):
                 )
         
         return foiling_plate
+
+
+class EmbossingPlateProductSerializer(serializers.ModelSerializer):
+    """压凸版产品序列化器"""
+    product_name = serializers.SerializerMethodField()
+    product_code = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = EmbossingPlateProduct
+        fields = '__all__'
+    
+    def get_product_name(self, obj):
+        return obj.product.name if obj.product else None
+    
+    def get_product_code(self, obj):
+        return obj.product.code if obj.product else None
+
+
+class EmbossingPlateSerializer(serializers.ModelSerializer):
+    """压凸版序列化器"""
+    products = EmbossingPlateProductSerializer(many=True, read_only=True)
+    products_data = serializers.ListField(
+        child=serializers.DictField(),
+        write_only=True,
+        required=False,
+        help_text='产品列表数据，格式：[{"product": 1, "quantity": 2}]'
+    )
+    
+    class Meta:
+        model = EmbossingPlate
+        fields = '__all__'
+        # code 字段不在 read_only_fields 中，允许自定义输入
+    
+    def create(self, validated_data):
+        """创建压凸版，如果编码为空则自动生成，并创建关联产品"""
+        products_data = validated_data.pop('products_data', [])
+        
+        # 如果编码为空，自动生成
+        if not validated_data.get('code'):
+            validated_data['code'] = EmbossingPlate.generate_code()
+        
+        embossing_plate = super().create(validated_data)
+        
+        # 创建关联产品
+        for idx, product_data in enumerate(products_data):
+            EmbossingPlateProduct.objects.create(
+                embossing_plate=embossing_plate,
+                product_id=product_data.get('product'),
+                quantity=product_data.get('quantity', 1),
+                sort_order=idx
+            )
+        
+        return embossing_plate
+    
+    def update(self, instance, validated_data):
+        """更新压凸版，处理产品列表"""
+        products_data = validated_data.pop('products_data', None)
+        
+        embossing_plate = super().update(instance, validated_data)
+        
+        # 如果提供了产品数据，更新产品列表
+        if products_data is not None:
+            # 删除现有产品关联
+            EmbossingPlateProduct.objects.filter(embossing_plate=embossing_plate).delete()
+            
+            # 创建新的产品关联
+            for idx, product_data in enumerate(products_data):
+                EmbossingPlateProduct.objects.create(
+                    embossing_plate=embossing_plate,
+                    product_id=product_data.get('product'),
+                    quantity=product_data.get('quantity', 1),
+                    sort_order=idx
+                )
+        
+        return embossing_plate
 

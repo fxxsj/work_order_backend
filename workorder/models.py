@@ -385,6 +385,73 @@ class FoilingPlateProduct(models.Model):
         return f"{self.foiling_plate.name} - {self.product.name} ({self.quantity}个)"
 
 
+class EmbossingPlate(models.Model):
+    """压凸版信息"""
+    code = models.CharField('压凸版编码', max_length=50, unique=True, blank=True)
+    name = models.CharField('压凸版名称', max_length=200)
+    size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：420x594mm、889x1194mm等')
+    material = models.CharField('材质', max_length=100, blank=True, help_text='如：铜版、锌版等')
+    thickness = models.CharField('厚度', max_length=50, blank=True, help_text='如：3mm、5mm等')
+    notes = models.TextField('备注', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '压凸版'
+        verbose_name_plural = '压凸版管理'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+    
+    @classmethod
+    def generate_code(cls):
+        """生成压凸版编码：格式 EP + yyyymm + 3位自增序号"""
+        now = timezone.now()
+        prefix = f"EP{now.strftime('%Y%m')}"
+        
+        with transaction.atomic():
+            last_plate = cls.objects.filter(
+                code__startswith=prefix
+            ).order_by('-code').select_for_update().first()
+            
+            if last_plate and len(last_plate.code) >= 11:
+                try:
+                    last_number = int(last_plate.code[8:])  # EP + yyyymm = 8位
+                    new_number = last_number + 1
+                except (ValueError, IndexError):
+                    new_number = 1
+            else:
+                new_number = 1
+            
+            return f"{prefix}{new_number:03d}"
+    
+    def save(self, *args, **kwargs):
+        """保存时自动生成压凸版编码"""
+        if not self.code:
+            self.code = self.generate_code()
+        super().save(*args, **kwargs)
+
+
+class EmbossingPlateProduct(models.Model):
+    """压凸版产品关联"""
+    embossing_plate = models.ForeignKey(EmbossingPlate, on_delete=models.CASCADE,
+                                        related_name='products', verbose_name='压凸版')
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, verbose_name='产品')
+    quantity = models.IntegerField('数量', default=1, help_text='该产品在压凸版中的数量')
+    sort_order = models.IntegerField('排序', default=0)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '压凸版产品'
+        verbose_name_plural = '压凸版产品管理'
+        ordering = ['embossing_plate', 'sort_order']
+        unique_together = ['embossing_plate', 'product']
+
+    def __str__(self):
+        return f"{self.embossing_plate.name} - {self.product.name} ({self.quantity}个)"
+
+
 class ProductGroup(models.Model):
     """产品组（如：天地盒、套装等，一个产品组可能需要多个施工单完成）"""
     name = models.CharField('产品组名称', max_length=200)
