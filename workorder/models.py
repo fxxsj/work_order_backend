@@ -168,6 +168,12 @@ class Artwork(models.Model):
     # 关联刀模（多对多关系）
     dies = models.ManyToManyField('Die', blank=True, verbose_name='关联刀模',
                                  help_text='该图稿关联的刀模')
+    # 关联烫金版（多对多关系）
+    foiling_plates = models.ManyToManyField('FoilingPlate', blank=True, verbose_name='关联烫金版',
+                                           help_text='该图稿关联的烫金版')
+    # 关联压凸版（多对多关系）
+    embossing_plates = models.ManyToManyField('EmbossingPlate', blank=True, verbose_name='关联压凸版',
+                                              help_text='该图稿关联的压凸版')
     # 图稿确认相关字段
     confirmed = models.BooleanField('已确认', default=False, help_text='设计部是否已确认该图稿')
     confirmed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,

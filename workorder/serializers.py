@@ -785,6 +785,12 @@ class ArtworkSerializer(serializers.ModelSerializer):
     # 刀模信息
     die_names = serializers.SerializerMethodField()
     die_codes = serializers.SerializerMethodField()
+    # 烫金版信息
+    foiling_plate_names = serializers.SerializerMethodField()
+    foiling_plate_codes = serializers.SerializerMethodField()
+    # 压凸版信息
+    embossing_plate_names = serializers.SerializerMethodField()
+    embossing_plate_codes = serializers.SerializerMethodField()
     # 完整编码（包含版本号），用于向后兼容
     code = serializers.SerializerMethodField()
     # 确认信息
@@ -838,6 +844,22 @@ class ArtworkSerializer(serializers.ModelSerializer):
     def get_die_codes(self, obj):
         """获取所有刀模编码"""
         return [die.code for die in obj.dies.all()]
+    
+    def get_foiling_plate_names(self, obj):
+        """获取所有烫金版名称"""
+        return [plate.name for plate in obj.foiling_plates.all()]
+    
+    def get_foiling_plate_codes(self, obj):
+        """获取所有烫金版编码"""
+        return [plate.code for plate in obj.foiling_plates.all()]
+    
+    def get_embossing_plate_names(self, obj):
+        """获取所有压凸版名称"""
+        return [plate.name for plate in obj.embossing_plates.all()]
+    
+    def get_embossing_plate_codes(self, obj):
+        """获取所有压凸版编码"""
+        return [plate.code for plate in obj.embossing_plates.all()]
     
     def get_code(self, obj):
         """获取完整编码（包含版本号），用于向后兼容"""
