@@ -543,6 +543,22 @@ class WorkOrder(models.Model):
     die_type = models.CharField('刀模', max_length=20, choices=DIE_TYPE_CHOICES,
                                default='no_die', help_text='是否需要刀模')
     
+    # 烫金版类型选择
+    FOILING_PLATE_TYPE_CHOICES = [
+        ('no_foiling_plate', '不需要烫金版'),
+        ('need_foiling_plate', '需要烫金版'),
+    ]
+    foiling_plate_type = models.CharField('烫金版', max_length=30, choices=FOILING_PLATE_TYPE_CHOICES,
+                                         default='no_foiling_plate', help_text='是否需要烫金版')
+    
+    # 压凸版类型选择
+    EMBOSSING_PLATE_TYPE_CHOICES = [
+        ('no_embossing_plate', '不需要压凸版'),
+        ('need_embossing_plate', '需要压凸版'),
+    ]
+    embossing_plate_type = models.CharField('压凸版', max_length=30, choices=EMBOSSING_PLATE_TYPE_CHOICES,
+                                           default='no_embossing_plate', help_text='是否需要压凸版')
+    
     # 图稿和刀模关联
     artworks = models.ManyToManyField('Artwork', blank=True,
                                       related_name='work_orders', verbose_name='图稿（CTP版）',
@@ -550,6 +566,13 @@ class WorkOrder(models.Model):
     dies = models.ManyToManyField('Die', blank=True,
                                   related_name='work_orders', verbose_name='刀模',
                                   help_text='关联的刀模，用于模切工序，支持多个刀模')
+    # 关联烫金版和压凸版
+    foiling_plates = models.ManyToManyField('FoilingPlate', blank=True,
+                                            related_name='work_orders', verbose_name='烫金版',
+                                            help_text='关联的烫金版，用于烫金工序，支持多个烫金版')
+    embossing_plates = models.ManyToManyField('EmbossingPlate', blank=True,
+                                              related_name='work_orders', verbose_name='压凸版',
+                                              help_text='关联的压凸版，用于压凸工序，支持多个压凸版')
     
     # 印刷形式
     PRINTING_TYPE_CHOICES = [

@@ -414,6 +414,20 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     dies = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     die_names = serializers.SerializerMethodField()
     die_codes = serializers.SerializerMethodField()
+    # 烫金版类型
+    foiling_plate_type = serializers.CharField(read_only=True)
+    foiling_plate_type_display = serializers.CharField(source='get_foiling_plate_type_display', read_only=True)
+    # 烫金版信息：支持多个烫金版
+    foiling_plates = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    foiling_plate_names = serializers.SerializerMethodField()
+    foiling_plate_codes = serializers.SerializerMethodField()
+    # 压凸版类型
+    embossing_plate_type = serializers.CharField(read_only=True)
+    embossing_plate_type_display = serializers.CharField(source='get_embossing_plate_type_display', read_only=True)
+    # 压凸版信息：支持多个压凸版
+    embossing_plates = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    embossing_plate_names = serializers.SerializerMethodField()
+    embossing_plate_codes = serializers.SerializerMethodField()
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     
     order_processes = WorkOrderProcessSerializer(many=True, read_only=True)
@@ -569,6 +583,22 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     def get_die_codes(self, obj):
         """获取所有刀模编码"""
         return [die.code for die in obj.dies.all()]
+    
+    def get_foiling_plate_names(self, obj):
+        """获取所有烫金版名称"""
+        return [plate.name for plate in obj.foiling_plates.all()]
+    
+    def get_foiling_plate_codes(self, obj):
+        """获取所有烫金版编码"""
+        return [plate.code for plate in obj.foiling_plates.all()]
+    
+    def get_embossing_plate_names(self, obj):
+        """获取所有压凸版名称"""
+        return [plate.name for plate in obj.embossing_plates.all()]
+    
+    def get_embossing_plate_codes(self, obj):
+        """获取所有压凸版编码"""
+        return [plate.code for plate in obj.embossing_plates.all()]
 
 
 class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
@@ -589,7 +619,10 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'order_date', 'delivery_date', 'actual_delivery_date',
             'production_quantity', 'defective_quantity',
             'total_amount', 'design_file', 'notes',
-            'artwork_type', 'artworks', 'die_type', 'dies', 'printing_type', 'printing_cmyk_colors', 'printing_other_colors',
+            'artwork_type', 'artworks', 'die_type', 'dies', 
+            'foiling_plate_type', 'foiling_plates', 
+            'embossing_plate_type', 'embossing_plates',
+            'printing_type', 'printing_cmyk_colors', 'printing_other_colors',
             'products_data'
         ]
         read_only_fields = ['order_number']
@@ -599,9 +632,13 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         products_data = data.get('products_data', [])
         artworks = data.get('artworks', [])
         dies = data.get('dies', [])
+        foiling_plates = data.get('foiling_plates', [])
+        embossing_plates = data.get('embossing_plates', [])
         printing_type = data.get('printing_type')
         artwork_type = data.get('artwork_type', 'no_artwork')
         die_type = data.get('die_type', 'no_die')
+        foiling_plate_type = data.get('foiling_plate_type', 'no_foiling_plate')
+        embossing_plate_type = data.get('embossing_plate_type', 'no_embossing_plate')
         
         # 根据图稿类型验证图稿选择
         # 如果需要图稿，可以选择图稿（可选），如果不选择则生成设计任务
@@ -640,6 +677,13 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         products_data = validated_data.pop('products_data', [])
         artworks = validated_data.pop('artworks', [])
         dies = validated_data.pop('dies', [])
+        foiling_plates = validated_data.pop('foiling_plates', [])
+        embossing_plates = validated_data.pop('embossing_plates', [])
+        # 如果类型为不需要，确保列表为空
+        if validated_data.get('foiling_plate_type') == 'no_foiling_plate':
+            foiling_plates = []
+        if validated_data.get('embossing_plate_type') == 'no_embossing_plate':
+            embossing_plates = []
         
         work_order = WorkOrder.objects.create(**validated_data)
         
@@ -650,6 +694,14 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         # 设置刀模（ManyToMany 字段需要在对象创建后设置）
         if dies:
             work_order.dies.set(dies)
+        
+        # 设置烫金版（ManyToMany 字段需要在对象创建后设置）
+        if foiling_plates:
+            work_order.foiling_plates.set(foiling_plates)
+        
+        # 设置压凸版（ManyToMany 字段需要在对象创建后设置）
+        if embossing_plates:
+            work_order.embossing_plates.set(embossing_plates)
         
         # 创建关联的产品记录
         if products_data:
@@ -673,6 +725,8 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         products_data = validated_data.pop('products_data', None)
         artworks = validated_data.pop('artworks', None)
         dies = validated_data.pop('dies', None)
+        foiling_plates = validated_data.pop('foiling_plates', None)
+        embossing_plates = validated_data.pop('embossing_plates', None)
         
         # 更新图稿（ManyToMany 字段）
         if artworks is not None:
@@ -692,6 +746,20 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         # 更新刀模（ManyToMany 字段）
         if dies is not None:
             instance.dies.set(dies)
+        
+        # 根据烫金版类型处理烫金版选择
+        foiling_plate_type = validated_data.get('foiling_plate_type')
+        if foiling_plate_type == 'no_foiling_plate':
+            instance.foiling_plates.clear()
+        elif foiling_plates is not None:
+            instance.foiling_plates.set(foiling_plates)
+        
+        # 根据压凸版类型处理压凸版选择
+        embossing_plate_type = validated_data.get('embossing_plate_type')
+        if embossing_plate_type == 'no_embossing_plate':
+            instance.embossing_plates.clear()
+        elif embossing_plates is not None:
+            instance.embossing_plates.set(embossing_plates)
         
         # 如果提供了 products_data，更新产品列表
         if products_data is not None:
