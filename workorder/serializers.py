@@ -851,9 +851,9 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         has_embossing_plate = work_order.embossing_plates.exists()
         
         if has_artwork or has_die or has_foiling_plate or has_embossing_plate:
-            # 查找制版工序
+            # 查找制版工序（使用 code 字段精确匹配）
             plate_making_processes = Process.objects.filter(
-                name__icontains='制版',
+                code='CTP',
                 is_active=True
             )
             processes.update(plate_making_processes)
