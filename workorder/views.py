@@ -2,7 +2,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from django_filters import FilterSet, NumberFilter
+from django_filters import FilterSet, NumberFilter, CharFilter
 from django.db.models import Q, Count, Sum, Max
 from django.utils import timezone
 from .permissions import WorkOrderProcessPermission, WorkOrderMaterialPermission
@@ -471,15 +471,28 @@ class WorkOrderProcessViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+class WorkOrderTaskFilter(FilterSet):
+    """任务筛选器"""
+    work_order_process = NumberFilter(field_name='work_order_process')
+    process = NumberFilter(field_name='work_order_process__process', help_text='按工序筛选')
+    status = CharFilter(field_name='status')
+    task_type = CharFilter(field_name='task_type')
+    
+    class Meta:
+        model = WorkOrderTask
+        fields = ['work_order_process', 'process', 'status', 'task_type']
+
+
 class WorkOrderTaskViewSet(viewsets.ModelViewSet):
     """施工单任务视图集"""
     queryset = WorkOrderTask.objects.select_related(
         'work_order_process', 'work_order_process__process', 
-        'work_order_process__work_order', 'artwork', 'die', 'product', 'material'
+        'work_order_process__work_order', 'artwork', 'die', 'product', 'material',
+        'foiling_plate', 'embossing_plate'
     )
     serializer_class = WorkOrderTaskSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['work_order_process', 'status', 'task_type']
+    filterset_class = WorkOrderTaskFilter
     search_fields = ['work_content', 'production_requirements']
     ordering_fields = ['created_at', 'updated_at']
     ordering = ['-created_at']
@@ -494,19 +507,23 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
-        """完成任务（支持设计图稿任务时选择图稿）"""
+        """完成任务（支持新任务类型和需求）"""
         task = self.get_object()
         work_order = task.work_order_process.work_order
         
-        # 检查任务内容是否包含"设计图稿"
-        is_design_task = '设计图稿' in task.work_content
-        is_die_design_task = '设计刀模' in task.work_content
+        # 获取前端传递的数据
+        status_value = request.data.get('status', 'completed')
+        quantity_completed = request.data.get('quantity_completed')
+        notes = request.data.get('notes', '')
+        artwork_ids = request.data.get('artwork_ids', [])
+        die_ids = request.data.get('die_ids', [])
+        
+        # 制版任务：需要检查版型选择是否正确（通过设计图稿/设计刀模任务）
+        is_design_task = '设计图稿' in task.work_content or '更新图稿' in task.work_content
+        is_die_design_task = '设计刀模' in task.work_content or '更新刀模' in task.work_content
         
         if is_design_task:
             # 设计图稿任务：需要选择图稿
-            artwork_ids = request.data.get('artwork_ids', [])
-            notes = request.data.get('notes', '')
-            
             if not artwork_ids or len(artwork_ids) == 0:
                 return Response(
                     {'error': '请至少选择一个图稿'},
@@ -527,9 +544,11 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
             
             # 更新任务：关联第一个图稿（如果有多个图稿，关联第一个）
             task.artwork = artworks.first()
-            task.production_requirements = notes  # 将备注保存到生产要求字段
-            task.status = 'completed'
-            if task.quantity_completed == 0:
+            task.production_requirements = notes
+            task.status = status_value
+            if quantity_completed is not None:
+                task.quantity_completed = quantity_completed
+            elif task.quantity_completed == 0:
                 task.quantity_completed = task.production_quantity
             task.save()
             
@@ -541,9 +560,6 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         
         elif is_die_design_task:
             # 设计刀模任务：需要选择刀模
-            die_ids = request.data.get('die_ids', [])
-            notes = request.data.get('notes', '')
-            
             if not die_ids or len(die_ids) == 0:
                 return Response(
                     {'error': '请至少选择一个刀模'},
@@ -564,9 +580,11 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
             
             # 更新任务：关联第一个刀模（如果有多个刀模，关联第一个）
             task.die = dies.first()
-            task.production_requirements = notes  # 将备注保存到生产要求字段
-            task.status = 'completed'
-            if task.quantity_completed == 0:
+            task.production_requirements = notes
+            task.status = status_value
+            if quantity_completed is not None:
+                task.quantity_completed = quantity_completed
+            elif task.quantity_completed == 0:
                 task.quantity_completed = task.production_quantity
             task.save()
             
@@ -577,12 +595,19 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         
         else:
-            # 普通任务：直接完成
-            notes = request.data.get('notes', '')
-            task.production_requirements = notes  # 将备注保存到生产要求字段
-            task.status = 'completed'
-            if task.quantity_completed == 0:
-                task.quantity_completed = task.production_quantity
+            # 其他任务：根据任务类型处理
+            # 制版任务（plate_making）：完成数量固定为1，状态为已完成
+            if task.task_type == 'plate_making':
+                task.status = 'completed'
+                task.quantity_completed = 1
+                task.production_requirements = notes
+            else:
+                # 其他任务：支持状态选择（进行中/已完成）和完成数量
+                task.status = status_value
+                if quantity_completed is not None:
+                    task.quantity_completed = quantity_completed
+                task.production_requirements = notes
+            
             task.save()
             
             # 检查工序是否完成
