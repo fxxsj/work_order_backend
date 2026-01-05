@@ -52,6 +52,29 @@ class ProcessAdmin(admin.ModelAdmin):
     ordering = ['sort_order', 'code']
     readonly_fields = ['is_builtin', 'created_at']  # is_builtin字段只读
     
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('code', 'name', 'description', 'standard_duration', 'sort_order', 'is_active', 'is_builtin')
+        }),
+        ('任务生成规则', {
+            'fields': ('task_generation_rule',),
+            'description': '该工序如何生成任务'
+        }),
+        ('工序与版的关系配置', {
+            'fields': (
+                ('requires_artwork', 'artwork_required'),
+                ('requires_die', 'die_required'),
+                ('requires_foiling_plate', 'foiling_plate_required'),
+                ('requires_embossing_plate', 'embossing_plate_required'),
+            ),
+            'description': '配置该工序需要哪些版，以及版是否必选。如果版必选，选择该工序时必须选择对应的版；如果版可选，未选择时将生成设计任务。'
+        }),
+        ('系统信息', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
     def get_readonly_fields(self, request, obj=None):
         """根据is_builtin字段动态设置code字段为只读"""
         readonly = list(self.readonly_fields)
@@ -191,9 +214,9 @@ class WorkOrderAdmin(admin.ModelAdmin):
                 'order_number', 'customer'
             )
         }),
-        ('图稿和刀模', {
-            'fields': ('artwork_type', 'artworks', 'die_type', 'dies'),
-            'description': '关联的图稿（CTP版）和刀模（模切），支持多个图稿和多个刀模'
+        ('图稿、刀模、烫金版和压凸版', {
+            'fields': ('artworks', 'dies', 'foiling_plates', 'embossing_plates'),
+            'description': '关联的图稿（CTP版）、刀模（模切）、烫金版和压凸版，支持多个。根据工序选择自动显示和验证。'
         }),
         ('状态与优先级', {
             'fields': ('status', 'priority', 'manager')

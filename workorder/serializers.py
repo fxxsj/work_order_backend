@@ -397,9 +397,6 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     printing_cmyk_colors = serializers.JSONField(read_only=True)
     printing_other_colors = serializers.JSONField(read_only=True)
     printing_colors_display = serializers.SerializerMethodField()
-    # 图稿类型
-    artwork_type = serializers.CharField(read_only=True)
-    artwork_type_display = serializers.CharField(source='get_artwork_type_display', read_only=True)
     # 图稿信息：支持多个图稿（使用 PrimaryKeyRelatedField，避免循环引用）
     artworks = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     artwork_names = serializers.SerializerMethodField()
@@ -407,23 +404,14 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     # 图稿详细信息（包含确认状态）
     artwork_details = serializers.SerializerMethodField()
     artwork_colors = serializers.SerializerMethodField()  # 图稿色数信息
-    # 刀模类型
-    die_type = serializers.CharField(read_only=True)
-    die_type_display = serializers.CharField(source='get_die_type_display', read_only=True)
     # 刀模信息：支持多个刀模
     dies = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     die_names = serializers.SerializerMethodField()
     die_codes = serializers.SerializerMethodField()
-    # 烫金版类型
-    foiling_plate_type = serializers.CharField(read_only=True)
-    foiling_plate_type_display = serializers.CharField(source='get_foiling_plate_type_display', read_only=True)
     # 烫金版信息：支持多个烫金版
     foiling_plates = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     foiling_plate_names = serializers.SerializerMethodField()
     foiling_plate_codes = serializers.SerializerMethodField()
-    # 压凸版类型
-    embossing_plate_type = serializers.CharField(read_only=True)
-    embossing_plate_type_display = serializers.CharField(source='get_embossing_plate_type_display', read_only=True)
     # 压凸版信息：支持多个压凸版
     embossing_plates = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     embossing_plate_names = serializers.SerializerMethodField()
@@ -610,6 +598,22 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         required=False,
         help_text='产品列表数据，格式：[{"product": id, "quantity": 1, "unit": "件", "specification": "", "sort_order": 0}]'
     )
+    # 工序ID列表（用于验证版的选择）
+    # 使用自定义方法来过滤 null 值
+    processes = serializers.ListField(
+        child=serializers.IntegerField(allow_null=True),  # 允许 null，然后在 validate 中过滤
+        write_only=True,
+        required=False,
+        allow_empty=True,
+        help_text='选中的工序ID列表，用于验证版的选择'
+    )
+    
+    def validate_processes(self, value):
+        """验证并过滤 processes 字段"""
+        if value is None:
+            return []
+        # 过滤掉 None 值
+        return [pid for pid in value if pid is not None]
     
     class Meta:
         model = WorkOrder
@@ -619,41 +623,83 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'order_date', 'delivery_date', 'actual_delivery_date',
             'production_quantity', 'defective_quantity',
             'total_amount', 'design_file', 'notes',
-            'artwork_type', 'artworks', 'die_type', 'dies', 
-            'foiling_plate_type', 'foiling_plates', 
-            'embossing_plate_type', 'embossing_plates',
+            'artworks', 'dies', 'foiling_plates', 'embossing_plates',
             'printing_type', 'printing_cmyk_colors', 'printing_other_colors',
-            'products_data'
+            'products_data', 'processes'
         ]
         read_only_fields = ['order_number']
     
     def validate(self, data):
-        """验证数据，自动从产品中填充信息"""
+        """验证数据，根据工序验证版的选择"""
         products_data = data.get('products_data', [])
-        artworks = data.get('artworks', [])
-        dies = data.get('dies', [])
-        foiling_plates = data.get('foiling_plates', [])
-        embossing_plates = data.get('embossing_plates', [])
+        artworks = data.get('artworks')  # 不设置默认值，以便区分是否发送
+        dies = data.get('dies')  # 不设置默认值，以便区分是否发送
+        foiling_plates = data.get('foiling_plates')  # 不设置默认值，以便区分是否发送
+        embossing_plates = data.get('embossing_plates')  # 不设置默认值，以便区分是否发送
         printing_type = data.get('printing_type')
-        artwork_type = data.get('artwork_type', 'no_artwork')
-        die_type = data.get('die_type', 'no_die')
-        foiling_plate_type = data.get('foiling_plate_type', 'no_foiling_plate')
-        embossing_plate_type = data.get('embossing_plate_type', 'no_embossing_plate')
+        process_ids = data.get('processes', [])
         
-        # 根据图稿类型验证图稿选择
-        # 如果需要图稿，可以选择图稿（可选），如果不选择则生成设计任务
-        # 不需要图稿时，不验证图稿选择
+        # process_ids 已经在 validate_processes 方法中过滤了 null 值
+        # 根据选中的工序验证版的选择（只验证发送的字段）
+        if process_ids:
+            processes = Process.objects.filter(id__in=process_ids, is_active=True)
+            
+            # 检查是否有工序需要图稿（只验证如果artworks字段被发送）
+            if artworks is not None:
+                processes_requiring_artwork = processes.filter(requires_artwork=True)
+                if processes_requiring_artwork.exists():
+                    processes_requiring_artwork_mandatory = processes_requiring_artwork.filter(artwork_required=True)
+                    if processes_requiring_artwork_mandatory.exists():
+                        if not artworks or len(artworks) == 0:
+                            process_names = ', '.join([p.name for p in processes_requiring_artwork_mandatory])
+                            raise serializers.ValidationError({
+                                'artworks': f'选择了需要图稿的工序（{process_names}），请至少选择一个图稿'
+                            })
+            
+            # 检查是否有工序需要刀模（只验证如果dies字段被发送）
+            if dies is not None:
+                processes_requiring_die = processes.filter(requires_die=True)
+                if processes_requiring_die.exists():
+                    processes_requiring_die_mandatory = processes_requiring_die.filter(die_required=True)
+                    if processes_requiring_die_mandatory.exists():
+                        if not dies or len(dies) == 0:
+                            process_names = ', '.join([p.name for p in processes_requiring_die_mandatory])
+                            raise serializers.ValidationError({
+                                'dies': f'选择了需要刀模的工序（{process_names}），请至少选择一个刀模'
+                            })
+            
+            # 检查是否有工序需要烫金版（只验证如果foiling_plates字段被发送）
+            if foiling_plates is not None:
+                processes_requiring_foiling_plate = processes.filter(requires_foiling_plate=True)
+                if processes_requiring_foiling_plate.exists():
+                    processes_requiring_foiling_plate_mandatory = processes_requiring_foiling_plate.filter(foiling_plate_required=True)
+                    if processes_requiring_foiling_plate_mandatory.exists():
+                        if not foiling_plates or len(foiling_plates) == 0:
+                            process_names = ', '.join([p.name for p in processes_requiring_foiling_plate_mandatory])
+                            raise serializers.ValidationError({
+                                'foiling_plates': f'选择了需要烫金版的工序（{process_names}），请至少选择一个烫金版'
+                            })
+            
+            # 检查是否有工序需要压凸版（只验证如果embossing_plates字段被发送）
+            if embossing_plates is not None:
+                processes_requiring_embossing_plate = processes.filter(requires_embossing_plate=True)
+                if processes_requiring_embossing_plate.exists():
+                    processes_requiring_embossing_plate_mandatory = processes_requiring_embossing_plate.filter(embossing_plate_required=True)
+                    if processes_requiring_embossing_plate_mandatory.exists():
+                        if not embossing_plates or len(embossing_plates) == 0:
+                            process_names = ', '.join([p.name for p in processes_requiring_embossing_plate_mandatory])
+                            raise serializers.ValidationError({
+                                'embossing_plates': f'选择了需要压凸版的工序（{process_names}），请至少选择一个压凸版'
+                            })
         
-        # 根据刀模类型验证刀模选择
-        # 如果需要刀模，可以选择刀模（可选），如果不选择则生成设计任务
-        # 不需要刀模时，不验证刀模选择
-        
-        # 如果没有选择图稿，自动设置印刷形式为"不需要印刷"
-        if not artworks or len(artworks) == 0:
-            data['printing_type'] = 'none'
-        elif printing_type == 'none':
-            # 如果选择了图稿但印刷形式是"不需要印刷"，默认改为"正面印刷"
-            data['printing_type'] = 'front'
+        # 只有在 artworks 字段被发送时才处理 printing_type
+        if 'artworks' in data:
+            artworks_value = artworks if artworks is not None else []
+            if not artworks_value or len(artworks_value) == 0:
+                data['printing_type'] = 'none'
+            elif printing_type == 'none':
+                # 如果选择了图稿但印刷形式是"不需要印刷"，默认改为"正面印刷"
+                data['printing_type'] = 'front'
         
         # 如果提供了 products_data，计算总金额
         if products_data:
@@ -679,11 +725,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         dies = validated_data.pop('dies', [])
         foiling_plates = validated_data.pop('foiling_plates', [])
         embossing_plates = validated_data.pop('embossing_plates', [])
-        # 如果类型为不需要，确保列表为空
-        if validated_data.get('foiling_plate_type') == 'no_foiling_plate':
-            foiling_plates = []
-        if validated_data.get('embossing_plate_type') == 'no_embossing_plate':
-            embossing_plates = []
+        process_ids = validated_data.pop('processes', [])  # 工序ID列表，用于后续创建工序
         
         work_order = WorkOrder.objects.create(**validated_data)
         
@@ -715,8 +757,8 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                     sort_order=item.get('sort_order', 0)
                 )
         
-        # 自动创建工序
-        self._create_work_order_processes(work_order)
+        # 自动创建工序（使用用户选择的工序ID列表）
+        self._create_work_order_processes(work_order, process_ids=process_ids)
         
         return work_order
     
@@ -727,6 +769,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         dies = validated_data.pop('dies', None)
         foiling_plates = validated_data.pop('foiling_plates', None)
         embossing_plates = validated_data.pop('embossing_plates', None)
+        process_ids = validated_data.pop('processes', None)  # 工序ID列表，用于后续更新工序
         
         # 更新图稿（ManyToMany 字段）
         if artworks is not None:
@@ -747,18 +790,12 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         if dies is not None:
             instance.dies.set(dies)
         
-        # 根据烫金版类型处理烫金版选择
-        foiling_plate_type = validated_data.get('foiling_plate_type')
-        if foiling_plate_type == 'no_foiling_plate':
-            instance.foiling_plates.clear()
-        elif foiling_plates is not None:
+        # 更新烫金版（ManyToMany 字段）
+        if foiling_plates is not None:
             instance.foiling_plates.set(foiling_plates)
         
-        # 根据压凸版类型处理压凸版选择
-        embossing_plate_type = validated_data.get('embossing_plate_type')
-        if embossing_plate_type == 'no_embossing_plate':
-            instance.embossing_plates.clear()
-        elif embossing_plates is not None:
+        # 更新压凸版（ManyToMany 字段）
+        if embossing_plates is not None:
             instance.embossing_plates.set(embossing_plates)
         
         # 如果提供了 products_data，更新产品列表
@@ -777,19 +814,49 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                     sort_order=item.get('sort_order', 0)
                 )
             
-            # 如果产品列表发生变化，重新创建工序
-            self._recreate_work_order_processes(instance)
+            # 如果产品列表发生变化，重新创建工序（使用用户选择的工序ID列表）
+            # 如果process_ids为空列表，则使用产品的默认工序
+            self._recreate_work_order_processes(instance, process_ids=process_ids if process_ids else None)
+        elif process_ids is not None:
+            # 如果只更新了工序选择，更新工序
+            # 如果process_ids为空列表，则使用产品的默认工序
+            # 删除现有的未开始工序
+            WorkOrderProcess.objects.filter(
+                work_order=instance,
+                status='pending'
+            ).delete()
+            
+            # 重新创建工序（如果process_ids为空，则使用产品的默认工序）
+            self._create_work_order_processes(instance, process_ids=process_ids if process_ids else None)
         
         return instance
     
-    def _create_work_order_processes(self, work_order):
+    def _create_work_order_processes(self, work_order, process_ids=None):
         """为施工单自动创建工序"""
-        # 收集所有产品的默认工序
         processes = set()
         
-        # 从 products 关联中获取
-        for product_item in work_order.products.all():
-            processes.update(product_item.product.default_processes.all())
+        # 如果提供了 process_ids，使用用户选择的工序
+        if process_ids:
+            processes.update(Process.objects.filter(id__in=process_ids, is_active=True))
+        else:
+            # 否则，收集所有产品的默认工序
+            for product_item in work_order.products.all():
+                processes.update(product_item.product.default_processes.all())
+        
+        # 检查是否需要自动添加制版工序
+        # 如果施工单中包含图稿、刀模、烫金版或压凸版至少其中一项，自动添加制版工序
+        has_artwork = work_order.artworks.exists()
+        has_die = work_order.dies.exists()
+        has_foiling_plate = work_order.foiling_plates.exists()
+        has_embossing_plate = work_order.embossing_plates.exists()
+        
+        if has_artwork or has_die or has_foiling_plate or has_embossing_plate:
+            # 查找制版工序
+            plate_making_processes = Process.objects.filter(
+                name__icontains='制版',
+                is_active=True
+            )
+            processes.update(plate_making_processes)
         
         # 为每个工序创建 WorkOrderProcess
         for process in sorted(processes, key=lambda p: p.sort_order):
@@ -806,7 +873,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                 }
             )
     
-    def _recreate_work_order_processes(self, work_order):
+    def _recreate_work_order_processes(self, work_order, process_ids=None):
         """重新创建施工单的工序（当产品列表变化时）"""
         # 删除现有的工序（如果还没有开始）
         WorkOrderProcess.objects.filter(
@@ -814,8 +881,8 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             status='pending'
         ).delete()
         
-        # 重新创建工序
-        self._create_work_order_processes(work_order)
+        # 重新创建工序（使用用户选择的工序ID列表）
+        self._create_work_order_processes(work_order, process_ids=process_ids)
 
 
 class WorkOrderProcessUpdateSerializer(serializers.ModelSerializer):

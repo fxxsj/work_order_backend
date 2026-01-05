@@ -70,6 +70,24 @@ class Process(models.Model):
                                            choices=TASK_GENERATION_RULE_CHOICES,
                                            default='general',
                                            help_text='该工序如何生成任务')
+    # 工序需要的版（配置化）
+    requires_artwork = models.BooleanField('需要图稿', default=False,
+                                          help_text='该工序是否需要图稿（CTP版）')
+    requires_die = models.BooleanField('需要刀模', default=False,
+                                      help_text='该工序是否需要刀模')
+    requires_foiling_plate = models.BooleanField('需要烫金版', default=False,
+                                                 help_text='该工序是否需要烫金版')
+    requires_embossing_plate = models.BooleanField('需要压凸版', default=False,
+                                                   help_text='该工序是否需要压凸版')
+    # 版是否必选（如果为False，则版可选，未选择时生成设计任务）
+    artwork_required = models.BooleanField('图稿必选', default=True,
+                                          help_text='如果为True，选择该工序时必须选择图稿；如果为False，图稿可选（未选择时生成设计任务）')
+    die_required = models.BooleanField('刀模必选', default=True,
+                                      help_text='如果为True，选择该工序时必须选择刀模；如果为False，刀模可选（未选择时生成设计任务）')
+    foiling_plate_required = models.BooleanField('烫金版必选', default=True,
+                                                 help_text='如果为True，选择该工序时必须选择烫金版；如果为False，烫金版可选（未选择时生成设计任务）')
+    embossing_plate_required = models.BooleanField('压凸版必选', default=True,
+                                                  help_text='如果为True，选择该工序时必须选择压凸版；如果为False，压凸版可选（未选择时生成设计任务）')
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
 
     class Meta:
@@ -527,39 +545,7 @@ class WorkOrder(models.Model):
                                           related_name='work_orders', verbose_name='产品组子项',
                                           help_text='如果该施工单是产品组的一部分，关联到对应的子产品')
     
-    # 图稿类型选择
-    ARTWORK_TYPE_CHOICES = [
-        ('no_artwork', '不需要图稿'),
-        ('need_artwork', '需要图稿'),
-    ]
-    artwork_type = models.CharField('图稿（CTP版）', max_length=20, choices=ARTWORK_TYPE_CHOICES,
-                                    default='no_artwork', help_text='是否需要图稿')
-    
-    # 刀模类型选择
-    DIE_TYPE_CHOICES = [
-        ('no_die', '不需要刀模'),
-        ('need_die', '需要刀模'),
-    ]
-    die_type = models.CharField('刀模', max_length=20, choices=DIE_TYPE_CHOICES,
-                               default='no_die', help_text='是否需要刀模')
-    
-    # 烫金版类型选择
-    FOILING_PLATE_TYPE_CHOICES = [
-        ('no_foiling_plate', '不需要烫金版'),
-        ('need_foiling_plate', '需要烫金版'),
-    ]
-    foiling_plate_type = models.CharField('烫金版', max_length=30, choices=FOILING_PLATE_TYPE_CHOICES,
-                                         default='no_foiling_plate', help_text='是否需要烫金版')
-    
-    # 压凸版类型选择
-    EMBOSSING_PLATE_TYPE_CHOICES = [
-        ('no_embossing_plate', '不需要压凸版'),
-        ('need_embossing_plate', '需要压凸版'),
-    ]
-    embossing_plate_type = models.CharField('压凸版', max_length=30, choices=EMBOSSING_PLATE_TYPE_CHOICES,
-                                           default='no_embossing_plate', help_text='是否需要压凸版')
-    
-    # 图稿和刀模关联
+    # 图稿、刀模、烫金版、压凸版关联（根据工序选择自动显示和验证）
     artworks = models.ManyToManyField('Artwork', blank=True,
                                       related_name='work_orders', verbose_name='图稿（CTP版）',
                                       help_text='关联的图稿，用于CTP制版，支持多个图稿（如纸卡双面印刷的面版和底版）')
@@ -735,7 +721,7 @@ class WorkOrderProcess(models.Model):
         """判断该工序是否可以开始"""
         # 制版、刀模和采购可以并行（通过工序名称识别）
         process_name = self.process.name.lower()
-        parallel_keywords = ['制版', '设计', '刀模', '模切', '采购']
+        parallel_keywords = ['制版', '刀模', '模切', '采购']
         
         if any(keyword in process_name for keyword in parallel_keywords):
             # 这些工序可以并行，只要没有其他限制就可以开始
@@ -747,8 +733,6 @@ class WorkOrderProcess(models.Model):
             work_order=self.work_order
         ).exclude(
             process__name__icontains='制版'
-        ).exclude(
-            process__name__icontains='设计'
         ).exclude(
             process__name__icontains='刀模'
         ).exclude(
@@ -787,7 +771,7 @@ class WorkOrderProcess(models.Model):
         # 根据任务生成规则和工序名称判断完成条件
         if rule == 'artwork':
             # 图稿任务：制版需要图稿确认+任务完成，印刷只需要任务完成
-            if '制版' in process_name or '设计' in process_name:
+            if '制版' in process_name:
                 # 制版：检查所有图稿是否已确认且任务完成
                 for task in all_tasks:
                     if task.artwork and not task.artwork.confirmed:
@@ -875,39 +859,36 @@ class WorkOrderProcess(models.Model):
         if rule == 'artwork':
             # 按图稿生成任务（每个图稿一个任务，数量为1）
             # 用于：制版、印刷
-            if '制版' in process_name or '设计' in process_name:
-                # 制版工序：根据artwork_type生成任务
-                artwork_type = work_order.artwork_type
+            if '制版' in process_name:
+                # 制版工序：根据图稿选择生成任务
                 order_number = work_order.order_number
+                artworks = work_order.artworks.all()
                 
-                if artwork_type == 'need_artwork':
-                    # 需要图稿：检查是否已选择图稿
-                    artworks = work_order.artworks.all()
-                    if artworks.exists():
-                        # 如果已选择图稿，为每个图稿生成制版任务
-                        for artwork in artworks:
-                            work_content = f'制版：{artwork.get_full_code()} - {artwork.name}'
-                            WorkOrderTask.objects.create(
-                                work_order_process=self,
-                                task_type='artwork',
-                                artwork=artwork,
-                                work_content=work_content,
-                                production_quantity=1,
-                                quantity_completed=0,
-                                auto_calculate_quantity=False
-                            )
-                    else:
-                        # 如果未选择图稿，生成设计图稿任务
-                        work_content = f'为{order_number}设计图稿'
+                if artworks.exists():
+                    # 如果已选择图稿，为每个图稿生成制版任务
+                    for artwork in artworks:
+                        work_content = f'制版：{artwork.get_full_code()} - {artwork.name}'
                         WorkOrderTask.objects.create(
                             work_order_process=self,
                             task_type='artwork',
-                            artwork=None,  # 设计时还没有图稿
+                            artwork=artwork,
                             work_content=work_content,
                             production_quantity=1,
                             quantity_completed=0,
                             auto_calculate_quantity=False
                         )
+                else:
+                    # 如果未选择图稿，生成设计图稿任务
+                    work_content = f'为{order_number}设计图稿'
+                    WorkOrderTask.objects.create(
+                        work_order_process=self,
+                        task_type='artwork',
+                        artwork=None,  # 设计时还没有图稿
+                        work_content=work_content,
+                        production_quantity=1,
+                        quantity_completed=0,
+                        auto_calculate_quantity=False
+                    )
             else:
                 # 其他工序（如印刷）：为每个图稿生成任务
                 for artwork in work_order.artworks.all():
@@ -925,37 +906,34 @@ class WorkOrderProcess(models.Model):
         elif rule == 'die':
             # 按刀模生成任务（每个刀模一个任务，数量为1）
             # 用于：模切
-            die_type = work_order.die_type
             order_number = work_order.order_number
+            dies = work_order.dies.all()
             
-            if die_type == 'need_die':
-                # 需要刀模：检查是否已选择刀模
-                dies = work_order.dies.all()
-                if dies.exists():
-                    # 如果已选择刀模，为每个刀模生成模切任务
-                    for die in dies:
-                        work_content = f'模切：{die.code} - {die.name}'
-                        WorkOrderTask.objects.create(
-                            work_order_process=self,
-                            task_type='die',
-                            die=die,
-                            work_content=work_content,
-                            production_quantity=1,
-                            quantity_completed=0,
-                            auto_calculate_quantity=False  # 刀模任务固定为1
-                        )
-                else:
-                    # 如果未选择刀模，生成设计刀模任务
-                    work_content = f'为{order_number}设计刀模'
+            if dies.exists():
+                # 如果已选择刀模，为每个刀模生成模切任务
+                for die in dies:
+                    work_content = f'模切：{die.code} - {die.name}'
                     WorkOrderTask.objects.create(
                         work_order_process=self,
                         task_type='die',
-                        die=None,  # 设计时还没有刀模
+                        die=die,
                         work_content=work_content,
                         production_quantity=1,
                         quantity_completed=0,
-                        auto_calculate_quantity=False
+                        auto_calculate_quantity=False  # 刀模任务固定为1
                     )
+            else:
+                # 如果未选择刀模，生成设计刀模任务
+                work_content = f'为{order_number}设计刀模'
+                WorkOrderTask.objects.create(
+                    work_order_process=self,
+                    task_type='die',
+                    die=None,  # 设计时还没有刀模
+                    work_content=work_content,
+                    production_quantity=1,
+                    quantity_completed=0,
+                    auto_calculate_quantity=False
+                )
         
         elif rule == 'product':
             # 按产品生成任务（每个产品一个任务）
@@ -1019,74 +997,66 @@ class WorkOrderProcess(models.Model):
             # 生成通用任务（一个工序一个任务）
             # 用于：裱坑、打钉等其他工序
             # 但是，如果制版工序的任务生成规则是 general，也需要根据 artwork_type 生成任务
-            if ('制版' in process_name or '设计' in process_name) and rule == 'general':
-                # 制版工序：根据artwork_type生成任务
-                artwork_type = work_order.artwork_type
+            if '制版' in process_name and rule == 'general':
+                # 制版工序：根据图稿选择生成任务
                 order_number = work_order.order_number
+                artworks = work_order.artworks.all()
                 
-                if artwork_type == 'need_artwork':
-                    # 需要图稿：检查是否已选择图稿
-                    artworks = work_order.artworks.all()
-                    if artworks.exists():
-                        # 如果已选择图稿，为每个图稿生成制版任务
-                        for artwork in artworks:
-                            work_content = f'制版：{artwork.get_full_code()} - {artwork.name}'
-                            WorkOrderTask.objects.create(
-                                work_order_process=self,
-                                task_type='artwork',
-                                artwork=artwork,
-                                work_content=work_content,
-                                production_quantity=1,
-                                quantity_completed=0,
-                                auto_calculate_quantity=False
-                            )
-                    else:
-                        # 如果未选择图稿，生成设计图稿任务
-                        work_content = f'为{order_number}设计图稿'
+                if artworks.exists():
+                    # 如果已选择图稿，为每个图稿生成制版任务
+                    for artwork in artworks:
+                        work_content = f'制版：{artwork.get_full_code()} - {artwork.name}'
                         WorkOrderTask.objects.create(
                             work_order_process=self,
                             task_type='artwork',
-                            artwork=None,  # 设计时还没有图稿
+                            artwork=artwork,
                             work_content=work_content,
                             production_quantity=1,
                             quantity_completed=0,
                             auto_calculate_quantity=False
                         )
-                # 如果 artwork_type 是 'no_artwork'，不生成任务
-            elif ('模切' in process_name) and rule == 'general':
-                # 模切工序：根据die_type生成任务
-                die_type = work_order.die_type
+                else:
+                    # 如果未选择图稿，生成设计图稿任务
+                    work_content = f'为{order_number}设计图稿'
+                    WorkOrderTask.objects.create(
+                        work_order_process=self,
+                        task_type='artwork',
+                        artwork=None,  # 设计时还没有图稿
+                        work_content=work_content,
+                        production_quantity=1,
+                        quantity_completed=0,
+                        auto_calculate_quantity=False
+                    )
+            elif '模切' in process_name and rule == 'general':
+                # 模切工序：根据刀模选择生成任务
                 order_number = work_order.order_number
+                dies = work_order.dies.all()
                 
-                if die_type == 'need_die':
-                    # 需要刀模：检查是否已选择刀模
-                    dies = work_order.dies.all()
-                    if dies.exists():
-                        # 如果已选择刀模，为每个刀模生成模切任务
-                        for die in dies:
-                            work_content = f'模切：{die.code} - {die.name}'
-                            WorkOrderTask.objects.create(
-                                work_order_process=self,
-                                task_type='die',
-                                die=die,
-                                work_content=work_content,
-                                production_quantity=1,
-                                quantity_completed=0,
-                                auto_calculate_quantity=False
-                            )
-                    else:
-                        # 如果未选择刀模，生成设计刀模任务
-                        work_content = f'为{order_number}设计刀模'
+                if dies.exists():
+                    # 如果已选择刀模，为每个刀模生成模切任务
+                    for die in dies:
+                        work_content = f'模切：{die.code} - {die.name}'
                         WorkOrderTask.objects.create(
                             work_order_process=self,
                             task_type='die',
-                            die=None,  # 设计时还没有刀模
+                            die=die,
                             work_content=work_content,
                             production_quantity=1,
                             quantity_completed=0,
                             auto_calculate_quantity=False
                         )
-                # 如果 die_type 是 'no_die'，不生成任务
+                else:
+                    # 如果未选择刀模，生成设计刀模任务
+                    work_content = f'为{order_number}设计刀模'
+                    WorkOrderTask.objects.create(
+                        work_order_process=self,
+                        task_type='die',
+                        die=None,  # 设计时还没有刀模
+                        work_content=work_content,
+                        production_quantity=1,
+                        quantity_completed=0,
+                        auto_calculate_quantity=False
+                    )
             else:
                 # 其他通用任务
                 WorkOrderTask.objects.create(

@@ -166,6 +166,16 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             return WorkOrderCreateUpdateSerializer
         return WorkOrderDetailSerializer
     
+    def update(self, request, *args, **kwargs):
+        """重写update方法以捕获详细错误信息"""
+        try:
+            return super().update(request, *args, **kwargs)
+        except Exception as e:
+            import traceback
+            print(f"Error in WorkOrderViewSet.update: {str(e)}")
+            print(traceback.format_exc())
+            raise
+    
     def get_queryset(self):
         queryset = super().get_queryset()
         queryset = queryset.select_related('customer', 'customer__salesperson', 'manager', 'created_by', 'approved_by')
