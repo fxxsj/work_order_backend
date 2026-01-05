@@ -131,6 +131,10 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
     product_name = serializers.SerializerMethodField()
     material_code = serializers.SerializerMethodField()
     material_name = serializers.SerializerMethodField()
+    foiling_plate_code = serializers.SerializerMethodField()
+    foiling_plate_name = serializers.SerializerMethodField()
+    embossing_plate_code = serializers.SerializerMethodField()
+    embossing_plate_name = serializers.SerializerMethodField()
     # 物料状态（用于采购和开料任务）
     material_purchase_status = serializers.SerializerMethodField()
     # 工序和施工单信息
@@ -141,8 +145,8 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
         fields = '__all__'
         # 在更新时，某些字段应该是只读的
         read_only_fields = ['work_order_process', 'task_type', 'work_content', 'production_quantity', 
-                          'artwork', 'die', 'product', 'material', 'auto_calculate_quantity', 
-                          'created_at']
+                          'artwork', 'die', 'product', 'material', 'foiling_plate', 'embossing_plate',
+                          'auto_calculate_quantity', 'created_at']
     
     def get_artwork_code(self, obj):
         """获取图稿编码"""
@@ -196,6 +200,30 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
         """获取物料名称"""
         if obj.material:
             return obj.material.name
+        return None
+    
+    def get_foiling_plate_code(self, obj):
+        """获取烫金版编码"""
+        if obj.foiling_plate:
+            return obj.foiling_plate.code
+        return None
+    
+    def get_foiling_plate_name(self, obj):
+        """获取烫金版名称"""
+        if obj.foiling_plate:
+            return obj.foiling_plate.name
+        return None
+    
+    def get_embossing_plate_code(self, obj):
+        """获取压凸版编码"""
+        if obj.embossing_plate:
+            return obj.embossing_plate.code
+        return None
+    
+    def get_embossing_plate_name(self, obj):
+        """获取压凸版名称"""
+        if obj.embossing_plate:
+            return obj.embossing_plate.name
         return None
     
     def get_material_purchase_status(self, obj):

@@ -760,313 +760,208 @@ class WorkOrderProcess(models.Model):
         return True
     
     def check_and_update_status(self):
-        """根据任务状态自动判断工序是否完成"""
-        all_tasks = self.tasks.all()
-        if not all_tasks.exists():
+        """根据任务状态自动判断工序是否完成（新规则）
+
+        - 不再依赖 task_generation_rule
+        - 若无任务，返回 False
+        - 所有任务需状态为 completed
+        - 若任务有生产数量，需 quantity_completed >= production_quantity
+        """
+        tasks = self.tasks.all()
+        if not tasks.exists():
             return False
-        
-        process_name = self.process.name.lower()
-        rule = self.process.task_generation_rule
-        
-        # 根据任务生成规则和工序名称判断完成条件
-        if rule == 'artwork':
-            # 图稿任务：制版需要图稿确认+任务完成，印刷只需要任务完成
-            if '制版' in process_name:
-                # 制版：检查所有图稿是否已确认且任务完成
-                for task in all_tasks:
-                    if task.artwork and not task.artwork.confirmed:
-                        return False
-                    if task.status != 'completed':
-                        return False
-            else:
-                # 印刷等其他图稿任务：只需要任务完成
-                for task in all_tasks:
-                    if task.status != 'completed':
-                        return False
-        
-        elif rule == 'material':
-            # 物料任务：根据工序名称判断完成条件
-            if '采购' in process_name:
-                # 采购：检查所有物料是否已回料（purchase_status='received'）
-                for task in all_tasks:
-                    if task.material:
-                        try:
-                            material_record = WorkOrderMaterial.objects.get(
-                                work_order=self.work_order,
-                                material=task.material
-                            )
-                            if material_record.purchase_status != 'received':
-                                return False
-                        except WorkOrderMaterial.DoesNotExist:
-                            return False
-            elif '开料' in process_name or '裁切' in process_name:
-                # 开料：检查所有物料是否已开料（purchase_status='cut'）
-                for task in all_tasks:
-                    if task.material:
-                        try:
-                            material_record = WorkOrderMaterial.objects.get(
-                                work_order=self.work_order,
-                                material=task.material
-                            )
-                            if material_record.purchase_status != 'cut':
-                                return False
-                        except WorkOrderMaterial.DoesNotExist:
-                            return False
-            else:
-                # 其他物料任务：检查任务状态
-                for task in all_tasks:
-                    if task.status != 'completed':
-                        return False
-        
-        elif rule == 'die':
-            # 刀模任务（模切）：检查所有任务是否完成
-            for task in all_tasks:
-                if task.status != 'completed':
-                    return False
-        
-        elif rule == 'product':
-            # 产品任务（包装）：检查所有任务是否完成
-            for task in all_tasks:
-                if task.status != 'completed':
-                    return False
-        
-        else:  # general
-            # 通用任务（裱坑、打钉等）：检查所有任务是否完成
-            for task in all_tasks:
-                if task.status != 'completed':
-                    return False
-        
-        # 如果所有任务完成，设置工序状态为 completed
-        if all(task.status == 'completed' for task in all_tasks):
-            self.status = 'completed'
-            self.actual_end_time = timezone.now()
-            self.save()
-            return True
-        return False
+
+        for task in tasks:
+            if task.status != 'completed':
+                return False
+            if task.production_quantity and task.quantity_completed < task.production_quantity:
+                return False
+
+        self.status = 'completed'
+        self.actual_end_time = timezone.now()
+        self.save()
+        return True
     
     def generate_tasks(self):
-        """为工序生成任务（在工序开始时调用）"""
+        """为工序生成任务（在工序开始时调用）
+        
+        使用 process.code 字段精确匹配工序，生成对应的任务：
+        - CTP（制版）：为图稿、刀模、烫金版、压凸版每个生成一个任务
+        - CUT（开料）：为需要开料的物料每个生成一个任务
+        - PRT（印刷）：为每个图稿生成一个任务
+        - FOIL_G（烫金）：为每个烫金版生成一个任务
+        - EMB（压凸）：为每个压凸版生成一个任务
+        - DIE（模切）：为每个刀模生成一个任务
+        - PACK（包装）：为每个产品生成一个任务
+        - 其他工序：生成通用任务
+        """
         # 如果已经有任务，不再生成
         if self.tasks.exists():
             return
         
         process = self.process
         work_order = self.work_order
-        rule = process.task_generation_rule
-        process_name = process.name.lower()
+        process_code = process.code
+        order_number = work_order.order_number
+        production_quantity = work_order.production_quantity or 0
         
-        # 根据任务生成规则生成任务
-        if rule == 'artwork':
-            # 按图稿生成任务（每个图稿一个任务，数量为1）
-            # 用于：制版、印刷
-            if '制版' in process_name:
-                # 制版工序：根据图稿选择生成任务
-                order_number = work_order.order_number
-                artworks = work_order.artworks.all()
-                
-                if artworks.exists():
-                    # 如果已选择图稿，为每个图稿生成制版任务
-                    for artwork in artworks:
-                        work_content = f'制版：{artwork.get_full_code()} - {artwork.name}'
-                        WorkOrderTask.objects.create(
-                            work_order_process=self,
-                            task_type='artwork',
-                            artwork=artwork,
-                            work_content=work_content,
-                            production_quantity=1,
-                            quantity_completed=0,
-                            auto_calculate_quantity=False
-                        )
-                else:
-                    # 如果未选择图稿，生成设计图稿任务
-                    work_content = f'为{order_number}设计图稿'
-                    WorkOrderTask.objects.create(
-                        work_order_process=self,
-                        task_type='artwork',
-                        artwork=None,  # 设计时还没有图稿
-                        work_content=work_content,
-                        production_quantity=1,
-                        quantity_completed=0,
-                        auto_calculate_quantity=False
-                    )
-            else:
-                # 其他工序（如印刷）：为每个图稿生成任务
-                for artwork in work_order.artworks.all():
-                    work_content = f'印刷：{artwork.get_full_code()} - {artwork.name}'
-                    WorkOrderTask.objects.create(
-                        work_order_process=self,
-                        task_type='artwork',
-                        artwork=artwork,
-                        work_content=work_content,
-                        production_quantity=1,
-                        quantity_completed=0,
-                        auto_calculate_quantity=False  # 图稿任务固定为1
-                    )
-        
-        elif rule == 'die':
-            # 按刀模生成任务（每个刀模一个任务，数量为1）
-            # 用于：模切
-            order_number = work_order.order_number
-            dies = work_order.dies.all()
-            
-            if dies.exists():
-                # 如果已选择刀模，为每个刀模生成模切任务
-                for die in dies:
-                    work_content = f'模切：{die.code} - {die.name}'
-                    WorkOrderTask.objects.create(
-                        work_order_process=self,
-                        task_type='die',
-                        die=die,
-                        work_content=work_content,
-                        production_quantity=1,
-                        quantity_completed=0,
-                        auto_calculate_quantity=False  # 刀模任务固定为1
-                    )
-            else:
-                # 如果未选择刀模，生成设计刀模任务
-                work_content = f'为{order_number}设计刀模'
+        # 使用 code 字段精确匹配工序
+        if process_code == 'CTP':
+            # 制版工序：为图稿、刀模、烫金版、压凸版每个生成一个任务
+            # 任务内容：{施工单号}制版审核，生产数量：1
+            # 图稿任务
+            for artwork in work_order.artworks.all():
                 WorkOrderTask.objects.create(
                     work_order_process=self,
-                    task_type='die',
-                    die=None,  # 设计时还没有刀模
-                    work_content=work_content,
+                    task_type='plate_making',
+                    artwork=artwork,
+                    work_content=f'{order_number}制版审核',
                     production_quantity=1,
                     quantity_completed=0,
+                    status='pending',
+                    auto_calculate_quantity=False
+                )
+            # 刀模任务
+            for die in work_order.dies.all():
+                WorkOrderTask.objects.create(
+                    work_order_process=self,
+                    task_type='plate_making',
+                    die=die,
+                    work_content=f'{order_number}制版审核',
+                    production_quantity=1,
+                    quantity_completed=0,
+                    status='pending',
+                    auto_calculate_quantity=False
+                )
+            # 烫金版任务
+            for foiling_plate in work_order.foiling_plates.all():
+                WorkOrderTask.objects.create(
+                    work_order_process=self,
+                    task_type='plate_making',
+                    foiling_plate=foiling_plate,
+                    work_content=f'{order_number}制版审核',
+                    production_quantity=1,
+                    quantity_completed=0,
+                    status='pending',
+                    auto_calculate_quantity=False
+                )
+            # 压凸版任务
+            for embossing_plate in work_order.embossing_plates.all():
+                WorkOrderTask.objects.create(
+                    work_order_process=self,
+                    task_type='plate_making',
+                    embossing_plate=embossing_plate,
+                    work_content=f'{order_number}制版审核',
+                    production_quantity=1,
+                    quantity_completed=0,
+                    status='pending',
                     auto_calculate_quantity=False
                 )
         
-        elif rule == 'product':
-            # 按产品生成任务（每个产品一个任务）
-            # 用于：包装
+        elif process_code == 'CUT':
+            # 开料工序：为需要开料的物料每个生成一个任务
+            # 任务内容：{施工单号}开料，生产数量：物料用量
+            for material_item in work_order.materials.all():
+                if material_item.need_cutting:
+                    quantity = self._parse_material_usage(material_item.material_usage)
+                    WorkOrderTask.objects.create(
+                        work_order_process=self,
+                        task_type='cutting',
+                        material=material_item.material,
+                        work_content=f'{order_number}开料',
+                        production_quantity=quantity,
+                        quantity_completed=0,
+                        status='pending',
+                        auto_calculate_quantity=False
+                    )
+        
+        elif process_code == 'PRT':
+            # 印刷工序：为每个图稿生成一个任务
+            # 任务内容：{施工单号}印刷，生产数量：施工单的生产数量
+            for artwork in work_order.artworks.all():
+                WorkOrderTask.objects.create(
+                    work_order_process=self,
+                    task_type='printing',
+                    artwork=artwork,
+                    work_content=f'{order_number}印刷',
+                    production_quantity=production_quantity,
+                    quantity_completed=0,
+                    status='pending',
+                    auto_calculate_quantity=False
+                )
+        
+        elif process_code == 'FOIL_G':
+            # 烫金工序：为每个烫金版生成一个任务（参考印刷任务）
+            # 任务内容：{施工单号}烫金，生产数量：施工单的生产数量
+            for foiling_plate in work_order.foiling_plates.all():
+                WorkOrderTask.objects.create(
+                    work_order_process=self,
+                    task_type='foiling',
+                    foiling_plate=foiling_plate,
+                    work_content=f'{order_number}烫金',
+                    production_quantity=production_quantity,
+                    quantity_completed=0,
+                    status='pending',
+                    auto_calculate_quantity=False
+                )
+        
+        elif process_code == 'EMB':
+            # 压凸工序：为每个压凸版生成一个任务（参考印刷任务）
+            # 任务内容：{施工单号}压凸，生产数量：施工单的生产数量
+            for embossing_plate in work_order.embossing_plates.all():
+                WorkOrderTask.objects.create(
+                    work_order_process=self,
+                    task_type='embossing',
+                    embossing_plate=embossing_plate,
+                    work_content=f'{order_number}压凸',
+                    production_quantity=production_quantity,
+                    quantity_completed=0,
+                    status='pending',
+                    auto_calculate_quantity=False
+                )
+        
+        elif process_code == 'DIE':
+            # 模切工序：为每个刀模生成一个任务（参考印刷任务）
+            # 任务内容：{施工单号}模切，生产数量：施工单的生产数量
+            for die in work_order.dies.all():
+                WorkOrderTask.objects.create(
+                    work_order_process=self,
+                    task_type='die_cutting',
+                    die=die,
+                    work_content=f'{order_number}模切',
+                    production_quantity=production_quantity,
+                    quantity_completed=0,
+                    status='pending',
+                    auto_calculate_quantity=False
+                )
+        
+        elif process_code == 'PACK':
+            # 包装工序：为每个产品生成一个任务
+            # 任务内容：{产品名称}包装，生产数量：产品数量
             for product_item in work_order.products.all():
                 WorkOrderTask.objects.create(
                     work_order_process=self,
-                    task_type='product',
+                    task_type='packaging',
                     product=product_item.product,
-                    work_content=f'包装：{product_item.product.name}',
+                    work_content=f'{product_item.product.name}包装',
                     production_quantity=product_item.quantity,
                     quantity_completed=0,
-                    auto_calculate_quantity=True
+                    status='pending',
+                    auto_calculate_quantity=False
                 )
         
-        elif rule == 'material':
-            # 按物料生成任务（每个物料一个任务）
-            # 用于：采购、开料
-            if '采购' in process_name:
-                # 采购任务：所有物料
-                for material_item in work_order.materials.all():
-                    quantity = self._parse_material_usage(material_item.material_usage)
-                    WorkOrderTask.objects.create(
-                        work_order_process=self,
-                        task_type='material',
-                        material=material_item.material,
-                        work_content=f'采购：{material_item.material.name}',
-                        production_quantity=quantity,
-                        quantity_completed=0,
-                        auto_calculate_quantity=True
-                    )
-            elif '开料' in process_name or '裁切' in process_name:
-                # 开料任务：只包含需要开料的物料（need_cutting=True）
-                for material_item in work_order.materials.all():
-                    if material_item.need_cutting:
-                        quantity = self._parse_material_usage(material_item.material_usage)
-                        WorkOrderTask.objects.create(
-                            work_order_process=self,
-                            task_type='material',
-                            material=material_item.material,
-                            work_content=f'开料：{material_item.material.name}',
-                            production_quantity=quantity,
-                            quantity_completed=0,
-                            auto_calculate_quantity=True
-                        )
-            else:
-                # 其他物料相关工序
-                for material_item in work_order.materials.all():
-                    quantity = self._parse_material_usage(material_item.material_usage)
-                    WorkOrderTask.objects.create(
-                        work_order_process=self,
-                        task_type='material',
-                        material=material_item.material,
-                        work_content=f'{process.name}：{material_item.material.name}',
-                        production_quantity=quantity,
-                        quantity_completed=0,
-                        auto_calculate_quantity=True
-                    )
-        
-        else:  # general
-            # 生成通用任务（一个工序一个任务）
-            # 用于：裱坑、打钉等其他工序
-            # 但是，如果制版工序的任务生成规则是 general，也需要根据 artwork_type 生成任务
-            if '制版' in process_name and rule == 'general':
-                # 制版工序：根据图稿选择生成任务
-                order_number = work_order.order_number
-                artworks = work_order.artworks.all()
-                
-                if artworks.exists():
-                    # 如果已选择图稿，为每个图稿生成制版任务
-                    for artwork in artworks:
-                        work_content = f'制版：{artwork.get_full_code()} - {artwork.name}'
-                        WorkOrderTask.objects.create(
-                            work_order_process=self,
-                            task_type='artwork',
-                            artwork=artwork,
-                            work_content=work_content,
-                            production_quantity=1,
-                            quantity_completed=0,
-                            auto_calculate_quantity=False
-                        )
-                else:
-                    # 如果未选择图稿，生成设计图稿任务
-                    work_content = f'为{order_number}设计图稿'
-                    WorkOrderTask.objects.create(
-                        work_order_process=self,
-                        task_type='artwork',
-                        artwork=None,  # 设计时还没有图稿
-                        work_content=work_content,
-                        production_quantity=1,
-                        quantity_completed=0,
-                        auto_calculate_quantity=False
-                    )
-            elif '模切' in process_name and rule == 'general':
-                # 模切工序：根据刀模选择生成任务
-                order_number = work_order.order_number
-                dies = work_order.dies.all()
-                
-                if dies.exists():
-                    # 如果已选择刀模，为每个刀模生成模切任务
-                    for die in dies:
-                        work_content = f'模切：{die.code} - {die.name}'
-                        WorkOrderTask.objects.create(
-                            work_order_process=self,
-                            task_type='die',
-                            die=die,
-                            work_content=work_content,
-                            production_quantity=1,
-                            quantity_completed=0,
-                            auto_calculate_quantity=False
-                        )
-                else:
-                    # 如果未选择刀模，生成设计刀模任务
-                    work_content = f'为{order_number}设计刀模'
-                    WorkOrderTask.objects.create(
-                        work_order_process=self,
-                        task_type='die',
-                        die=None,  # 设计时还没有刀模
-                        work_content=work_content,
-                        production_quantity=1,
-                        quantity_completed=0,
-                        auto_calculate_quantity=False
-                    )
-            else:
-                # 其他通用任务
-                WorkOrderTask.objects.create(
-                    work_order_process=self,
-                    task_type='general',
-                    work_content=f'{process.name}：{work_order.order_number}',
-                    production_quantity=work_order.production_quantity or 0,
-                    quantity_completed=0,
-                    auto_calculate_quantity=True
-                )
+        else:
+            # 其他工序：生成通用任务
+            # 任务内容：{工序名称}：{施工单号}，生产数量：施工单的生产数量
+            WorkOrderTask.objects.create(
+                work_order_process=self,
+                task_type='general',
+                work_content=f'{process.name}：{order_number}',
+                production_quantity=production_quantity,
+                quantity_completed=0,
+                status='pending',
+                auto_calculate_quantity=False
+            )
     
     def _parse_material_usage(self, usage_str):
         """解析物料用量字符串，提取数字部分"""
@@ -1181,10 +1076,13 @@ class ProcessLog(models.Model):
 class WorkOrderTask(models.Model):
     """施工单任务（为工序生成的具体任务）"""
     TASK_TYPE_CHOICES = [
-        ('artwork', '图稿任务'),
-        ('die', '刀模任务'),
-        ('product', '产品任务'),
-        ('material', '物料任务'),
+        ('plate_making', '制版任务'),
+        ('cutting', '开料任务'),
+        ('printing', '印刷任务'),
+        ('foiling', '烫金任务'),
+        ('embossing', '压凸任务'),
+        ('die_cutting', '模切任务'),
+        ('packaging', '包装任务'),
         ('general', '通用任务'),
     ]
     
@@ -1207,6 +1105,10 @@ class WorkOrderTask(models.Model):
                                 related_name='tasks', verbose_name='关联产品')
     material = models.ForeignKey('Material', on_delete=models.CASCADE, null=True, blank=True,
                                 related_name='tasks', verbose_name='关联物料')
+    foiling_plate = models.ForeignKey('FoilingPlate', on_delete=models.CASCADE, null=True, blank=True,
+                                     related_name='tasks', verbose_name='关联烫金版')
+    embossing_plate = models.ForeignKey('EmbossingPlate', on_delete=models.CASCADE, null=True, blank=True,
+                                       related_name='tasks', verbose_name='关联压凸版')
     production_requirements = models.TextField('生产要求', blank=True, help_text='生产过程中的特殊要求')
     status = models.CharField('状态', max_length=20, 
                              choices=[('pending', '待开始'), ('in_progress', '进行中'), 

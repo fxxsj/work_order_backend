@@ -56,10 +56,11 @@ class ProcessAdmin(admin.ModelAdmin):
         ('基本信息', {
             'fields': ('code', 'name', 'description', 'standard_duration', 'sort_order', 'is_active', 'is_builtin')
         }),
-        ('任务生成规则', {
-            'fields': ('task_generation_rule',),
-            'description': '该工序如何生成任务'
-        }),
+        # 注意：任务生成规则字段已废弃，任务生成现在基于工序的 code 字段自动匹配
+        # ('任务生成规则', {
+        #     'fields': ('task_generation_rule',),
+        #     'description': '注意：任务生成现在基于工序的 code 字段自动匹配，不再使用此规则字段。此字段保留仅为向后兼容，请勿修改。'
+        # }),
         ('工序与版的关系配置', {
             'fields': (
                 ('requires_artwork', 'artwork_required'),
@@ -646,7 +647,7 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
     """施工单任务管理"""
     list_display = [
         'work_order_process', 'task_type', 'work_content', 
-        'artwork', 'die', 'product', 'material',
+        'artwork', 'die', 'product', 'material', 'foiling_plate', 'embossing_plate',
         'production_quantity', 'quantity_completed', 'status_badge', 'created_at'
     ]
     
@@ -658,10 +659,12 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
     search_fields = [
         'work_content', 'work_order_process__work_order__order_number',
         'artwork__name', 'artwork__base_code', 'die__code', 'die__name',
-        'product__name', 'product__code', 'material__name', 'material__code'
+        'product__name', 'product__code', 'material__name', 'material__code',
+        'foiling_plate__name', 'foiling_plate__code', 'embossing_plate__name', 'embossing_plate__code'
     ]
     
-    autocomplete_fields = ['work_order_process', 'artwork', 'die', 'product', 'material']
+    autocomplete_fields = ['work_order_process', 'artwork', 'die', 'product', 'material', 
+                          'foiling_plate', 'embossing_plate']
     
     readonly_fields = ['created_at', 'updated_at']
     
@@ -670,8 +673,8 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
             'fields': ('work_order_process', 'task_type', 'work_content', 'status')
         }),
         ('关联对象', {
-            'fields': ('artwork', 'die', 'product', 'material'),
-            'description': '根据任务类型，关联相应的图稿、刀模、产品或物料'
+            'fields': ('artwork', 'die', 'product', 'material', 'foiling_plate', 'embossing_plate'),
+            'description': '根据任务类型，关联相应的图稿、刀模、产品、物料、烫金版或压凸版'
         }),
         ('数量信息', {
             'fields': ('production_quantity', 'quantity_completed', 'auto_calculate_quantity')
@@ -703,7 +706,8 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
         qs = super().get_queryset(request)
         return qs.select_related(
             'work_order_process', 'work_order_process__work_order',
-            'work_order_process__process', 'artwork', 'die', 'product', 'material'
+            'work_order_process__process', 'artwork', 'die', 'product', 'material',
+            'foiling_plate', 'embossing_plate'
         )
 
 
