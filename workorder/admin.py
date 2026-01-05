@@ -563,16 +563,16 @@ class FoilingPlateProductInline(admin.TabularInline):
 
 @admin.register(FoilingPlate)
 class FoilingPlateAdmin(admin.ModelAdmin):
-    list_display = ['code', 'name', 'size', 'material', 'thickness', 'created_at']
+    list_display = ['code', 'name', 'foiling_type', 'size', 'material', 'thickness', 'created_at']
     search_fields = ['code', 'name', 'size', 'material']
-    list_filter = ['material', 'created_at']
+    list_filter = ['foiling_type', 'material', 'created_at']
     ordering = ['-created_at']
     readonly_fields = ['code', 'created_at', 'updated_at']
     inlines = [FoilingPlateProductInline]
     
     fieldsets = (
         ('基本信息', {
-            'fields': ('code', 'name', 'size', 'material', 'thickness')
+            'fields': ('code', 'name', 'foiling_type', 'size', 'material', 'thickness')
         }),
         ('其他', {
             'fields': ('notes', 'created_at', 'updated_at')

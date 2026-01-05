@@ -326,8 +326,15 @@ class DieProduct(models.Model):
 
 class FoilingPlate(models.Model):
     """烫金版信息"""
+    FOILING_TYPE_CHOICES = [
+        ('gold', '烫金'),
+        ('silver', '烫银'),
+    ]
+    
     code = models.CharField('烫金版编码', max_length=50, unique=True, blank=True)
     name = models.CharField('烫金版名称', max_length=200)
+    foiling_type = models.CharField('类型', max_length=20, choices=FOILING_TYPE_CHOICES, 
+                                    default='gold', help_text='该版是烫金还是烫银')
     size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：420x594mm、889x1194mm等')
     material = models.CharField('材质', max_length=100, blank=True, help_text='如：铜版、锌版等')
     thickness = models.CharField('厚度', max_length=50, blank=True, help_text='如：3mm、5mm等')
