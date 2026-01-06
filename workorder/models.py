@@ -719,9 +719,10 @@ class WorkOrderProcess(models.Model):
     
     def can_start(self):
         """判断该工序是否可以开始"""
-        # 制版、刀模和采购可以并行（通过工序名称识别）
+        # 制版、刀模、模切可以并行（通过工序名称识别）
+        # 注意：采购不属于施工单工序，采购任务通过其他系统管理
         process_name = self.process.name.lower()
-        parallel_keywords = ['制版', '刀模', '模切', '采购']
+        parallel_keywords = ['制版', '刀模', '模切']
         
         if any(keyword in process_name for keyword in parallel_keywords):
             # 这些工序可以并行，只要没有其他限制就可以开始
@@ -737,8 +738,6 @@ class WorkOrderProcess(models.Model):
             process__name__icontains='刀模'
         ).exclude(
             process__name__icontains='模切'
-        ).exclude(
-            process__name__icontains='采购'
         ).order_by('sequence')
         
         # 找到当前工序在非并行工序中的位置
@@ -766,16 +765,39 @@ class WorkOrderProcess(models.Model):
         - 若无任务，返回 False
         - 所有任务需状态为 completed
         - 若任务有生产数量，需 quantity_completed >= production_quantity
+        - 增加业务条件检查：制版任务需图稿确认，开料任务需物料状态满足条件
+        - 注意：采购不属于施工单工序，采购任务通过其他系统管理
         """
         tasks = self.tasks.all()
         if not tasks.exists():
             return False
+
+        process_code = self.process.code
+        process_name = self.process.name
 
         for task in tasks:
             if task.status != 'completed':
                 return False
             if task.production_quantity and task.quantity_completed < task.production_quantity:
                 return False
+            
+            # 业务条件检查：制版任务需图稿/刀模等已确认
+            if task.task_type == 'plate_making':
+                if task.artwork and not task.artwork.confirmed:
+                    return False
+                # 刀模、烫金版、压凸版的确认状态检查（如果模型有confirmed字段）
+                # 目前先检查图稿，其他版型的确认逻辑可根据实际需求添加
+            
+            # 业务条件检查：开料任务需物料状态满足条件
+            # 注意：只有CUT工序生成cutting类型任务
+            # 采购不属于施工单工序，采购任务通过其他系统管理，物料采购状态在WorkOrderMaterial中记录
+            if task.task_type == 'cutting' and task.material:
+                work_order_material = self.work_order.materials.filter(material=task.material).first()
+                if work_order_material:
+                    # 开料工序（CUT或名称包含开料/裁切）：物料必须已开料
+                    if process_code == 'CUT' or '开料' in process_name or '裁切' in process_name:
+                        if work_order_material.purchase_status != 'cut':
+                            return False
 
         self.status = 'completed'
         self.actual_end_time = timezone.now()

@@ -501,6 +501,12 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         """更新任务时，检查工序是否完成"""
         task = serializer.save()
         
+        # 验证完成数量不能超过生产数量
+        if task.quantity_completed is not None and task.production_quantity:
+            if task.quantity_completed > task.production_quantity:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError(f'完成数量（{task.quantity_completed}）不能超过生产数量（{task.production_quantity}）')
+        
         # 如果任务完成，检查工序是否完成
         if task.status == 'completed':
             task.work_order_process.check_and_update_status()
@@ -509,7 +515,10 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
     def complete(self, request, pk=None):
         """完成任务（支持新任务类型和需求）"""
         task = self.get_object()
-        work_order = task.work_order_process.work_order
+        work_order_process = task.work_order_process
+        work_order = work_order_process.work_order
+        process_code = work_order_process.process.code
+        process_name = work_order_process.process.name
         
         # 获取前端传递的数据
         status_value = request.data.get('status', 'completed')
@@ -517,6 +526,41 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         notes = request.data.get('notes', '')
         artwork_ids = request.data.get('artwork_ids', [])
         die_ids = request.data.get('die_ids', [])
+        
+        # 业务条件验证：制版任务需图稿/刀模等已确认
+        if task.task_type == 'plate_making' and task.artwork:
+            if not task.artwork.confirmed:
+                return Response(
+                    {'error': '图稿未确认，无法完成任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # 业务条件验证：开料任务需物料状态满足条件
+        # 注意：只有CUT工序生成cutting类型任务
+        # 采购不属于施工单工序，采购任务通过其他系统管理，物料采购状态在WorkOrderMaterial中记录
+        if task.task_type == 'cutting' and task.material:
+            work_order_material = work_order.materials.filter(material=task.material).first()
+            if work_order_material:
+                # 开料工序（CUT或名称包含开料/裁切）：物料必须已开料
+                if process_code == 'CUT' or '开料' in process_name or '裁切' in process_name:
+                    if work_order_material.purchase_status != 'cut':
+                        return Response(
+                            {'error': '物料未开料，无法完成开料任务'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+        
+        # 验证完成数量不能超过生产数量
+        if quantity_completed is not None:
+            if quantity_completed < 0:
+                return Response(
+                    {'error': '完成数量不能小于0'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if task.production_quantity and quantity_completed > task.production_quantity:
+                return Response(
+                    {'error': f'完成数量（{quantity_completed}）不能超过生产数量（{task.production_quantity}）'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         
         # 制版任务：需要检查版型选择是否正确（通过设计图稿/设计刀模任务）
         is_design_task = '设计图稿' in task.work_content or '更新图稿' in task.work_content
@@ -539,8 +583,8 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # 将图稿关联到施工单
-            work_order.artworks.set(artworks)
+            # 将图稿关联到施工单（使用add追加，而不是set覆盖）
+            work_order.artworks.add(*artworks)
             
             # 更新任务：关联第一个图稿（如果有多个图稿，关联第一个）
             task.artwork = artworks.first()
@@ -575,8 +619,8 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # 将刀模关联到施工单
-            work_order.dies.set(dies)
+            # 将刀模关联到施工单（使用add追加，而不是set覆盖）
+            work_order.dies.add(*dies)
             
             # 更新任务：关联第一个刀模（如果有多个刀模，关联第一个）
             task.die = dies.first()
@@ -606,6 +650,9 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
                 task.status = status_value
                 if quantity_completed is not None:
                     task.quantity_completed = quantity_completed
+                elif task.quantity_completed == 0 and task.production_quantity:
+                    # 如果没有提供完成数量，且当前为0，则使用生产数量
+                    task.quantity_completed = task.production_quantity
                 task.production_requirements = notes
             
             task.save()
