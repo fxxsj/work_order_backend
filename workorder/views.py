@@ -524,16 +524,20 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         process_code = work_order_process.process.code
         
         # 获取前端传递的数据
-        quantity_completed = request.data.get('quantity_completed')
+        quantity_increment = request.data.get('quantity_increment')
         notes = request.data.get('notes', '')
         artwork_ids = request.data.get('artwork_ids', [])
         die_ids = request.data.get('die_ids', [])
         
-        if quantity_completed is None:
+        if quantity_increment is None:
             return Response(
-                {'error': '请提供完成数量'},
+                {'error': '请提供本次完成数量'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # 计算新的完成数量（增量更新）
+        quantity_before = task.quantity_completed
+        new_quantity_completed = quantity_before + quantity_increment
         
         # 业务条件验证：制版任务需图稿/刀模等已确认
         if task.task_type == 'plate_making' and task.artwork:
@@ -554,20 +558,19 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
                             status=status.HTTP_400_BAD_REQUEST
                         )
         
-        # 验证完成数量
-        if quantity_completed < 0:
+        # 验证增量数量
+        if new_quantity_completed < 0:
             return Response(
-                {'error': '完成数量不能小于0'},
+                {'error': '更新后完成数量不能小于0'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        if task.production_quantity and quantity_completed > task.production_quantity:
+        if task.production_quantity and new_quantity_completed > task.production_quantity:
             return Response(
-                {'error': f'完成数量（{quantity_completed}）不能超过生产数量（{task.production_quantity}）'},
+                {'error': f'更新后完成数量（{new_quantity_completed}）不能超过生产数量（{task.production_quantity}）'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         # 记录更新前的状态和数量
-        quantity_before = task.quantity_completed
         status_before = task.status
         
         # 处理设计图稿/设计刀模任务
@@ -605,23 +608,22 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
             work_order.dies.add(*dies)
             task.die = dies.first()
         
-        # 更新任务数量
-        task.quantity_completed = quantity_completed
+        # 更新任务数量（增量更新）
+        task.quantity_completed = new_quantity_completed
         if notes:
             task.production_requirements = notes
         
         # 根据数量自动判断状态
         # 如果完成数量 >= 生产数量，状态自动标志为已完成
         # 否则为进行中
-        if task.production_quantity and quantity_completed >= task.production_quantity:
+        if task.production_quantity and new_quantity_completed >= task.production_quantity:
             task.status = 'completed'
         else:
             # 如果任务还未开始，设置为进行中
             if task.status == 'pending':
                 task.status = 'in_progress'
-            # 如果任务已完成但数量不足，保持已完成状态（这种情况不应该发生，但为了安全）
-            # 实际上，如果数量不足，应该保持或设置为进行中
-            if task.status == 'completed' and quantity_completed < task.production_quantity:
+            # 如果任务已完成但数量不足，设置为进行中
+            elif task.status == 'completed' and new_quantity_completed < task.production_quantity:
                 task.status = 'in_progress'
         
         task.save()
@@ -630,9 +632,10 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         TaskLog.objects.create(
             task=task,
             log_type='update_quantity',
-            content=f'更新完成数量：{quantity_before} → {quantity_completed}，状态：{status_before} → {task.status}' + (f'，备注：{notes}' if notes else ''),
+            content=f'更新完成数量：{quantity_before} → {new_quantity_completed}，本次完成：{quantity_increment}，状态：{status_before} → {task.status}' + (f'，备注：{notes}' if notes else ''),
             quantity_before=quantity_before,
-            quantity_after=quantity_completed,
+            quantity_after=new_quantity_completed,
+            quantity_increment=quantity_increment,
             status_before=status_before,
             status_after=task.status,
             operator=request.user
@@ -731,8 +734,13 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         
         task.save()
         
+        # 计算数量增量
+        quantity_increment = task.quantity_completed - quantity_before
+        
         # 记录操作日志
-        log_content = f'强制完成任务，状态：{status_before} → completed'
+        log_content = f'强制完成任务，完成数量：{quantity_before} → {task.quantity_completed}，状态：{status_before} → completed'
+        if quantity_increment != 0:
+            log_content += f'，本次完成：{quantity_increment}'
         if completion_reason:
             log_content += f'，完成理由：{completion_reason}'
         if notes:
@@ -744,6 +752,7 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
             content=log_content,
             quantity_before=quantity_before,
             quantity_after=task.quantity_completed,
+            quantity_increment=quantity_increment,
             status_before=status_before,
             status_after='completed',
             completion_reason=completion_reason,

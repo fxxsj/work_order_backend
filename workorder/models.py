@@ -1112,6 +1112,7 @@ class TaskLog(models.Model):
     content = models.TextField('内容', help_text='操作内容描述')
     quantity_before = models.IntegerField('更新前数量', null=True, blank=True)
     quantity_after = models.IntegerField('更新后数量', null=True, blank=True)
+    quantity_increment = models.IntegerField('数量增量', null=True, blank=True, help_text='本次操作的数量增量')
     status_before = models.CharField('更新前状态', max_length=20, null=True, blank=True)
     status_after = models.CharField('更新后状态', max_length=20, null=True, blank=True)
     completion_reason = models.TextField('完成理由', blank=True, help_text='强制完成时的理由说明')

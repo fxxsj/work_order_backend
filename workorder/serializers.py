@@ -122,7 +122,7 @@ class TaskLogSerializer(serializers.ModelSerializer):
     """任务操作日志序列化器"""
     log_type_display = serializers.CharField(source='get_log_type_display', read_only=True)
     operator_name = serializers.SerializerMethodField()
-    quantity_increment = serializers.SerializerMethodField()  # 增量值（计算得出）
+    quantity_increment = serializers.SerializerMethodField()  # 增量值（优先使用模型字段，如果没有则计算）
     
     class Meta:
         model = TaskLog
@@ -135,7 +135,10 @@ class TaskLogSerializer(serializers.ModelSerializer):
         return None
     
     def get_quantity_increment(self, obj):
-        """计算增量值"""
+        """获取增量值（优先使用模型字段，如果没有则计算）"""
+        if obj.quantity_increment is not None:
+            return obj.quantity_increment
+        # 兼容旧数据：如果没有增量字段，则计算
         if obj.quantity_before is not None and obj.quantity_after is not None:
             return obj.quantity_after - obj.quantity_before
         return None
