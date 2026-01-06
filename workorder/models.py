@@ -79,15 +79,15 @@ class Process(models.Model):
                                                  help_text='该工序是否需要烫金版')
     requires_embossing_plate = models.BooleanField('需要压凸版', default=False,
                                                    help_text='该工序是否需要压凸版')
-    # 版是否必选（如果为False，则版可选，未选择时生成设计任务）
+    # 版是否必选（如果为False，则版可选，但需要手动创建设计任务，因为设计不属于施工单工序）
     artwork_required = models.BooleanField('图稿必选', default=True,
-                                          help_text='如果为True，选择该工序时必须选择图稿；如果为False，图稿可选（未选择时生成设计任务）')
+                                          help_text='如果为True，选择该工序时必须选择图稿；如果为False，图稿可选（但需要手动创建设计任务，设计不属于施工单工序）')
     die_required = models.BooleanField('刀模必选', default=True,
-                                      help_text='如果为True，选择该工序时必须选择刀模；如果为False，刀模可选（未选择时生成设计任务）')
+                                      help_text='如果为True，选择该工序时必须选择刀模；如果为False，刀模可选（但需要手动创建设计任务，设计不属于施工单工序）')
     foiling_plate_required = models.BooleanField('烫金版必选', default=True,
-                                                 help_text='如果为True，选择该工序时必须选择烫金版；如果为False，烫金版可选（未选择时生成设计任务）')
+                                                 help_text='如果为True，选择该工序时必须选择烫金版；如果为False，烫金版可选（但需要手动创建设计任务，设计不属于施工单工序）')
     embossing_plate_required = models.BooleanField('压凸版必选', default=True,
-                                                  help_text='如果为True，选择该工序时必须选择压凸版；如果为False，压凸版可选（未选择时生成设计任务）')
+                                                  help_text='如果为True，选择该工序时必须选择压凸版；如果为False，压凸版可选（但需要手动创建设计任务，设计不属于施工单工序）')
     is_parallel = models.BooleanField('可并行执行', default=False,
                                      help_text='该工序是否可以与其他工序并行执行（如制版、模切等）')
     created_at = models.DateTimeField('创建时间', auto_now_add=True)

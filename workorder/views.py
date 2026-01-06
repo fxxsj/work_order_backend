@@ -574,6 +574,8 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         status_before = task.status
         
         # 处理设计图稿/设计刀模任务
+        # 注意：设计不属于施工单工序，设计任务通过其他系统管理
+        # 以下逻辑用于兼容可能已存在的设计任务（手动创建或历史数据）
         is_design_task = '设计图稿' in task.work_content or '更新图稿' in task.work_content
         is_die_design_task = '设计刀模' in task.work_content or '更新刀模' in task.work_content
         
@@ -689,6 +691,8 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         quantity_before = task.quantity_completed
         
         # 处理设计图稿/设计刀模任务
+        # 注意：设计不属于施工单工序，设计任务通过其他系统管理
+        # 以下逻辑用于兼容可能已存在的设计任务（手动创建或历史数据）
         is_design_task = '设计图稿' in task.work_content or '更新图稿' in task.work_content
         is_die_design_task = '设计刀模' in task.work_content or '更新刀模' in task.work_content
         

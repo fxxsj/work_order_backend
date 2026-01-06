@@ -700,53 +700,60 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         if process_ids:
             processes = Process.objects.filter(id__in=process_ids, is_active=True)
             
-            # 检查是否有工序需要图稿（只验证如果artworks字段被发送）
-            if artworks is not None:
-                processes_requiring_artwork = processes.filter(requires_artwork=True)
-                if processes_requiring_artwork.exists():
-                    processes_requiring_artwork_mandatory = processes_requiring_artwork.filter(artwork_required=True)
-                    if processes_requiring_artwork_mandatory.exists():
-                        if not artworks or len(artworks) == 0:
-                            process_names = ', '.join([p.name for p in processes_requiring_artwork_mandatory])
-                            raise serializers.ValidationError({
-                                'artworks': f'选择了需要图稿的工序（{process_names}），请至少选择一个图稿'
-                            })
+            # 如果是更新操作，需要检查数据库中已有的版选择
+            instance = getattr(self, 'instance', None)
             
-            # 检查是否有工序需要刀模（只验证如果dies字段被发送）
-            if dies is not None:
-                processes_requiring_die = processes.filter(requires_die=True)
-                if processes_requiring_die.exists():
-                    processes_requiring_die_mandatory = processes_requiring_die.filter(die_required=True)
-                    if processes_requiring_die_mandatory.exists():
-                        if not dies or len(dies) == 0:
-                            process_names = ', '.join([p.name for p in processes_requiring_die_mandatory])
-                            raise serializers.ValidationError({
-                                'dies': f'选择了需要刀模的工序（{process_names}），请至少选择一个刀模'
-                            })
+            # 检查是否有工序需要图稿
+            processes_requiring_artwork = processes.filter(requires_artwork=True)
+            if processes_requiring_artwork.exists():
+                processes_requiring_artwork_mandatory = processes_requiring_artwork.filter(artwork_required=True)
+                if processes_requiring_artwork_mandatory.exists():
+                    # 如果artworks字段被发送，使用发送的值；否则使用数据库中的值
+                    artworks_to_check = artworks if artworks is not None else (list(instance.artworks.values_list('id', flat=True)) if instance else [])
+                    if not artworks_to_check or len(artworks_to_check) == 0:
+                        process_names = ', '.join([p.name for p in processes_requiring_artwork_mandatory])
+                        raise serializers.ValidationError({
+                            'artworks': f'选择了需要图稿的工序（{process_names}），请至少选择一个图稿'
+                        })
             
-            # 检查是否有工序需要烫金版（只验证如果foiling_plates字段被发送）
-            if foiling_plates is not None:
-                processes_requiring_foiling_plate = processes.filter(requires_foiling_plate=True)
-                if processes_requiring_foiling_plate.exists():
-                    processes_requiring_foiling_plate_mandatory = processes_requiring_foiling_plate.filter(foiling_plate_required=True)
-                    if processes_requiring_foiling_plate_mandatory.exists():
-                        if not foiling_plates or len(foiling_plates) == 0:
-                            process_names = ', '.join([p.name for p in processes_requiring_foiling_plate_mandatory])
-                            raise serializers.ValidationError({
-                                'foiling_plates': f'选择了需要烫金版的工序（{process_names}），请至少选择一个烫金版'
-                            })
+            # 检查是否有工序需要刀模
+            processes_requiring_die = processes.filter(requires_die=True)
+            if processes_requiring_die.exists():
+                processes_requiring_die_mandatory = processes_requiring_die.filter(die_required=True)
+                if processes_requiring_die_mandatory.exists():
+                    # 如果dies字段被发送，使用发送的值；否则使用数据库中的值
+                    dies_to_check = dies if dies is not None else (list(instance.dies.values_list('id', flat=True)) if instance else [])
+                    if not dies_to_check or len(dies_to_check) == 0:
+                        process_names = ', '.join([p.name for p in processes_requiring_die_mandatory])
+                        raise serializers.ValidationError({
+                            'dies': f'选择了需要刀模的工序（{process_names}），请至少选择一个刀模'
+                        })
             
-            # 检查是否有工序需要压凸版（只验证如果embossing_plates字段被发送）
-            if embossing_plates is not None:
-                processes_requiring_embossing_plate = processes.filter(requires_embossing_plate=True)
-                if processes_requiring_embossing_plate.exists():
-                    processes_requiring_embossing_plate_mandatory = processes_requiring_embossing_plate.filter(embossing_plate_required=True)
-                    if processes_requiring_embossing_plate_mandatory.exists():
-                        if not embossing_plates or len(embossing_plates) == 0:
-                            process_names = ', '.join([p.name for p in processes_requiring_embossing_plate_mandatory])
-                            raise serializers.ValidationError({
-                                'embossing_plates': f'选择了需要压凸版的工序（{process_names}），请至少选择一个压凸版'
-                            })
+            # 检查是否有工序需要烫金版
+            processes_requiring_foiling_plate = processes.filter(requires_foiling_plate=True)
+            if processes_requiring_foiling_plate.exists():
+                processes_requiring_foiling_plate_mandatory = processes_requiring_foiling_plate.filter(foiling_plate_required=True)
+                if processes_requiring_foiling_plate_mandatory.exists():
+                    # 如果foiling_plates字段被发送，使用发送的值；否则使用数据库中的值
+                    foiling_plates_to_check = foiling_plates if foiling_plates is not None else (list(instance.foiling_plates.values_list('id', flat=True)) if instance else [])
+                    if not foiling_plates_to_check or len(foiling_plates_to_check) == 0:
+                        process_names = ', '.join([p.name for p in processes_requiring_foiling_plate_mandatory])
+                        raise serializers.ValidationError({
+                            'foiling_plates': f'选择了需要烫金版的工序（{process_names}），请至少选择一个烫金版'
+                        })
+            
+            # 检查是否有工序需要压凸版
+            processes_requiring_embossing_plate = processes.filter(requires_embossing_plate=True)
+            if processes_requiring_embossing_plate.exists():
+                processes_requiring_embossing_plate_mandatory = processes_requiring_embossing_plate.filter(embossing_plate_required=True)
+                if processes_requiring_embossing_plate_mandatory.exists():
+                    # 如果embossing_plates字段被发送，使用发送的值；否则使用数据库中的值
+                    embossing_plates_to_check = embossing_plates if embossing_plates is not None else (list(instance.embossing_plates.values_list('id', flat=True)) if instance else [])
+                    if not embossing_plates_to_check or len(embossing_plates_to_check) == 0:
+                        process_names = ', '.join([p.name for p in processes_requiring_embossing_plate_mandatory])
+                        raise serializers.ValidationError({
+                            'embossing_plates': f'选择了需要压凸版的工序（{process_names}），请至少选择一个压凸版'
+                        })
         
         # 只有在 artworks 字段被发送时才处理 printing_type
         if 'artworks' in data:
