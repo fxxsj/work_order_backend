@@ -859,12 +859,80 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
     
     def update(self, instance, validated_data):
         """更新施工单并处理多个产品和图稿"""
+        from .models import APPROVED_ORDER_PROTECTED_FIELDS
+        from rest_framework.exceptions import ValidationError
+        
+        # 先 pop 出需要特殊处理的字段
         products_data = validated_data.pop('products_data', None)
         artworks = validated_data.pop('artworks', None)
         dies = validated_data.pop('dies', None)
         foiling_plates = validated_data.pop('foiling_plates', None)
         embossing_plates = validated_data.pop('embossing_plates', None)
-        process_ids = validated_data.pop('processes', None)  # 工序ID列表，用于后续更新工序
+        process_ids = validated_data.pop('processes', None)
+        
+        # 如果审核状态为 approved，检查是否尝试修改核心字段
+        if instance.approval_status == 'approved':
+            request = self.context.get('request')
+            if request:
+                # 检查用户是否有编辑已审核订单的权限
+                can_edit_approved = request.user.has_perm('workorder.change_approved_workorder')
+                
+                if not can_edit_approved:
+                    # 检查是否尝试修改核心字段
+                    modified_protected_fields = []
+                    
+                    # 检查 ManyToMany 字段（版选择）
+                    many_to_many_fields = {
+                        'artworks': artworks,
+                        'dies': dies,
+                        'foiling_plates': foiling_plates,
+                        'embossing_plates': embossing_plates,
+                    }
+                    
+                    for field_name, field_value in many_to_many_fields.items():
+                        if field_value is not None:
+                            old_ids = set(getattr(instance, field_name).values_list('id', flat=True))
+                            new_ids = set(field_value or [])
+                            if old_ids != new_ids:
+                                modified_protected_fields.append(field_name)
+                    
+                    # 检查产品列表
+                    if products_data is not None:
+                        old_products = set(instance.products.values_list('id', flat=True))
+                        new_products = set([item.get('product') for item in products_data if item.get('product')])
+                        if old_products != new_products:
+                            modified_protected_fields.append('products')
+                    
+                    # 检查工序列表
+                    if process_ids is not None:
+                        old_processes = set(instance.order_processes.values_list('process_id', flat=True))
+                        new_processes = set(process_ids or [])
+                        if old_processes != new_processes:
+                            modified_protected_fields.append('processes')
+                    
+                    # 检查其他核心字段
+                    for field in APPROVED_ORDER_PROTECTED_FIELDS:
+                        if field in validated_data:
+                            # 跳过已检查的字段
+                            if field in ['artworks', 'dies', 'foiling_plates', 'embossing_plates', 
+                                        'products_data', 'processes']:
+                                continue
+                            
+                            old_value = getattr(instance, field, None)
+                            new_value = validated_data[field]
+                            
+                            if old_value != new_value:
+                                modified_protected_fields.append(field)
+                    
+                    if modified_protected_fields:
+                        raise ValidationError({
+                            'error': '审核通过后，核心字段（产品、工序、版选择等）不能修改。如需修改，请联系管理员或重新提交审核。',
+                            'modified_fields': modified_protected_fields
+                        })
+                else:
+                    # 有权限的用户可以修改核心字段，但需要重新审核
+                    instance.approval_status = 'pending'
+                    instance.approval_comment = ''
         
         # 更新图稿（ManyToMany 字段）
         if artworks is not None:

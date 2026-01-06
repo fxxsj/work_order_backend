@@ -5,6 +5,32 @@ from django.db import transaction
 from django.db.models import Max
 from datetime import datetime
 
+# 审核通过后禁止编辑的核心字段列表
+APPROVED_ORDER_PROTECTED_FIELDS = [
+    'customer',           # 客户
+    'products_data',      # 产品列表
+    'processes',          # 工序列表
+    'artworks',           # 图稿
+    'dies',               # 刀模
+    'foiling_plates',     # 烫金版
+    'embossing_plates',   # 压凸版
+    'printing_type',      # 印刷形式
+    'printing_cmyk_colors',    # CMYK颜色
+    'printing_other_colors',   # 其他颜色
+    'production_quantity',     # 生产数量
+    'total_amount',            # 总金额
+]
+
+# 审核通过后允许编辑的非核心字段列表
+APPROVED_ORDER_EDITABLE_FIELDS = [
+    'notes',                    # 备注
+    'delivery_date',           # 交货日期
+    'actual_delivery_date',    # 实际交货日期
+    'priority',                # 优先级
+    'design_file',             # 设计文件
+    'materials',                # 物料信息（需要谨慎处理）
+]
+
 
 class Customer(models.Model):
     """客户信息"""
@@ -630,6 +656,9 @@ class WorkOrder(models.Model):
         verbose_name = '施工单'
         verbose_name_plural = '施工单管理'
         ordering = ['-created_at']
+        permissions = [
+            ('change_approved_workorder', '可以编辑已审核的施工单'),
+        ]
 
     def __str__(self):
         # 显示第一个产品的名称，如果有多个产品则显示数量
