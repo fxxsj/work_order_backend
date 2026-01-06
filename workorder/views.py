@@ -68,14 +68,16 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['is_active']
+    filterset_fields = ['is_active', 'parent']
     search_fields = ['name', 'code']
     ordering_fields = ['sort_order', 'code']
     ordering = ['sort_order', 'code']
     
     def get_queryset(self):
         queryset = super().get_queryset()
-        return queryset.prefetch_related('processes')
+        # 预加载关联数据，提高查询效率
+        queryset = queryset.select_related('parent').prefetch_related('processes', 'children')
+        return queryset
 
 
 class ProcessViewSet(viewsets.ModelViewSet):

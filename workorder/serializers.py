@@ -39,6 +39,9 @@ class DepartmentSerializer(serializers.ModelSerializer):
     """部门序列化器"""
     processes = serializers.PrimaryKeyRelatedField(many=True, queryset=Process.objects.all(), required=False)
     process_names = serializers.SerializerMethodField()
+    parent = serializers.PrimaryKeyRelatedField(queryset=Department.objects.all(), required=False, allow_null=True)
+    parent_name = serializers.SerializerMethodField()
+    children_count = serializers.SerializerMethodField()
     
     class Meta:
         model = Department
@@ -49,6 +52,18 @@ class DepartmentSerializer(serializers.ModelSerializer):
         if hasattr(obj, 'processes'):
             return [f"{p.code} - {p.name}" for p in obj.processes.all()]
         return []
+    
+    def get_parent_name(self, obj):
+        """获取上级部门名称"""
+        if obj.parent:
+            return obj.parent.name
+        return None
+    
+    def get_children_count(self, obj):
+        """获取子部门数量"""
+        if hasattr(obj, 'children'):
+            return obj.children.count()
+        return 0
 
 
 class ProcessSerializer(serializers.ModelSerializer):

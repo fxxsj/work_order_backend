@@ -4,8 +4,9 @@ from django.db import migrations
 
 
 def reset_processes(apps, schema_editor):
-    """清空工序表并插入预设工序"""
+    """清空工序表并插入预设工序，同时建立部门与工序的关联关系"""
     Process = apps.get_model('workorder', 'Process')
+    Department = apps.get_model('workorder', 'Department')
     WorkOrderProcess = apps.get_model('workorder', 'WorkOrderProcess')
     Product = apps.get_model('workorder', 'Product')
     
@@ -54,6 +55,27 @@ def reset_processes(apps, schema_editor):
             sort_order=proc['sort_order'],
             is_active=True
         )
+    
+    # 建立部门与工序的关联关系
+    # 部门与工序对应关系配置
+    dept_process_mapping = {
+        'design': ['CTP'],
+        'cutting': ['CUT', 'SCORE', 'TRIM'],
+        'printing': ['PRT', 'VAN'],
+        'outsourcing': ['CUT', 'PRT', 'VAN', 'LAM_G', 'LAM_M', 'UV', 'FOIL_G', 'FOIL_S', 'EMB', 'TEX', 'DIE', 'LAM_B', 'MOUNT', 'BOX', 'STAPLE'],
+        'die_cutting': ['FOIL_G', 'FOIL_S', 'EMB', 'SCORE', 'DIE'],
+        'packaging': ['CUT', 'TEX', 'LAM_B', 'MOUNT', 'GLUE', 'BOX', 'WINDOW', 'STAPLE', 'PACK'],
+    }
+    
+    # 为每个部门建立工序关联
+    for dept_code, process_codes in dept_process_mapping.items():
+        try:
+            dept = Department.objects.get(code=dept_code)
+            processes = Process.objects.filter(code__in=process_codes, is_active=True)
+            dept.processes.set(processes)
+        except Department.DoesNotExist:
+            # 如果部门不存在（理论上不应该发生，因为 0023 已经创建了部门），跳过
+            pass
 
 
 def reverse_reset_processes(apps, schema_editor):

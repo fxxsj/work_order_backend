@@ -36,11 +36,37 @@ class CustomerAdmin(admin.ModelAdmin):
 
 @admin.register(Department)
 class DepartmentAdmin(admin.ModelAdmin):
-    list_display = ['code', 'name', 'sort_order', 'is_active', 'created_at']
+    list_display = ['code', 'name', 'parent', 'get_children_count', 'sort_order', 'is_active', 'created_at']
     search_fields = ['code', 'name']
-    list_filter = ['is_active', 'created_at']
+    list_filter = ['is_active', 'parent', 'created_at']
     list_editable = ['sort_order', 'is_active']
     ordering = ['sort_order', 'code']
+    autocomplete_fields = ['parent']
+    filter_horizontal = ['processes']
+    
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('code', 'name', 'parent', 'sort_order', 'is_active')
+        }),
+        ('工序关联', {
+            'fields': ('processes',),
+            'description': '选择该部门负责的工序'
+        }),
+        ('系统信息', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['created_at']
+    
+    def get_children_count(self, obj):
+        """显示子部门数量"""
+        if obj.pk:
+            return obj.children.count()
+        return 0
+    get_children_count.short_description = '子部门数'
+    get_children_count.admin_order_field = 'children__count'
 
 
 @admin.register(Process)

@@ -33,6 +33,9 @@ class Department(models.Model):
     """部门"""
     name = models.CharField('部门名称', max_length=50, unique=True)
     code = models.CharField('部门编码', max_length=20, unique=True)
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True,
+                               related_name='children', verbose_name='上级部门',
+                               help_text='上级部门，用于建立部门层级关系（如生产部下有多个车间）')
     sort_order = models.IntegerField('排序', default=0)
     is_active = models.BooleanField('是否启用', default=True)
     processes = models.ManyToManyField('Process', blank=True, verbose_name='工序',
@@ -45,6 +48,12 @@ class Department(models.Model):
         ordering = ['sort_order', 'code']
 
     def __str__(self):
+        return self.name
+    
+    def get_full_name(self):
+        """获取完整名称（包含上级部门）"""
+        if self.parent:
+            return f"{self.parent.name} - {self.name}"
         return self.name
 
 
