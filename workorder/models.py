@@ -88,6 +88,8 @@ class Process(models.Model):
                                                  help_text='如果为True，选择该工序时必须选择烫金版；如果为False，烫金版可选（未选择时生成设计任务）')
     embossing_plate_required = models.BooleanField('压凸版必选', default=True,
                                                   help_text='如果为True，选择该工序时必须选择压凸版；如果为False，压凸版可选（未选择时生成设计任务）')
+    is_parallel = models.BooleanField('可并行执行', default=False,
+                                     help_text='该工序是否可以与其他工序并行执行（如制版、模切等）')
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
 
     class Meta:
@@ -719,12 +721,12 @@ class WorkOrderProcess(models.Model):
     
     def can_start(self):
         """判断该工序是否可以开始"""
-        # 制版、刀模、模切可以并行（通过工序名称识别）
+        # 使用配置字段或编码判断是否可并行
         # 注意：采购不属于施工单工序，采购任务通过其他系统管理
-        process_name = self.process.name.lower()
-        parallel_keywords = ['制版', '刀模', '模切']
+        from .process_codes import ProcessCodes
         
-        if any(keyword in process_name for keyword in parallel_keywords):
+        # 优先使用配置字段，如果未配置则使用编码判断
+        if self.process.is_parallel or ProcessCodes.is_parallel(self.process.code):
             # 这些工序可以并行，只要没有其他限制就可以开始
             return True
         
@@ -733,11 +735,9 @@ class WorkOrderProcess(models.Model):
         non_parallel_processes = WorkOrderProcess.objects.filter(
             work_order=self.work_order
         ).exclude(
-            process__name__icontains='制版'
+            process__is_parallel=True
         ).exclude(
-            process__name__icontains='刀模'
-        ).exclude(
-            process__name__icontains='模切'
+            process__code__in=[ProcessCodes.CTP, ProcessCodes.DIE]
         ).order_by('sequence')
         
         # 找到当前工序在非并行工序中的位置
@@ -772,8 +772,9 @@ class WorkOrderProcess(models.Model):
         if not tasks.exists():
             return False
 
+        from .process_codes import ProcessCodes
+        
         process_code = self.process.code
-        process_name = self.process.name
 
         for task in tasks:
             if task.status != 'completed':
@@ -794,8 +795,8 @@ class WorkOrderProcess(models.Model):
             if task.task_type == 'cutting' and task.material:
                 work_order_material = self.work_order.materials.filter(material=task.material).first()
                 if work_order_material:
-                    # 开料工序（CUT或名称包含开料/裁切）：物料必须已开料
-                    if process_code == 'CUT' or '开料' in process_name or '裁切' in process_name:
+                    # 使用编码判断：开料工序（CUT）物料必须已开料
+                    if ProcessCodes.requires_material_cut_status(process_code):
                         if work_order_material.purchase_status != 'cut':
                             return False
 
@@ -817,6 +818,8 @@ class WorkOrderProcess(models.Model):
         - PACK（包装）：为每个产品生成一个任务
         - 其他工序：生成通用任务
         """
+        from .process_codes import ProcessCodes
+        
         # 如果已经有任务，不再生成
         if self.tasks.exists():
             return
@@ -828,7 +831,7 @@ class WorkOrderProcess(models.Model):
         production_quantity = work_order.production_quantity or 0
         
         # 使用 code 字段精确匹配工序
-        if process_code == 'CTP':
+        if process_code == ProcessCodes.CTP:
             # 制版工序：为图稿、刀模、烫金版、压凸版每个生成一个任务
             # 任务内容：{施工单号}制版审核，生产数量：1
             # 图稿任务
@@ -880,7 +883,7 @@ class WorkOrderProcess(models.Model):
                     auto_calculate_quantity=False
                 )
         
-        elif process_code == 'CUT':
+        elif process_code == ProcessCodes.CUT:
             # 开料工序：为需要开料的物料每个生成一个任务
             # 任务内容：{施工单号}开料，生产数量：物料用量
             for material_item in work_order.materials.all():
@@ -897,7 +900,7 @@ class WorkOrderProcess(models.Model):
                         auto_calculate_quantity=False
                     )
         
-        elif process_code == 'PRT':
+        elif process_code == ProcessCodes.PRT:
             # 印刷工序：为每个图稿生成一个任务
             # 任务内容：{施工单号}印刷，生产数量：施工单的生产数量
             for artwork in work_order.artworks.all():
@@ -912,7 +915,7 @@ class WorkOrderProcess(models.Model):
                     auto_calculate_quantity=False
                 )
         
-        elif process_code == 'FOIL_G':
+        elif process_code == ProcessCodes.FOIL_G:
             # 烫金工序：为每个烫金版生成一个任务（参考印刷任务）
             # 任务内容：{施工单号}烫金，生产数量：施工单的生产数量
             for foiling_plate in work_order.foiling_plates.all():
@@ -927,7 +930,7 @@ class WorkOrderProcess(models.Model):
                     auto_calculate_quantity=False
                 )
         
-        elif process_code == 'EMB':
+        elif process_code == ProcessCodes.EMB:
             # 压凸工序：为每个压凸版生成一个任务（参考印刷任务）
             # 任务内容：{施工单号}压凸，生产数量：施工单的生产数量
             for embossing_plate in work_order.embossing_plates.all():
@@ -942,7 +945,7 @@ class WorkOrderProcess(models.Model):
                     auto_calculate_quantity=False
                 )
         
-        elif process_code == 'DIE':
+        elif process_code == ProcessCodes.DIE:
             # 模切工序：为每个刀模生成一个任务（参考印刷任务）
             # 任务内容：{施工单号}模切，生产数量：施工单的生产数量
             for die in work_order.dies.all():
@@ -957,7 +960,7 @@ class WorkOrderProcess(models.Model):
                     auto_calculate_quantity=False
                 )
         
-        elif process_code == 'PACK':
+        elif process_code == ProcessCodes.PACK:
             # 包装工序：为每个产品生成一个任务
             # 任务内容：{产品名称}包装，生产数量：产品数量
             for product_item in work_order.products.all():

@@ -517,10 +517,11 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         from .models import TaskLog
         
         task = self.get_object()
+        from .process_codes import ProcessCodes
+        
         work_order_process = task.work_order_process
         work_order = work_order_process.work_order
         process_code = work_order_process.process.code
-        process_name = work_order_process.process.name
         
         # 获取前端传递的数据
         quantity_completed = request.data.get('quantity_completed')
@@ -546,7 +547,7 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         if task.task_type == 'cutting' and task.material:
             work_order_material = work_order.materials.filter(material=task.material).first()
             if work_order_material:
-                if process_code == 'CUT' or '开料' in process_name or '裁切' in process_name:
+                if ProcessCodes.requires_material_cut_status(process_code):
                     if work_order_material.purchase_status != 'cut':
                         return Response(
                             {'error': '物料未开料，无法更新开料任务'},
@@ -649,10 +650,11 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         from .models import TaskLog
         
         task = self.get_object()
+        from .process_codes import ProcessCodes
+        
         work_order_process = task.work_order_process
         work_order = work_order_process.work_order
         process_code = work_order_process.process.code
-        process_name = work_order_process.process.name
         
         # 获取前端传递的数据
         completion_reason = request.data.get('completion_reason', '')
@@ -672,7 +674,7 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         if task.task_type == 'cutting' and task.material:
             work_order_material = work_order.materials.filter(material=task.material).first()
             if work_order_material:
-                if process_code == 'CUT' or '开料' in process_name or '裁切' in process_name:
+                if ProcessCodes.requires_material_cut_status(process_code):
                     if work_order_material.purchase_status != 'cut':
                         return Response(
                             {'error': '物料未开料，无法完成开料任务'},
