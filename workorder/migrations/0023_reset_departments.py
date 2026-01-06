@@ -12,13 +12,16 @@ def reset_departments(apps, schema_editor):
     
     # 预设部门数据
     departments = [
-        {'name': '设计部', 'code': 'design', 'sort_order': 1},
-        {'name': '采购部', 'code': 'purchase', 'sort_order': 2},
-        {'name': '裁切部', 'code': 'cutting', 'sort_order': 3},
-        {'name': '印刷部', 'code': 'printing', 'sort_order': 4},
-        {'name': '外协部', 'code': 'outsourcing', 'sort_order': 5},
-        {'name': '模切部', 'code': 'die_cutting', 'sort_order': 6},
-        {'name': '包装部', 'code': 'packaging', 'sort_order': 7},
+        {'name': '业务部', 'code': 'business', 'sort_order': 1},
+        {'name': '财务部', 'code': 'finance', 'sort_order': 2},
+        {'name': '设计部', 'code': 'design', 'sort_order': 3},
+        {'name': '采购部', 'code': 'purchase', 'sort_order': 4},
+        {'name': '裁切部', 'code': 'cutting', 'sort_order': 5},
+        {'name': '印刷部', 'code': 'printing', 'sort_order': 6},
+        {'name': '外协部', 'code': 'outsourcing', 'sort_order': 7},
+        {'name': '模切部', 'code': 'die_cutting', 'sort_order': 8},
+        {'name': '包装部', 'code': 'packaging', 'sort_order': 9},
+        {'name': '运输部', 'code': 'logistics', 'sort_order': 10},
     ]
     
     # 插入预设部门
