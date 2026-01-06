@@ -11,7 +11,7 @@ from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
     Die, DieProduct, FoilingPlate, FoilingPlateProduct, EmbossingPlate, EmbossingPlateProduct,
-    WorkOrderTask, ProductGroup, ProductGroupItem
+    WorkOrderTask, ProductGroup, ProductGroupItem, WorkOrderApprovalLog
 )
 from .serializers import (
     CustomerSerializer, DepartmentSerializer, ProcessSerializer, ProductSerializer, 
@@ -157,7 +157,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     # permission_classes 继承自 settings 中的 DEFAULT_PERMISSION_CLASSES (DjangoModelPermissions)
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = WorkOrderFilter
-    search_fields = ['order_number', 'product_name', 'customer__name']
+    search_fields = ['order_number', 'products__product__name', 'products__product__code', 'customer__name']
     ordering_fields = ['created_at', 'order_date', 'delivery_date', 'order_number']
     ordering = ['-created_at']
     
@@ -297,7 +297,9 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
-        """业务员审核施工单"""
+        """业务员审核施工单（完善版）"""
+        from .models import WorkOrderApprovalLog
+        
         work_order = self.get_object()
         
         # 检查用户是否为业务员
@@ -314,8 +316,16 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
+        # 检查当前审核状态（只有待审核的施工单才能审核）
+        if work_order.approval_status != 'pending':
+            return Response(
+                {'error': '该施工单已经审核过了，不能重复审核。如需重新审核，请先修改施工单并重新提交审核。'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         approval_status = request.data.get('approval_status')  # 'approved' 或 'rejected'
         approval_comment = request.data.get('approval_comment', '')
+        rejection_reason = request.data.get('rejection_reason', '')
         
         if approval_status not in ['approved', 'rejected']:
             return Response(
@@ -323,11 +333,70 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # 审核拒绝时，强制要求填写拒绝原因
+        if approval_status == 'rejected' and not rejection_reason:
+            return Response(
+                {'error': '审核拒绝时，必须填写拒绝原因'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 审核前数据完整性检查
+        validation_errors = work_order.validate_before_approval()
+        if validation_errors:
+            return Response(
+                {'error': '施工单数据不完整，无法审核', 'details': validation_errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 记录审核历史
+        approval_log = WorkOrderApprovalLog.objects.create(
+            work_order=work_order,
+            approval_status=approval_status,
+            approved_by=request.user,
+            approval_comment=approval_comment,
+            rejection_reason=rejection_reason
+        )
+        
         # 更新审核信息
         work_order.approval_status = approval_status
         work_order.approved_by = request.user
         work_order.approved_at = timezone.now()
         work_order.approval_comment = approval_comment
+        
+        # 审核通过后，自动变更施工单状态
+        if approval_status == 'approved' and work_order.status == 'pending':
+            work_order.status = 'in_progress'
+        
+        work_order.save()
+        
+        serializer = self.get_serializer(work_order)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def resubmit_for_approval(self, request, pk=None):
+        """重新提交审核（审核拒绝后使用）"""
+        work_order = self.get_object()
+        
+        # 检查当前审核状态（只有被拒绝的施工单才能重新提交）
+        if work_order.approval_status != 'rejected':
+            return Response(
+                {'error': '只有被拒绝的施工单才能重新提交审核'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 检查用户是否有权限（制表人或创建人）
+        if work_order.manager != request.user and work_order.created_by != request.user:
+            # 检查是否有编辑施工单的权限
+            if not request.user.has_perm('workorder.change_workorder'):
+                return Response(
+                    {'error': '只有制表人、创建人或有编辑权限的用户才能重新提交审核'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        # 重置审核状态为 pending
+        work_order.approval_status = 'pending'
+        # 清空之前的审核信息，允许重新审核
+        work_order.approval_comment = ''
         work_order.save()
         
         serializer = self.get_serializer(work_order)

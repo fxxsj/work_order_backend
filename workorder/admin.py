@@ -5,7 +5,7 @@ from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
     Die, DieProduct, FoilingPlate, FoilingPlateProduct, EmbossingPlate, EmbossingPlateProduct,
-    WorkOrderTask, ProductGroup, ProductGroupItem, UserProfile
+    WorkOrderTask, ProductGroup, ProductGroupItem, UserProfile, WorkOrderApprovalLog
 )
 
 
@@ -767,4 +767,54 @@ class UserProfileAdmin(admin.ModelAdmin):
                 return ', '.join([dept.name for dept in departments])
         return '-'
     get_departments_display.short_description = '所属部门'
+
+
+@admin.register(WorkOrderApprovalLog)
+class WorkOrderApprovalLogAdmin(admin.ModelAdmin):
+    """施工单审核历史管理"""
+    list_display = [
+        'work_order', 'approval_status_badge', 'approved_by', 
+        'approved_at', 'has_comment', 'has_rejection_reason'
+    ]
+    list_filter = ['approval_status', 'approved_at', 'approved_by']
+    search_fields = ['work_order__order_number', 'approval_comment', 'rejection_reason']
+    readonly_fields = ['created_at', 'approved_at']
+    ordering = ['-approved_at', '-created_at']
+    
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('work_order', 'approval_status', 'approved_by', 'approved_at')
+        }),
+        ('审核内容', {
+            'fields': ('approval_comment', 'rejection_reason')
+        }),
+        ('系统信息', {
+            'fields': ('created_at',)
+        }),
+    )
+    
+    def approval_status_badge(self, obj):
+        """审核状态徽章"""
+        colors = {
+            'pending': 'orange',
+            'approved': 'green',
+            'rejected': 'red'
+        }
+        color = colors.get(obj.approval_status, 'gray')
+        status_display = obj.get_approval_status_display()
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 8px; border-radius: 3px;">{}</span>',
+            color, status_display
+        )
+    approval_status_badge.short_description = '审核状态'
+    
+    def has_comment(self, obj):
+        """是否有审核意见"""
+        return '是' if obj.approval_comment else '否'
+    has_comment.short_description = '有审核意见'
+    
+    def has_rejection_reason(self, obj):
+        """是否有拒绝原因"""
+        return '是' if obj.rejection_reason else '否'
+    has_rejection_reason.short_description = '有拒绝原因'
 

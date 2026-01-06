@@ -4,7 +4,7 @@ from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, TaskLog, Artwork, ArtworkProduct,
     Die, DieProduct, FoilingPlate, FoilingPlateProduct, EmbossingPlate, EmbossingPlateProduct,
-    WorkOrderTask, ProductGroup, ProductGroupItem
+    WorkOrderTask, ProductGroup, ProductGroupItem, WorkOrderApprovalLog
 )
 
 
@@ -157,6 +157,16 @@ class TaskLogSerializer(serializers.ModelSerializer):
         if obj.quantity_before is not None and obj.quantity_after is not None:
             return obj.quantity_after - obj.quantity_before
         return None
+
+
+class WorkOrderApprovalLogSerializer(serializers.ModelSerializer):
+    """施工单审核历史序列化器"""
+    approval_status_display = serializers.CharField(source='get_approval_status_display', read_only=True)
+    approved_by_name = serializers.CharField(source='approved_by.username', read_only=True, allow_null=True)
+    
+    class Meta:
+        model = WorkOrderApprovalLog
+        fields = '__all__'
 
 
 class WorkOrderTaskSerializer(serializers.ModelSerializer):
@@ -492,6 +502,8 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     order_processes = WorkOrderProcessSerializer(many=True, read_only=True)
     products = WorkOrderProductSerializer(many=True, read_only=True)  # 一个施工单包含的多个产品
     materials = WorkOrderMaterialSerializer(many=True, read_only=True)
+    # 审核历史记录
+    approval_logs = serializers.SerializerMethodField()
     
     progress_percentage = serializers.SerializerMethodField()
     # 多产品合并显示字段（用于基本信息显示）
@@ -658,6 +670,11 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     def get_embossing_plate_codes(self, obj):
         """获取所有压凸版编码"""
         return [plate.code for plate in obj.embossing_plates.all()]
+    
+    def get_approval_logs(self, obj):
+        """获取审核历史记录"""
+        logs = obj.approval_logs.all()
+        return WorkOrderApprovalLogSerializer(logs, many=True).data
 
 
 class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
@@ -862,6 +879,13 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         # 更新施工单基本信息
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+        
+        # 如果审核状态是 rejected，修改后自动重置为 pending（允许重新提交审核）
+        if instance.approval_status == 'rejected':
+            instance.approval_status = 'pending'
+            # 清空之前的审核信息，允许重新审核
+            instance.approval_comment = ''
+        
         instance.save()
         
         # 更新刀模（ManyToMany 字段）

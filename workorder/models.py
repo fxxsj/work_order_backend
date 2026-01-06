@@ -649,6 +649,61 @@ class WorkOrder(models.Model):
         completed_processes = self.order_processes.filter(status='completed').count()
         return int((completed_processes / total_processes) * 100)
     
+    def validate_before_approval(self):
+        """审核前验证施工单数据完整性
+        
+        Returns:
+            list: 错误信息列表，如果为空则表示验证通过
+        """
+        errors = []
+        
+        # 检查客户信息
+        if not self.customer:
+            errors.append('缺少客户信息')
+        
+        # 检查产品信息
+        if not self.products.exists():
+            errors.append('缺少产品信息')
+        
+        # 检查工序信息
+        if not self.order_processes.exists():
+            errors.append('缺少工序信息')
+        
+        # 检查交货日期
+        if not self.delivery_date:
+            errors.append('缺少交货日期')
+        
+        # 检查工序与版的选择是否匹配
+        # 获取所有选中的工序
+        selected_processes = self.order_processes.values_list('process', flat=True)
+        processes = Process.objects.filter(id__in=selected_processes, is_active=True)
+        
+        # 检查图稿
+        processes_requiring_artwork = processes.filter(requires_artwork=True, artwork_required=True)
+        if processes_requiring_artwork.exists() and not self.artworks.exists():
+            process_names = ', '.join([p.name for p in processes_requiring_artwork])
+            errors.append(f'选择了需要图稿的工序（{process_names}），请至少选择一个图稿')
+        
+        # 检查刀模
+        processes_requiring_die = processes.filter(requires_die=True, die_required=True)
+        if processes_requiring_die.exists() and not self.dies.exists():
+            process_names = ', '.join([p.name for p in processes_requiring_die])
+            errors.append(f'选择了需要刀模的工序（{process_names}），请至少选择一个刀模')
+        
+        # 检查烫金版
+        processes_requiring_foiling_plate = processes.filter(requires_foiling_plate=True, foiling_plate_required=True)
+        if processes_requiring_foiling_plate.exists() and not self.foiling_plates.exists():
+            process_names = ', '.join([p.name for p in processes_requiring_foiling_plate])
+            errors.append(f'选择了需要烫金版的工序（{process_names}），请至少选择一个烫金版')
+        
+        # 检查压凸版
+        processes_requiring_embossing_plate = processes.filter(requires_embossing_plate=True, embossing_plate_required=True)
+        if processes_requiring_embossing_plate.exists() and not self.embossing_plates.exists():
+            process_names = ', '.join([p.name for p in processes_requiring_embossing_plate])
+            errors.append(f'选择了需要压凸版的工序（{process_names}），请至少选择一个压凸版')
+        
+        return errors
+    
     @classmethod
     def generate_order_number(cls):
         """生成施工单号：格式 yyyymm + 3位自增序号"""
@@ -1208,4 +1263,30 @@ class UserProfile(models.Model):
             dept_names = ', '.join([dept.name for dept in self.departments.all()])
             return f"{self.user.username} - {dept_names}"
         return f"{self.user.username} - 未分配部门"
+
+
+class WorkOrderApprovalLog(models.Model):
+    """施工单审核历史记录"""
+    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE,
+                                   related_name='approval_logs', verbose_name='施工单')
+    approval_status = models.CharField('审核状态', max_length=20, 
+                                     choices=WorkOrder.APPROVAL_STATUS_CHOICES)
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, 
+                                   null=True, blank=True,
+                                   related_name='approval_logs', verbose_name='审核人')
+    approved_at = models.DateTimeField('审核时间', auto_now_add=True)
+    approval_comment = models.TextField('审核意见', blank=True, 
+                                       help_text='审核意见或说明')
+    rejection_reason = models.TextField('拒绝原因', blank=True, 
+                                       help_text='审核拒绝时的拒绝原因')
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '施工单审核历史'
+        verbose_name_plural = '施工单审核历史管理'
+        ordering = ['-approved_at', '-created_at']
+
+    def __str__(self):
+        status_display = dict(WorkOrder.APPROVAL_STATUS_CHOICES).get(self.approval_status, self.approval_status)
+        return f"{self.work_order.order_number} - {status_display} - {self.approved_by.username if self.approved_by else '未知'}"
 
