@@ -172,7 +172,7 @@ class Material(models.Model):
 
 class Artwork(models.Model):
     """图稿信息"""
-    base_code = models.CharField('图稿主编码', max_length=50, blank=True, editable=False,
+    base_code = models.CharField('图稿主编码', max_length=50, blank=True, null=True, editable=False,
                                 help_text='图稿的主编码，如：ART202412001，不包含版本号')
     version = models.IntegerField('版本号', default=1, help_text='图稿版本号，从1开始递增')
     name = models.CharField('图稿名称', max_length=200)
@@ -1093,6 +1093,35 @@ class ProcessLog(models.Model):
 
     def __str__(self):
         return f"{self.work_order_process} - {self.get_log_type_display()}"
+
+
+class TaskLog(models.Model):
+    """任务操作日志"""
+    LOG_TYPE_CHOICES = [
+        ('update_quantity', '更新数量'),
+        ('complete', '强制完成'),
+        ('status_change', '状态变更'),
+    ]
+
+    task = models.ForeignKey('WorkOrderTask', on_delete=models.CASCADE,
+                             related_name='logs', verbose_name='任务')
+    log_type = models.CharField('日志类型', max_length=20, choices=LOG_TYPE_CHOICES)
+    content = models.TextField('内容', help_text='操作内容描述')
+    quantity_before = models.IntegerField('更新前数量', null=True, blank=True)
+    quantity_after = models.IntegerField('更新后数量', null=True, blank=True)
+    status_before = models.CharField('更新前状态', max_length=20, null=True, blank=True)
+    status_after = models.CharField('更新后状态', max_length=20, null=True, blank=True)
+    completion_reason = models.TextField('完成理由', blank=True, help_text='强制完成时的理由说明')
+    operator = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name='操作员')
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '任务操作日志'
+        verbose_name_plural = '任务操作日志'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.task} - {self.get_log_type_display()}"
 
 
 class WorkOrderTask(models.Model):

@@ -489,7 +489,7 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         'work_order_process', 'work_order_process__process', 
         'work_order_process__work_order', 'artwork', 'die', 'product', 'material',
         'foiling_plate', 'embossing_plate'
-    )
+    ).prefetch_related('logs', 'logs__operator')
     serializer_class = WorkOrderTaskSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = WorkOrderTaskFilter
@@ -512,8 +512,10 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
             task.work_order_process.check_and_update_status()
     
     @action(detail=True, methods=['post'])
-    def complete(self, request, pk=None):
-        """完成任务（支持新任务类型和需求）"""
+    def update_quantity(self, request, pk=None):
+        """更新任务数量（包含业务条件验证，根据数量自动判断状态，记录操作人）"""
+        from .models import TaskLog
+        
         task = self.get_object()
         work_order_process = task.work_order_process
         work_order = work_order_process.work_order
@@ -521,8 +523,139 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         process_name = work_order_process.process.name
         
         # 获取前端传递的数据
-        status_value = request.data.get('status', 'completed')
         quantity_completed = request.data.get('quantity_completed')
+        notes = request.data.get('notes', '')
+        artwork_ids = request.data.get('artwork_ids', [])
+        die_ids = request.data.get('die_ids', [])
+        
+        if quantity_completed is None:
+            return Response(
+                {'error': '请提供完成数量'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 业务条件验证：制版任务需图稿/刀模等已确认
+        if task.task_type == 'plate_making' and task.artwork:
+            if not task.artwork.confirmed:
+                return Response(
+                    {'error': '图稿未确认，无法更新任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # 业务条件验证：开料任务需物料状态满足条件
+        if task.task_type == 'cutting' and task.material:
+            work_order_material = work_order.materials.filter(material=task.material).first()
+            if work_order_material:
+                if process_code == 'CUT' or '开料' in process_name or '裁切' in process_name:
+                    if work_order_material.purchase_status != 'cut':
+                        return Response(
+                            {'error': '物料未开料，无法更新开料任务'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+        
+        # 验证完成数量
+        if quantity_completed < 0:
+            return Response(
+                {'error': '完成数量不能小于0'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if task.production_quantity and quantity_completed > task.production_quantity:
+            return Response(
+                {'error': f'完成数量（{quantity_completed}）不能超过生产数量（{task.production_quantity}）'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 记录更新前的状态和数量
+        quantity_before = task.quantity_completed
+        status_before = task.status
+        
+        # 处理设计图稿/设计刀模任务
+        is_design_task = '设计图稿' in task.work_content or '更新图稿' in task.work_content
+        is_die_design_task = '设计刀模' in task.work_content or '更新刀模' in task.work_content
+        
+        if is_design_task:
+            if not artwork_ids or len(artwork_ids) == 0:
+                return Response(
+                    {'error': '请至少选择一个图稿'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            from .models import Artwork
+            artworks = Artwork.objects.filter(id__in=artwork_ids)
+            if artworks.count() != len(artwork_ids):
+                return Response(
+                    {'error': '部分图稿不存在'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            work_order.artworks.add(*artworks)
+            task.artwork = artworks.first()
+        elif is_die_design_task:
+            if not die_ids or len(die_ids) == 0:
+                return Response(
+                    {'error': '请至少选择一个刀模'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            from .models import Die
+            dies = Die.objects.filter(id__in=die_ids)
+            if dies.count() != len(die_ids):
+                return Response(
+                    {'error': '部分刀模不存在'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            work_order.dies.add(*dies)
+            task.die = dies.first()
+        
+        # 更新任务数量
+        task.quantity_completed = quantity_completed
+        if notes:
+            task.production_requirements = notes
+        
+        # 根据数量自动判断状态
+        # 如果完成数量 >= 生产数量，状态自动标志为已完成
+        # 否则为进行中
+        if task.production_quantity and quantity_completed >= task.production_quantity:
+            task.status = 'completed'
+        else:
+            # 如果任务还未开始，设置为进行中
+            if task.status == 'pending':
+                task.status = 'in_progress'
+            # 如果任务已完成但数量不足，保持已完成状态（这种情况不应该发生，但为了安全）
+            # 实际上，如果数量不足，应该保持或设置为进行中
+            if task.status == 'completed' and quantity_completed < task.production_quantity:
+                task.status = 'in_progress'
+        
+        task.save()
+        
+        # 记录操作日志
+        TaskLog.objects.create(
+            task=task,
+            log_type='update_quantity',
+            content=f'更新完成数量：{quantity_before} → {quantity_completed}，状态：{status_before} → {task.status}' + (f'，备注：{notes}' if notes else ''),
+            quantity_before=quantity_before,
+            quantity_after=quantity_completed,
+            status_before=status_before,
+            status_after=task.status,
+            operator=request.user
+        )
+        
+        # 检查工序是否完成
+        task.work_order_process.check_and_update_status()
+        
+        serializer = self.get_serializer(task)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """强制完成任务（用于完成数量小于生产数量但需要强制标志为已完成的情况）"""
+        from .models import TaskLog
+        
+        task = self.get_object()
+        work_order_process = task.work_order_process
+        work_order = work_order_process.work_order
+        process_code = work_order_process.process.code
+        process_name = work_order_process.process.name
+        
+        # 获取前端传递的数据
+        completion_reason = request.data.get('completion_reason', '')
         notes = request.data.get('notes', '')
         artwork_ids = request.data.get('artwork_ids', [])
         die_ids = request.data.get('die_ids', [])
@@ -536,12 +669,9 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
                 )
         
         # 业务条件验证：开料任务需物料状态满足条件
-        # 注意：只有CUT工序生成cutting类型任务
-        # 采购不属于施工单工序，采购任务通过其他系统管理，物料采购状态在WorkOrderMaterial中记录
         if task.task_type == 'cutting' and task.material:
             work_order_material = work_order.materials.filter(material=task.material).first()
             if work_order_material:
-                # 开料工序（CUT或名称包含开料/裁切）：物料必须已开料
                 if process_code == 'CUT' or '开料' in process_name or '裁切' in process_name:
                     if work_order_material.purchase_status != 'cut':
                         return Response(
@@ -549,32 +679,20 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
                             status=status.HTTP_400_BAD_REQUEST
                         )
         
-        # 验证完成数量不能超过生产数量
-        if quantity_completed is not None:
-            if quantity_completed < 0:
-                return Response(
-                    {'error': '完成数量不能小于0'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            if task.production_quantity and quantity_completed > task.production_quantity:
-                return Response(
-                    {'error': f'完成数量（{quantity_completed}）不能超过生产数量（{task.production_quantity}）'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        # 记录更新前的状态和数量
+        status_before = task.status
+        quantity_before = task.quantity_completed
         
-        # 制版任务：需要检查版型选择是否正确（通过设计图稿/设计刀模任务）
+        # 处理设计图稿/设计刀模任务
         is_design_task = '设计图稿' in task.work_content or '更新图稿' in task.work_content
         is_die_design_task = '设计刀模' in task.work_content or '更新刀模' in task.work_content
         
         if is_design_task:
-            # 设计图稿任务：需要选择图稿
             if not artwork_ids or len(artwork_ids) == 0:
                 return Response(
                     {'error': '请至少选择一个图稿'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            # 验证图稿是否存在
             from .models import Artwork
             artworks = Artwork.objects.filter(id__in=artwork_ids)
             if artworks.count() != len(artwork_ids):
@@ -582,35 +700,14 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
                     {'error': '部分图稿不存在'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            # 将图稿关联到施工单（使用add追加，而不是set覆盖）
             work_order.artworks.add(*artworks)
-            
-            # 更新任务：关联第一个图稿（如果有多个图稿，关联第一个）
             task.artwork = artworks.first()
-            task.production_requirements = notes
-            task.status = status_value
-            if quantity_completed is not None:
-                task.quantity_completed = quantity_completed
-            elif task.quantity_completed == 0:
-                task.quantity_completed = task.production_quantity
-            task.save()
-            
-            # 检查工序是否完成
-            task.work_order_process.check_and_update_status()
-            
-            serializer = self.get_serializer(task)
-            return Response(serializer.data)
-        
         elif is_die_design_task:
-            # 设计刀模任务：需要选择刀模
             if not die_ids or len(die_ids) == 0:
                 return Response(
                     {'error': '请至少选择一个刀模'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            # 验证刀模是否存在
             from .models import Die
             dies = Die.objects.filter(id__in=die_ids)
             if dies.count() != len(die_ids):
@@ -618,50 +715,44 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
                     {'error': '部分刀模不存在'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            # 将刀模关联到施工单（使用add追加，而不是set覆盖）
             work_order.dies.add(*dies)
-            
-            # 更新任务：关联第一个刀模（如果有多个刀模，关联第一个）
             task.die = dies.first()
-            task.production_requirements = notes
-            task.status = status_value
-            if quantity_completed is not None:
-                task.quantity_completed = quantity_completed
-            elif task.quantity_completed == 0:
-                task.quantity_completed = task.production_quantity
-            task.save()
-            
-            # 检查工序是否完成
-            task.work_order_process.check_and_update_status()
-            
-            serializer = self.get_serializer(task)
-            return Response(serializer.data)
         
-        else:
-            # 其他任务：根据任务类型处理
-            # 制版任务（plate_making）：完成数量固定为1，状态为已完成
-            if task.task_type == 'plate_making':
-                task.status = 'completed'
-                task.quantity_completed = 1
-                task.production_requirements = notes
-            else:
-                # 其他任务：支持状态选择（进行中/已完成）和完成数量
-                task.status = status_value
-                if quantity_completed is not None:
-                    task.quantity_completed = quantity_completed
-                elif task.quantity_completed == 0 and task.production_quantity:
-                    # 如果没有提供完成数量，且当前为0，则使用生产数量
-                    task.quantity_completed = task.production_quantity
-                task.production_requirements = notes
-            
-            task.save()
-            
-            # 检查工序是否完成
-            task.work_order_process.check_and_update_status()
-            
-            serializer = self.get_serializer(task)
-            return Response(serializer.data)
+        # 强制设置为已完成（不根据数量判断）
+        task.status = 'completed'
+        if notes:
+            task.production_requirements = notes
+        
+        # 制版任务：完成数量固定为1
+        if task.task_type == 'plate_making':
+            task.quantity_completed = 1
+        
+        task.save()
+        
+        # 记录操作日志
+        log_content = f'强制完成任务，状态：{status_before} → completed'
+        if completion_reason:
+            log_content += f'，完成理由：{completion_reason}'
+        if notes:
+            log_content += f'，备注：{notes}'
+        
+        TaskLog.objects.create(
+            task=task,
+            log_type='complete',
+            content=log_content,
+            quantity_before=quantity_before,
+            quantity_after=task.quantity_completed,
+            status_before=status_before,
+            status_after='completed',
+            completion_reason=completion_reason,
+            operator=request.user
+        )
+        
+        # 检查工序是否完成
+        task.work_order_process.check_and_update_status()
+        
+        serializer = self.get_serializer(task)
+        return Response(serializer.data)
 
 
 class WorkOrderProductViewSet(viewsets.ModelViewSet):

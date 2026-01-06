@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
-    WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
+    WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, TaskLog, Artwork, ArtworkProduct,
     Die, DieProduct, FoilingPlate, FoilingPlateProduct, EmbossingPlate, EmbossingPlateProduct,
     WorkOrderTask, ProductGroup, ProductGroupItem
 )
@@ -118,6 +118,29 @@ class ProcessLogSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class TaskLogSerializer(serializers.ModelSerializer):
+    """任务操作日志序列化器"""
+    log_type_display = serializers.CharField(source='get_log_type_display', read_only=True)
+    operator_name = serializers.SerializerMethodField()
+    quantity_increment = serializers.SerializerMethodField()  # 增量值（计算得出）
+    
+    class Meta:
+        model = TaskLog
+        fields = '__all__'
+    
+    def get_operator_name(self, obj):
+        """获取操作员名称"""
+        if obj.operator:
+            return obj.operator.username
+        return None
+    
+    def get_quantity_increment(self, obj):
+        """计算增量值"""
+        if obj.quantity_before is not None and obj.quantity_after is not None:
+            return obj.quantity_after - obj.quantity_before
+        return None
+
+
 class WorkOrderTaskSerializer(serializers.ModelSerializer):
     """施工单任务序列化器"""
     status_display = serializers.CharField(source='get_status_display', read_only=True)
@@ -139,6 +162,8 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
     material_purchase_status = serializers.SerializerMethodField()
     # 工序和施工单信息
     work_order_process_info = serializers.SerializerMethodField()
+    # 任务操作历史
+    logs = TaskLogSerializer(many=True, read_only=True)
     
     class Meta:
         model = WorkOrderTask
