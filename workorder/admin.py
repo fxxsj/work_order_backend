@@ -740,9 +740,31 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     """用户扩展信息管理"""
-    list_display = ['user', 'department', 'created_at']
-    list_filter = ['department', 'created_at']
-    search_fields = ['user__username', 'user__first_name', 'user__last_name', 'department__name']
-    raw_id_fields = ['user', 'department']
+    list_display = ['user', 'get_departments_display', 'created_at']
+    list_filter = ['departments', 'created_at']
+    search_fields = ['user__username', 'user__first_name', 'user__last_name', 'departments__name']
+    autocomplete_fields = ['user']
+    filter_horizontal = ['departments']
     ordering = ['-created_at']
+    
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('user', 'departments')
+        }),
+        ('系统信息', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['created_at', 'updated_at']
+    
+    def get_departments_display(self, obj):
+        """显示部门名称列表"""
+        if obj.pk:
+            departments = obj.departments.all()
+            if departments.exists():
+                return ', '.join([dept.name for dept in departments])
+        return '-'
+    get_departments_display.short_description = '所属部门'
 

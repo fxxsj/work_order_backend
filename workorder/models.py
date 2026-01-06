@@ -1194,8 +1194,8 @@ class UserProfile(models.Model):
     """用户扩展信息"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile',
                                 verbose_name='用户')
-    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True,
-                                   verbose_name='所属部门', help_text='用户所属的部门')
+    departments = models.ManyToManyField(Department, blank=True,
+                                        verbose_name='所属部门', help_text='用户所属的部门（可多选）')
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
 
@@ -1204,5 +1204,8 @@ class UserProfile(models.Model):
         verbose_name_plural = '用户扩展信息管理'
 
     def __str__(self):
-        return f"{self.user.username} - {self.department.name if self.department else '未分配部门'}"
+        if self.pk and self.departments.exists():
+            dept_names = ', '.join([dept.name for dept in self.departments.all()])
+            return f"{self.user.username} - {dept_names}"
+        return f"{self.user.username} - 未分配部门"
 
