@@ -195,6 +195,10 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
     # 分派信息
     assigned_department_name = serializers.CharField(source='assigned_department.name', read_only=True, allow_null=True)
     assigned_operator_name = serializers.SerializerMethodField()
+    # 任务拆分信息
+    is_subtask = serializers.SerializerMethodField()
+    subtasks_count = serializers.SerializerMethodField()
+    parent_task_id = serializers.IntegerField(source='parent_task.id', read_only=True, allow_null=True)
     
     class Meta:
         model = WorkOrderTask
@@ -209,6 +213,16 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
         if obj.assigned_operator:
             return f"{obj.assigned_operator.first_name}{obj.assigned_operator.last_name}"
         return None
+    
+    def get_is_subtask(self, obj):
+        """判断是否为子任务"""
+        return obj.is_subtask()
+    
+    def get_subtasks_count(self, obj):
+        """获取子任务数量"""
+        if obj.pk:
+            return obj.subtasks.count()
+        return 0
     
     def get_artwork_code(self, obj):
         """获取图稿编码"""

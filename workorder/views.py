@@ -776,8 +776,9 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
     queryset = WorkOrderTask.objects.select_related(
         'work_order_process', 'work_order_process__process', 
         'work_order_process__work_order', 'artwork', 'die', 'product', 'material',
-        'foiling_plate', 'embossing_plate', 'assigned_department', 'assigned_operator'
-    ).prefetch_related('logs', 'logs__operator')
+        'foiling_plate', 'embossing_plate', 'assigned_department', 'assigned_operator',
+        'parent_task'
+    ).prefetch_related('logs', 'logs__operator', 'subtasks')
     serializer_class = WorkOrderTaskSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = WorkOrderTaskFilter
@@ -806,6 +807,15 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         
         task = self.get_object()
         from .process_codes import ProcessCodes
+        
+        # 并发控制：检查版本号（乐观锁）
+        expected_version = request.data.get('version')
+        if expected_version is not None:
+            if task.version != expected_version:
+                return Response(
+                    {'error': '任务已被其他操作员更新，请刷新后重试', 'current_version': task.version},
+                    status=status.HTTP_409_CONFLICT
+                )
         
         work_order_process = task.work_order_process
         work_order = work_order_process.work_order
@@ -924,20 +934,28 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
             elif task.status == 'completed' and new_quantity_completed < task.production_quantity:
                 task.status = 'in_progress'
         
+        # 更新版本号（乐观锁）
+        task.version += 1
         task.save()
         
-        # 记录操作日志
+        # 记录操作日志（增强协作追踪）
+        defective_increment = quantity_defective if quantity_defective else 0
         TaskLog.objects.create(
             task=task,
             log_type='update_quantity',
-            content=f'更新完成数量：{quantity_before} → {new_quantity_completed}，本次完成：{quantity_increment}，状态：{status_before} → {task.status}' + (f'，备注：{notes}' if notes else ''),
+            content=f'更新完成数量：{quantity_before} → {new_quantity_completed}，本次完成：{quantity_increment}，不良品：{defective_increment}，状态：{status_before} → {task.status}' + (f'，备注：{notes}' if notes else ''),
             quantity_before=quantity_before,
             quantity_after=new_quantity_completed,
             quantity_increment=quantity_increment,
+            quantity_defective_increment=defective_increment,
             status_before=status_before,
             status_after=task.status,
             operator=request.user
         )
+        
+        # 如果是子任务，更新父任务
+        if task.is_subtask() and task.parent_task:
+            task.parent_task.update_from_subtasks()
         
         # 检查工序是否完成
         task.work_order_process.check_and_update_status()
@@ -952,6 +970,15 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         
         task = self.get_object()
         from .process_codes import ProcessCodes
+        
+        # 并发控制：检查版本号（乐观锁）
+        expected_version = request.data.get('version')
+        if expected_version is not None:
+            if task.version != expected_version:
+                return Response(
+                    {'error': '任务已被其他操作员更新，请刷新后重试', 'current_version': task.version},
+                    status=status.HTTP_409_CONFLICT
+                )
         
         work_order_process = task.work_order_process
         work_order = work_order_process.work_order
@@ -1037,13 +1064,16 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         if quantity_defective is not None:
             task.quantity_defective = quantity_defective
         
+        # 更新版本号（乐观锁）
+        task.version += 1
         task.save()
         
         # 计算数量增量
         quantity_increment = task.quantity_completed - quantity_before
+        defective_increment = quantity_defective if quantity_defective else 0
         
-        # 记录操作日志
-        log_content = f'强制完成任务，完成数量：{quantity_before} → {task.quantity_completed}，状态：{status_before} → completed'
+        # 记录操作日志（增强协作追踪）
+        log_content = f'强制完成任务，完成数量：{quantity_before} → {task.quantity_completed}，不良品：{defective_increment}，状态：{status_before} → completed'
         if quantity_increment != 0:
             log_content += f'，本次完成：{quantity_increment}'
         if completion_reason:
@@ -1058,17 +1088,125 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
             quantity_before=quantity_before,
             quantity_after=task.quantity_completed,
             quantity_increment=quantity_increment,
+            quantity_defective_increment=defective_increment,
             status_before=status_before,
             status_after='completed',
             completion_reason=completion_reason,
             operator=request.user
         )
         
+        # 如果是子任务，更新父任务
+        if task.is_subtask() and task.parent_task:
+            task.parent_task.update_from_subtasks()
+        
         # 检查工序是否完成
         task.work_order_process.check_and_update_status()
         
         serializer = self.get_serializer(task)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def split(self, request, pk=None):
+        """拆分任务为多个子任务（支持多人协作）
+        
+        请求参数：
+        - splits: 子任务列表，每个子任务包含：
+          - production_quantity: 生产数量
+          - assigned_department: 分派部门ID（可选）
+          - assigned_operator: 分派操作员ID（可选）
+          - work_content: 工作内容（可选，默认使用父任务内容）
+        """
+        from .models import WorkOrderTask, TaskLog
+        
+        task = self.get_object()
+        
+        # 检查任务是否已经拆分
+        if task.subtasks.exists():
+            return Response(
+                {'error': '该任务已经拆分，无法再次拆分'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 检查任务是否已完成
+        if task.status == 'completed':
+            return Response(
+                {'error': '已完成的任务无法拆分'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        splits = request.data.get('splits', [])
+        if not splits or len(splits) < 2:
+            return Response(
+                {'error': '至少需要拆分为2个子任务'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 验证拆分数量总和不超过父任务数量
+        total_split_quantity = sum(s.get('production_quantity', 0) for s in splits)
+        if total_split_quantity > task.production_quantity:
+            return Response(
+                {'error': f'子任务数量总和（{total_split_quantity}）不能超过父任务数量（{task.production_quantity}）'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 创建子任务
+        created_subtasks = []
+        for idx, split_data in enumerate(splits):
+            production_quantity = split_data.get('production_quantity', 0)
+            if production_quantity <= 0:
+                return Response(
+                    {'error': f'第{idx+1}个子任务的生产数量必须大于0'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 获取分派信息
+            assigned_department_id = split_data.get('assigned_department')
+            assigned_operator_id = split_data.get('assigned_operator')
+            work_content = split_data.get('work_content', f"{task.work_content}（子任务{idx+1}）")
+            
+            # 创建子任务
+            subtask = WorkOrderTask.objects.create(
+                work_order_process=task.work_order_process,
+                task_type=task.task_type,
+                work_content=work_content,
+                production_quantity=production_quantity,
+                quantity_completed=0,
+                quantity_defective=0,
+                parent_task=task,
+                assigned_department_id=assigned_department_id,
+                assigned_operator_id=assigned_operator_id,
+                artwork=task.artwork,
+                die=task.die,
+                product=task.product,
+                material=task.material,
+                foiling_plate=task.foiling_plate,
+                embossing_plate=task.embossing_plate,
+                production_requirements=task.production_requirements,
+                status='pending',
+                auto_calculate_quantity=task.auto_calculate_quantity
+            )
+            created_subtasks.append(subtask)
+        
+        # 将父任务状态设置为进行中（因为已拆分）
+        if task.status == 'pending':
+            task.status = 'in_progress'
+            task.version += 1
+            task.save()
+        
+        # 记录拆分日志
+        TaskLog.objects.create(
+            task=task,
+            log_type='status_change',
+            content=f'任务已拆分为{len(created_subtasks)}个子任务，子任务数量总和：{total_split_quantity}',
+            operator=request.user
+        )
+        
+        serializer = self.get_serializer(task)
+        return Response({
+            'message': f'任务已成功拆分为{len(created_subtasks)}个子任务',
+            'parent_task': serializer.data,
+            'subtasks_count': len(created_subtasks)
+        }, status=status.HTTP_201_CREATED)
     
     @action(detail=True, methods=['post'])
     def assign(self, request, pk=None):

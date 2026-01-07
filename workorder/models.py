@@ -1330,6 +1330,8 @@ class TaskLog(models.Model):
     quantity_before = models.IntegerField('更新前数量', null=True, blank=True)
     quantity_after = models.IntegerField('更新后数量', null=True, blank=True)
     quantity_increment = models.IntegerField('数量增量', null=True, blank=True, help_text='本次操作的数量增量')
+    quantity_defective_increment = models.IntegerField('不良品数量增量', null=True, blank=True, 
+                                                       help_text='本次操作的不良品数量增量')
     status_before = models.CharField('更新前状态', max_length=20, null=True, blank=True)
     status_after = models.CharField('更新后状态', max_length=20, null=True, blank=True)
     completion_reason = models.TextField('完成理由', blank=True, help_text='强制完成时的理由说明')
@@ -1391,6 +1393,12 @@ class WorkOrderTask(models.Model):
     assigned_operator = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
                                          related_name='assigned_tasks', verbose_name='分派操作员',
                                          help_text='该任务分派给哪个操作员执行')
+    # 任务拆分支持（多人协作）
+    parent_task = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True,
+                                    related_name='subtasks', verbose_name='父任务',
+                                    help_text='如果该任务是子任务，指向父任务')
+    # 并发控制（乐观锁）
+    version = models.IntegerField('版本号', default=1, help_text='用于乐观锁，防止并发更新冲突')
     status = models.CharField('状态', max_length=20, 
                              choices=[('pending', '待开始'), ('in_progress', '进行中'), 
                                      ('completed', '已完成'), ('cancelled', '已取消')],
@@ -1405,6 +1413,38 @@ class WorkOrderTask(models.Model):
 
     def __str__(self):
         return f"{self.work_order_process} - {self.work_content[:50]}"
+    
+    def is_subtask(self):
+        """判断是否为子任务"""
+        return self.parent_task is not None
+    
+    def get_subtasks(self):
+        """获取所有子任务"""
+        return self.subtasks.all()
+    
+    def update_from_subtasks(self):
+        """从子任务汇总数量和状态到父任务"""
+        if not self.is_subtask() and self.subtasks.exists():
+            subtasks = self.subtasks.all()
+            # 汇总完成数量
+            total_completed = sum(st.quantity_completed or 0 for st in subtasks)
+            # 汇总不良品数量
+            total_defective = sum(st.quantity_defective or 0 for st in subtasks)
+            
+            # 更新父任务
+            self.quantity_completed = total_completed
+            self.quantity_defective = total_defective
+            
+            # 判断父任务状态：所有子任务完成则父任务完成
+            all_subtasks_completed = subtasks.exclude(status='completed').count() == 0
+            if all_subtasks_completed and self.status != 'completed':
+                self.status = 'completed'
+            elif not all_subtasks_completed and self.status == 'completed':
+                self.status = 'in_progress'
+            
+            self.save()
+            return True
+        return False
 
 
 class UserProfile(models.Model):
