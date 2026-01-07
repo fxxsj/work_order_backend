@@ -673,30 +673,37 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
     """施工单任务管理"""
     list_display = [
         'work_order_process', 'task_type', 'work_content', 
+        'assigned_department', 'assigned_operator',
         'artwork', 'die', 'product', 'material', 'foiling_plate', 'embossing_plate',
         'production_quantity', 'quantity_completed', 'status_badge', 'created_at'
     ]
     
     list_filter = [
         'task_type', 'status', 'work_order_process__work_order', 
-        'work_order_process__process', 'created_at'
+        'work_order_process__process', 'assigned_department', 'assigned_operator',
+        'created_at'
     ]
     
     search_fields = [
         'work_content', 'work_order_process__work_order__order_number',
         'artwork__name', 'artwork__base_code', 'die__code', 'die__name',
         'product__name', 'product__code', 'material__name', 'material__code',
-        'foiling_plate__name', 'foiling_plate__code', 'embossing_plate__name', 'embossing_plate__code'
+        'foiling_plate__name', 'foiling_plate__code', 'embossing_plate__name', 'embossing_plate__code',
+        'assigned_department__name', 'assigned_operator__username', 'assigned_operator__first_name', 'assigned_operator__last_name'
     ]
     
     autocomplete_fields = ['work_order_process', 'artwork', 'die', 'product', 'material', 
-                          'foiling_plate', 'embossing_plate']
+                          'foiling_plate', 'embossing_plate', 'assigned_department', 'assigned_operator']
     
     readonly_fields = ['created_at', 'updated_at']
     
     fieldsets = (
         ('基本信息', {
             'fields': ('work_order_process', 'task_type', 'work_content', 'status')
+        }),
+        ('任务分派', {
+            'fields': ('assigned_department', 'assigned_operator'),
+            'description': '任务分派到哪个部门和操作员。如果未分派，任务生成时会根据工序自动分派。'
         }),
         ('关联对象', {
             'fields': ('artwork', 'die', 'product', 'material', 'foiling_plate', 'embossing_plate'),
@@ -733,7 +740,7 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
         return qs.select_related(
             'work_order_process', 'work_order_process__work_order',
             'work_order_process__process', 'artwork', 'die', 'product', 'material',
-            'foiling_plate', 'embossing_plate'
+            'foiling_plate', 'embossing_plate', 'assigned_department', 'assigned_operator'
         )
 
 

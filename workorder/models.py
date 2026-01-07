@@ -923,7 +923,11 @@ class WorkOrderProcess(models.Model):
         
         分派规则：
         1. 优先使用工序级别的分派（self.department, self.operator）
-        2. 如果工序未指定部门，根据工序与部门的关联关系自动分派
+        2. 如果工序未指定部门，根据工序与部门的关联关系自动分派：
+           - 优先选择专业车间（排除外协车间）
+           - 如果部门编码与工序编码匹配（如 die_cutting 对应 DIE），优先选择
+           - 如果只有外协车间，则选择外协车间
+           - 如果都没有，选择父部门（生产部）
         3. 如果工序未指定操作员，从分派部门中选择第一个操作员（可选）
         """
         # 优先使用工序级别的分派
@@ -931,19 +935,63 @@ class WorkOrderProcess(models.Model):
             task.assigned_department = self.department
         else:
             # 根据工序与部门的关联关系自动分派
-            # 查找负责该工序的部门（优先选择最匹配的部门）
+            # 查找负责该工序的部门
             departments = Department.objects.filter(
                 processes=self.process,
                 is_active=True
-            ).order_by('sort_order')
+            )
             
             if departments.exists():
-                # 优先选择子部门（车间），如果没有则选择父部门（生产部）
-                workshop_dept = departments.filter(parent__isnull=False).first()
-                if workshop_dept:
-                    task.assigned_department = workshop_dept
-                else:
-                    task.assigned_department = departments.first()
+                # 获取工序编码，用于匹配专业车间
+                process_code = self.process.code.lower()
+                
+                # 1. 优先选择专业车间：部门编码与工序编码匹配（如 die_cutting 对应 DIE）
+                # 映射关系：
+                # - DIE (模切) -> die_cutting (模切车间)
+                # - PRT (印刷) -> printing (印刷车间)
+                # - CUT (开料) -> cutting (裁切车间)
+                # - PACK (包装) -> packaging (包装车间)
+                # - CTP (制版) -> design (设计部)
+                process_dept_mapping = {
+                    'die': 'die_cutting',  # 模切 -> 模切车间
+                    'prt': 'printing',     # 印刷 -> 印刷车间
+                    'cut': 'cutting',      # 开料 -> 裁切车间
+                    'pack': 'packaging',   # 包装 -> 包装车间
+                    'ctp': 'design',       # 制版 -> 设计部
+                }
+                
+                # 查找匹配的专业车间
+                matched_dept_code = process_dept_mapping.get(process_code)
+                if matched_dept_code:
+                    matched_dept = departments.filter(code=matched_dept_code).first()
+                    if matched_dept:
+                        task.assigned_department = matched_dept
+                    else:
+                        # 如果匹配的专业车间不在列表中，继续其他逻辑
+                        pass
+                
+                # 2. 如果没有找到匹配的专业车间，优先选择非外协车间的专业车间
+                if not task.assigned_department:
+                    # 排除外协车间，优先选择其他专业车间（子部门）
+                    professional_depts = departments.filter(
+                        parent__isnull=False
+                    ).exclude(code='outsourcing').order_by('sort_order')
+                    
+                    if professional_depts.exists():
+                        task.assigned_department = professional_depts.first()
+                    else:
+                        # 3. 如果只有外协车间，则选择外协车间
+                        outsourcing_dept = departments.filter(code='outsourcing').first()
+                        if outsourcing_dept:
+                            task.assigned_department = outsourcing_dept
+                        else:
+                            # 4. 如果都没有，选择父部门（生产部）
+                            parent_dept = departments.filter(parent__isnull=True).first()
+                            if parent_dept:
+                                task.assigned_department = parent_dept
+                            else:
+                                # 最后兜底：选择第一个部门
+                                task.assigned_department = departments.order_by('sort_order').first()
         
         # 如果工序已指定操作员，使用工序的操作员
         if self.operator:

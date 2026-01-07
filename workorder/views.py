@@ -540,7 +540,135 @@ class WorkOrderProcessViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(process)
         return Response(serializer.data)
-
+    
+    @action(detail=True, methods=['post'])
+    def reassign_tasks(self, request, pk=None):
+        """批量重新分派工序的所有任务到新部门/操作员
+        
+        使用场景：
+        - 工序自动分派后，发现部门无法处理，需要整体调整为外协
+        - 批量调整工序下所有任务的分派
+        - 例如：裱坑工序从包装车间调整为外协车间
+        
+        请求参数：
+        - assigned_department: 新分派部门ID（可选）
+        - assigned_operator: 新分派操作员ID（可选，清空传null）
+        - reason: 调整原因（必填）
+        - notes: 备注（可选）
+        - update_process_department: 是否同时更新工序级别的部门（默认false）
+        """
+        from .models import TaskLog
+        
+        work_order_process = self.get_object()
+        department_id = request.data.get('assigned_department')
+        operator_id = request.data.get('assigned_operator')
+        reason = request.data.get('reason', '')
+        notes = request.data.get('notes', '')
+        update_process_department = request.data.get('update_process_department', False)
+        
+        # 验证必填字段
+        if not reason:
+            return Response(
+                {'error': '调整原因不能为空，请说明为什么需要调整分派'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 获取所有任务
+        tasks = work_order_process.tasks.all()
+        if not tasks.exists():
+            return Response(
+                {'error': '该工序还没有生成任务'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 验证部门
+        new_department = None
+        if department_id:
+            try:
+                from .models import Department
+                new_department = Department.objects.get(id=department_id)
+            except Department.DoesNotExist:
+                return Response(
+                    {'error': '部门不存在'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        
+        # 验证操作员
+        new_operator = None
+        if operator_id:
+            try:
+                from django.contrib.auth.models import User
+                new_operator = User.objects.get(id=operator_id)
+            except User.DoesNotExist:
+                return Response(
+                    {'error': '操作员不存在'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        
+        # 批量更新任务
+        updated_count = 0
+        for task in tasks:
+            changed = False
+            old_dept = task.assigned_department
+            old_op = task.assigned_operator
+            
+            # 更新部门
+            if department_id is not None:
+                if department_id:
+                    task.assigned_department = new_department
+                    changed = changed or (old_dept != new_department)
+                else:
+                    task.assigned_department = None
+                    changed = changed or (old_dept is not None)
+            
+            # 更新操作员
+            if operator_id is not None:
+                if operator_id:
+                    task.assigned_operator = new_operator
+                    changed = changed or (old_op != new_operator)
+                else:
+                    task.assigned_operator = None
+                    changed = changed or (old_op is not None)
+            
+            if changed:
+                task.save()
+                updated_count += 1
+                
+                # 记录调整日志
+                changes = []
+                if department_id is not None:
+                    old_dept_name = old_dept.name if old_dept else '未分配'
+                    new_dept_name = new_department.name if new_department else '未分配'
+                    changes.append(f"部门：{old_dept_name} → {new_dept_name}")
+                if operator_id is not None:
+                    old_op_name = f"{old_op.first_name}{old_op.last_name}" if old_op else '未分配'
+                    new_op_name = f"{new_operator.first_name}{new_operator.last_name}" if new_operator else '未分配'
+                    changes.append(f"操作员：{old_op_name} → {new_op_name}")
+                
+                log_content = f'批量调整任务分派：{", ".join(changes)}，原因：{reason}'
+                if notes:
+                    log_content += f'，备注：{notes}'
+                
+                TaskLog.objects.create(
+                    task=task,
+                    log_type='status_change',
+                    content=log_content,
+                    operator=request.user
+                )
+        
+        # 如果需要，同时更新工序级别的部门
+        if update_process_department and department_id:
+            work_order_process.department = new_department
+            work_order_process.save()
+        
+        serializer = self.get_serializer(work_order_process)
+        return Response({
+            **serializer.data,
+            'message': f'成功调整 {updated_count} 个任务的分派',
+            'updated_tasks_count': updated_count,
+            'total_tasks_count': tasks.count()
+        })
+    
 
 class WorkOrderTaskFilter(FilterSet):
     """任务筛选器"""
@@ -844,10 +972,25 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def assign(self, request, pk=None):
-        """分派任务到部门和操作员"""
+        """分派任务到部门和操作员（支持调整分派）
+        
+        使用场景：
+        - 自动分派后需要调整（如从包装车间调整为外协车间）
+        - 手动调整任务分派
+        - 记录调整原因和备注
+        """
+        from .models import TaskLog
+        
         task = self.get_object()
         department_id = request.data.get('assigned_department')
         operator_id = request.data.get('assigned_operator')
+        reason = request.data.get('reason', '')  # 调整原因
+        notes = request.data.get('notes', '')  # 备注
+        
+        # 记录调整前的状态
+        old_department = task.assigned_department
+        old_operator = task.assigned_operator
+        changes = []
         
         # 更新分派部门
         if department_id is not None:
@@ -855,14 +998,18 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
                 try:
                     from .models import Department
                     department = Department.objects.get(id=department_id)
-                    task.assigned_department = department
+                    if task.assigned_department != department:
+                        changes.append(f'部门：{old_department.name if old_department else "未分配"} → {department.name}')
+                        task.assigned_department = department
                 except Department.DoesNotExist:
                     return Response(
                         {'error': '部门不存在'},
                         status=status.HTTP_404_NOT_FOUND
                     )
             else:
-                task.assigned_department = None
+                if task.assigned_department:
+                    changes.append(f'部门：{old_department.name if old_department else "未分配"} → 未分配')
+                    task.assigned_department = None
         
         # 更新分派操作员
         if operator_id is not None:
@@ -870,16 +1017,40 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
                 try:
                     from django.contrib.auth.models import User
                     operator = User.objects.get(id=operator_id)
-                    task.assigned_operator = operator
+                    old_operator_name = f"{old_operator.first_name}{old_operator.last_name}" if old_operator else "未分配"
+                    new_operator_name = f"{operator.first_name}{operator.last_name}"
+                    if task.assigned_operator != operator:
+                        changes.append(f'操作员：{old_operator_name} → {new_operator_name}')
+                        task.assigned_operator = operator
                 except User.DoesNotExist:
                     return Response(
                         {'error': '操作员不存在'},
                         status=status.HTTP_404_NOT_FOUND
                     )
             else:
-                task.assigned_operator = None
+                if task.assigned_operator:
+                    old_operator_name = f"{old_operator.first_name}{old_operator.last_name}" if old_operator else "未分配"
+                    changes.append(f'操作员：{old_operator_name} → 未分配')
+                    task.assigned_operator = None
         
-        task.save()
+        # 如果有变更，保存并记录日志
+        if changes:
+            task.save()
+            
+            # 记录调整日志
+            log_content = f'调整任务分派：{", ".join(changes)}'
+            if reason:
+                log_content += f'，原因：{reason}'
+            if notes:
+                log_content += f'，备注：{notes}'
+            
+            TaskLog.objects.create(
+                task=task,
+                log_type='status_change',
+                content=log_content,
+                operator=request.user
+            )
+        
         serializer = self.get_serializer(task)
         return Response(serializer.data)
 
