@@ -3,13 +3,13 @@
 运行: python manage.py reset_processes
 功能：
 1. 清空所有工序数据（包括关联数据）
-2. 从预设fixtures文件加载21个标准工序
+2. 从共享数据源加载21个标准工序
 3. 这些工序的code字段在Admin中为只读
 """
 from django.core.management.base import BaseCommand
-from django.core.management import call_command
 from django.db import transaction
 from workorder.models import Process, WorkOrderProcess, Product
+from workorder.data import PRESET_PROCESSES
 
 
 class Command(BaseCommand):
@@ -81,10 +81,11 @@ class Command(BaseCommand):
                     self.style.SUCCESS(f'✓ 已删除 {process_count} 个现有工序')
                 )
                 
-                # 4. 加载预设工序数据
+                # 4. 加载预设工序数据（使用共享数据源）
                 self.stdout.write('正在加载预设工序数据...')
                 try:
-                    call_command('loaddata', 'workorder/fixtures/preset_processes.json', verbosity=0)
+                    for process_data in PRESET_PROCESSES:
+                        Process.objects.create(**process_data)
                     loaded_count = Process.objects.count()
                     self.stdout.write(
                         self.style.SUCCESS(f'✓ 成功加载 {loaded_count} 个预设工序')

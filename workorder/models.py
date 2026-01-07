@@ -81,6 +81,15 @@ class Department(models.Model):
         if self.parent:
             return f"{self.parent.name} - {self.name}"
         return self.name
+    
+    def natural_key(self):
+        """自然键：用于 fixtures 序列化"""
+        return (self.code,)
+    
+    @classmethod
+    def get_by_natural_key(cls, code):
+        """通过自然键获取对象：用于 fixtures 反序列化"""
+        return cls.objects.get(code=code)
 
 
 class Process(models.Model):

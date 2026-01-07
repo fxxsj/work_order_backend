@@ -1,0 +1,167 @@
+[
+  {
+    "model": "auth.user",
+    "pk": null,
+    "fields": {
+      "username": "business_user",
+      "first_name": "业务",
+      "last_name": "员",
+      "email": "business@example.com",
+      "password": "pbkdf2_sha256$600000$3dPUM5VmtX689q7C32c6cO$P9DhAlR1DM7eG8eTIMsvZrZs14aQQ1SBb2ZGD0SDoX4=",
+      "is_staff": true,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": null,
+    "fields": {
+      "username": "finance_user",
+      "first_name": "财务",
+      "last_name": "员",
+      "email": "finance@example.com",
+      "password": "pbkdf2_sha256$600000$3dPUM5VmtX689q7C32c6cO$P9DhAlR1DM7eG8eTIMsvZrZs14aQQ1SBb2ZGD0SDoX4=",
+      "is_staff": true,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": null,
+    "fields": {
+      "username": "design_user",
+      "first_name": "设计",
+      "last_name": "员",
+      "email": "design@example.com",
+      "password": "pbkdf2_sha256$600000$3dPUM5VmtX689q7C32c6cO$P9DhAlR1DM7eG8eTIMsvZrZs14aQQ1SBb2ZGD0SDoX4=",
+      "is_staff": true,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": null,
+    "fields": {
+      "username": "purchase_user",
+      "first_name": "采购",
+      "last_name": "员",
+      "email": "purchase@example.com",
+      "password": "pbkdf2_sha256$600000$3dPUM5VmtX689q7C32c6cO$P9DhAlR1DM7eG8eTIMsvZrZs14aQQ1SBb2ZGD0SDoX4=",
+      "is_staff": true,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": null,
+    "fields": {
+      "username": "logistics_user",
+      "first_name": "运输",
+      "last_name": "员",
+      "email": "logistics@example.com",
+      "password": "pbkdf2_sha256$600000$3dPUM5VmtX689q7C32c6cO$P9DhAlR1DM7eG8eTIMsvZrZs14aQQ1SBb2ZGD0SDoX4=",
+      "is_staff": true,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": null,
+    "fields": {
+      "username": "production_user",
+      "first_name": "生产",
+      "last_name": "主管",
+      "email": "production@example.com",
+      "password": "pbkdf2_sha256$600000$3dPUM5VmtX689q7C32c6cO$P9DhAlR1DM7eG8eTIMsvZrZs14aQQ1SBb2ZGD0SDoX4=",
+      "is_staff": true,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": null,
+    "fields": {
+      "username": "cutting_user",
+      "first_name": "裁切",
+      "last_name": "操作员",
+      "email": "cutting@example.com",
+      "password": "pbkdf2_sha256$600000$3dPUM5VmtX689q7C32c6cO$P9DhAlR1DM7eG8eTIMsvZrZs14aQQ1SBb2ZGD0SDoX4=",
+      "is_staff": true,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": null,
+    "fields": {
+      "username": "printing_user",
+      "first_name": "印刷",
+      "last_name": "操作员",
+      "email": "printing@example.com",
+      "password": "pbkdf2_sha256$600000$3dPUM5VmtX689q7C32c6cO$P9DhAlR1DM7eG8eTIMsvZrZs14aQQ1SBb2ZGD0SDoX4=",
+      "is_staff": true,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": null,
+    "fields": {
+      "username": "outsourcing_user",
+      "first_name": "外协",
+      "last_name": "操作员",
+      "email": "outsourcing@example.com",
+      "password": "pbkdf2_sha256$600000$3dPUM5VmtX689q7C32c6cO$P9DhAlR1DM7eG8eTIMsvZrZs14aQQ1SBb2ZGD0SDoX4=",
+      "is_staff": true,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": null,
+    "fields": {
+      "username": "die_cutting_user",
+      "first_name": "模切",
+      "last_name": "操作员",
+      "email": "die_cutting@example.com",
+      "password": "pbkdf2_sha256$600000$3dPUM5VmtX689q7C32c6cO$P9DhAlR1DM7eG8eTIMsvZrZs14aQQ1SBb2ZGD0SDoX4=",
+      "is_staff": true,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": null,
+    "fields": {
+      "username": "packaging_user",
+      "first_name": "包装",
+      "last_name": "操作员",
+      "email": "packaging@example.com",
+      "password": "pbkdf2_sha256$600000$3dPUM5VmtX689q7C32c6cO$P9DhAlR1DM7eG8eTIMsvZrZs14aQQ1SBb2ZGD0SDoX4=",
+      "is_staff": true,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2024-01-01T00:00:00Z"
+    }
+  }
+]
