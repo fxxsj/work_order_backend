@@ -320,11 +320,24 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
         if obj.work_order_process:
             process = obj.work_order_process.process
             work_order = obj.work_order_process.work_order
+            # 获取与工序关联的部门
+            departments = []
+            if process:
+                # 使用反向关系 department_set 来访问关联的部门
+                departments = [
+                    {
+                        'id': dept.id,
+                        'name': dept.name,
+                        'code': dept.code
+                    }
+                    for dept in process.department_set.filter(is_active=True).order_by('sort_order')
+                ]
             return {
                 'process': {
                     'id': process.id if process else None,
                     'name': process.name if process else None,
-                    'code': process.code if process else None
+                    'code': process.code if process else None,
+                    'departments': departments  # 添加关联的部门列表
                 },
                 'work_order': {
                     'id': work_order.id if work_order else None,
