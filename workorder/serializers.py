@@ -341,7 +341,10 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
                 },
                 'work_order': {
                     'id': work_order.id if work_order else None,
-                    'order_number': work_order.order_number if work_order else None
+                    'order_number': work_order.order_number if work_order else None,
+                    'priority': work_order.priority if work_order else None,
+                    'priority_display': work_order.get_priority_display() if work_order else None,
+                    'delivery_date': work_order.delivery_date.strftime('%Y-%m-%d') if work_order and work_order.delivery_date else None
                 }
             }
         return None
