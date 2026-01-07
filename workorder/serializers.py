@@ -192,6 +192,9 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
     work_order_process_info = serializers.SerializerMethodField()
     # 任务操作历史
     logs = TaskLogSerializer(many=True, read_only=True)
+    # 分派信息
+    assigned_department_name = serializers.CharField(source='assigned_department.name', read_only=True, allow_null=True)
+    assigned_operator_name = serializers.SerializerMethodField()
     
     class Meta:
         model = WorkOrderTask
@@ -200,6 +203,12 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
         read_only_fields = ['work_order_process', 'task_type', 'work_content', 'production_quantity', 
                           'artwork', 'die', 'product', 'material', 'foiling_plate', 'embossing_plate',
                           'auto_calculate_quantity', 'created_at']
+    
+    def get_assigned_operator_name(self, obj):
+        """获取分派操作员名称"""
+        if obj.assigned_operator:
+            return f"{obj.assigned_operator.first_name}{obj.assigned_operator.last_name}"
+        return None
     
     def get_artwork_code(self, obj):
         """获取图稿编码"""

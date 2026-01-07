@@ -905,7 +905,53 @@ class WorkOrderProcess(models.Model):
         self.status = 'completed'
         self.actual_end_time = timezone.now()
         self.save()
+        
+        # 检查是否所有工序都完成，如果是则自动标记施工单为完成
+        work_order = self.work_order
+        all_processes_completed = work_order.order_processes.exclude(
+            status='completed'
+        ).count() == 0
+        
+        if all_processes_completed and work_order.status != 'completed':
+            work_order.status = 'completed'
+            work_order.save()
+        
         return True
+    
+    def _auto_assign_task(self, task):
+        """自动分派任务到部门和操作员
+        
+        分派规则：
+        1. 优先使用工序级别的分派（self.department, self.operator）
+        2. 如果工序未指定部门，根据工序与部门的关联关系自动分派
+        3. 如果工序未指定操作员，从分派部门中选择第一个操作员（可选）
+        """
+        # 优先使用工序级别的分派
+        if self.department:
+            task.assigned_department = self.department
+        else:
+            # 根据工序与部门的关联关系自动分派
+            # 查找负责该工序的部门（优先选择最匹配的部门）
+            departments = Department.objects.filter(
+                processes=self.process,
+                is_active=True
+            ).order_by('sort_order')
+            
+            if departments.exists():
+                # 优先选择子部门（车间），如果没有则选择父部门（生产部）
+                workshop_dept = departments.filter(parent__isnull=False).first()
+                if workshop_dept:
+                    task.assigned_department = workshop_dept
+                else:
+                    task.assigned_department = departments.first()
+        
+        # 如果工序已指定操作员，使用工序的操作员
+        if self.operator:
+            task.assigned_operator = self.operator
+        # 否则，如果已分派部门，可以从部门中选择操作员（可选，暂不实现）
+        # 未来可以扩展：根据部门、任务类型、工作量等智能分派操作员
+        
+        task.save()
     
     def generate_tasks(self):
         """为工序生成任务（在工序开始时调用）
@@ -938,7 +984,7 @@ class WorkOrderProcess(models.Model):
             # 任务内容：{施工单号}制版审核，生产数量：1
             # 图稿任务
             for artwork in work_order.artworks.all():
-                WorkOrderTask.objects.create(
+                task = WorkOrderTask.objects.create(
                     work_order_process=self,
                     task_type='plate_making',
                     artwork=artwork,
@@ -948,9 +994,10 @@ class WorkOrderProcess(models.Model):
                     status='pending',
                     auto_calculate_quantity=False
                 )
+                self._auto_assign_task(task)
             # 刀模任务
             for die in work_order.dies.all():
-                WorkOrderTask.objects.create(
+                task = WorkOrderTask.objects.create(
                     work_order_process=self,
                     task_type='plate_making',
                     die=die,
@@ -960,9 +1007,10 @@ class WorkOrderProcess(models.Model):
                     status='pending',
                     auto_calculate_quantity=False
                 )
+                self._auto_assign_task(task)
             # 烫金版任务
             for foiling_plate in work_order.foiling_plates.all():
-                WorkOrderTask.objects.create(
+                task = WorkOrderTask.objects.create(
                     work_order_process=self,
                     task_type='plate_making',
                     foiling_plate=foiling_plate,
@@ -972,9 +1020,10 @@ class WorkOrderProcess(models.Model):
                     status='pending',
                     auto_calculate_quantity=False
                 )
+                self._auto_assign_task(task)
             # 压凸版任务
             for embossing_plate in work_order.embossing_plates.all():
-                WorkOrderTask.objects.create(
+                task = WorkOrderTask.objects.create(
                     work_order_process=self,
                     task_type='plate_making',
                     embossing_plate=embossing_plate,
@@ -984,6 +1033,7 @@ class WorkOrderProcess(models.Model):
                     status='pending',
                     auto_calculate_quantity=False
                 )
+                self._auto_assign_task(task)
         
         elif process_code == ProcessCodes.CUT:
             # 开料工序：为需要开料的物料每个生成一个任务
@@ -991,7 +1041,7 @@ class WorkOrderProcess(models.Model):
             for material_item in work_order.materials.all():
                 if material_item.need_cutting:
                     quantity = self._parse_material_usage(material_item.material_usage)
-                    WorkOrderTask.objects.create(
+                    task = WorkOrderTask.objects.create(
                         work_order_process=self,
                         task_type='cutting',
                         material=material_item.material,
@@ -1001,12 +1051,13 @@ class WorkOrderProcess(models.Model):
                         status='pending',
                         auto_calculate_quantity=False
                     )
+                    self._auto_assign_task(task)
         
         elif process_code == ProcessCodes.PRT:
             # 印刷工序：为每个图稿生成一个任务
             # 任务内容：{施工单号}印刷，生产数量：施工单的生产数量
             for artwork in work_order.artworks.all():
-                WorkOrderTask.objects.create(
+                task = WorkOrderTask.objects.create(
                     work_order_process=self,
                     task_type='printing',
                     artwork=artwork,
@@ -1016,12 +1067,13 @@ class WorkOrderProcess(models.Model):
                     status='pending',
                     auto_calculate_quantity=False
                 )
+                self._auto_assign_task(task)
         
         elif process_code == ProcessCodes.FOIL_G:
             # 烫金工序：为每个烫金版生成一个任务（参考印刷任务）
             # 任务内容：{施工单号}烫金，生产数量：施工单的生产数量
             for foiling_plate in work_order.foiling_plates.all():
-                WorkOrderTask.objects.create(
+                task = WorkOrderTask.objects.create(
                     work_order_process=self,
                     task_type='foiling',
                     foiling_plate=foiling_plate,
@@ -1031,12 +1083,13 @@ class WorkOrderProcess(models.Model):
                     status='pending',
                     auto_calculate_quantity=False
                 )
+                self._auto_assign_task(task)
         
         elif process_code == ProcessCodes.EMB:
             # 压凸工序：为每个压凸版生成一个任务（参考印刷任务）
             # 任务内容：{施工单号}压凸，生产数量：施工单的生产数量
             for embossing_plate in work_order.embossing_plates.all():
-                WorkOrderTask.objects.create(
+                task = WorkOrderTask.objects.create(
                     work_order_process=self,
                     task_type='embossing',
                     embossing_plate=embossing_plate,
@@ -1046,12 +1099,13 @@ class WorkOrderProcess(models.Model):
                     status='pending',
                     auto_calculate_quantity=False
                 )
+                self._auto_assign_task(task)
         
         elif process_code == ProcessCodes.DIE:
             # 模切工序：为每个刀模生成一个任务（参考印刷任务）
             # 任务内容：{施工单号}模切，生产数量：施工单的生产数量
             for die in work_order.dies.all():
-                WorkOrderTask.objects.create(
+                task = WorkOrderTask.objects.create(
                     work_order_process=self,
                     task_type='die_cutting',
                     die=die,
@@ -1061,12 +1115,13 @@ class WorkOrderProcess(models.Model):
                     status='pending',
                     auto_calculate_quantity=False
                 )
+                self._auto_assign_task(task)
         
         elif process_code == ProcessCodes.PACK:
             # 包装工序：为每个产品生成一个任务
             # 任务内容：{产品名称}包装，生产数量：产品数量
             for product_item in work_order.products.all():
-                WorkOrderTask.objects.create(
+                task = WorkOrderTask.objects.create(
                     work_order_process=self,
                     task_type='packaging',
                     product=product_item.product,
@@ -1076,11 +1131,12 @@ class WorkOrderProcess(models.Model):
                     status='pending',
                     auto_calculate_quantity=False
                 )
+                self._auto_assign_task(task)
         
         else:
             # 其他工序：生成通用任务
             # 任务内容：{工序名称}：{施工单号}，生产数量：施工单的生产数量
-            WorkOrderTask.objects.create(
+            task = WorkOrderTask.objects.create(
                 work_order_process=self,
                 task_type='general',
                 work_content=f'{process.name}：{order_number}',
@@ -1089,6 +1145,7 @@ class WorkOrderProcess(models.Model):
                 status='pending',
                 auto_calculate_quantity=False
             )
+            self._auto_assign_task(task)
     
     def _parse_material_usage(self, usage_str):
         """解析物料用量字符串，提取数字部分"""
@@ -1267,6 +1324,13 @@ class WorkOrderTask(models.Model):
     embossing_plate = models.ForeignKey('EmbossingPlate', on_delete=models.CASCADE, null=True, blank=True,
                                        related_name='tasks', verbose_name='关联压凸版')
     production_requirements = models.TextField('生产要求', blank=True, help_text='生产过程中的特殊要求')
+    # 任务分派（任务级别的分派，支持精细化管理）
+    assigned_department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True,
+                                           related_name='assigned_tasks', verbose_name='分派部门',
+                                           help_text='该任务分派给哪个部门执行')
+    assigned_operator = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                         related_name='assigned_tasks', verbose_name='分派操作员',
+                                         help_text='该任务分派给哪个操作员执行')
     status = models.CharField('状态', max_length=20, 
                              choices=[('pending', '待开始'), ('in_progress', '进行中'), 
                                      ('completed', '已完成'), ('cancelled', '已取消')],

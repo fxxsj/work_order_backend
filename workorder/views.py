@@ -548,10 +548,12 @@ class WorkOrderTaskFilter(FilterSet):
     process = NumberFilter(field_name='work_order_process__process', help_text='按工序筛选')
     status = CharFilter(field_name='status')
     task_type = CharFilter(field_name='task_type')
+    assigned_department = NumberFilter(field_name='assigned_department', help_text='按分派部门筛选')
+    assigned_operator = NumberFilter(field_name='assigned_operator', help_text='按分派操作员筛选')
     
     class Meta:
         model = WorkOrderTask
-        fields = ['work_order_process', 'process', 'status', 'task_type']
+        fields = ['work_order_process', 'process', 'status', 'task_type', 'assigned_department', 'assigned_operator']
 
 
 class WorkOrderTaskViewSet(viewsets.ModelViewSet):
@@ -559,13 +561,13 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
     queryset = WorkOrderTask.objects.select_related(
         'work_order_process', 'work_order_process__process', 
         'work_order_process__work_order', 'artwork', 'die', 'product', 'material',
-        'foiling_plate', 'embossing_plate'
+        'foiling_plate', 'embossing_plate', 'assigned_department', 'assigned_operator'
     ).prefetch_related('logs', 'logs__operator')
     serializer_class = WorkOrderTaskSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = WorkOrderTaskFilter
     search_fields = ['work_content', 'production_requirements']
-    ordering_fields = ['created_at', 'updated_at']
+    ordering_fields = ['created_at', 'updated_at', 'assigned_department', 'assigned_operator']
     ordering = ['-created_at']
     
     def perform_update(self, serializer):
@@ -837,6 +839,47 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         # 检查工序是否完成
         task.work_order_process.check_and_update_status()
         
+        serializer = self.get_serializer(task)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def assign(self, request, pk=None):
+        """分派任务到部门和操作员"""
+        task = self.get_object()
+        department_id = request.data.get('assigned_department')
+        operator_id = request.data.get('assigned_operator')
+        
+        # 更新分派部门
+        if department_id is not None:
+            if department_id:
+                try:
+                    from .models import Department
+                    department = Department.objects.get(id=department_id)
+                    task.assigned_department = department
+                except Department.DoesNotExist:
+                    return Response(
+                        {'error': '部门不存在'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            else:
+                task.assigned_department = None
+        
+        # 更新分派操作员
+        if operator_id is not None:
+            if operator_id:
+                try:
+                    from django.contrib.auth.models import User
+                    operator = User.objects.get(id=operator_id)
+                    task.assigned_operator = operator
+                except User.DoesNotExist:
+                    return Response(
+                        {'error': '操作员不存在'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            else:
+                task.assigned_operator = None
+        
+        task.save()
         serializer = self.get_serializer(task)
         return Response(serializer.data)
 
