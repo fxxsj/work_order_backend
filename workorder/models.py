@@ -902,6 +902,16 @@ class WorkOrderProcess(models.Model):
                         if work_order_material.purchase_status != 'cut':
                             return False
 
+        # 汇总任务的完成数量和不良品数量
+        total_quantity_completed = sum(task.quantity_completed or 0 for task in tasks)
+        total_quantity_defective = sum(task.quantity_defective or 0 for task in tasks)
+        
+        # 更新工序的完成数量和不良品数量（如果工序数量为0，则使用汇总值）
+        if not self.quantity_completed:
+            self.quantity_completed = total_quantity_completed
+        if not self.quantity_defective:
+            self.quantity_defective = total_quantity_defective
+        
         self.status = 'completed'
         self.actual_end_time = timezone.now()
         self.save()
@@ -1356,6 +1366,8 @@ class WorkOrderTask(models.Model):
     production_quantity = models.IntegerField('生产数量', default=0, help_text='该任务需要生产的数量')
     quantity_completed = models.IntegerField('完成数量', default=0, 
                                            help_text='任务完成数量，可自动计算或手动输入')
+    quantity_defective = models.IntegerField('不良品数量', default=0,
+                                           help_text='任务不良品数量，在任务完成时记录')
     auto_calculate_quantity = models.BooleanField('自动计算数量', default=True,
                                                   help_text='是否自动计算完成数量')
     # 关联对象（根据任务类型，只有一个字段会有值）

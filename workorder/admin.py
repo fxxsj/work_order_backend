@@ -166,7 +166,7 @@ class WorkOrderProcessInline(admin.TabularInline):
     extra = 1
     fields = ['sequence', 'process', 'status', 'operator', 
               'planned_start_time', 'planned_end_time',
-              'actual_start_time', 'actual_end_time', 'quantity_completed']
+              'actual_start_time', 'actual_end_time', 'quantity_completed', 'quantity_defective']
     autocomplete_fields = ['process', 'operator']
 
 
@@ -675,7 +675,7 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
         'work_order_process', 'task_type', 'work_content', 
         'assigned_department', 'assigned_operator',
         'artwork', 'die', 'product', 'material', 'foiling_plate', 'embossing_plate',
-        'production_quantity', 'quantity_completed', 'status_badge', 'created_at'
+        'production_quantity', 'quantity_completed', 'quantity_defective', 'status_badge', 'created_at'
     ]
     
     list_filter = [
@@ -710,7 +710,7 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
             'description': '根据任务类型，关联相应的图稿、刀模、产品、物料、烫金版或压凸版'
         }),
         ('数量信息', {
-            'fields': ('production_quantity', 'quantity_completed', 'auto_calculate_quantity')
+            'fields': ('production_quantity', 'quantity_completed', 'quantity_defective', 'auto_calculate_quantity')
         }),
         ('系统信息', {
             'fields': ('created_at', 'updated_at'),

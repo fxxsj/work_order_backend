@@ -509,7 +509,13 @@ class WorkOrderProcessViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
-        """完成工序"""
+        """完成工序
+        
+        完成逻辑：
+        1. 优先检查是否所有任务已完成，如果是则自动完成（推荐方式）
+        2. 如果任务未完成，需要提供强制完成原因（force_complete=True）
+        3. 强制完成时会同步更新所有任务状态为已完成
+        """
         process = self.get_object()
         
         # 检查状态
@@ -522,6 +528,73 @@ class WorkOrderProcessViewSet(viewsets.ModelViewSet):
         # 获取完成数量和不良品数量
         quantity_completed = request.data.get('quantity_completed', 0)
         quantity_defective = request.data.get('quantity_defective', 0)
+        force_complete = request.data.get('force_complete', False)
+        force_reason = request.data.get('force_reason', '')
+        
+        # 检查任务完成情况
+        tasks = process.tasks.all()
+        incomplete_tasks = tasks.exclude(status='completed')
+        
+        # 如果任务未完成，尝试自动完成（检查是否满足自动完成条件）
+        if incomplete_tasks.exists():
+            # 尝试自动完成检查
+            if process.check_and_update_status():
+                # 自动完成成功，汇总任务的不良品数量
+                # 如果手动提供了不良品数量，则使用手动值；否则使用任务汇总值
+                if quantity_defective > 0:
+                    process.quantity_defective = quantity_defective
+                # quantity_completed 已经在 check_and_update_status 中汇总了
+                # 如果手动提供了完成数量，则使用手动值（覆盖汇总值）
+                if quantity_completed > 0:
+                    process.quantity_completed = quantity_completed
+                process.save()
+                
+                ProcessLog.objects.create(
+                    work_order_process=process,
+                    log_type='complete',
+                    content=f'自动完成工序（所有任务已完成），完成数量：{process.quantity_completed}，不良品数量：{process.quantity_defective}',
+                    operator=request.user
+                )
+                
+                serializer = self.get_serializer(process)
+                return Response(serializer.data)
+            
+            # 自动完成失败，需要强制完成
+            if not force_complete:
+                incomplete_count = incomplete_tasks.count()
+                return Response(
+                    {
+                        'error': f'该工序还有 {incomplete_count} 个任务未完成，无法完成工序',
+                        'incomplete_tasks': incomplete_count,
+                        'requires_force': True,
+                        'message': '请先完成所有任务，或提供强制完成原因进行强制完成'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 强制完成：需要提供原因
+            if not force_reason:
+                return Response(
+                    {'error': '强制完成工序需要提供完成原因'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 强制完成：将所有未完成的任务标记为已完成
+            for task in incomplete_tasks:
+                task.status = 'completed'
+                # 如果任务有生产数量但完成数量为0，设置为生产数量
+                if task.production_quantity and not task.quantity_completed:
+                    task.quantity_completed = task.production_quantity
+                task.save()
+                
+                # 记录任务强制完成日志
+                from .models import TaskLog
+                TaskLog.objects.create(
+                    task=task,
+                    log_type='status_change',
+                    content=f'强制完成（因工序强制完成），原因：{force_reason}',
+                    operator=request.user
+                )
         
         # 更新工序信息
         process.quantity_completed = quantity_completed
@@ -531,12 +604,26 @@ class WorkOrderProcessViewSet(viewsets.ModelViewSet):
         process.save()
         
         # 记录日志
+        log_content = f'完成工序，完成数量：{quantity_completed}，不良品数量：{quantity_defective}'
+        if force_complete:
+            log_content += f'（强制完成，原因：{force_reason}）'
+        
         ProcessLog.objects.create(
             work_order_process=process,
             log_type='complete',
-            content=f'完成工序，完成数量：{quantity_completed}，不良品数量：{quantity_defective}',
+            content=log_content,
             operator=request.user
         )
+        
+        # 检查是否所有工序都完成，如果是则自动标记施工单为完成
+        work_order = process.work_order
+        all_processes_completed = work_order.order_processes.exclude(
+            status='completed'
+        ).count() == 0
+        
+        if all_processes_completed and work_order.status != 'completed':
+            work_order.status = 'completed'
+            work_order.save()
         
         serializer = self.get_serializer(process)
         return Response(serializer.data)
@@ -726,6 +813,7 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         
         # 获取前端传递的数据
         quantity_increment = request.data.get('quantity_increment')
+        quantity_defective = request.data.get('quantity_defective', 0)  # 不良品数量（增量或绝对值）
         notes = request.data.get('notes', '')
         artwork_ids = request.data.get('artwork_ids', [])
         die_ids = request.data.get('die_ids', [])
@@ -813,6 +901,13 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         
         # 更新任务数量（增量更新）
         task.quantity_completed = new_quantity_completed
+        
+        # 更新不良品数量（如果提供了）
+        if quantity_defective is not None:
+            # 如果quantity_defective是增量，则累加；如果是绝对值，则直接设置
+            # 这里假设前端传递的是增量值，如果需要支持绝对值，可以添加参数
+            task.quantity_defective = (task.quantity_defective or 0) + quantity_defective
+        
         if notes:
             task.production_requirements = notes
         
@@ -864,6 +959,7 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         
         # 获取前端传递的数据
         completion_reason = request.data.get('completion_reason', '')
+        quantity_defective = request.data.get('quantity_defective', 0)  # 不良品数量
         notes = request.data.get('notes', '')
         artwork_ids = request.data.get('artwork_ids', [])
         die_ids = request.data.get('die_ids', [])
@@ -936,6 +1032,10 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         # 制版任务：完成数量固定为1
         if task.task_type == 'plate_making':
             task.quantity_completed = 1
+        
+        # 更新不良品数量（如果提供了）
+        if quantity_defective is not None:
+            task.quantity_defective = quantity_defective
         
         task.save()
         
