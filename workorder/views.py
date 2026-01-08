@@ -1291,6 +1291,139 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(task)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def collaboration_stats(self, request):
+        """协作统计：按操作员汇总完成任务数量、完成时间、不良品率等"""
+        from django.contrib.auth.models import User
+        from django.db.models import Count, Sum, Avg, Q, F
+        from datetime import datetime, timedelta
+        
+        # 获取查询参数
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        department_id = request.query_params.get('department_id')
+        
+        # 构建时间过滤条件
+        time_filter = Q()
+        if start_date:
+            try:
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+                time_filter &= Q(logs__created_at__gte=start_date_obj)
+            except ValueError:
+                pass
+        if end_date:
+            try:
+                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+                time_filter &= Q(logs__created_at__lt=end_date_obj)
+            except ValueError:
+                pass
+        
+        # 构建部门过滤条件
+        dept_filter = Q()
+        if department_id:
+            dept_filter = Q(assigned_department_id=department_id)
+        
+        # 获取所有有任务的操作员
+        operators = User.objects.filter(
+            assigned_tasks__isnull=False,
+            is_active=True
+        ).exclude(
+            is_superuser=True
+        ).distinct()
+        
+        if department_id:
+            operators = operators.filter(profile__departments__id=department_id).distinct()
+        
+        stats_list = []
+        for operator in operators:
+            # 获取该操作员的任务
+            task_filter = Q(assigned_operator=operator) & dept_filter
+            tasks = WorkOrderTask.objects.filter(task_filter)
+            
+            # 统计总数
+            total_tasks = tasks.count()
+            completed_tasks = tasks.filter(status='completed').count()
+            in_progress_tasks = tasks.filter(status='in_progress').count()
+            pending_tasks = tasks.filter(status='pending').count()
+            
+            # 统计完成数量和不良品数量（只统计已完成的任务）
+            completed_task_data = tasks.filter(
+                Q(status='completed') & time_filter
+            ).aggregate(
+                total_completed_quantity=Sum('quantity_completed', default=0),
+                total_defective_quantity=Sum('quantity_defective', default=0),
+                total_production_quantity=Sum('production_quantity', default=0)
+            )
+            
+            total_completed_quantity = completed_task_data['total_completed_quantity'] or 0
+            total_defective_quantity = completed_task_data['total_defective_quantity'] or 0
+            total_production_quantity = completed_task_data['total_production_quantity'] or 0
+            
+            # 计算不良品率
+            defective_rate = 0
+            if total_completed_quantity > 0:
+                defective_rate = round((total_defective_quantity / total_completed_quantity) * 100, 2)
+            
+            # 统计平均完成时间（从任务创建到完成的时间）
+            avg_completion_hours = None
+            completed_tasks_with_times = tasks.filter(
+                status='completed',
+                created_at__isnull=False
+            ).filter(time_filter)
+            
+            if completed_tasks_with_times.exists():
+                # 计算平均完成时间（小时）
+                completion_times = []
+                for task in completed_tasks_with_times:
+                    completion_log = task.logs.filter(log_type='complete').first()
+                    if completion_log and task.created_at:
+                        duration = completion_log.created_at - task.created_at
+                        completion_times.append(duration.total_seconds() / 3600)  # 转换为小时
+                
+                if completion_times:
+                    avg_completion_hours = round(sum(completion_times) / len(completion_times), 2)
+            
+            # 获取操作员所属部门
+            departments = operator.profile.departments.all() if hasattr(operator, 'profile') else []
+            dept_names = [dept.name for dept in departments]
+            
+            stats_list.append({
+                'operator_id': operator.id,
+                'operator_username': operator.username,
+                'operator_name': operator.get_full_name() or operator.username,
+                'departments': dept_names,
+                'total_tasks': total_tasks,
+                'completed_tasks': completed_tasks,
+                'in_progress_tasks': in_progress_tasks,
+                'pending_tasks': pending_tasks,
+                'total_completed_quantity': total_completed_quantity,
+                'total_defective_quantity': total_defective_quantity,
+                'total_production_quantity': total_production_quantity,
+                'defective_rate': defective_rate,
+                'avg_completion_hours': avg_completion_hours,
+                'completion_rate': round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 2)
+            })
+        
+        # 按完成数量排序（降序）
+        stats_list.sort(key=lambda x: x['total_completed_quantity'], reverse=True)
+        
+        return Response({
+            'results': stats_list,
+            'summary': {
+                'total_operators': len(stats_list),
+                'total_tasks': sum(s['total_tasks'] for s in stats_list),
+                'total_completed_tasks': sum(s['completed_tasks'] for s in stats_list),
+                'total_completed_quantity': sum(s['total_completed_quantity'] for s in stats_list),
+                'total_defective_quantity': sum(s['total_defective_quantity'] for s in stats_list),
+                'overall_defective_rate': round(
+                    (sum(s['total_defective_quantity'] for s in stats_list) / 
+                     sum(s['total_completed_quantity'] for s in stats_list) * 100)
+                    if sum(s['total_completed_quantity'] for s in stats_list) > 0 else 0, 
+                    2
+                )
+            }
+        })
 
 
 class WorkOrderProductViewSet(viewsets.ModelViewSet):

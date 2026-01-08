@@ -1006,8 +1006,32 @@ class WorkOrderProcess(models.Model):
         # 如果工序已指定操作员，使用工序的操作员
         if self.operator:
             task.assigned_operator = self.operator
-        # 否则，如果已分派部门，可以从部门中选择操作员（可选，暂不实现）
-        # 未来可以扩展：根据部门、任务类型、工作量等智能分派操作员
+        elif task.assigned_department:
+            # 如果已分派部门但未分派操作员，从部门中选择操作员
+            # 策略：优先选择任务数量较少的操作员（工作量均衡）
+            department_users = User.objects.filter(
+                profile__departments=task.assigned_department,
+                is_active=True
+            ).exclude(
+                is_superuser=True  # 排除超级管理员
+            )
+            
+            if department_users.exists():
+                # 统计每个操作员的待开始和进行中的任务数量
+                from django.db.models import Count, Q
+                
+                # 获取每个用户的当前任务数量（待开始 + 进行中）
+                users_with_task_count = []
+                for user in department_users:
+                    task_count = WorkOrderTask.objects.filter(
+                        assigned_operator=user,
+                        status__in=['pending', 'in_progress']
+                    ).count()
+                    users_with_task_count.append((user, task_count))
+                
+                # 按任务数量排序，优先选择任务数量最少的操作员
+                users_with_task_count.sort(key=lambda x: x[1])
+                task.assigned_operator = users_with_task_count[0][0]
         
         task.save()
     
