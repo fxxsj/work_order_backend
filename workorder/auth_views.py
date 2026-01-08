@@ -173,3 +173,29 @@ def get_salespersons(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_users_by_department(request):
+    """根据部门获取用户列表"""
+    from .models import UserProfile
+    
+    try:
+        department_id = request.query_params.get('department_id')
+        
+        # 获取所有活跃用户
+        users = User.objects.filter(is_active=True).exclude(is_superuser=True)
+        
+        # 如果指定了部门，则过滤该部门的用户
+        if department_id:
+            users = users.filter(profile__departments__id=department_id).distinct()
+        
+        users = users.order_by('username')
+        serializer = UserSerializer(users, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+

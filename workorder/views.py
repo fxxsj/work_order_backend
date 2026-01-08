@@ -11,7 +11,7 @@ from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
     Die, DieProduct, FoilingPlate, FoilingPlateProduct, EmbossingPlate, EmbossingPlateProduct,
-    WorkOrderTask, ProductGroup, ProductGroupItem, WorkOrderApprovalLog
+    WorkOrderTask, ProductGroup, ProductGroupItem, WorkOrderApprovalLog, TaskAssignmentRule
 )
 from .serializers import (
     CustomerSerializer, DepartmentSerializer, ProcessSerializer, ProductSerializer, 
@@ -23,7 +23,8 @@ from .serializers import (
     ArtworkSerializer, ArtworkProductSerializer,
     DieSerializer, DieProductSerializer, FoilingPlateSerializer, FoilingPlateProductSerializer,
     EmbossingPlateSerializer, EmbossingPlateProductSerializer,
-    WorkOrderTaskSerializer, ProductGroupSerializer, ProductGroupItemSerializer
+    WorkOrderTaskSerializer, ProductGroupSerializer, ProductGroupItemSerializer,
+    TaskAssignmentRuleSerializer
 )
 
 
@@ -1293,6 +1294,99 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
+    def assignment_history(self, request):
+        """分派历史查询：查询任务分派调整历史记录"""
+        from .models import TaskLog
+        from django.db.models import Q
+        
+        # 获取查询参数
+        task_id = request.query_params.get('task_id')
+        department_id = request.query_params.get('department_id')
+        operator_id = request.query_params.get('operator_id')
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        
+        # 构建查询条件：筛选包含"调整任务分派"的日志
+        query = Q(log_type='status_change', content__contains='调整任务分派')
+        
+        if task_id:
+            query &= Q(task_id=task_id)
+        
+        if department_id:
+            # 通过任务查询部门
+            query &= Q(task__assigned_department_id=department_id)
+        
+        if operator_id:
+            # 通过任务或日志操作员查询
+            query &= (Q(task__assigned_operator_id=operator_id) | Q(operator_id=operator_id))
+        
+        if start_date:
+            try:
+                from datetime import datetime
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+                query &= Q(created_at__gte=start_date_obj)
+            except ValueError:
+                pass
+        
+        if end_date:
+            try:
+                from datetime import datetime, timedelta
+                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+                query &= Q(created_at__lt=end_date_obj)
+            except ValueError:
+                pass
+        
+        # 查询日志
+        logs = TaskLog.objects.filter(query).select_related(
+            'task', 'task__assigned_department', 'task__assigned_operator',
+            'operator', 'task__work_order_process', 'task__work_order_process__work_order'
+        ).order_by('-created_at')
+        
+        # 分页
+        total = logs.count()
+        start = (page - 1) * page_size
+        end = start + page_size
+        logs = logs[start:end]
+        
+        # 序列化结果
+        from .serializers import TaskLogSerializer
+        serializer = TaskLogSerializer()
+        
+        # 构建响应数据，包含额外信息
+        results = []
+        for log in logs:
+            log_data = serializer.to_representation(log)
+            # 添加任务和施工单信息
+            if log.task:
+                log_data['task_info'] = {
+                    'id': log.task.id,
+                    'work_content': log.task.work_content,
+                    'assigned_department': log.task.assigned_department.name if log.task.assigned_department else None,
+                    'assigned_operator': log.task.assigned_operator.username if log.task.assigned_operator else None,
+                }
+                if log.task.work_order_process and log.task.work_order_process.work_order:
+                    wo = log.task.work_order_process.work_order
+                    log_data['work_order_info'] = {
+                        'id': wo.id,
+                        'order_number': wo.order_number,
+                        'customer_name': wo.customer.name if wo.customer else None,
+                    }
+            # 添加操作员名称
+            if log.operator:
+                log_data['operator_name'] = log.operator.username
+            results.append(log_data)
+        
+        return Response({
+            'results': results,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total + page_size - 1) // page_size
+        })
+    
+    @action(detail=False, methods=['get'])
     def collaboration_stats(self, request):
         """协作统计：按操作员汇总完成任务数量、完成时间、不良品率等"""
         from django.contrib.auth.models import User
@@ -1650,4 +1744,16 @@ class EmbossingPlateProductViewSet(viewsets.ModelViewSet):
     filterset_fields = ['embossing_plate', 'product']
     ordering_fields = ['sort_order']
     ordering = ['embossing_plate', 'sort_order']
+
+
+class TaskAssignmentRuleViewSet(viewsets.ModelViewSet):
+    """任务分派规则视图集"""
+    queryset = TaskAssignmentRule.objects.select_related('process', 'department').all()
+    serializer_class = TaskAssignmentRuleSerializer
+    permission_classes = [DjangoModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['process', 'department', 'is_active']
+    search_fields = ['process__name', 'process__code', 'department__name', 'department__code', 'notes']
+    ordering_fields = ['priority', 'created_at', 'updated_at']
+    ordering = ['process', '-priority', 'department']
 

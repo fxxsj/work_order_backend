@@ -944,96 +944,104 @@ class WorkOrderProcess(models.Model):
         if self.department:
             task.assigned_department = self.department
         else:
-            # 根据工序与部门的关联关系自动分派
-            # 查找负责该工序的部门
-            departments = Department.objects.filter(
+            # 使用配置的分派规则
+            from .models import TaskAssignmentRule
+            assignment_rules = TaskAssignmentRule.objects.filter(
+                process=self.process,
+                is_active=True
+            ).select_related('department').order_by('-priority', 'department')
+            
+            # 获取可用部门列表（工序关联的部门）
+            available_departments = Department.objects.filter(
                 processes=self.process,
                 is_active=True
             )
             
-            if departments.exists():
-                # 获取工序编码，用于匹配专业车间
-                process_code = self.process.code.lower()
+            if assignment_rules.exists():
+                # 使用配置的规则，按优先级选择
+                # 检查规则中的部门是否在可用部门列表中
+                for rule in assignment_rules:
+                    if rule.department in available_departments:
+                        task.assigned_department = rule.department
+                        break
                 
-                # 1. 优先选择专业车间：部门编码与工序编码匹配（如 die_cutting 对应 DIE）
-                # 映射关系：
-                # - DIE (模切) -> die_cutting (模切车间)
-                # - PRT (印刷) -> printing (印刷车间)
-                # - CUT (开料) -> cutting (裁切车间)
-                # - PACK (包装) -> packaging (包装车间)
-                # - CTP (制版) -> design (设计部)
-                process_dept_mapping = {
-                    'die': 'die_cutting',  # 模切 -> 模切车间
-                    'prt': 'printing',     # 印刷 -> 印刷车间
-                    'cut': 'cutting',      # 开料 -> 裁切车间
-                    'pack': 'packaging',   # 包装 -> 包装车间
-                    'ctp': 'design',       # 制版 -> 设计部
-                }
-                
-                # 查找匹配的专业车间
-                matched_dept_code = process_dept_mapping.get(process_code)
-                if matched_dept_code:
-                    matched_dept = departments.filter(code=matched_dept_code).first()
-                    if matched_dept:
-                        task.assigned_department = matched_dept
-                    else:
-                        # 如果匹配的专业车间不在列表中，继续其他逻辑
-                        pass
-                
-                # 2. 如果没有找到匹配的专业车间，优先选择非外协车间的专业车间
-                if not task.assigned_department:
-                    # 排除外协车间，优先选择其他专业车间（子部门）
-                    professional_depts = departments.filter(
-                        parent__isnull=False
-                    ).exclude(code='outsourcing').order_by('sort_order')
-                    
-                    if professional_depts.exists():
-                        task.assigned_department = professional_depts.first()
-                    else:
-                        # 3. 如果只有外协车间，则选择外协车间
-                        outsourcing_dept = departments.filter(code='outsourcing').first()
-                        if outsourcing_dept:
-                            task.assigned_department = outsourcing_dept
-                        else:
-                            # 4. 如果都没有，选择父部门（生产部）
-                            parent_dept = departments.filter(parent__isnull=True).first()
-                            if parent_dept:
-                                task.assigned_department = parent_dept
-                            else:
-                                # 最后兜底：选择第一个部门
-                                task.assigned_department = departments.order_by('sort_order').first()
+                # 如果配置的规则都没有匹配到，选择第一个可用部门作为兜底
+                if not task.assigned_department and available_departments.exists():
+                    task.assigned_department = available_departments.order_by('sort_order').first()
+            else:
+                # 如果没有配置规则，选择第一个可用部门作为兜底
+                if available_departments.exists():
+                    task.assigned_department = available_departments.order_by('sort_order').first()
         
         # 如果工序已指定操作员，使用工序的操作员
         if self.operator:
             task.assigned_operator = self.operator
         elif task.assigned_department:
             # 如果已分派部门但未分派操作员，从部门中选择操作员
-            # 策略：优先选择任务数量较少的操作员（工作量均衡）
-            department_users = User.objects.filter(
-                profile__departments=task.assigned_department,
+            # 优先使用配置规则中的操作员选择策略
+            from .models import TaskAssignmentRule
+            assignment_rule = TaskAssignmentRule.objects.filter(
+                process=self.process,
+                department=task.assigned_department,
                 is_active=True
-            ).exclude(
-                is_superuser=True  # 排除超级管理员
-            )
+            ).order_by('-priority').first()
             
-            if department_users.exists():
-                # 统计每个操作员的待开始和进行中的任务数量
-                from django.db.models import Count, Q
-                
-                # 获取每个用户的当前任务数量（待开始 + 进行中）
-                users_with_task_count = []
-                for user in department_users:
-                    task_count = WorkOrderTask.objects.filter(
-                        assigned_operator=user,
-                        status__in=['pending', 'in_progress']
-                    ).count()
-                    users_with_task_count.append((user, task_count))
-                
-                # 按任务数量排序，优先选择任务数量最少的操作员
-                users_with_task_count.sort(key=lambda x: x[1])
-                task.assigned_operator = users_with_task_count[0][0]
+            strategy = 'least_tasks'  # 默认策略
+            if assignment_rule:
+                strategy = assignment_rule.operator_selection_strategy
+            
+            task.assigned_operator = self._select_operator_by_strategy(
+                task.assigned_department, strategy
+            )
         
         task.save()
+    
+    def _select_operator_by_strategy(self, department, strategy):
+        """根据策略从部门中选择操作员"""
+        from django.contrib.auth.models import User
+        from django.db.models import Count, Q
+        import random
+        
+        department_users = User.objects.filter(
+            profile__departments=department,
+            is_active=True
+        ).exclude(
+            is_superuser=True  # 排除超级管理员
+        )
+        
+        if not department_users.exists():
+            return None
+        
+        if strategy == 'least_tasks':
+            # 优先选择任务数量较少的操作员（工作量均衡）
+            users_with_task_count = []
+            for user in department_users:
+                task_count = WorkOrderTask.objects.filter(
+                    assigned_operator=user,
+                    status__in=['pending', 'in_progress']
+                ).count()
+                users_with_task_count.append((user, task_count))
+            
+            # 按任务数量排序，优先选择任务数量最少的操作员
+            users_with_task_count.sort(key=lambda x: x[1])
+            return users_with_task_count[0][0]
+        
+        elif strategy == 'random':
+            # 随机选择
+            return random.choice(list(department_users))
+        
+        elif strategy == 'round_robin':
+            # 轮询分配（简单实现：按ID排序后选择）
+            # TODO: 可以实现更复杂的轮询逻辑（记录上次分配的操作员）
+            return department_users.order_by('id').first()
+        
+        elif strategy == 'first_available':
+            # 选择第一个可用操作员
+            return department_users.first()
+        
+        else:
+            # 默认使用least_tasks策略
+            return self._select_operator_by_strategy(department, 'least_tasks')
     
     def generate_tasks(self):
         """为工序生成任务（在工序开始时调用）
@@ -1515,4 +1523,42 @@ class WorkOrderApprovalLog(models.Model):
     def __str__(self):
         status_display = dict(WorkOrder.APPROVAL_STATUS_CHOICES).get(self.approval_status, self.approval_status)
         return f"{self.work_order.order_number} - {status_display} - {self.approved_by.username if self.approved_by else '未知'}"
+
+
+class TaskAssignmentRule(models.Model):
+    """任务分派规则配置"""
+    OPERATOR_SELECTION_STRATEGY_CHOICES = [
+        ('least_tasks', '任务数量最少（工作量均衡）'),
+        ('random', '随机选择'),
+        ('round_robin', '轮询分配'),
+        ('first_available', '第一个可用'),
+    ]
+    
+    process = models.ForeignKey(Process, on_delete=models.CASCADE,
+                               related_name='assignment_rules', verbose_name='工序',
+                               help_text='该规则适用的工序')
+    department = models.ForeignKey(Department, on_delete=models.CASCADE,
+                                  related_name='assignment_rules', verbose_name='分派部门',
+                                  help_text='该工序应分派到的部门')
+    priority = models.IntegerField('优先级', default=0,
+                                  help_text='优先级越高越优先匹配（0-100）')
+    operator_selection_strategy = models.CharField('操作员选择策略', max_length=20,
+                                                   choices=OPERATOR_SELECTION_STRATEGY_CHOICES,
+                                                   default='least_tasks',
+                                                   help_text='从部门中选择操作员的策略')
+    is_active = models.BooleanField('是否启用', default=True,
+                                   help_text='是否启用该规则')
+    notes = models.TextField('备注', blank=True,
+                            help_text='规则说明或备注')
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+    
+    class Meta:
+        verbose_name = '任务分派规则'
+        verbose_name_plural = '任务分派规则管理'
+        ordering = ['process', '-priority', 'department']
+        unique_together = [['process', 'department']]  # 同一工序同一部门只能有一条规则
+    
+    def __str__(self):
+        return f"{self.process.name} -> {self.department.name} (优先级:{self.priority})"
 

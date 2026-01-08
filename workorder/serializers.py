@@ -4,7 +4,7 @@ from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, TaskLog, Artwork, ArtworkProduct,
     Die, DieProduct, FoilingPlate, FoilingPlateProduct, EmbossingPlate, EmbossingPlateProduct,
-    WorkOrderTask, ProductGroup, ProductGroupItem, WorkOrderApprovalLog
+    WorkOrderTask, ProductGroup, ProductGroupItem, WorkOrderApprovalLog, TaskAssignmentRule
 )
 
 
@@ -167,6 +167,22 @@ class WorkOrderApprovalLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkOrderApprovalLog
         fields = '__all__'
+
+
+class TaskAssignmentRuleSerializer(serializers.ModelSerializer):
+    """任务分派规则序列化器"""
+    process_name = serializers.CharField(source='process.name', read_only=True)
+    process_code = serializers.CharField(source='process.code', read_only=True)
+    department_name = serializers.CharField(source='department.name', read_only=True)
+    department_code = serializers.CharField(source='department.code', read_only=True)
+    operator_selection_strategy_display = serializers.CharField(
+        source='get_operator_selection_strategy_display', read_only=True
+    )
+    
+    class Meta:
+        model = TaskAssignmentRule
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
 
 
 class WorkOrderTaskSerializer(serializers.ModelSerializer):

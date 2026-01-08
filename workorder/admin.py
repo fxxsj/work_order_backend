@@ -5,7 +5,8 @@ from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
     Die, DieProduct, FoilingPlate, FoilingPlateProduct, EmbossingPlate, EmbossingPlateProduct,
-    WorkOrderTask, ProductGroup, ProductGroupItem, UserProfile, WorkOrderApprovalLog
+    WorkOrderTask, ProductGroup, ProductGroupItem, UserProfile, WorkOrderApprovalLog,
+    TaskAssignmentRule
 )
 
 
@@ -824,4 +825,49 @@ class WorkOrderApprovalLogAdmin(admin.ModelAdmin):
         """是否有拒绝原因"""
         return '是' if obj.rejection_reason else '否'
     has_rejection_reason.short_description = '有拒绝原因'
+
+
+@admin.register(TaskAssignmentRule)
+class TaskAssignmentRuleAdmin(admin.ModelAdmin):
+    """任务分派规则管理"""
+    list_display = [
+        'process', 'department', 'priority', 'operator_selection_strategy_display',
+        'is_active_badge', 'notes', 'created_at', 'updated_at'
+    ]
+    list_filter = ['is_active', 'operator_selection_strategy', 'created_at']
+    search_fields = ['process__name', 'process__code', 'department__name', 'department__code', 'notes']
+    autocomplete_fields = ['process', 'department']
+    ordering = ['process', '-priority', 'department']
+    readonly_fields = ['created_at', 'updated_at']
+    
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('process', 'department', 'priority', 'is_active')
+        }),
+        ('操作员选择策略', {
+            'fields': ('operator_selection_strategy',),
+            'description': '从部门中选择操作员的策略'
+        }),
+        ('备注', {
+            'fields': ('notes',),
+            'classes': ('collapse',)
+        }),
+        ('系统信息', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def is_active_badge(self, obj):
+        """显示启用状态"""
+        if obj.is_active:
+            return format_html('<span style="color: #67C23A;">✓ 启用</span>')
+        else:
+            return format_html('<span style="color: #909399;">✗ 禁用</span>')
+    is_active_badge.short_description = '状态'
+    
+    def operator_selection_strategy_display(self, obj):
+        """显示操作员选择策略"""
+        return obj.get_operator_selection_strategy_display()
+    operator_selection_strategy_display.short_description = '操作员选择策略'
 

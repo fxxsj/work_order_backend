@@ -8,9 +8,10 @@ from .views import (
     ArtworkViewSet, ArtworkProductViewSet,
     DieViewSet, DieProductViewSet, FoilingPlateViewSet, FoilingPlateProductViewSet,
     EmbossingPlateViewSet, EmbossingPlateProductViewSet,
-    WorkOrderTaskViewSet, ProductGroupViewSet, ProductGroupItemViewSet
+    WorkOrderTaskViewSet, ProductGroupViewSet, ProductGroupItemViewSet,
+    TaskAssignmentRuleViewSet
 )
-from .auth_views import login_view, logout_view, get_current_user, register_view, get_salespersons
+from .auth_views import login_view, logout_view, get_current_user, register_view, get_salespersons, get_users_by_department
 
 router = DefaultRouter()
 router.register(r'customers', CustomerViewSet)
@@ -27,6 +28,7 @@ router.register(r'workorder-tasks', WorkOrderTaskViewSet)
 router.register(r'product-groups', ProductGroupViewSet)
 router.register(r'product-group-items', ProductGroupItemViewSet)
 router.register(r'process-logs', ProcessLogViewSet)
+router.register(r'task-assignment-rules', TaskAssignmentRuleViewSet)
 router.register(r'artworks', ArtworkViewSet)
 router.register(r'artwork-products', ArtworkProductViewSet)
 router.register(r'dies', DieViewSet)
@@ -43,5 +45,6 @@ urlpatterns = [
     path('auth/user/', get_current_user, name='current-user'),
     path('auth/register/', register_view, name='register'),
     path('auth/salespersons/', get_salespersons, name='salespersons'),
+    path('auth/users/', get_users_by_department, name='users-by-department'),
 ]
 

@@ -76,3 +76,94 @@ DEPARTMENT_PROCESS_MAPPING = {
     'packaging': ['CUT', 'TEX', 'LAM_B', 'MOUNT', 'GLUE', 'BOX', 'WINDOW', 'STAPLE', 'PACK'],  # 包装车间：多个工序
 }
 
+# 预设任务分派规则配置
+# 格式：{'process_code': '工序编码', 'department_code': '部门编码', 'priority': 优先级, 'operator_selection_strategy': '策略', 'notes': '备注'}
+# 优先级说明：0-100，优先级越高越优先匹配
+# 策略说明：'least_tasks'（任务数量最少）、'random'（随机）、'round_robin'（轮询）、'first_available'（第一个可用）
+PRESET_ASSIGNMENT_RULES = [
+    # 制版工序 -> 设计部（最高优先级）
+    {'process_code': 'CTP', 'department_code': 'design', 'priority': 100, 'operator_selection_strategy': 'least_tasks', 'notes': '制版工序优先分派给设计部'},
+    
+    # 专业车间匹配（高优先级：80-90）
+    # 模切工序 -> 模切车间（最高优先级）
+    {'process_code': 'DIE', 'department_code': 'die_cutting', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '模切工序优先分派给模切车间'},
+    # 印刷工序 -> 印刷车间
+    {'process_code': 'PRT', 'department_code': 'printing', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '印刷工序优先分派给印刷车间'},
+    # 过油工序 -> 印刷车间
+    {'process_code': 'VAN', 'department_code': 'printing', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '过油工序优先分派给印刷车间'},
+    # 开料工序 -> 裁切车间
+    {'process_code': 'CUT', 'department_code': 'cutting', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '开料工序优先分派给裁切车间'},
+    # 压线工序 -> 裁切车间
+    {'process_code': 'SCORE', 'department_code': 'cutting', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '压线工序优先分派给裁切车间'},
+    # 切成品工序 -> 裁切车间
+    {'process_code': 'TRIM', 'department_code': 'cutting', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '切成品工序优先分派给裁切车间'},
+    # 烫金工序 -> 模切车间
+    {'process_code': 'FOIL_G', 'department_code': 'die_cutting', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '烫金工序优先分派给模切车间'},
+    # 烫银工序 -> 模切车间
+    {'process_code': 'FOIL_S', 'department_code': 'die_cutting', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '烫银工序优先分派给模切车间'},
+    # 压凸工序 -> 模切车间
+    {'process_code': 'EMB', 'department_code': 'die_cutting', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '压凸工序优先分派给模切车间'},
+    # 包装工序 -> 包装车间
+    {'process_code': 'PACK', 'department_code': 'packaging', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '包装工序优先分派给包装车间'},
+    # 裱坑工序 -> 包装车间
+    {'process_code': 'MOUNT', 'department_code': 'packaging', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '裱坑工序优先分派给包装车间'},
+    # 对裱工序 -> 包装车间
+    {'process_code': 'LAM_B', 'department_code': 'packaging', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '对裱工序优先分派给包装车间'},
+    # 粘胶工序 -> 包装车间
+    {'process_code': 'GLUE', 'department_code': 'packaging', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '粘胶工序优先分派给包装车间'},
+    # 粘盒工序 -> 包装车间
+    {'process_code': 'BOX', 'department_code': 'packaging', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '粘盒工序优先分派给包装车间'},
+    # 粘窗口工序 -> 包装车间
+    {'process_code': 'WINDOW', 'department_code': 'packaging', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '粘窗口工序优先分派给包装车间'},
+    # 打钉工序 -> 包装车间
+    {'process_code': 'STAPLE', 'department_code': 'packaging', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '打钉工序优先分派给包装车间'},
+    # 压纹工序 -> 包装车间
+    {'process_code': 'TEX', 'department_code': 'packaging', 'priority': 90, 'operator_selection_strategy': 'least_tasks', 'notes': '压纹工序优先分派给包装车间'},
+    
+    # 其他工序的专业车间匹配（中优先级：70-79）
+    {'process_code': 'UV', 'department_code': 'printing', 'priority': 75, 'operator_selection_strategy': 'least_tasks', 'notes': 'UV工序分派给印刷车间'},
+    {'process_code': 'LAM_G', 'department_code': 'printing', 'priority': 75, 'operator_selection_strategy': 'least_tasks', 'notes': '覆光膜工序分派给印刷车间'},
+    {'process_code': 'LAM_M', 'department_code': 'printing', 'priority': 75, 'operator_selection_strategy': 'least_tasks', 'notes': '覆哑膜工序分派给印刷车间'},
+    
+    # 外协车间作为备选（低优先级：10-20）
+    # 注意：外协车间可以处理多个工序，但优先级较低，只有在专业车间不可用时才会选择
+    {'process_code': 'CUT', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': '开料工序外协备选'},
+    {'process_code': 'PRT', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': '印刷工序外协备选'},
+    {'process_code': 'VAN', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': '过油工序外协备选'},
+    {'process_code': 'LAM_G', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': '覆光膜工序外协备选'},
+    {'process_code': 'LAM_M', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': '覆哑膜工序外协备选'},
+    {'process_code': 'UV', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': 'UV工序外协备选'},
+    {'process_code': 'FOIL_G', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': '烫金工序外协备选'},
+    {'process_code': 'FOIL_S', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': '烫银工序外协备选'},
+    {'process_code': 'EMB', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': '压凸工序外协备选'},
+    {'process_code': 'TEX', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': '压纹工序外协备选'},
+    {'process_code': 'DIE', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': '模切工序外协备选'},
+    {'process_code': 'LAM_B', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': '对裱工序外协备选'},
+    {'process_code': 'MOUNT', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': '裱坑工序外协备选'},
+    {'process_code': 'BOX', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': '粘盒工序外协备选'},
+    {'process_code': 'STAPLE', 'department_code': 'outsourcing', 'priority': 15, 'operator_selection_strategy': 'least_tasks', 'notes': '打钉工序外协备选'},
+    
+    # 生产部作为兜底（最低优先级：5）
+    # 生产部包含所有子部门的工序，作为最后的兜底选择
+    {'process_code': 'CUT', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '开料工序生产部兜底'},
+    {'process_code': 'PRT', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '印刷工序生产部兜底'},
+    {'process_code': 'VAN', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '过油工序生产部兜底'},
+    {'process_code': 'LAM_G', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '覆光膜工序生产部兜底'},
+    {'process_code': 'LAM_M', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '覆哑膜工序生产部兜底'},
+    {'process_code': 'UV', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': 'UV工序生产部兜底'},
+    {'process_code': 'FOIL_G', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '烫金工序生产部兜底'},
+    {'process_code': 'FOIL_S', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '烫银工序生产部兜底'},
+    {'process_code': 'EMB', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '压凸工序生产部兜底'},
+    {'process_code': 'TEX', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '压纹工序生产部兜底'},
+    {'process_code': 'SCORE', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '压线工序生产部兜底'},
+    {'process_code': 'DIE', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '模切工序生产部兜底'},
+    {'process_code': 'TRIM', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '切成品工序生产部兜底'},
+    {'process_code': 'LAM_B', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '对裱工序生产部兜底'},
+    {'process_code': 'MOUNT', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '裱坑工序生产部兜底'},
+    {'process_code': 'GLUE', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '粘胶工序生产部兜底'},
+    {'process_code': 'BOX', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '粘盒工序生产部兜底'},
+    {'process_code': 'WINDOW', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '粘窗口工序生产部兜底'},
+    {'process_code': 'STAPLE', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '打钉工序生产部兜底'},
+    {'process_code': 'PACK', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '包装工序生产部兜底'},
+]
+
