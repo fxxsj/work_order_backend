@@ -9,7 +9,7 @@ from .views import (
     DieViewSet, DieProductViewSet, FoilingPlateViewSet, FoilingPlateProductViewSet,
     EmbossingPlateViewSet, EmbossingPlateProductViewSet,
     WorkOrderTaskViewSet, ProductGroupViewSet, ProductGroupItemViewSet,
-    TaskAssignmentRuleViewSet
+    TaskAssignmentRuleViewSet, NotificationViewSet
 )
 from .auth_views import login_view, logout_view, get_current_user, register_view, get_salespersons, get_users_by_department
 
@@ -29,6 +29,7 @@ router.register(r'product-groups', ProductGroupViewSet)
 router.register(r'product-group-items', ProductGroupItemViewSet)
 router.register(r'process-logs', ProcessLogViewSet)
 router.register(r'task-assignment-rules', TaskAssignmentRuleViewSet)
+router.register(r'notifications', NotificationViewSet)
 router.register(r'artworks', ArtworkViewSet)
 router.register(r'artwork-products', ArtworkProductViewSet)
 router.register(r'dies', DieViewSet)

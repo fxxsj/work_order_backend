@@ -328,6 +328,11 @@ class Die(models.Model):
     size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：420x594mm、889x1194mm等')
     material = models.CharField('材质', max_length=100, blank=True, help_text='如：木板、胶板等')
     thickness = models.CharField('厚度', max_length=50, blank=True, help_text='如：3mm、5mm等')
+    # 刀模确认相关字段
+    confirmed = models.BooleanField('已确认', default=False, help_text='设计部是否已确认该刀模')
+    confirmed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name='confirmed_dies', verbose_name='确认人')
+    confirmed_at = models.DateTimeField('确认时间', null=True, blank=True)
     notes = models.TextField('备注', blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
@@ -402,6 +407,11 @@ class FoilingPlate(models.Model):
     size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：420x594mm、889x1194mm等')
     material = models.CharField('材质', max_length=100, blank=True, help_text='如：铜版、锌版等')
     thickness = models.CharField('厚度', max_length=50, blank=True, help_text='如：3mm、5mm等')
+    # 烫金版确认相关字段
+    confirmed = models.BooleanField('已确认', default=False, help_text='设计部是否已确认该烫金版')
+    confirmed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name='confirmed_foiling_plates', verbose_name='确认人')
+    confirmed_at = models.DateTimeField('确认时间', null=True, blank=True)
     notes = models.TextField('备注', blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
@@ -469,6 +479,11 @@ class EmbossingPlate(models.Model):
     size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：420x594mm、889x1194mm等')
     material = models.CharField('材质', max_length=100, blank=True, help_text='如：铜版、锌版等')
     thickness = models.CharField('厚度', max_length=50, blank=True, help_text='如：3mm、5mm等')
+    # 压凸版确认相关字段
+    confirmed = models.BooleanField('已确认', default=False, help_text='设计部是否已确认该压凸版')
+    confirmed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name='confirmed_embossing_plates', verbose_name='确认人')
+    confirmed_at = models.DateTimeField('确认时间', null=True, blank=True)
     notes = models.TextField('备注', blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
@@ -886,10 +901,18 @@ class WorkOrderProcess(models.Model):
             
             # 业务条件检查：制版任务需图稿/刀模等已确认
             if task.task_type == 'plate_making':
+                # 检查图稿确认状态
                 if task.artwork and not task.artwork.confirmed:
                     return False
-                # 刀模、烫金版、压凸版的确认状态检查（如果模型有confirmed字段）
-                # 目前先检查图稿，其他版型的确认逻辑可根据实际需求添加
+                # 检查刀模确认状态
+                if task.die and not task.die.confirmed:
+                    return False
+                # 检查烫金版确认状态
+                if task.foiling_plate and not task.foiling_plate.confirmed:
+                    return False
+                # 检查压凸版确认状态
+                if task.embossing_plate and not task.embossing_plate.confirmed:
+                    return False
             
             # 业务条件检查：开料任务需物料状态满足条件
             # 注意：只有CUT工序生成cutting类型任务
@@ -916,6 +939,20 @@ class WorkOrderProcess(models.Model):
         self.actual_end_time = timezone.now()
         self.save()
         
+        # 创建工序完成通知
+        from .models import Notification
+        # 通知施工单创建人
+        if work_order.created_by:
+            Notification.create_notification(
+                recipient=work_order.created_by,
+                notification_type='process_completed',
+                title=f'工序完成：{self.process.name}',
+                content=f'施工单 {work_order.order_number} 的工序"{self.process.name}"已完成',
+                priority='normal',
+                work_order=work_order,
+                work_order_process=self
+            )
+        
         # 检查是否所有工序都完成，如果是则自动标记施工单为完成
         work_order = self.work_order
         all_processes_completed = work_order.order_processes.exclude(
@@ -925,6 +962,17 @@ class WorkOrderProcess(models.Model):
         if all_processes_completed and work_order.status != 'completed':
             work_order.status = 'completed'
             work_order.save()
+            
+            # 创建施工单完成通知
+            if work_order.created_by:
+                Notification.create_notification(
+                    recipient=work_order.created_by,
+                    notification_type='workorder_completed',
+                    title=f'施工单完成：{work_order.order_number}',
+                    content=f'施工单 {work_order.order_number} 所有工序已完成，施工单已标记为完成',
+                    priority='high',
+                    work_order=work_order
+                )
         
         return True
     
@@ -995,6 +1043,20 @@ class WorkOrderProcess(models.Model):
             )
         
         task.save()
+        
+        # 创建任务分派通知
+        if task.assigned_operator:
+            from .models import Notification
+            Notification.create_notification(
+                recipient=task.assigned_operator,
+                notification_type='task_assigned',
+                title=f'新任务分派：{task.work_content}',
+                content=f'您有一个新任务：{task.work_content}（施工单：{self.work_order.order_number}）',
+                priority='normal',
+                work_order=self.work_order,
+                work_order_process=self,
+                task=task
+            )
     
     def _select_operator_by_strategy(self, department, strategy):
         """根据策略从部门中选择操作员"""
@@ -1082,7 +1144,7 @@ class WorkOrderProcess(models.Model):
                     production_quantity=1,
                     quantity_completed=0,
                     status='pending',
-                    auto_calculate_quantity=False
+                    auto_calculate_quantity=True  # 启用自动计算：图稿确认后自动更新
                 )
                 self._auto_assign_task(task)
             # 刀模任务
@@ -1095,7 +1157,7 @@ class WorkOrderProcess(models.Model):
                     production_quantity=1,
                     quantity_completed=0,
                     status='pending',
-                    auto_calculate_quantity=False
+                    auto_calculate_quantity=True  # 启用自动计算：刀模确认后自动更新
                 )
                 self._auto_assign_task(task)
             # 烫金版任务
@@ -1108,7 +1170,7 @@ class WorkOrderProcess(models.Model):
                     production_quantity=1,
                     quantity_completed=0,
                     status='pending',
-                    auto_calculate_quantity=False
+                    auto_calculate_quantity=True  # 启用自动计算：烫金版确认后自动更新
                 )
                 self._auto_assign_task(task)
             # 压凸版任务
@@ -1121,7 +1183,7 @@ class WorkOrderProcess(models.Model):
                     production_quantity=1,
                     quantity_completed=0,
                     status='pending',
-                    auto_calculate_quantity=False
+                    auto_calculate_quantity=True  # 启用自动计算：压凸版确认后自动更新
                 )
                 self._auto_assign_task(task)
         
@@ -1139,7 +1201,7 @@ class WorkOrderProcess(models.Model):
                         production_quantity=quantity,
                         quantity_completed=0,
                         status='pending',
-                        auto_calculate_quantity=False
+                        auto_calculate_quantity=True  # 开料任务启用自动计算
                     )
                     self._auto_assign_task(task)
         
@@ -1523,6 +1585,87 @@ class WorkOrderApprovalLog(models.Model):
     def __str__(self):
         status_display = dict(WorkOrder.APPROVAL_STATUS_CHOICES).get(self.approval_status, self.approval_status)
         return f"{self.work_order.order_number} - {status_display} - {self.approved_by.username if self.approved_by else '未知'}"
+
+
+class Notification(models.Model):
+    """系统通知"""
+    NOTIFICATION_TYPE_CHOICES = [
+        ('approval_passed', '审核通过'),
+        ('approval_rejected', '审核拒绝'),
+        ('task_assigned', '任务分派'),
+        ('task_due_soon', '任务即将到期'),
+        ('process_completed', '工序完成'),
+        ('workorder_completed', '施工单完成'),
+        ('task_cancelled', '任务取消'),
+        ('system', '系统通知'),
+    ]
+    
+    PRIORITY_CHOICES = [
+        ('low', '低'),
+        ('normal', '普通'),
+        ('high', '高'),
+        ('urgent', '紧急'),
+    ]
+    
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE,
+                                 related_name='notifications', verbose_name='接收人')
+    notification_type = models.CharField('通知类型', max_length=30, choices=NOTIFICATION_TYPE_CHOICES)
+    title = models.CharField('标题', max_length=200)
+    content = models.TextField('内容', help_text='通知详细内容')
+    priority = models.CharField('优先级', max_length=10, choices=PRIORITY_CHOICES, default='normal')
+    
+    # 关联对象（可选，用于跳转到相关页面）
+    work_order = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, null=True, blank=True,
+                                   related_name='notifications', verbose_name='关联施工单')
+    work_order_process = models.ForeignKey(WorkOrderProcess, on_delete=models.CASCADE, null=True, blank=True,
+                                         related_name='notifications', verbose_name='关联工序')
+    task = models.ForeignKey('WorkOrderTask', on_delete=models.CASCADE, null=True, blank=True,
+                            related_name='notifications', verbose_name='关联任务')
+    
+    # 通知状态
+    is_read = models.BooleanField('已读', default=False)
+    read_at = models.DateTimeField('阅读时间', null=True, blank=True)
+    
+    # 元数据
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    expires_at = models.DateTimeField('过期时间', null=True, blank=True,
+                                     help_text='通知过期时间，过期后不再显示')
+    
+    class Meta:
+        verbose_name = '系统通知'
+        verbose_name_plural = '系统通知管理'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', 'is_read', '-created_at']),
+            models.Index(fields=['notification_type', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.recipient.username} - {self.title}"
+    
+    def mark_as_read(self):
+        """标记为已读"""
+        if not self.is_read:
+            self.is_read = True
+            self.read_at = timezone.now()
+            self.save(update_fields=['is_read', 'read_at'])
+    
+    @classmethod
+    def create_notification(cls, recipient, notification_type, title, content, 
+                           priority='normal', work_order=None, work_order_process=None, 
+                           task=None, expires_at=None):
+        """创建通知的便捷方法"""
+        return cls.objects.create(
+            recipient=recipient,
+            notification_type=notification_type,
+            title=title,
+            content=content,
+            priority=priority,
+            work_order=work_order,
+            work_order_process=work_order_process,
+            task=task,
+            expires_at=expires_at
+        )
 
 
 class TaskAssignmentRule(models.Model):

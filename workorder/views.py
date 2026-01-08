@@ -3,7 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters import FilterSet, NumberFilter, CharFilter
-from django.db.models import Q, Count, Sum, Max
+from django.db.models import Q, Count, Sum, Max, Avg, F
+from django.db import models
 from django.utils import timezone
 from .permissions import WorkOrderProcessPermission, WorkOrderMaterialPermission
 from rest_framework.permissions import DjangoModelPermissions
@@ -11,7 +12,7 @@ from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, Artwork, ArtworkProduct,
     Die, DieProduct, FoilingPlate, FoilingPlateProduct, EmbossingPlate, EmbossingPlateProduct,
-    WorkOrderTask, ProductGroup, ProductGroupItem, WorkOrderApprovalLog, TaskAssignmentRule
+    WorkOrderTask, ProductGroup, ProductGroupItem, WorkOrderApprovalLog, TaskAssignmentRule, Notification
 )
 from .serializers import (
     CustomerSerializer, DepartmentSerializer, ProcessSerializer, ProductSerializer, 
@@ -24,7 +25,7 @@ from .serializers import (
     DieSerializer, DieProductSerializer, FoilingPlateSerializer, FoilingPlateProductSerializer,
     EmbossingPlateSerializer, EmbossingPlateProductSerializer,
     WorkOrderTaskSerializer, ProductGroupSerializer, ProductGroupItemSerializer,
-    TaskAssignmentRuleSerializer
+    TaskAssignmentRuleSerializer, NotificationSerializer
 )
 
 
@@ -370,6 +371,26 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         
         work_order.save()
         
+        # 创建通知
+        if approval_status == 'approved':
+            Notification.create_notification(
+                recipient=work_order.created_by,
+                notification_type='approval_passed',
+                title=f'施工单 {work_order.order_number} 审核通过',
+                content=f'施工单 {work_order.order_number} 已通过审核，状态已变更为"进行中"。' + (f'审核意见：{approval_comment}' if approval_comment else ''),
+                priority='high',
+                work_order=work_order
+            )
+        else:
+            Notification.create_notification(
+                recipient=work_order.created_by,
+                notification_type='approval_rejected',
+                title=f'施工单 {work_order.order_number} 审核拒绝',
+                content=f'施工单 {work_order.order_number} 审核被拒绝。拒绝原因：{rejection_reason}',
+                priority='high',
+                work_order=work_order
+            )
+        
         serializer = self.get_serializer(work_order)
         return Response(serializer.data)
     
@@ -405,7 +426,9 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def statistics(self, request):
-        """统计数据"""
+        """统计数据（增强版：包含任务统计和生产效率分析）"""
+        from datetime import timedelta
+        
         queryset = self.filter_queryset(self.get_queryset())
         
         total_count = queryset.count()
@@ -426,7 +449,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         
         # 即将到期的订单（7天内）
         upcoming_deadline = queryset.filter(
-            delivery_date__lte=timezone.now().date() + timezone.timedelta(days=7),
+            delivery_date__lte=timezone.now().date() + timedelta(days=7),
             status__in=['pending', 'in_progress']
         ).count()
         
@@ -438,12 +461,162 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
                 customer__salesperson=request.user
             ).count()
         
+        # ========== 新增：任务统计 ==========
+        from .models import WorkOrderTask, WorkOrderProcess
+        
+        # 任务总数统计
+        all_tasks = WorkOrderTask.objects.filter(
+            work_order_process__work_order__in=queryset
+        )
+        task_total_count = all_tasks.count()
+        
+        # 任务状态统计
+        task_status_stats = list(all_tasks.values('status').annotate(count=Count('id')).order_by('status'))
+        all_task_statuses = ['pending', 'in_progress', 'completed', 'cancelled']
+        task_status_dict = {item['status']: item['count'] for item in task_status_stats}
+        task_status_statistics = [
+            {'status': status, 'count': task_status_dict.get(status, 0)} 
+            for status in all_task_statuses
+        ]
+        
+        # 任务类型统计
+        task_type_stats = list(all_tasks.values('task_type').annotate(count=Count('id')).order_by('task_type'))
+        task_type_statistics = [
+            {'task_type': item['task_type'], 'count': item['count']} 
+            for item in task_type_stats
+        ]
+        
+        # 按部门统计任务
+        task_dept_stats = list(
+            all_tasks.filter(assigned_department__isnull=False)
+            .values('assigned_department__name')
+            .annotate(count=Count('id'), completed=Count('id', filter=Q(status='completed')))
+            .order_by('-count')
+        )
+        task_department_statistics = [
+            {
+                'department': item['assigned_department__name'],
+                'total': item['count'],
+                'completed': item['completed'],
+                'completion_rate': round(item['completed'] / item['count'] * 100, 2) if item['count'] > 0 else 0
+            }
+            for item in task_dept_stats
+        ]
+        
+        # ========== 新增：生产效率分析 ==========
+        
+        # 工序完成率统计
+        all_processes = WorkOrderProcess.objects.filter(work_order__in=queryset)
+        process_total = all_processes.count()
+        process_completed = all_processes.filter(status='completed').count()
+        process_completion_rate = round(process_completed / process_total * 100, 2) if process_total > 0 else 0
+        
+        # 平均完成时间（已完成工序）
+        completed_processes = all_processes.filter(
+            status='completed',
+            actual_start_time__isnull=False,
+            actual_end_time__isnull=False
+        )
+        avg_completion_time = None
+        if completed_processes.exists():
+            # 计算平均完成时间（小时）
+            completion_times = []
+            for process in completed_processes:
+                if process.actual_start_time and process.actual_end_time:
+                    delta = process.actual_end_time - process.actual_start_time
+                    completion_times.append(delta.total_seconds() / 3600)  # 转换为小时
+            
+            if completion_times:
+                avg_completion_time = round(sum(completion_times) / len(completion_times), 2)
+        
+        # 任务完成率统计
+        task_completed = all_tasks.filter(status='completed').count()
+        task_completion_rate = round(task_completed / task_total_count * 100, 2) if task_total_count > 0 else 0
+        
+        # 不良品率统计（已完成任务）
+        completed_tasks = all_tasks.filter(status='completed')
+        total_production_quantity = completed_tasks.aggregate(
+            total=Sum('production_quantity', default=0)
+        )['total']
+        total_defective_quantity = completed_tasks.aggregate(
+            total=Sum('quantity_defective', default=0)
+        )['total']
+        defective_rate = round(total_defective_quantity / total_production_quantity * 100, 2) if total_production_quantity > 0 else 0
+        
+        # 按客户统计
+        customer_stats = list(
+            queryset.values('customer__name')
+            .annotate(
+                count=Count('id'),
+                completed=Count('id', filter=Q(status='completed'))
+            )
+            .order_by('-count')[:10]  # 前10个客户
+        )
+        customer_statistics = [
+            {
+                'customer': item['customer__name'],
+                'total': item['count'],
+                'completed': item['completed'],
+                'completion_rate': round(item['completed'] / item['count'] * 100, 2) if item['count'] > 0 else 0
+            }
+            for item in customer_stats
+        ]
+        
+        # 按产品统计
+        from .models import WorkOrderProduct
+        product_stats = list(
+            WorkOrderProduct.objects.filter(work_order__in=queryset)
+            .values('product__name', 'product__code')
+            .annotate(
+                count=Count('work_order', distinct=True),
+                total_quantity=Sum('quantity')
+            )
+            .order_by('-count')[:10]  # 前10个产品
+        )
+        product_statistics = [
+            {
+                'product_name': item['product__name'],
+                'product_code': item['product__code'],
+                'order_count': item['count'],
+                'total_quantity': item['total_quantity']
+            }
+            for item in product_stats
+        ]
+        
         return Response({
+            # 基础统计
             'total_count': total_count,
             'status_statistics': status_statistics,
             'priority_statistics': priority_statistics,
             'upcoming_deadline_count': upcoming_deadline,
             'pending_approval_count': pending_approval_count,
+            
+            # 任务统计
+            'task_statistics': {
+                'total_count': task_total_count,
+                'status_statistics': task_status_statistics,
+                'type_statistics': task_type_statistics,
+                'department_statistics': task_department_statistics,
+                'completion_rate': task_completion_rate,
+            },
+            
+            # 生产效率分析
+            'efficiency_analysis': {
+                'process_completion_rate': process_completion_rate,
+                'process_total': process_total,
+                'process_completed': process_completed,
+                'avg_completion_time_hours': avg_completion_time,
+                'task_completion_rate': task_completion_rate,
+                'defective_rate': defective_rate,
+                'total_production_quantity': total_production_quantity,
+                'total_defective_quantity': total_defective_quantity,
+            },
+            
+            # 业务分析
+            'business_analysis': {
+                'customer_statistics': customer_statistics,
+                'product_statistics': product_statistics,
+            },
         })
 
 
@@ -840,10 +1013,25 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         new_quantity_completed = quantity_before + quantity_increment
         
         # 业务条件验证：制版任务需图稿/刀模等已确认
-        if task.task_type == 'plate_making' and task.artwork:
-            if not task.artwork.confirmed:
+        if task.task_type == 'plate_making':
+            if task.artwork and not task.artwork.confirmed:
                 return Response(
                     {'error': '图稿未确认，无法更新任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if task.die and not task.die.confirmed:
+                return Response(
+                    {'error': '刀模未确认，无法更新任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if task.foiling_plate and not task.foiling_plate.confirmed:
+                return Response(
+                    {'error': '烫金版未确认，无法更新任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if task.embossing_plate and not task.embossing_plate.confirmed:
+                return Response(
+                    {'error': '压凸版未确认，无法更新任务'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
@@ -997,6 +1185,29 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
             if not task.artwork.confirmed:
                 return Response(
                     {'error': '图稿未确认，无法完成任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # 业务条件验证：制版任务需图稿/刀模等已确认
+        if task.task_type == 'plate_making':
+            if task.artwork and not task.artwork.confirmed:
+                return Response(
+                    {'error': '图稿未确认，无法完成任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if task.die and not task.die.confirmed:
+                return Response(
+                    {'error': '刀模未确认，无法完成任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if task.foiling_plate and not task.foiling_plate.confirmed:
+                return Response(
+                    {'error': '烫金版未确认，无法完成任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if task.embossing_plate and not task.embossing_plate.confirmed:
+                return Response(
+                    {'error': '压凸版未确认，无法完成任务'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
@@ -1292,6 +1503,128 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(task)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """取消任务
+        
+        请求参数：
+        - cancellation_reason: 取消原因（必填）
+        - notes: 备注（可选）
+        
+        权限控制：
+        - 只有生产主管、创建人或任务分派的操作员可以取消任务
+        - 已开始的任务需要特殊权限才能取消
+        """
+        from .models import TaskLog
+        from django.contrib.auth.models import User
+        
+        task = self.get_object()
+        cancellation_reason = request.data.get('cancellation_reason', '').strip()
+        notes = request.data.get('notes', '')
+        
+        # 验证取消原因
+        if not cancellation_reason:
+            return Response(
+                {'error': '请填写取消原因'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 检查任务状态
+        if task.status == 'cancelled':
+            return Response(
+                {'error': '任务已经取消，无法重复取消'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if task.status == 'completed':
+            return Response(
+                {'error': '已完成的任务无法取消'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 权限检查：生产主管、创建人或任务分派的操作员可以取消
+        # 这里简化处理，实际可以根据用户角色和部门进行更细粒度的控制
+        user = request.user
+        can_cancel = False
+        
+        # 检查是否为生产主管（简化：检查用户是否有管理权限）
+        if user.has_perm('workorder.change_workorder'):
+            can_cancel = True
+        # 检查是否为任务分派的操作员
+        elif task.assigned_operator == user:
+            can_cancel = True
+        # 检查是否为施工单创建人
+        elif task.work_order_process.work_order.created_by == user:
+            can_cancel = True
+        
+        if not can_cancel:
+            return Response(
+                {'error': '您没有权限取消此任务'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 检查是否会影响工序完成状态
+        work_order_process = task.work_order_process
+        # 如果工序只有一个任务且该任务被取消，工序无法完成
+        if work_order_process.tasks.count() == 1:
+            # 如果工序状态不是pending，需要特殊处理
+            if work_order_process.status != 'pending':
+                return Response(
+                    {'error': '该任务是工序的唯一任务，取消后工序无法完成。请先处理工序状态'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # 记录取消前的状态
+        status_before = task.status
+        quantity_before = task.quantity_completed
+        
+        # 取消任务
+        task.status = 'cancelled'
+        task.version += 1
+        task.save()
+        
+        # 记录操作日志
+        log_content = f'取消任务，原因：{cancellation_reason}'
+        if notes:
+            log_content += f'，备注：{notes}'
+        
+        TaskLog.objects.create(
+            task=task,
+            log_type='status_change',
+            content=log_content,
+            status_before=status_before,
+            status_after='cancelled',
+            operator=user
+        )
+        
+        # 创建任务取消通知
+        if task.assigned_operator:
+            Notification.create_notification(
+                recipient=task.assigned_operator,
+                notification_type='task_cancelled',
+                title=f'任务已取消：{task.work_content}',
+                content=f'任务"{task.work_content}"已被取消。取消原因：{cancellation_reason}',
+                priority='normal',
+                work_order=work_order_process.work_order,
+                work_order_process=work_order_process,
+                task=task
+            )
+        
+        # 检查工序状态：如果所有任务都取消或完成，需要更新工序状态
+        remaining_tasks = work_order_process.tasks.exclude(status='cancelled')
+        if not remaining_tasks.exists():
+            # 所有任务都已取消或完成，工序状态需要调整
+            if work_order_process.status == 'in_progress':
+                # 如果工序进行中但没有可用任务，可能需要暂停或取消工序
+                # 这里暂时不自动处理，由用户手动处理
+                pass
+        
+        serializer = self.get_serializer(task)
+        return Response({
+            'message': '任务已成功取消',
+            'task': serializer.data
+        })
     
     @action(detail=False, methods=['get'])
     def assignment_history(self, request):
@@ -1756,4 +2089,53 @@ class TaskAssignmentRuleViewSet(viewsets.ModelViewSet):
     search_fields = ['process__name', 'process__code', 'department__name', 'department__code', 'notes']
     ordering_fields = ['priority', 'created_at', 'updated_at']
     ordering = ['process', '-priority', 'department']
+
+
+class NotificationViewSet(viewsets.ModelViewSet):
+    """通知视图集"""
+    queryset = Notification.objects.all()  # 默认 queryset，会被 get_queryset() 覆盖
+    serializer_class = NotificationSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['notification_type', 'priority', 'is_read', 'work_order', 'task']
+    ordering_fields = ['created_at', 'priority']
+    ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """只返回当前用户的通知"""
+        queryset = Notification.objects.filter(recipient=self.request.user)
+        # 过滤过期通知
+        from django.utils import timezone
+        queryset = queryset.filter(
+            models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=timezone.now())
+        )
+        return queryset.select_related('work_order', 'work_order_process', 'task', 'recipient')
+    
+    @action(detail=True, methods=['post'])
+    def mark_read(self, request, pk=None):
+        """标记通知为已读"""
+        notification = self.get_object()
+        notification.mark_as_read()
+        serializer = self.get_serializer(notification)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['post'])
+    def mark_all_read(self, request):
+        """标记所有通知为已读"""
+        count = Notification.objects.filter(
+            recipient=request.user,
+            is_read=False
+        ).update(
+            is_read=True,
+            read_at=timezone.now()
+        )
+        return Response({'message': f'已标记 {count} 条通知为已读'})
+    
+    @action(detail=False, methods=['get'])
+    def unread_count(self, request):
+        """获取未读通知数量"""
+        count = Notification.objects.filter(
+            recipient=request.user,
+            is_read=False
+        ).count()
+        return Response({'unread_count': count})
 

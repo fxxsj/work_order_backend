@@ -4,7 +4,7 @@ from .models import (
     Customer, Department, Process, Product, ProductMaterial, Material, WorkOrder,
     WorkOrderProcess, WorkOrderMaterial, WorkOrderProduct, ProcessLog, TaskLog, Artwork, ArtworkProduct,
     Die, DieProduct, FoilingPlate, FoilingPlateProduct, EmbossingPlate, EmbossingPlateProduct,
-    WorkOrderTask, ProductGroup, ProductGroupItem, WorkOrderApprovalLog, TaskAssignmentRule
+    WorkOrderTask, ProductGroup, ProductGroupItem, WorkOrderApprovalLog, TaskAssignmentRule, Notification
 )
 
 
@@ -1571,4 +1571,17 @@ class EmbossingPlateSerializer(serializers.ModelSerializer):
                 )
         
         return embossing_plate
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    """通知序列化器"""
+    notification_type_display = serializers.CharField(source='get_notification_type_display', read_only=True)
+    priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    recipient_name = serializers.CharField(source='recipient.username', read_only=True)
+    work_order_number = serializers.CharField(source='work_order.order_number', read_only=True, allow_null=True)
+    
+    class Meta:
+        model = Notification
+        fields = '__all__'
+        read_only_fields = ['created_at', 'read_at']
 
