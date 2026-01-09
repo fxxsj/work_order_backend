@@ -703,12 +703,22 @@ class WorkOrder(models.Model):
         return int((completed_processes / total_processes) * 100)
     
     def validate_before_approval(self):
-        """审核前验证施工单数据完整性
+        """审核前验证施工单数据完整性（增强版）
+        
+        验证内容：
+        1. 基础信息验证（客户、产品、工序、交货日期）
+        2. 版与工序匹配验证（图稿、刀模、烫金版、压凸版）
+        3. 数量验证（生产数量、产品数量）
+        4. 日期验证（交货日期合理性）
+        5. 物料验证（物料信息完整性、开料物料用量）
+        6. 工序顺序验证（工序顺序合理性）
         
         Returns:
             list: 错误信息列表，如果为空则表示验证通过
         """
         errors = []
+        
+        # ========== 基础信息验证 ==========
         
         # 检查客户信息
         if not self.customer:
@@ -726,7 +736,8 @@ class WorkOrder(models.Model):
         if not self.delivery_date:
             errors.append('缺少交货日期')
         
-        # 检查工序与版的选择是否匹配
+        # ========== 版与工序匹配验证 ==========
+        
         # 获取所有选中的工序
         selected_processes = self.order_processes.values_list('process', flat=True)
         processes = Process.objects.filter(id__in=selected_processes, is_active=True)
@@ -754,6 +765,70 @@ class WorkOrder(models.Model):
         if processes_requiring_embossing_plate.exists() and not self.embossing_plates.exists():
             process_names = ', '.join([p.name for p in processes_requiring_embossing_plate])
             errors.append(f'选择了需要压凸版的工序（{process_names}），请至少选择一个压凸版')
+        
+        # ========== 数量验证 ==========
+        
+        # 检查生产数量
+        if self.production_quantity is None:
+            errors.append('缺少生产数量')
+        elif self.production_quantity <= 0:
+            errors.append(f'生产数量必须大于0，当前值为{self.production_quantity}')
+        
+        # 检查产品数量总和
+        if self.products.exists():
+            total_product_quantity = sum([p.quantity or 0 for p in self.products.all()])
+            if total_product_quantity <= 0:
+                errors.append(f'产品数量总和必须大于0，当前总和为{total_product_quantity}')
+        
+        # ========== 日期验证 ==========
+        
+        # 检查交货日期是否早于下单日期
+        if self.delivery_date and self.order_date:
+            if self.delivery_date < self.order_date:
+                errors.append(f'交货日期不能早于下单日期。交货日期：{self.delivery_date}，下单日期：{self.order_date}')
+        
+        # 检查交货日期是否在过去（允许今天）
+        from django.utils import timezone
+        today = timezone.now().date()
+        if self.delivery_date and self.delivery_date < today:
+            errors.append(f'交货日期不能早于今天。交货日期：{self.delivery_date}，今天：{today}')
+        
+        # ========== 物料验证 ==========
+        
+        # 检查是否有需要开料的物料但未填写用量
+        if self.materials.exists():
+            for material_item in self.materials.all():
+                if material_item.need_cutting and not material_item.material_usage:
+                    errors.append(f'物料"{material_item.material.name}"需要开料，请填写物料用量')
+        
+        # ========== 工序顺序验证 ==========
+        
+        # 检查制版工序是否在印刷工序之前
+        processes_ordered = self.order_processes.filter(
+            process__code__in=['CTP', 'PRT']
+        ).select_related('process').order_by('sequence')
+        
+        ctp_sequence = None
+        prt_sequence = None
+        for wp in processes_ordered:
+            if wp.process.code == 'CTP':
+                ctp_sequence = wp.sequence
+            elif wp.process.code == 'PRT':
+                prt_sequence = wp.sequence
+        
+        if ctp_sequence is not None and prt_sequence is not None:
+            if ctp_sequence > prt_sequence:
+                errors.append('制版工序（CTP）应该在印刷工序（PRT）之前，请调整工序顺序')
+        
+        # 检查开料工序是否在印刷工序之前
+        cut_sequence = None
+        for wp in processes_ordered:
+            if wp.process.code == 'CUT':
+                cut_sequence = wp.sequence
+        
+        if cut_sequence is not None and prt_sequence is not None:
+            if cut_sequence > prt_sequence:
+                errors.append('开料工序（CUT）应该在印刷工序（PRT）之前，请调整工序顺序')
         
         return errors
     
@@ -1592,6 +1667,7 @@ class Notification(models.Model):
     NOTIFICATION_TYPE_CHOICES = [
         ('approval_passed', '审核通过'),
         ('approval_rejected', '审核拒绝'),
+        ('reapproval_requested', '请求重新审核'),
         ('task_assigned', '任务分派'),
         ('task_due_soon', '任务即将到期'),
         ('process_completed', '工序完成'),

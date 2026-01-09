@@ -349,9 +349,10 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             )
         
         # 检查当前审核状态（只有待审核的施工单才能审核）
+        # 注意：通过 request_reapproval 接口请求重新审核后，状态会重置为 pending
         if work_order.approval_status != 'pending':
             return Response(
-                {'error': '该施工单已经审核过了，不能重复审核。如需重新审核，请先修改施工单并重新提交审核。'},
+                {'error': '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -453,6 +454,91 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(work_order)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def request_reapproval(self, request, pk=None):
+        """请求重新审核（审核通过后发现错误需要修改）
+        
+        使用场景：
+        - 审核通过后发现需要修改核心字段（产品、工序、版等）
+        - 审核通过后发现需要添加工序
+        - 审核通过后发现数据错误需要修正
+        
+        流程：
+        1. 检查权限（只有创建人或制表人可以请求重新审核）
+        2. 检查状态（只有已审核通过的施工单可以请求重新审核）
+        3. 重置审核状态为 pending
+        4. 重置施工单状态为 pending（如果已开始，需要重置）
+        5. 通知原审核人
+        """
+        from .models import Notification
+        
+        work_order = self.get_object()
+        
+        # 检查权限：只有创建人或制表人可以请求重新审核
+        if work_order.created_by != request.user and work_order.manager != request.user:
+            # 检查是否有编辑施工单的权限
+            if not request.user.has_perm('workorder.change_workorder'):
+                return Response(
+                    {'error': '只有创建人、制表人或有编辑权限的用户可以请求重新审核'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        # 检查状态：只有已审核通过的施工单可以请求重新审核
+        if work_order.approval_status != 'approved':
+            return Response(
+                {'error': '只有已审核通过的施工单可以请求重新审核'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 获取请求原因（可选，但建议填写）
+        request_reason = request.data.get('reason', '')
+        
+        # 记录原审核人
+        original_approver = work_order.approved_by
+        
+        # 重置审核状态
+        work_order.approval_status = 'pending'
+        # 如果施工单已开始，重置状态为 pending（需要重新审核后才能开始）
+        if work_order.status == 'in_progress':
+            work_order.status = 'pending'
+        # 保留原审核人信息（用于通知），但清空审核意见
+        # work_order.approved_by 保持不变，用于通知原审核人
+        work_order.approval_comment = ''
+        work_order.save()
+        
+        # 创建通知（通知原审核人）
+        if original_approver:
+            notification_content = f'施工单 {work_order.order_number} 已修改，请求重新审核。'
+            if request_reason:
+                notification_content += f' 请求原因：{request_reason}'
+            
+            Notification.create_notification(
+                recipient=original_approver,
+                notification_type='reapproval_requested',
+                title=f'施工单 {work_order.order_number} 请求重新审核',
+                content=notification_content,
+                priority='high',
+                work_order=work_order
+            )
+        
+        # 创建通知（通知创建人，确认已提交重新审核请求）
+        if work_order.created_by and work_order.created_by != request.user:
+            Notification.create_notification(
+                recipient=work_order.created_by,
+                notification_type='reapproval_requested',
+                title=f'施工单 {work_order.order_number} 已提交重新审核请求',
+                content=f'施工单 {work_order.order_number} 已提交重新审核请求，等待业务员审核。',
+                priority='normal',
+                work_order=work_order
+            )
+        
+        serializer = self.get_serializer(work_order)
+        return Response({
+            **serializer.data,
+            'message': '重新审核请求已提交，已通知原审核人',
+            'original_approver': original_approver.username if original_approver else None
+        })
     
     @action(detail=False, methods=['get'])
     def statistics(self, request):
