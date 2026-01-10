@@ -1306,6 +1306,9 @@ class WorkOrderProcess(models.Model):
         total_quantity_completed = sum(task.quantity_completed or 0 for task in tasks)
         total_quantity_defective = sum(task.quantity_defective or 0 for task in tasks)
         
+        # 获取施工单对象
+        work_order = self.work_order
+
         # 更新工序的完成数量和不良品数量（如果工序数量为0，则使用汇总值）
         if not self.quantity_completed:
             self.quantity_completed = total_quantity_completed
