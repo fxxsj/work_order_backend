@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    CustomerViewSet, DepartmentViewSet, ProcessViewSet, ProductViewSet, 
+    CustomerViewSet, DepartmentViewSet, ProcessViewSet, ProductViewSet,
     ProductMaterialViewSet, MaterialViewSet,
     WorkOrderViewSet, WorkOrderProcessViewSet,
     WorkOrderProductViewSet, WorkOrderMaterialViewSet, ProcessLogViewSet,
@@ -9,7 +9,8 @@ from .views import (
     DieViewSet, DieProductViewSet, FoilingPlateViewSet, FoilingPlateProductViewSet,
     EmbossingPlateViewSet, EmbossingPlateProductViewSet,
     WorkOrderTaskViewSet, ProductGroupViewSet, ProductGroupItemViewSet,
-    TaskAssignmentRuleViewSet, NotificationViewSet
+    TaskAssignmentRuleViewSet, NotificationViewSet,
+    SupplierViewSet, MaterialSupplierViewSet, PurchaseOrderViewSet, PurchaseOrderItemViewSet
 )
 from .auth_views import login_view, logout_view, get_current_user, register_view, get_salespersons, get_users_by_department
 
@@ -20,6 +21,10 @@ router.register(r'processes', ProcessViewSet)
 router.register(r'products', ProductViewSet)
 router.register(r'product-materials', ProductMaterialViewSet)
 router.register(r'materials', MaterialViewSet)
+router.register(r'suppliers', SupplierViewSet)
+router.register(r'material-suppliers', MaterialSupplierViewSet)
+router.register(r'purchase-orders', PurchaseOrderViewSet)
+router.register(r'purchase-order-items', PurchaseOrderItemViewSet)
 router.register(r'workorders', WorkOrderViewSet)
 router.register(r'workorder-processes', WorkOrderProcessViewSet)
 router.register(r'workorder-products', WorkOrderProductViewSet)
