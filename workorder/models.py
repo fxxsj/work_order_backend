@@ -173,6 +173,111 @@ class Product(models.Model):
     def __str__(self):
         return f"{self.code} - {self.name}"
 
+    def is_low_stock(self):
+        """检查库存是否不足"""
+        return self.stock_quantity < self.min_stock_quantity
+
+    def add_stock(self, quantity, user=None, reason=''):
+        """增加库存数量"""
+        if quantity <= 0:
+            return False
+
+        old_quantity = self.stock_quantity
+        self.stock_quantity += quantity
+        self.save(update_fields=['stock_quantity'])
+
+        # 创建库存变更日志
+        from .models import ProductStockLog
+        ProductStockLog.objects.create(
+            product=self,
+            change_type='add',
+            quantity=quantity,
+            old_quantity=old_quantity,
+            new_quantity=self.stock_quantity,
+            reason=reason,
+            created_by=user
+        )
+
+        # 检查是否需要预警
+        if self.is_low_stock():
+            self._send_low_stock_warning()
+
+        return True
+
+    def reduce_stock(self, quantity, user=None, reason=''):
+        """减少库存数量"""
+        if quantity <= 0:
+            return False
+
+        if self.stock_quantity < quantity:
+            # 库存不足
+            raise ValueError(f"库存不足：当前库存{self.stock_quantity}，需要{quantity}")
+
+        old_quantity = self.stock_quantity
+        self.stock_quantity -= quantity
+        self.save(update_fields=['stock_quantity'])
+
+        # 创建库存变更日志
+        from .models import ProductStockLog
+        ProductStockLog.objects.create(
+            product=self,
+            change_type='reduce',
+            quantity=-quantity,
+            old_quantity=old_quantity,
+            new_quantity=self.stock_quantity,
+            reason=reason,
+            created_by=user
+        )
+
+        # 检查是否需要预警
+        if self.is_low_stock():
+            self._send_low_stock_warning()
+
+        return True
+
+    def _send_low_stock_warning(self):
+        """发送库存预警通知"""
+        from .models import Notification
+        # 向所有具有库存预警权限的用户发送通知
+        # 这里简化为向系统管理员发送
+        from django.contrib.auth.models import User
+        admins = User.objects.filter(is_superuser=True)
+        for admin in admins:
+            Notification.objects.create(
+                recipient=admin,
+                notification_type='low_stock_warning',
+                title=f'产品库存预警：{self.name}',
+                content=f'产品【{self.code} - {self.name}】的库存已低于预警值。当前库存：{self.stock_quantity}，最小库存：{self.min_stock_quantity}。请及时补货。',
+                priority='high'
+            )
+
+
+class ProductStockLog(models.Model):
+    """产品库存变更日志"""
+    CHANGE_TYPE_CHOICES = [
+        ('add', '入库'),
+        ('reduce', '出库'),
+    ]
+    
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, 
+                              related_name='stock_logs', verbose_name='产品')
+    change_type = models.CharField('变更类型', max_length=20, choices=CHANGE_TYPE_CHOICES)
+    quantity = models.IntegerField('变更数量', help_text='正数表示入库，负数表示出库')
+    old_quantity = models.IntegerField('变更前库存')
+    new_quantity = models.IntegerField('变更后库存')
+    reason = models.TextField('变更原因', blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name='product_stock_logs', verbose_name='操作人')
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '产品库存日志'
+        verbose_name_plural = '产品库存日志管理'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.product.name} - {self.get_change_type_display()}: {self.quantity}"
+
 
 class ProductMaterial(models.Model):
     """产品默认物料配置"""
@@ -1210,7 +1315,11 @@ class WorkOrderProcess(models.Model):
         self.status = 'completed'
         self.actual_end_time = timezone.now()
         self.save()
-        
+
+        # 如果是包装任务，更新产品库存
+        if self.process.code == 'PACK':
+            self._update_product_stock_on_packaging()
+
         # 创建工序完成通知
         from .models import Notification
         # 通知施工单创建人
@@ -1329,7 +1438,51 @@ class WorkOrderProcess(models.Model):
                 work_order_process=self,
                 task=task
             )
-    
+
+    def _update_product_stock_on_packaging(self):
+        """包装工序完成时，更新产品的库存数量
+        
+        规则：
+        - 包装任务完成时，将任务的完成数量增加到对应产品的库存中
+        - 产品数量 = 任务的生产数量
+        """
+        from .models import Product
+
+        # 获取所有包装任务
+        packaging_tasks = self.tasks.filter(
+            task_type='packaging',
+            status='completed'
+        )
+
+        # 按产品分组汇总数量
+        product_quantities = {}
+        for task in packaging_tasks:
+            if task.product:
+                product_id = task.product.id
+                if product_id not in product_quantities:
+                    product_quantities[product_id] = 0
+                # 计算实际需要入库的数量
+                # 新增数量 = 当前总完成数量 - 上次已计入库存的数量
+                actual_quantity_to_stock = task.quantity_completed - (task.stock_accounted_quantity or 0)
+                if actual_quantity_to_stock > 0:
+                    product_quantities[product_id] += actual_quantity_to_stock
+                    # 更新已计入库存的数量
+                    task.stock_accounted_quantity = task.quantity_completed
+                    task.save(update_fields=['stock_accounted_quantity'])
+
+        # 更新产品库存
+        for product_id, quantity in product_quantities.items():
+            try:
+                product = Product.objects.get(id=product_id)
+                product.add_stock(
+                    quantity=quantity,
+                    user=None,
+                    reason=f'施工单{self.work_order.order_number}包装工序完成，入库{quantity}{product.unit}'
+                )
+            except Product.DoesNotExist:
+                # 产品已被删除，忽略
+                pass
+
     def _select_operator_by_strategy(self, department, strategy):
         """根据策略从部门中选择操作员"""
         from django.contrib.auth.models import User
@@ -1752,6 +1905,8 @@ class WorkOrderTask(models.Model):
     embossing_plate = models.ForeignKey('EmbossingPlate', on_delete=models.CASCADE, null=True, blank=True,
                                        related_name='tasks', verbose_name='关联压凸版')
     production_requirements = models.TextField('生产要求', blank=True, help_text='生产过程中的特殊要求')
+    stock_accounted_quantity = models.IntegerField('已计入库存的完成数量', default=0, 
+                                              help_text='该任务已计入产品库存的完成数量，用于编辑数量时计算差异')
     # 任务分派（任务级别的分派，支持精细化管理）
     assigned_department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True,
                                            related_name='assigned_tasks', verbose_name='分派部门',

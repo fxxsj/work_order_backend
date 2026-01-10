@@ -1290,7 +1290,12 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         # 计算新的完成数量（增量更新）
         quantity_before = task.quantity_completed
         new_quantity_completed = quantity_before + quantity_increment
-        
+
+        # 计算库存差异（用于编辑数量时调整库存）
+        # 差异 = 新完成数量 - 上次已计入库存的完成数量
+        # 包装任务完成时已计入库存的数量 = 上次生产数量（如果任务已完成）
+        stock_adjustment = new_quantity_completed - (task.stock_accounted_quantity or 0)
+
         # 业务条件验证：制版任务需图稿/刀模等已确认
         if task.task_type == 'plate_making':
             if task.artwork and not task.artwork.confirmed:
@@ -1405,7 +1410,37 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         # 更新版本号（乐观锁）
         task.version += 1
         task.save()
-        
+
+        # 如果是包装任务，调整库存差异
+        # 计算库存差异：新完成数量 - 上次已计入库存的完成数量
+        stock_increment = new_quantity_completed - (task.stock_accounted_quantity or 0)
+        if stock_increment != 0 and task.product:
+            try:
+                if stock_increment > 0:
+                    # 库存增加（编辑后数量增加）
+                    task.product.add_stock(
+                        quantity=stock_increment,
+                        user=None,
+                        reason=f'施工单{work_order.order_number}包装任务数量编辑，入库{stock_increment}{task.product.unit}'
+                    )
+                else:
+                    # 库存减少（编辑后数量减少）
+                    try:
+                        task.product.reduce_stock(
+                            quantity=abs(stock_increment),
+                            user=None,
+                            reason=f'施工单{work_order.order_number}包装任务数量编辑，出库{abs(stock_increment)}{task.product.unit}'
+                        )
+                    except ValueError as e:
+                        # 库存不足，记录错误日志
+                        print(f"库存不足警告：{e}")
+            except Exception as e:
+                print(f"调整产品库存失败：{e}")
+            
+            # 更新已计入库存的数量
+            task.stock_accounted_quantity = new_quantity_completed
+            task.save(update_fields=['stock_accounted_quantity'])
+
         # 记录操作日志（增强协作追踪）
         defective_increment = quantity_defective if quantity_defective else 0
         TaskLog.objects.create(
@@ -3533,6 +3568,9 @@ class SalesOrderViewSet(viewsets.ModelViewSet):
         sales_order.approval_comment = request.data.get('approval_comment', '')
         sales_order.save()
 
+        # 审核通过后，减少产品库存数量
+        self._reduce_product_stock(sales_order)
+
         serializer = self.get_serializer(sales_order)
         return Response(serializer.data)
 
@@ -3579,6 +3617,43 @@ class SalesOrderViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(sales_order)
         return Response(serializer.data)
+
+    def _reduce_product_stock(self, sales_order):
+        """销售订单审核通过后，减少产品库存数量
+        
+        规则：
+        - 遍历订单明细，减少对应产品的库存数量
+        - 减少数量 = 订单明细的 quantity
+        """
+        from .models import Product
+
+        # 获取订单明细
+        items = sales_order.items.all()
+        
+        # 按产品汇总数量
+        product_quantities = {}
+        for item in items:
+            product_id = item.product.id
+            if product_id not in product_quantities:
+                product_quantities[product_id] = 0
+            product_quantities[product_id] += item.quantity
+
+        # 减少产品库存
+        for product_id, quantity in product_quantities.items():
+            try:
+                product = Product.objects.get(id=product_id)
+                try:
+                    product.reduce_stock(
+                        quantity=quantity,
+                        user=None,  # 系统自动操作，不记录操作人
+                        reason=f'销售订单{sales_order.order_number}审核通过，出库{quantity}{product.unit}'
+                    )
+                except ValueError as e:
+                    # 库存不足，记录错误日志
+                    print(f"库存不足警告：{e}")
+            except Product.DoesNotExist:
+                # 产品已被删除，忽略
+                pass
 
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
