@@ -10,7 +10,8 @@ from .views import (
     EmbossingPlateViewSet, EmbossingPlateProductViewSet,
     WorkOrderTaskViewSet, ProductGroupViewSet, ProductGroupItemViewSet,
     TaskAssignmentRuleViewSet, NotificationViewSet,
-    SupplierViewSet, MaterialSupplierViewSet, PurchaseOrderViewSet, PurchaseOrderItemViewSet
+    SupplierViewSet, MaterialSupplierViewSet, PurchaseOrderViewSet, PurchaseOrderItemViewSet,
+    SalesOrderViewSet, SalesOrderItemViewSet
 )
 from .auth_views import login_view, logout_view, get_current_user, register_view, get_salespersons, get_users_by_department
 
@@ -25,6 +26,8 @@ router.register(r'suppliers', SupplierViewSet)
 router.register(r'material-suppliers', MaterialSupplierViewSet)
 router.register(r'purchase-orders', PurchaseOrderViewSet)
 router.register(r'purchase-order-items', PurchaseOrderItemViewSet)
+router.register(r'sales-orders', SalesOrderViewSet)
+router.register(r'sales-order-items', SalesOrderItemViewSet)
 router.register(r'workorders', WorkOrderViewSet)
 router.register(r'workorder-processes', WorkOrderProcessViewSet)
 router.register(r'workorder-products', WorkOrderProductViewSet)
