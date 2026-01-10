@@ -152,11 +152,14 @@ class Product(models.Model):
     specification = models.CharField('规格', max_length=200, blank=True)
     unit = models.CharField('单位', max_length=20, default='件')
     unit_price = models.DecimalField('单价', max_digits=10, decimal_places=2, default=0)
-    
+    stock_quantity = models.IntegerField('库存数量', default=0, help_text='产品的当前库存数量')
+    min_stock_quantity = models.IntegerField('最小库存', default=0,
+                                          help_text='库存低于此数量时触发预警')
+
     # 默认工序（多对多关系）
     default_processes = models.ManyToManyField('Process', blank=True, verbose_name='默认工序',
                                                help_text='创建施工单时将自动添加这些工序')
-    
+
     description = models.TextField('产品描述', blank=True)
     is_active = models.BooleanField('是否启用', default=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)

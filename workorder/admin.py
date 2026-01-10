@@ -132,17 +132,22 @@ class ProductMaterialInline(admin.TabularInline):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['code', 'name', 'specification', 'unit', 'unit_price', 'is_active', 'created_at']
+    list_display = ['code', 'name', 'specification', 'unit', 'unit_price', 
+                    'stock_quantity', 'min_stock_quantity', 'is_active', 'created_at']
     search_fields = ['code', 'name', 'specification']
     list_filter = ['is_active', 'unit', 'created_at']
-    list_editable = ['unit_price', 'is_active']
+    list_editable = ['unit_price', 'stock_quantity', 'min_stock_quantity', 'is_active']
     ordering = ['code']
     filter_horizontal = ['default_processes']
     inlines = [ProductMaterialInline]
-    
+
     fieldsets = (
         ('基本信息', {
             'fields': ('code', 'name', 'specification', 'unit', 'unit_price')
+        }),
+        ('库存信息', {
+            'fields': ('stock_quantity', 'min_stock_quantity'),
+            'description': '产品的库存管理信息'
         }),
         ('默认工序', {
             'fields': ('default_processes',),
