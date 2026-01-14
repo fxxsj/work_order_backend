@@ -281,9 +281,18 @@ class ArtworkProductViewSet(viewsets.ModelViewSet):
     queryset = ArtworkProduct.objects.all()
     serializer_class = ArtworkProductSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['artwork', 'product']
     ordering_fields = ['sort_order']
     ordering = ['artwork', 'sort_order']
+    def get_filterset(self):
+        """延迟创建 FilterSet，避免模块加载时的关系解析问题"""
+        from django_filters import FilterSet
+
+        class ArtworkProductFilterSet(FilterSet):
+            class Meta:
+                model = ArtworkProduct
+                fields = ['artwork', 'product']
+
+        return ArtworkProductFilterSet
 
 
 
@@ -292,9 +301,18 @@ class DieProductViewSet(viewsets.ModelViewSet):
     queryset = DieProduct.objects.all()
     serializer_class = DieProductSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['die', 'product']
     ordering_fields = ['sort_order']
     ordering = ['die', 'sort_order']
+    def get_filterset(self):
+        """延迟创建 FilterSet，避免模块加载时的关系解析问题"""
+        from django_filters import FilterSet
+
+        class DieProductFilterSet(FilterSet):
+            class Meta:
+                model = DieProduct
+                fields = ['die', 'product']
+
+        return DieProductFilterSet
 
 
 
@@ -303,9 +321,18 @@ class FoilingPlateProductViewSet(viewsets.ModelViewSet):
     queryset = FoilingPlateProduct.objects.all()
     serializer_class = FoilingPlateProductSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['foiling_plate', 'product']
     ordering_fields = ['sort_order']
     ordering = ['foiling_plate', 'sort_order']
+    def get_filterset(self):
+        """延迟创建 FilterSet，避免模块加载时的关系解析问题"""
+        from django_filters import FilterSet
+
+        class FoilingPlateProductFilterSet(FilterSet):
+            class Meta:
+                model = FoilingPlateProduct
+                fields = ['foiling_plate', 'product']
+
+        return FoilingPlateProductFilterSet
 
 
 
@@ -314,7 +341,16 @@ class EmbossingPlateProductViewSet(viewsets.ModelViewSet):
     queryset = EmbossingPlateProduct.objects.all()
     serializer_class = EmbossingPlateProductSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['embossing_plate', 'product']
     ordering_fields = ['sort_order']
     ordering = ['embossing_plate', 'sort_order']
+    def get_filterset(self):
+        """延迟创建 FilterSet，避免模块加载时的关系解析问题"""
+        from django_filters import FilterSet
+
+        class EmbossingPlateProductFilterSet(FilterSet):
+            class Meta:
+                model = EmbossingPlateProduct
+                fields = ['embossing_plate', 'product']
+
+        return EmbossingPlateProductFilterSet
 

@@ -8,11 +8,9 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from django_filters import FilterSet, NumberFilter
 from rest_framework.permissions import DjangoModelPermissions
 
 from ..models.base import Customer, Department, Process
-from ..models.core import WorkOrder
 from ..serializers.base import CustomerSerializer, DepartmentSerializer, ProcessSerializer
 
 
@@ -91,14 +89,4 @@ class ProcessViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         return super().destroy(request, *args, **kwargs)
-
-
-
-class WorkOrderFilter(FilterSet):
-    """施工单筛选器"""
-    customer__salesperson = NumberFilter(field_name='customer__salesperson', lookup_expr='exact')
-    
-    class Meta:
-        model = WorkOrder
-        fields = ['status', 'priority', 'customer', 'manager', 'approval_status', 'customer__salesperson']
 

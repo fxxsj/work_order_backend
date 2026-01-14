@@ -4,7 +4,7 @@
 包含物料、供应商、物料供应商等视图集。
 """
 
-from rest_framework import viewsets, filters
+from rest_framework import viewsets, filters, pagination
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import DjangoModelPermissions
 

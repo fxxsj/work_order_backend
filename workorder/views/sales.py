@@ -20,7 +20,9 @@ from ..models.products import Product
 from ..serializers.sales import (
     SalesOrderListSerializer,
     SalesOrderDetailSerializer,
-    SalesOrderItemSerializer,
+    SalesOrderItemSerializer
+)
+from ..serializers.materials import (
     PurchaseOrderListSerializer,
     PurchaseOrderDetailSerializer,
     PurchaseOrderItemSerializer
@@ -33,10 +35,20 @@ class SalesOrderViewSet(viewsets.ModelViewSet):
     queryset = SalesOrder.objects.all()
     permission_classes = [DjangoModelPermissions]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['customer', 'status', 'payment_status']
     search_fields = ['order_number', 'customer__name']
     ordering_fields = ['created_at', 'order_date', 'delivery_date']
     ordering = ['-created_at']
+
+    def get_filterset(self):
+        """动态创建 FilterSet，避免模块加载时的关系解析问题"""
+        from django_filters import FilterSet
+
+        class SalesOrderFilterSet(FilterSet):
+            class Meta:
+                model = SalesOrder
+                fields = ['customer', 'status', 'payment_status']
+
+        return SalesOrderFilterSet
 
     def get_queryset(self):
         """优化查询"""
@@ -255,9 +267,18 @@ class SalesOrderItemViewSet(viewsets.ModelViewSet):
     permission_classes = [DjangoModelPermissions]
     serializer_class = SalesOrderItemSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['sales_order', 'product']
     ordering_fields = ['created_at']
     ordering = ['sales_order', 'id']
+    def get_filterset(self):
+        """延迟创建 FilterSet，避免模块加载时的关系解析问题"""
+        from django_filters import FilterSet
+
+        class SalesOrderItemFilterSet(FilterSet):
+            class Meta:
+                model = SalesOrderItem
+                fields = ['sales_order', 'product']
+
+        return SalesOrderItemFilterSet
 
     def get_queryset(self):
         """优化查询"""
@@ -287,10 +308,19 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     queryset = PurchaseOrder.objects.all()
     permission_classes = [DjangoModelPermissions]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['supplier', 'status', 'work_order']
     search_fields = ['order_number', 'supplier__name']
     ordering_fields = ['created_at', 'order_number', 'total_amount']
     ordering = ['-created_at']
+    def get_filterset(self):
+        """延迟创建 FilterSet，避免模块加载时的关系解析问题"""
+        from django_filters import FilterSet
+
+        class PurchaseOrderFilterSet(FilterSet):
+            class Meta:
+                model = PurchaseOrder
+                fields = ['supplier', 'status', 'work_order']
+
+        return PurchaseOrderFilterSet
 
     def get_serializer_class(self):
         """根据 action 返回不同的序列化器"""
@@ -525,9 +555,18 @@ class PurchaseOrderItemViewSet(viewsets.ModelViewSet):
     permission_classes = [DjangoModelPermissions]
     serializer_class = PurchaseOrderItemSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['purchase_order', 'material', 'status']
     ordering_fields = ['created_at']
     ordering = ['purchase_order', 'id']
+    def get_filterset(self):
+        """延迟创建 FilterSet，避免模块加载时的关系解析问题"""
+        from django_filters import FilterSet
+
+        class PurchaseOrderItemFilterSet(FilterSet):
+            class Meta:
+                model = PurchaseOrderItem
+                fields = ['purchase_order', 'material', 'status']
+
+        return PurchaseOrderItemFilterSet
 
     def get_queryset(self):
         """优化查询"""

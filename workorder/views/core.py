@@ -51,11 +51,30 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     queryset = WorkOrder.objects.all()
     permission_classes = [WorkOrderDataPermission]  # 使用细粒度数据权限
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_class = WorkOrderFilter
     search_fields = ['order_number', 'products__product__name', 'products__product__code', 'customer__name']
     ordering_fields = ['created_at', 'order_date', 'delivery_date', 'order_number']
     ordering = ['-created_at']
-    
+
+    def get_filterset(self):
+        """
+        动态创建 FilterSet，避免模块加载时的关系解析问题。
+
+        由于 WorkOrder 模型使用了字符串外键引用（如 'base.Customer'），
+        在模块导入时 Django apps registry 可能还未完全初始化。
+        在请求处理时创建 FilterSet 可以确保 Django 已完全初始化。
+        """
+        from django_filters import FilterSet, NumberFilter
+
+        class WorkOrderFilterSet(FilterSet):
+            """施工单筛选器"""
+            customer__salesperson = NumberFilter(field_name='customer__salesperson', lookup_expr='exact')
+
+            class Meta:
+                model = WorkOrder
+                fields = ['status', 'priority', 'customer', 'manager', 'approval_status', 'customer__salesperson']
+
+        return WorkOrderFilterSet
+
     def get_serializer_class(self):
         if self.action == 'list':
             return WorkOrderListSerializer
@@ -1051,7 +1070,7 @@ class WorkOrderProcessViewSet(viewsets.ModelViewSet):
 class WorkOrderTaskViewSet(viewsets.ModelViewSet):
     """施工单任务视图集"""
     queryset = WorkOrderTask.objects.select_related(
-        'work_order_process', 'work_order_process__process', 
+        'work_order_process', 'work_order_process__process',
         'work_order_process__work_order', 'artwork', 'die', 'product', 'material',
         'foiling_plate', 'embossing_plate', 'assigned_department', 'assigned_operator',
         'parent_task'
@@ -1059,10 +1078,20 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
     permission_classes = [WorkOrderTaskPermission]  # 使用细粒度任务权限
     serializer_class = WorkOrderTaskSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_class = WorkOrderTaskFilter
     search_fields = ['work_content', 'production_requirements']
     ordering_fields = ['created_at', 'updated_at', 'assigned_department', 'assigned_operator']
     ordering = ['-created_at']
+
+    def get_filterset(self):
+        """动态创建 FilterSet，避免模块加载时的关系解析问题"""
+        from django_filters import FilterSet
+
+        class WorkOrderTaskFilterSet(FilterSet):
+            class Meta:
+                model = WorkOrderTask
+                fields = ['status', 'assigned_department', 'assigned_operator']
+
+        return WorkOrderTaskFilterSet
     
     def get_queryset(self):
         """根据用户权限过滤查询集"""

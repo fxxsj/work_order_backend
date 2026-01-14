@@ -29,6 +29,10 @@ from .assets import (
     DieViewSet,
     FoilingPlateViewSet,
     EmbossingPlateViewSet,
+    ArtworkProductViewSet,
+    DieProductViewSet,
+    FoilingPlateProductViewSet,
+    EmbossingPlateProductViewSet,
 )
 
 from .core import (
@@ -74,6 +78,10 @@ __all__ = [
     'DieViewSet',
     'FoilingPlateViewSet',
     'EmbossingPlateViewSet',
+    'ArtworkProductViewSet',
+    'DieProductViewSet',
+    'FoilingPlateProductViewSet',
+    'EmbossingPlateProductViewSet',
 
     # 核心业务视图集
     'WorkOrderViewSet',

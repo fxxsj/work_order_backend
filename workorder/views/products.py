@@ -42,9 +42,18 @@ class ProductMaterialViewSet(viewsets.ModelViewSet):
     queryset = ProductMaterial.objects.all()
     serializer_class = ProductMaterialSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['product']
     ordering_fields = ['sort_order']
     ordering = ['product', 'sort_order']
+    def get_filterset(self):
+        """延迟创建 FilterSet，避免模块加载时的关系解析问题"""
+        from django_filters import FilterSet
+
+        class ProductMaterialFilterSet(FilterSet):
+            class Meta:
+                model = ProductMaterial
+                fields = ['product']
+
+        return ProductMaterialFilterSet
 
 
 
@@ -66,7 +75,16 @@ class ProductGroupItemViewSet(viewsets.ModelViewSet):
     queryset = ProductGroupItem.objects.select_related('product_group', 'product')
     serializer_class = ProductGroupItemSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['product_group', 'product']
     ordering_fields = ['sort_order', 'created_at']
     ordering = ['product_group', 'sort_order']
+    def get_filterset(self):
+        """延迟创建 FilterSet，避免模块加载时的关系解析问题"""
+        from django_filters import FilterSet
+
+        class ProductGroupItemFilterSet(FilterSet):
+            class Meta:
+                model = ProductGroupItem
+                fields = ['product_group', 'product']
+
+        return ProductGroupItemFilterSet
 
