@@ -149,7 +149,7 @@ class ProductMaterial(models.Model):
     """产品默认物料配置"""
     product = models.ForeignKey(Product, on_delete=models.CASCADE,
                                related_name='default_materials', verbose_name='产品')
-    material = models.ForeignKey('materials.Material', on_delete=models.PROTECT, verbose_name='物料')
+    material = models.ForeignKey('workorder.Material', on_delete=models.PROTECT, verbose_name='物料')
     material_size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：A4、210x297mm等')
     material_usage = models.CharField('用量', max_length=100, blank=True, help_text='如：1000张、50平方米等')
     need_cutting = models.BooleanField('需要开料', default=False,

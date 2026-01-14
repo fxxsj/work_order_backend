@@ -155,7 +155,7 @@ class PurchaseOrder(models.Model):
                                     help_text='供应商预计的到货日期')
     actual_received_date = models.DateField('实际到货日期', null=True, blank=True)
     # 关联信息
-    work_order = models.ForeignKey('core.WorkOrder', on_delete=models.SET_NULL, null=True, blank=True,
+    work_order = models.ForeignKey('workorder.WorkOrder', on_delete=models.SET_NULL, null=True, blank=True,
                                     related_name='purchase_orders', verbose_name='关联施工单',
                                     help_text='如果是为了某个施工单采购，可关联该施工单')
     notes = models.TextField('备注', blank=True)
@@ -205,7 +205,7 @@ class PurchaseOrderItem(models.Model):
     # 收货状态
     status = models.CharField('收货状态', max_length=20, choices=STATUS_CHOICES, default='pending')
     # 关联施工单物料
-    work_order_material = models.ForeignKey('core.WorkOrderMaterial', on_delete=models.SET_NULL,
+    work_order_material = models.ForeignKey('workorder.WorkOrderMaterial', on_delete=models.SET_NULL,
                                            null=True, blank=True, verbose_name='关联施工单物料',
                                            help_text='如果是为了某个施工单采购的物料，可关联')
     notes = models.TextField('备注', blank=True)

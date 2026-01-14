@@ -44,7 +44,7 @@ class SalesOrder(models.Model):
             return f'{prefix}{new_number:04d}'
 
     order_number = models.CharField('销售订单号', max_length=50, unique=True)
-    customer = models.ForeignKey('base.Customer', on_delete=models.PROTECT, verbose_name='客户')
+    customer = models.ForeignKey('workorder.Customer', on_delete=models.PROTECT, verbose_name='客户')
     status = models.CharField('订单状态', max_length=20, choices=STATUS_CHOICES, default='draft')
     payment_status = models.CharField('付款状态', max_length=20, choices=PAYMENT_STATUS_CHOICES, default='unpaid')
 
@@ -77,7 +77,7 @@ class SalesOrder(models.Model):
     approval_comment = models.TextField('审核意见', blank=True)
 
     # 关联施工单（一个销售订单可能需要多个施工单）
-    work_orders = models.ManyToManyField('core.WorkOrder', blank=True, verbose_name='关联施工单')
+    work_orders = models.ManyToManyField('workorder.WorkOrder', blank=True, verbose_name='关联施工单')
 
     # 其他信息
     contact_person = models.CharField('联系人', max_length=100, blank=True)
@@ -158,7 +158,7 @@ class SalesOrderItem(models.Model):
     """销售订单明细"""
     sales_order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE,
                                   related_name='items', verbose_name='销售订单')
-    product = models.ForeignKey('products.Product', on_delete=models.PROTECT, verbose_name='产品')
+    product = models.ForeignKey('workorder.Product', on_delete=models.PROTECT, verbose_name='产品')
     quantity = models.IntegerField('数量')
     unit = models.CharField('单位', max_length=20, default='件')
     unit_price = models.DecimalField('单价', max_digits=10, decimal_places=2)

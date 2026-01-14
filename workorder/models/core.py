@@ -64,25 +64,25 @@ class WorkOrder(models.Model):
     ]
 
     order_number = models.CharField('施工单号', max_length=50, unique=True, editable=False)
-    customer = models.ForeignKey('base.Customer', on_delete=models.PROTECT, verbose_name='客户')
+    customer = models.ForeignKey('workorder.Customer', on_delete=models.PROTECT, verbose_name='客户')
     
     # 产品组关联（支持一个产品需要多个施工单的场景）
-    product_group_item = models.ForeignKey('products.ProductGroupItem', on_delete=models.SET_NULL, null=True, blank=True,
+    product_group_item = models.ForeignKey('workorder.ProductGroupItem', on_delete=models.SET_NULL, null=True, blank=True,
                                           related_name='work_orders', verbose_name='产品组子项',
                                           help_text='如果该施工单是产品组的一部分，关联到对应的子产品')
     
     # 图稿、刀模、烫金版、压凸版关联（根据工序选择自动显示和验证）
-    artworks = models.ManyToManyField('assets.Artwork', blank=True,
+    artworks = models.ManyToManyField('workorder.Artwork', blank=True,
                                       related_name='work_orders', verbose_name='图稿（CTP版）',
                                       help_text='关联的图稿，用于CTP制版，支持多个图稿（如纸卡双面印刷的面版和底版）')
-    dies = models.ManyToManyField('assets.Die', blank=True,
+    dies = models.ManyToManyField('workorder.Die', blank=True,
                                   related_name='work_orders', verbose_name='刀模',
                                   help_text='关联的刀模，用于模切工序，支持多个刀模')
     # 关联烫金版和压凸版
-    foiling_plates = models.ManyToManyField('assets.FoilingPlate', blank=True,
+    foiling_plates = models.ManyToManyField('workorder.FoilingPlate', blank=True,
                                             related_name='work_orders', verbose_name='烫金版',
                                             help_text='关联的烫金版，用于烫金工序，支持多个烫金版')
-    embossing_plates = models.ManyToManyField('assets.EmbossingPlate', blank=True,
+    embossing_plates = models.ManyToManyField('workorder.EmbossingPlate', blank=True,
                                               related_name='work_orders', verbose_name='压凸版',
                                               help_text='关联的压凸版，用于压凸工序，支持多个压凸版')
     
@@ -340,8 +340,8 @@ class WorkOrderProcess(models.Model):
 
     work_order = models.ForeignKey('WorkOrder', on_delete=models.CASCADE, 
                                    related_name='order_processes', verbose_name='施工单')
-    process = models.ForeignKey('base.Process', on_delete=models.PROTECT, verbose_name='工序')
-    department = models.ForeignKey('base.Department', on_delete=models.PROTECT, null=True, blank=True,
+    process = models.ForeignKey('workorder.Process', on_delete=models.PROTECT, verbose_name='工序')
+    department = models.ForeignKey('workorder.Department', on_delete=models.PROTECT, null=True, blank=True,
                                   verbose_name='生产部门', help_text='指定该工序由哪个部门生产')
     
     sequence = models.IntegerField('工序顺序', default=0)
@@ -917,7 +917,7 @@ class WorkOrderProduct(models.Model):
     """施工单产品关联（支持一个施工单包含多个产品，如一套图稿中拼版了多个产品）"""
     work_order = models.ForeignKey('WorkOrder', on_delete=models.CASCADE,
                                    related_name='products', verbose_name='施工单')
-    product = models.ForeignKey('products.Product', on_delete=models.PROTECT, verbose_name='产品')
+    product = models.ForeignKey('workorder.Product', on_delete=models.PROTECT, verbose_name='产品')
     quantity = models.IntegerField('数量', default=1)
     unit = models.CharField('单位', max_length=20, default='件')
     specification = models.TextField('产品规格', blank=True)
@@ -946,7 +946,7 @@ class WorkOrderMaterial(models.Model):
     
     work_order = models.ForeignKey('WorkOrder', on_delete=models.CASCADE,
                                    related_name='materials', verbose_name='施工单')
-    material = models.ForeignKey('materials.Material', on_delete=models.PROTECT, verbose_name='物料')
+    material = models.ForeignKey('workorder.Material', on_delete=models.PROTECT, verbose_name='物料')
     
     material_size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：A4、210x297mm等')
     material_usage = models.CharField('用量', max_length=100, blank=True, help_text='如：1000张、50平方米等')
@@ -1058,23 +1058,23 @@ class WorkOrderTask(models.Model):
     auto_calculate_quantity = models.BooleanField('自动计算数量', default=True,
                                                   help_text='是否自动计算完成数量')
     # 关联对象（根据任务类型，只有一个字段会有值）
-    artwork = models.ForeignKey('assets.Artwork', on_delete=models.CASCADE, null=True, blank=True,
+    artwork = models.ForeignKey('workorder.Artwork', on_delete=models.CASCADE, null=True, blank=True,
                                related_name='tasks', verbose_name='关联图稿')
-    die = models.ForeignKey('assets.Die', on_delete=models.CASCADE, null=True, blank=True,
+    die = models.ForeignKey('workorder.Die', on_delete=models.CASCADE, null=True, blank=True,
                            related_name='tasks', verbose_name='关联刀模')
-    product = models.ForeignKey('products.Product', on_delete=models.CASCADE, null=True, blank=True,
+    product = models.ForeignKey('workorder.Product', on_delete=models.CASCADE, null=True, blank=True,
                                 related_name='tasks', verbose_name='关联产品')
-    material = models.ForeignKey('materials.Material', on_delete=models.CASCADE, null=True, blank=True,
+    material = models.ForeignKey('workorder.Material', on_delete=models.CASCADE, null=True, blank=True,
                                 related_name='tasks', verbose_name='关联物料')
-    foiling_plate = models.ForeignKey('assets.FoilingPlate', on_delete=models.CASCADE, null=True, blank=True,
+    foiling_plate = models.ForeignKey('workorder.FoilingPlate', on_delete=models.CASCADE, null=True, blank=True,
                                      related_name='tasks', verbose_name='关联烫金版')
-    embossing_plate = models.ForeignKey('assets.EmbossingPlate', on_delete=models.CASCADE, null=True, blank=True,
+    embossing_plate = models.ForeignKey('workorder.EmbossingPlate', on_delete=models.CASCADE, null=True, blank=True,
                                        related_name='tasks', verbose_name='关联压凸版')
     production_requirements = models.TextField('生产要求', blank=True, help_text='生产过程中的特殊要求')
     stock_accounted_quantity = models.IntegerField('已计入库存的完成数量', default=0, 
                                               help_text='该任务已计入产品库存的完成数量，用于编辑数量时计算差异')
     # 任务分派（任务级别的分派，支持精细化管理）
-    assigned_department = models.ForeignKey('base.Department', on_delete=models.SET_NULL, null=True, blank=True,
+    assigned_department = models.ForeignKey('workorder.Department', on_delete=models.SET_NULL, null=True, blank=True,
                                            related_name='assigned_tasks', verbose_name='分派部门',
                                            help_text='该任务分派给哪个部门执行')
     assigned_operator = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,

@@ -109,7 +109,7 @@ class ArtworkProduct(models.Model):
     """图稿产品关联（包含拼版数量）"""
     artwork = models.ForeignKey(Artwork, on_delete=models.CASCADE,
                                related_name='products', verbose_name='图稿')
-    product = models.ForeignKey('products.Product', on_delete=models.PROTECT, verbose_name='产品')
+    product = models.ForeignKey('workorder.Product', on_delete=models.PROTECT, verbose_name='产品')
     imposition_quantity = models.IntegerField('拼版数量', default=1, help_text='该产品在图稿中的拼版数量')
     sort_order = models.IntegerField('排序', default=0)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
@@ -181,7 +181,7 @@ class DieProduct(models.Model):
     """刀模产品关联"""
     die = models.ForeignKey(Die, on_delete=models.CASCADE,
                            related_name='products', verbose_name='刀模')
-    product = models.ForeignKey('products.Product', on_delete=models.PROTECT, verbose_name='产品')
+    product = models.ForeignKey('workorder.Product', on_delete=models.PROTECT, verbose_name='产品')
     quantity = models.IntegerField('数量', default=1, help_text='该产品在刀模中的数量')
     sort_order = models.IntegerField('排序', default=0)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
@@ -260,7 +260,7 @@ class FoilingPlateProduct(models.Model):
     """烫金版产品关联"""
     foiling_plate = models.ForeignKey(FoilingPlate, on_delete=models.CASCADE,
                                      related_name='products', verbose_name='烫金版')
-    product = models.ForeignKey('products.Product', on_delete=models.PROTECT, verbose_name='产品')
+    product = models.ForeignKey('workorder.Product', on_delete=models.PROTECT, verbose_name='产品')
     quantity = models.IntegerField('数量', default=1, help_text='该产品在烫金版中的数量')
     sort_order = models.IntegerField('排序', default=0)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
@@ -332,7 +332,7 @@ class EmbossingPlateProduct(models.Model):
     """压凸版产品关联"""
     embossing_plate = models.ForeignKey(EmbossingPlate, on_delete=models.CASCADE,
                                         related_name='products', verbose_name='压凸版')
-    product = models.ForeignKey('products.Product', on_delete=models.PROTECT, verbose_name='产品')
+    product = models.ForeignKey('workorder.Product', on_delete=models.PROTECT, verbose_name='产品')
     quantity = models.IntegerField('数量', default=1, help_text='该产品在压凸版中的数量')
     sort_order = models.IntegerField('排序', default=0)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)

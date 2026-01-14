@@ -35,7 +35,7 @@ class UserProfile(models.Model):
 
 class WorkOrderApprovalLog(models.Model):
     """施工单审核历史记录"""
-    work_order = models.ForeignKey('core.WorkOrder', on_delete=models.CASCADE,
+    work_order = models.ForeignKey('workorder.WorkOrder', on_delete=models.CASCADE,
                                    related_name='approval_logs', verbose_name='施工单')
     approval_status = models.CharField('审核状态', max_length=20, 
                                      choices=WorkOrder.APPROVAL_STATUS_CHOICES)
@@ -92,13 +92,13 @@ class Notification(models.Model):
     priority = models.CharField('优先级', max_length=10, choices=PRIORITY_CHOICES, default='normal')
     
     # 关联对象（可选，用于跳转到相关页面）
-    work_order = models.ForeignKey('core.WorkOrder', on_delete=models.CASCADE, null=True, blank=True,
+    work_order = models.ForeignKey('workorder.WorkOrder', on_delete=models.CASCADE, null=True, blank=True,
                                    related_name='notifications', verbose_name='关联施工单')
-    work_order_process = models.ForeignKey('core.WorkOrderProcess', on_delete=models.CASCADE, null=True, blank=True,
+    work_order_process = models.ForeignKey('workorder.WorkOrderProcess', on_delete=models.CASCADE, null=True, blank=True,
                                          related_name='notifications', verbose_name='关联工序')
-    task = models.ForeignKey('core.WorkOrderTask', on_delete=models.CASCADE, null=True, blank=True,
+    task = models.ForeignKey('workorder.WorkOrderTask', on_delete=models.CASCADE, null=True, blank=True,
                             related_name='notifications', verbose_name='关联任务')
-    purchase_order = models.ForeignKey('materials.PurchaseOrder', on_delete=models.CASCADE, null=True, blank=True,
+    purchase_order = models.ForeignKey('workorder.PurchaseOrder', on_delete=models.CASCADE, null=True, blank=True,
                                        related_name='notifications', verbose_name='关联采购单')
     
     # 通知状态
@@ -155,10 +155,10 @@ class TaskAssignmentRule(models.Model):
         ('first_available', '第一个可用'),
     ]
     
-    process = models.ForeignKey('base.Process', on_delete=models.CASCADE,
+    process = models.ForeignKey('workorder.Process', on_delete=models.CASCADE,
                                related_name='assignment_rules', verbose_name='工序',
                                help_text='该规则适用的工序')
-    department = models.ForeignKey('base.Department', on_delete=models.CASCADE,
+    department = models.ForeignKey('workorder.Department', on_delete=models.CASCADE,
                                   related_name='assignment_rules', verbose_name='分派部门',
                                   help_text='该工序应分派到的部门')
     priority = models.IntegerField('优先级', default=0,
