@@ -1965,10 +1965,33 @@ class WorkOrderTask(models.Model):
                 self.status = 'completed'
             elif not all_subtasks_completed and self.status == 'completed':
                 self.status = 'in_progress'
-            
-            self.save()
+
+            self.save(update_fields=['quantity_completed', 'quantity_defective', 'status', 'updated_at'])
             return True
         return False
+
+    def save(self, *args, **kwargs):
+        """保存时实现乐观锁机制"""
+        # 如果是更新操作，检查版本号
+        if self.pk:
+            # 获取数据库中的当前版本
+            try:
+                with transaction.atomic():
+                    current = WorkOrderTask.objects.select_for_update().get(pk=self.pk)
+                    if current.version != self.version:
+                        from workorder.exceptions import BusinessLogicError
+                        raise BusinessLogicError(
+                            f"数据已被其他用户修改，请刷新后重试。"
+                            f"当前版本: {current.version}, 您的版本: {self.version}"
+                        )
+                    # 递增版本号
+                    self.version += 1
+            except WorkOrderTask.DoesNotExist:
+                # 记录不存在，可能是被删除了
+                from workorder.exceptions import BusinessLogicError
+                raise BusinessLogicError("该任务已被删除，请刷新页面")
+
+        super().save(*args, **kwargs)
 
 
 class UserProfile(models.Model):
