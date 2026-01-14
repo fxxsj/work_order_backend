@@ -2505,7 +2505,7 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         logs = logs[start:end]
         
         # 序列化结果
-        from .serializers import TaskLogSerializer
+        from workorder.serializers.core import TaskLogSerializer
         serializer = TaskLogSerializer()
         
         # 构建响应数据，包含额外信息
