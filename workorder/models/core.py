@@ -338,7 +338,7 @@ class WorkOrderProcess(models.Model):
         ('skipped', '已跳过'),
     ]
 
-    work_order = models.ForeignKey('core.WorkOrder', on_delete=models.CASCADE, 
+    work_order = models.ForeignKey('WorkOrder', on_delete=models.CASCADE, 
                                    related_name='order_processes', verbose_name='施工单')
     process = models.ForeignKey('base.Process', on_delete=models.PROTECT, verbose_name='工序')
     department = models.ForeignKey('base.Department', on_delete=models.PROTECT, null=True, blank=True,
@@ -915,7 +915,7 @@ class WorkOrderProcess(models.Model):
 
 class WorkOrderProduct(models.Model):
     """施工单产品关联（支持一个施工单包含多个产品，如一套图稿中拼版了多个产品）"""
-    work_order = models.ForeignKey('core.WorkOrder', on_delete=models.CASCADE,
+    work_order = models.ForeignKey('WorkOrder', on_delete=models.CASCADE,
                                    related_name='products', verbose_name='施工单')
     product = models.ForeignKey('products.Product', on_delete=models.PROTECT, verbose_name='产品')
     quantity = models.IntegerField('数量', default=1)
@@ -944,7 +944,7 @@ class WorkOrderMaterial(models.Model):
         ('completed', '已完成'),
     ]
     
-    work_order = models.ForeignKey('core.WorkOrder', on_delete=models.CASCADE,
+    work_order = models.ForeignKey('WorkOrder', on_delete=models.CASCADE,
                                    related_name='materials', verbose_name='施工单')
     material = models.ForeignKey('materials.Material', on_delete=models.PROTECT, verbose_name='物料')
     
@@ -984,7 +984,7 @@ class ProcessLog(models.Model):
         ('note', '备注'),
     ]
 
-    work_order_process = models.ForeignKey('core.WorkOrderProcess', on_delete=models.CASCADE,
+    work_order_process = models.ForeignKey('WorkOrderProcess', on_delete=models.CASCADE,
                                           related_name='logs', verbose_name='工序')
     log_type = models.CharField('日志类型', max_length=20, choices=LOG_TYPE_CHOICES)
     content = models.TextField('内容')
@@ -1008,7 +1008,7 @@ class TaskLog(models.Model):
         ('status_change', '状态变更'),
     ]
 
-    task = models.ForeignKey('core.WorkOrderTask', on_delete=models.CASCADE,
+    task = models.ForeignKey('WorkOrderTask', on_delete=models.CASCADE,
                              related_name='logs', verbose_name='任务')
     log_type = models.CharField('日志类型', max_length=20, choices=LOG_TYPE_CHOICES)
     content = models.TextField('内容', help_text='操作内容描述')
@@ -1045,7 +1045,7 @@ class WorkOrderTask(models.Model):
         ('general', '通用任务'),
     ]
     
-    work_order_process = models.ForeignKey('core.WorkOrderProcess', on_delete=models.CASCADE,
+    work_order_process = models.ForeignKey('WorkOrderProcess', on_delete=models.CASCADE,
                                           related_name='tasks', verbose_name='工序')
     task_type = models.CharField('任务类型', max_length=20, choices=TASK_TYPE_CHOICES,
                                 default='general', help_text='任务类型，用于区分不同的任务生成规则')
