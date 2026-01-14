@@ -57,11 +57,11 @@ venv/bin/python manage.py <命令> --skip-checks
 **不需要 --skip-checks 的命令：**
 - `createsuperuser` - 创建超级用户
 - `shell` - Django shell
-- `makemigrations` - 创建迁移文件
 
 **需要 --skip-checks 的命令：**
 - `runserver` - 启动开发服务器
 - `migrate` - 运行数据库迁移
+- `makemigrations` - 创建迁移文件（包括 --merge 选项）
 - 其他会触发系统检查的命令
 
 ## 📝 技术说明

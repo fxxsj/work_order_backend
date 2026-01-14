@@ -19,7 +19,7 @@ elif [ "$COMMAND" = "createsuperuser" ]; then
 elif [ "$COMMAND" = "shell" ]; then
     venv/bin/python manage.py shell "$@"
 elif [ "$COMMAND" = "makemigrations" ]; then
-    venv/bin/python manage.py makemigrations "$@"
+    venv/bin/python manage.py makemigrations --skip-checks "$@"
 else
     venv/bin/python manage.py "$COMMAND" --skip-checks "$@"
 fi

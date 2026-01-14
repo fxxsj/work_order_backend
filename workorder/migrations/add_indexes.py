@@ -93,7 +93,7 @@ class Migration(migrations.Migration):
         # ProcessLog 索引
         migrations.AddIndex(
             model_name='processlog',
-            index=models.Index(fields=['work_order'], name='processlog_wo_idx'),
+            index=models.Index(fields=['work_order_process'], name='processlog_wo_idx'),
         ),
         migrations.AddIndex(
             model_name='processlog',
