@@ -1,9 +1,16 @@
-Django==4.2.8
+# Django
+Django==4.2.11
 djangorestframework==3.14.0
 django-cors-headers==4.3.1
 django-filter==23.5
-Pillow>=10.4.0
-python-dateutil==2.8.2
-pytz==2024.1
-openpyxl==3.1.2
 
+# 环境变量管理
+python-dotenv==1.0.0
+
+# 数据库（可选，使用 PostgreSQL）
+# psycopg2-binary==2.9.9
+
+# 开发工具
+# black==24.1.1
+# pylint==3.0.3
+# pytest-django==4.7.0
