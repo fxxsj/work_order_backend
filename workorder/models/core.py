@@ -20,6 +20,13 @@ from django.db import transaction
 from django.db.models import Max, Sum
 from datetime import datetime
 
+# 导入 Process 模型用于验证
+try:
+    from workorder.models.base import Process
+except ImportError:
+    # 如果在同一个模块中，使用相对导入
+    from .base import Process
+
 # 审核通过后禁止编辑的核心字段列表
 APPROVED_ORDER_PROTECTED_FIELDS = [
     'customer',           # 客户
@@ -184,9 +191,9 @@ class WorkOrder(models.Model):
         errors = []
         
         # ========== 基础信息验证 ==========
-        
-        # 检查客户信息
-        if not self.customer:
+
+        # 检查客户信息（使用 getattr 避免 RelatedObjectDoesNotExist 异常）
+        if getattr(self, 'customer_id', None) is None:
             errors.append('缺少客户信息')
         
         # 检查产品信息
@@ -206,15 +213,19 @@ class WorkOrder(models.Model):
         # 获取所有选中的工序
         selected_processes = self.order_processes.values_list('process', flat=True)
         processes = Process.objects.filter(id__in=selected_processes, is_active=True)
-        
-        # 检查图稿
-        processes_requiring_artwork = processes.filter(requires_artwork=True, artwork_required=True)
+
+        # 检查图稿（任一字段为True即需要图稿）
+        processes_requiring_artwork = processes.filter(
+            models.Q(requires_artwork=True) | models.Q(artwork_required=True)
+        )
         if processes_requiring_artwork.exists() and not self.artworks.exists():
             process_names = ', '.join([p.name for p in processes_requiring_artwork])
             errors.append(f'选择了需要图稿的工序（{process_names}），请至少选择一个图稿')
-        
-        # 检查刀模
-        processes_requiring_die = processes.filter(requires_die=True, die_required=True)
+
+        # 检查刀模（任一字段为True即需要刀模）
+        processes_requiring_die = processes.filter(
+            models.Q(requires_die=True) | models.Q(die_required=True)
+        )
         if processes_requiring_die.exists() and not self.dies.exists():
             process_names = ', '.join([p.name for p in processes_requiring_die])
             errors.append(f'选择了需要刀模的工序（{process_names}），请至少选择一个刀模')
@@ -246,11 +257,16 @@ class WorkOrder(models.Model):
                 errors.append(f'产品数量总和必须大于0，当前总和为{total_product_quantity}')
         
         # ========== 日期验证 ==========
-        
+
         # 检查交货日期是否早于下单日期
         if self.delivery_date and self.order_date:
-            if self.delivery_date < self.order_date:
-                errors.append(f'交货日期不能早于下单日期。交货日期：{self.delivery_date}，下单日期：{self.order_date}')
+            # 确保 order_date 是 date 对象（处理可能从 timezone.now() 返回的 datetime）
+            order_date = self.order_date
+            if hasattr(order_date, 'date'):
+                order_date = order_date.date()
+
+            if self.delivery_date < order_date:
+                errors.append(f'交货日期不能早于下单日期。交货日期：{self.delivery_date}，下单日期：{order_date}')
         
         # 检查交货日期是否在过去（允许今天）
         from django.utils import timezone
@@ -267,34 +283,31 @@ class WorkOrder(models.Model):
                     errors.append(f'物料"{material_item.material.name}"需要开料，请填写物料用量')
         
         # ========== 工序顺序验证 ==========
-        
+
         # 检查制版工序是否在印刷工序之前
         processes_ordered = self.order_processes.filter(
-            process__code__in=['CTP', 'PRT']
+            process__code__in=['CTP', 'PRT', 'CUT']
         ).select_related('process').order_by('sequence')
-        
+
         ctp_sequence = None
         prt_sequence = None
+        cut_sequence = None
         for wp in processes_ordered:
             if wp.process.code == 'CTP':
                 ctp_sequence = wp.sequence
             elif wp.process.code == 'PRT':
                 prt_sequence = wp.sequence
-        
+            elif wp.process.code == 'CUT':
+                cut_sequence = wp.sequence
+
         if ctp_sequence is not None and prt_sequence is not None:
             if ctp_sequence > prt_sequence:
                 errors.append('制版工序（CTP）应该在印刷工序（PRT）之前，请调整工序顺序')
-        
-        # 检查开料工序是否在印刷工序之前
-        cut_sequence = None
-        for wp in processes_ordered:
-            if wp.process.code == 'CUT':
-                cut_sequence = wp.sequence
-        
+
         if cut_sequence is not None and prt_sequence is not None:
             if cut_sequence > prt_sequence:
                 errors.append('开料工序（CUT）应该在印刷工序（PRT）之前，请调整工序顺序')
-        
+
         return errors
     
     @classmethod
