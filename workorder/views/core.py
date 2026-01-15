@@ -51,29 +51,10 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     queryset = WorkOrder.objects.all()
     permission_classes = [WorkOrderDataPermission]  # 使用细粒度数据权限
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status', 'priority', 'customer', 'manager', 'approval_status']
     search_fields = ['order_number', 'products__product__name', 'products__product__code', 'customer__name']
     ordering_fields = ['created_at', 'order_date', 'delivery_date', 'order_number']
     ordering = ['-created_at']
-
-    def get_filterset(self):
-        """
-        动态创建 FilterSet，避免模块加载时的关系解析问题。
-
-        由于 WorkOrder 模型使用了字符串外键引用（如 'base.Customer'），
-        在模块导入时 Django apps registry 可能还未完全初始化。
-        在请求处理时创建 FilterSet 可以确保 Django 已完全初始化。
-        """
-        from django_filters import FilterSet, NumberFilter
-
-        class WorkOrderFilterSet(FilterSet):
-            """施工单筛选器"""
-            customer__salesperson = NumberFilter(field_name='customer__salesperson', lookup_expr='exact')
-
-            class Meta:
-                model = WorkOrder
-                fields = ['status', 'priority', 'customer', 'manager', 'approval_status', 'customer__salesperson']
-
-        return WorkOrderFilterSet
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -96,13 +77,13 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         """根据用户权限过滤查询集"""
         queryset = super().get_queryset()
         user = self.request.user
-        
+
         # 管理员可以查看所有数据
         if user.is_superuser:
             queryset = queryset.select_related('customer', 'customer__salesperson', 'manager', 'created_by', 'approved_by')
             queryset = queryset.prefetch_related('order_processes', 'materials', 'products__product', 'artworks', 'dies')
             return queryset
-        
+
         # 业务员只能查看自己负责的客户的施工单
         if user.groups.filter(name='业务员').exists():
             queryset = queryset.filter(customer__salesperson=user)
@@ -122,7 +103,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         # 其他用户只能查看自己创建的施工单
         else:
             queryset = queryset.filter(created_by=user)
-        
+
         queryset = queryset.select_related('customer', 'customer__salesperson', 'manager', 'created_by', 'approved_by')
         queryset = queryset.prefetch_related('order_processes', 'materials', 'products__product', 'artworks', 'dies')
         return queryset
@@ -853,13 +834,13 @@ class WorkOrderProcessViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def batch_start(self, request):
         """批量开始工序
-        
+
         请求参数：
         - process_ids: 工序ID列表（必填）
         - operator: 操作员ID（可选，应用到所有工序）
         - department: 部门ID（可选，应用到所有工序）
         """
-        from ..models.base import ProcessLog
+        from ..models.core import ProcessLog
         
         process_ids = request.data.get('process_ids', [])
         operator_id = request.data.get('operator')
@@ -1310,9 +1291,8 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
             # 如果任务已完成但数量不足，设置为进行中
             elif task.status == 'completed' and new_quantity_completed < task.production_quantity:
                 task.status = 'in_progress'
-        
-        # 更新版本号（乐观锁）
-        task.version += 1
+
+        # 保存任务（模型会自动处理版本号）
         task.save()
 
         # 如果是包装任务，调整库存差异
@@ -1508,17 +1488,19 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         task.status = 'completed'
         if notes:
             task.production_requirements = notes
-        
+
         # 制版任务：完成数量固定为1
         if task.task_type == 'plate_making':
             task.quantity_completed = 1
-        
+        else:
+            # 其他任务：完成数量自动更新为生产数量
+            task.quantity_completed = task.production_quantity
+
         # 更新不良品数量（如果提供了）
         if quantity_defective is not None:
             task.quantity_defective = quantity_defective
-        
-        # 更新版本号（乐观锁）
-        task.version += 1
+
+        # 保存任务（模型会自动处理版本号）
         task.save()
         
         # 计算数量增量

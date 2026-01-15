@@ -18,7 +18,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Max, Sum
-from datetime import datetime
+from datetime import datetime, date
 
 # 导入 Process 和 Department 模型用于验证和分派
 try:
@@ -112,7 +112,7 @@ class WorkOrder(models.Model):
     status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='pending')
     priority = models.CharField('优先级', max_length=20, choices=PRIORITY_CHOICES, default='normal')
     
-    order_date = models.DateField('下单日期', default=timezone.now)
+    order_date = models.DateField('下单日期', default=date.today)
     delivery_date = models.DateField('交货日期')
     actual_delivery_date = models.DateField('实际交货日期', null=True, blank=True)
     

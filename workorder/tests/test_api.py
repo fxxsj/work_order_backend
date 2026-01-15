@@ -43,18 +43,14 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
             'customer': self.customer.id,
             'production_quantity': 100,
             'delivery_date': '2026-12-31',
-            'products': [
+            'products_data': [
                 {
                     'product': self.product.id,
-                    'quantity': 50
+                    'quantity': 50,
+                    'unit': '件'
                 }
             ],
-            'processes': [
-                {
-                    'process': self.process.id,
-                    'sequence': 10
-                }
-            ]
+            'processes': [self.process.id]  # 工序ID列表
         }
 
         response = self.api_post('/api/workorders/', data)
@@ -122,7 +118,11 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
 
     def test_filter_by_status(self):
         """测试按状态过滤"""
-        # 创建不同状态的施工单
+        # 清空现有的施工单
+        from workorder.models.core import WorkOrder
+        WorkOrder.objects.all().delete()
+
+        # 创建不同状态的施工单（都由同一个用户创建）
         wo1 = TestDataFactory.create_workorder(
             customer=self.customer,
             creator=self.user
@@ -137,8 +137,18 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         wo2.status = 'in_progress'
         wo2.save()
 
+        # 验证数据库中的状态
+        pending_count = WorkOrder.objects.filter(status='pending').count()
+        in_progress_count = WorkOrder.objects.filter(status='in_progress').count()
+        print(f"数据库中: pending={pending_count}, in_progress={in_progress_count}")
+
         # 过滤待开始的施工单
         response = self.api_get('/api/workorders/?status=pending')
+
+        # 调试：打印结果
+        print(f"API过滤后的施工单数量: {len(response.data['results'])}")
+        for i, wo in enumerate(response.data['results']):
+            print(f"  {i+1}. ID={wo['id']}, order_number={wo['order_number']}, status={wo['status']}")
 
         # 应该只返回待开始的
         self.assertEqual(response.status_code, 200)
@@ -292,7 +302,7 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
         )
 
         data = {
-            'increment': 30
+            'quantity_increment': 30
         }
 
         response = self.api_post(f'/api/workorder-tasks/{task.id}/update_quantity/', data)
@@ -349,14 +359,14 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
             production_quantity=100
         )
 
-        department = Department.objects.create(
-            name='测试部门',
-            code='TEST'
+        department, _ = Department.objects.get_or_create(
+            code='TEST',
+            defaults={'name': '测试部门'}
         )
 
         data = {
-            'department': department.id,
-            'operator': self.user.id
+            'assigned_department': department.id,
+            'assigned_operator': self.user.id
         }
 
         response = self.api_post(f'/api/workorder-tasks/{task.id}/assign/', data)
