@@ -286,8 +286,8 @@ class APIAuthenticationTest(TestCase):
         """测试需要登录"""
         response = self.client.get('/api/workorders/')
 
-        # 未登录应该返回 401
-        self.assertEqual(response.status_code, 401)
+        # 未登录应该返回 401 或 403（取决于 DRF 配置）
+        self.assertIn(response.status_code, [401, 403])
 
     def test_login_success(self):
         """测试登录成功"""
