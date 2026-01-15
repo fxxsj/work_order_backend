@@ -17,6 +17,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         """设置测试数据"""
         super().setUp()
         self.user = TestDataFactory.create_user()
+        self.client.force_login(self.user)
         self.customer = TestDataFactory.create_customer(salesperson=self.user)
         self.product = TestDataFactory.create_product()
         self.process = Process.objects.create(name='测试工序', code='TEST')
@@ -166,6 +167,7 @@ class WorkOrderProcessAPITest(APITestCaseMixin, TestCase):
         """设置测试数据"""
         super().setUp()
         self.user = TestDataFactory.create_user()
+        self.client.force_login(self.user)
         self.customer = TestDataFactory.create_customer(salesperson=self.user)
         self.work_order = TestDataFactory.create_workorder(
             customer=self.customer,
@@ -240,6 +242,7 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
         """设置测试数据"""
         super().setUp()
         self.user = TestDataFactory.create_user()
+        self.client.force_login(self.user)
         self.customer = TestDataFactory.create_customer(salesperson=self.user)
         self.work_order = TestDataFactory.create_workorder(
             customer=self.customer,

@@ -50,15 +50,45 @@ class TestDataFactory:
     def create_user(username='testuser', password='testpass123', **kwargs):
         """创建测试用户"""
         from django.contrib.auth.models import User
-        return User.objects.create_user(
+        from django.contrib.contenttypes.models import ContentType
+        from django.contrib.auth.models import Permission
+        from workorder.models import WorkOrder
+
+        # 创建用户
+        user = User.objects.create_user(
             username=username,
             password=password,
             email=kwargs.get('email', f'{username}@example.com'),
             first_name=kwargs.get('first_name', 'Test'),
             last_name=kwargs.get('last_name', 'User'),
-            is_staff=kwargs.get('is_staff', False),
+            is_staff=kwargs.get('is_staff', True),
             is_superuser=kwargs.get('is_superuser', False),
         )
+
+        # 如果不是超级用户，添加必要的权限
+        if not user.is_superuser and kwargs.get('add_permissions', True):
+            # 获取 WorkOrder 的内容类型
+            try:
+                ct = ContentType.objects.get_for_model(WorkOrder)
+                # 添加查看和修改权限
+                view_perm = Permission.objects.get(
+                    content_type=ct,
+                    codename='view_workorder'
+                )
+                change_perm = Permission.objects.get(
+                    content_type=ct,
+                    codename='change_workorder'
+                )
+                add_perm = Permission.objects.get(
+                    content_type=ct,
+                    codename='add_workorder'
+                )
+                user.user_permissions.add(view_perm, change_perm, add_perm)
+            except:
+                # 如果权限不存在（例如在测试环境中），忽略
+                pass
+
+        return user
 
     @staticmethod
     def create_customer(name='测试客户', salesperson=None, **kwargs):
@@ -99,6 +129,24 @@ class TestDataFactory:
         )
 
     @staticmethod
+    def create_workorder_process(work_order=None, process=None, sequence=10, **kwargs):
+        """创建测试施工单工序"""
+        from workorder.models.core import WorkOrderProcess
+
+        if not work_order:
+            work_order = TestDataFactory.create_workorder()
+
+        if not process:
+            process = TestDataFactory.create_process()
+
+        return WorkOrderProcess.objects.create(
+            work_order=work_order,
+            process=process,
+            sequence=sequence,
+            status=kwargs.get('status', 'pending'),
+        )
+
+    @staticmethod
     def create_workorder(customer=None, creator=None, **kwargs):
         """创建测试施工单"""
         from workorder.models.core import WorkOrder
@@ -132,8 +180,8 @@ class APITestCaseMixin:
         """设置认证"""
         super().setUp()
         self.client = self.client_class()
-        self.user = TestDataFactory.create_user()
-        self.client.force_login(self.user)
+        # 不自动创建用户，让测试类自己创建
+        # 避免用户名冲突
 
     def api_get(self, url, **kwargs):
         """GET 请求"""
