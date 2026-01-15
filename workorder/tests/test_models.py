@@ -270,14 +270,14 @@ class WorkOrderTaskModelTest(TestCase):
         )
         original_version = task.version
 
-        # 更新版本
-        task.version += 1
+        # 正常更新会自动增加版本号
+        task.work_content = '更新的任务内容'
         task.save()
 
         # 刷新
         task.refresh_from_db()
 
-        # 版本应该增加
+        # 版本应该自动增加
         self.assertEqual(task.version, original_version + 1)
 
     def test_task_log_created_on_update(self):

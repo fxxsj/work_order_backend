@@ -20,12 +20,12 @@ from django.db import transaction
 from django.db.models import Max, Sum
 from datetime import datetime
 
-# 导入 Process 模型用于验证
+# 导入 Process 和 Department 模型用于验证和分派
 try:
-    from workorder.models.base import Process
+    from workorder.models.base import Process, Department
 except ImportError:
     # 如果在同一个模块中，使用相对导入
-    from .base import Process
+    from .base import Process, Department
 
 # 审核通过后禁止编辑的核心字段列表
 APPROVED_ORDER_PROTECTED_FIELDS = [
@@ -391,15 +391,19 @@ class WorkOrderProcess(models.Model):
     
     def can_start(self):
         """判断该工序是否可以开始"""
+        # 如果工序已经开始或完成，不能重新开始
+        if self.status in ['in_progress', 'completed', 'cancelled']:
+            return False
+
         # 使用配置字段或编码判断是否可并行
         # 注意：采购不属于施工单工序，采购任务通过其他系统管理
         from .process_codes import ProcessCodes
-        
+
         # 优先使用配置字段，如果未配置则使用编码判断
         if self.process.is_parallel or ProcessCodes.is_parallel(self.process.code):
             # 这些工序可以并行，只要没有其他限制就可以开始
             return True
-        
+
         # 其他工序需要前一个工序完成
         # 获取所有非并行工序，按 sequence 排序
         non_parallel_processes = WorkOrderProcess.objects.filter(
@@ -409,23 +413,23 @@ class WorkOrderProcess(models.Model):
         ).exclude(
             process__code__in=[ProcessCodes.CTP, ProcessCodes.DIE]
         ).order_by('sequence')
-        
+
         # 找到当前工序在非并行工序中的位置
         current_idx = None
         for idx, wp in enumerate(non_parallel_processes):
             if wp.id == self.id:
                 current_idx = idx
                 break
-        
+
         # 如果是第一个非并行工序，可以开始
         if current_idx == 0:
             return True
-        
+
         # 检查前一个非并行工序是否完成
         if current_idx and current_idx > 0:
             previous_process = non_parallel_processes[current_idx - 1]
             return previous_process.status == 'completed'
-        
+
         return True
     
     def check_and_update_status(self):
@@ -1145,6 +1149,53 @@ class WorkOrderTask(models.Model):
             self.save(update_fields=['quantity_completed', 'quantity_defective', 'status', 'updated_at'])
             return True
         return False
+
+    def update_quantity(self, increment, user=None):
+        """
+        增量更新完成数量
+
+        Args:
+            increment: 增量值（可以是正数或负数）
+            user: 更新的用户（可选）
+
+        Returns:
+            bool: 更新是否成功
+        """
+        from django.utils import timezone
+
+        # 保存旧值
+        old_quantity = self.quantity_completed
+
+        # 更新数量
+        self.quantity_completed += increment
+
+        # 确保不超过生产数量
+        if self.quantity_completed > self.production_quantity:
+            self.quantity_completed = self.production_quantity
+
+        # 确保不为负数
+        if self.quantity_completed < 0:
+            self.quantity_completed = 0
+
+        # 如果达到生产数量，自动完成任务
+        if self.quantity_completed >= self.production_quantity:
+            self.status = 'completed'
+
+        # 保存（会自动递增版本号）
+        self.save()
+
+        # 创建任务日志
+        TaskLog.objects.create(
+            task=self,
+            log_type='update_quantity',
+            operator=user,
+            content=f'数量从 {old_quantity} 更新到 {self.quantity_completed}',
+            quantity_before=old_quantity,
+            quantity_after=self.quantity_completed,
+            quantity_increment=increment
+        )
+
+        return True
 
     def save(self, *args, **kwargs):
         """保存时实现乐观锁机制"""
