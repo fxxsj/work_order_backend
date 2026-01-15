@@ -7,6 +7,7 @@ from django.contrib.auth.models import User, Group
 from rest_framework.test import APIClient
 from .conftest import TestDataFactory, APITestCaseMixin
 from ..models import WorkOrder, Customer, Product, Process, Department
+from datetime import date
 
 
 class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
@@ -38,15 +39,18 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
             creator=self.salesperson2
         )
 
-        # 创建部门
-        self.department = Department.objects.create(
-            name='生产部',
-            code='PROD'
+        # 创建部门（使用 get_or_create 避免与预置数据冲突）
+        self.department, _ = Department.objects.get_or_create(
+            code='TEST_DEPT',
+            defaults={
+                'name': '测试部门',
+            }
         )
 
         # 创建生产主管
         self.supervisor = TestDataFactory.create_user(username='supervisor')
-        self.supervisor_profile = self.supervisor.profile
+        from workorder.models import UserProfile
+        self.supervisor_profile = UserProfile.objects.create(user=self.supervisor)
         self.supervisor_profile.departments.add(self.department)
 
     def test_salesperson_can_only_see_own_customers(self):
@@ -70,7 +74,7 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
         data = {
             'customer': self.customer1.id,
             'production_quantity': 100,
-            'delivery_date': '2026-12-31'
+            'delivery_date': date(2026, 12, 31)
         }
 
         response = self.api_post('/api/workorders/', data)
@@ -85,7 +89,7 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
         data = {
             'customer': self.customer2.id,  # 客户2属于业务员2
             'production_quantity': 100,
-            'delivery_date': '2026-12-31'
+            'delivery_date': date(2026, 12, 31)
         }
 
         response = self.api_post('/api/workorders/', data)
