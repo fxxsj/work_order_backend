@@ -30,14 +30,14 @@ class SuperuserFriendlyModelPermissions(permissions.DjangoModelPermissions):
     def has_object_permission(self, request, view, obj):
         # 超级用户拥有所有权限
         if request.user and request.user.is_superuser:
-            print("[DEBUG] SuperuserFriendlyModelPermissions: 用户 {} 是超级用户，允许访问对象".format(request.user.username))
+            print("[DEBUG] SuperuserFriendlyModelPermissions.has_object_permission: 用户 {} 是超级用户，允许访问对象".format(request.user.username))
             return True
 
-        # 其他用户使用默认的对象权限检查
-        result = super().has_object_permission(request, view, obj)
-        username = request.user.username if request.user else 'None'
-        print("[DEBUG] SuperuserFriendlyModelPermissions: 用户 {} 对象权限检查结果: {}".format(username, result))
-        return result
+        # DjangoModelPermissions 默认不检查对象级权限
+        # 它只在 queryset 被过滤时才检查对象权限
+        # 所以对于全局 queryset，我们直接返回 True
+        print("[DEBUG] SuperuserFriendlyModelPermissions.has_object_permission: 用户 {} 非超级用户，允许访问（DjangoModelPermissions 不检查对象权限）".format(request.user.username if request.user else 'None'))
+        return True
 
 
 class IsStaffOrReadOnly(permissions.BasePermission):
