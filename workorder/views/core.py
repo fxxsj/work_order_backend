@@ -74,14 +74,30 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             raise
     
     def get_queryset(self):
-        """根据用户权限过滤查询集"""
+        """根据用户权限过滤查询集，优化查询性能"""
         queryset = super().get_queryset()
         user = self.request.user
 
+        # 预加载所有关联数据，避免 N+1 查询
+        queryset = queryset.select_related(
+            'customer',
+            'customer__salesperson',
+            'manager',
+            'created_by',
+            'approved_by'
+        ).prefetch_related(
+            'products__product',
+            'artworks',
+            'dies',
+            'foiling_plates',
+            'embossing_plates',
+            'order_processes__process',
+            'materials__material',
+            'order_processes__tasks__assigned_department'
+        )
+
         # 管理员可以查看所有数据
         if user.is_superuser:
-            queryset = queryset.select_related('customer', 'customer__salesperson', 'manager', 'created_by', 'approved_by')
-            queryset = queryset.prefetch_related('order_processes', 'materials', 'products__product', 'artworks', 'dies')
             return queryset
 
         # 业务员只能查看自己负责的客户的施工单
