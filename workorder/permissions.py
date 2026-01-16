@@ -18,12 +18,25 @@ class SuperuserFriendlyModelPermissions(permissions.DjangoModelPermissions):
     def has_permission(self, request, view):
         # 超级用户拥有所有权限
         if request.user and request.user.is_superuser:
-            print(f"[DEBUG] SuperuserFriendlyModelPermissions: 用户 {request.user.username} 是超级用户，允许访问")
+            print("[DEBUG] SuperuserFriendlyModelPermissions: 用户 {} 是超级用户，允许访问".format(request.user.username))
             return True
 
         # 其他用户使用 Django 模型权限检查
         result = super().has_permission(request, view)
-        print(f"[DEBUG] SuperuserFriendlyModelPermissions: 用户 {request.user.username if request.user else 'None'} 权限检查结果: {result}")
+        username = request.user.username if request.user else 'None'
+        print("[DEBUG] SuperuserFriendlyModelPermissions: 用户 {} 权限检查结果: {}".format(username, result))
+        return result
+
+    def has_object_permission(self, request, view, obj):
+        # 超级用户拥有所有权限
+        if request.user and request.user.is_superuser:
+            print("[DEBUG] SuperuserFriendlyModelPermissions: 用户 {} 是超级用户，允许访问对象".format(request.user.username))
+            return True
+
+        # 其他用户使用默认的对象权限检查
+        result = super().has_object_permission(request, view, obj)
+        username = request.user.username if request.user else 'None'
+        print("[DEBUG] SuperuserFriendlyModelPermissions: 用户 {} 对象权限检查结果: {}".format(username, result))
         return result
 
 
