@@ -13,7 +13,7 @@ from .views import (
     SupplierViewSet, MaterialSupplierViewSet, PurchaseOrderViewSet, PurchaseOrderItemViewSet,
     SalesOrderViewSet, SalesOrderItemViewSet
 )
-from .auth_views import login_view, logout_view, get_current_user, register_view, get_salespersons, get_users_by_department
+from .auth_views import LoginView, logout_view, get_current_user, register_view, get_salespersons, get_users_by_department
 
 router = DefaultRouter()
 router.register(r'customers', CustomerViewSet)
@@ -49,7 +49,7 @@ router.register(r'embossing-plate-products', EmbossingPlateProductViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('auth/login/', login_view, name='login'),
+    path('auth/login/', LoginView.as_view(), name='login'),
     path('auth/logout/', logout_view, name='logout'),
     path('auth/user/', get_current_user, name='current-user'),
     path('auth/register/', register_view, name='register'),

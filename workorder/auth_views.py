@@ -2,6 +2,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User, Group, Permission
@@ -11,56 +12,58 @@ from .serializers import UserSerializer
 import re
 
 
-@csrf_exempt  # 豁免 CSRF 验证，因为登录时还没有 CSRF token
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def login_view(request):
-    """用户登录"""
-    username = request.data.get('username')
-    password = request.data.get('password')
-    
-    if not username or not password:
-        return Response(
-            {'error': '请提供用户名和密码'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    user = authenticate(request, username=username, password=password)
-    
-    if user is not None:
-        login(request, user)
+class LoginView(APIView):
+    """用户登录视图"""
+    permission_classes = [AllowAny]
+    authentication_classes = []  # 禁用所有认证类，避免 CSRF 检查
 
-        # 获取或创建用户的 Token
-        token, created = Token.objects.get_or_create(user=user)
+    def post(self, request):
+        """用户登录"""
+        username = request.data.get('username')
+        password = request.data.get('password')
 
-        # 获取用户所属的组
-        groups = list(user.groups.values_list('name', flat=True))
+        if not username or not password:
+            return Response(
+                {'error': '请提供用户名和密码'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # 获取用户权限（用于前端权限控制）
-        permissions = []
-        if user.is_superuser:
-            permissions = ['*']
+        user = authenticate(request, username=username, password=password)
+
+        if user is not None:
+            login(request, user)
+
+            # 获取或创建用户的 Token
+            token, created = Token.objects.get_or_create(user=user)
+
+            # 获取用户所属的组
+            groups = list(user.groups.values_list('name', flat=True))
+
+            # 获取用户权限（用于前端权限控制）
+            permissions = []
+            if user.is_superuser:
+                permissions = ['*']
+            else:
+                permissions = list(user.get_all_permissions())
+
+            return Response({
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'is_staff': user.is_staff,
+                'is_superuser': user.is_superuser,
+                'groups': groups,
+                'is_salesperson': '业务员' in groups,
+                'permissions': permissions,  # 添加权限列表
+                'token': token.key,  # 添加认证令牌
+            })
         else:
-            permissions = list(user.get_all_permissions())
-
-        return Response({
-            'id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-            'is_staff': user.is_staff,
-            'is_superuser': user.is_superuser,
-            'groups': groups,
-            'is_salesperson': '业务员' in groups,
-            'permissions': permissions,  # 添加权限列表
-            'token': token.key,  # 添加认证令牌
-        })
-    else:
-        return Response(
-            {'error': '用户名或密码错误'},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
+            return Response(
+                {'error': '用户名或密码错误'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
 
 @api_view(['POST'])
