@@ -1,8 +1,11 @@
 """
 自定义权限类
 用于处理特殊的权限需求
+
+P1 优化：使用缓存减少权限检查的数据库查询
 """
 from rest_framework import permissions
+from .permission_utils import PermissionCache
 
 
 class IsStaffOrReadOnly(permissions.BasePermission):
@@ -153,9 +156,8 @@ class WorkOrderTaskPermission(permissions.BasePermission):
             
             # 生产主管可以查看本部门的任务
             if obj.assigned_department:
-                # 检查用户是否属于该部门
-                user_departments = request.user.profile.departments.all() if hasattr(request.user, 'profile') else []
-                if obj.assigned_department in user_departments:
+                # P1 优化: 使用缓存检查用户是否属于该部门
+                if PermissionCache.is_user_in_department(request.user, obj.assigned_department.id):
                     return True
             
             # 施工单创建人可以查看自己创建的施工单的任务
@@ -175,8 +177,8 @@ class WorkOrderTaskPermission(permissions.BasePermission):
         
         # 生产主管可以更新本部门的所有任务
         if obj.assigned_department:
-            user_departments = request.user.profile.departments.all() if hasattr(request.user, 'profile') else []
-            if obj.assigned_department in user_departments:
+            # P1 优化: 使用缓存检查用户是否属于该部门
+            if PermissionCache.is_user_in_department(request.user, obj.assigned_department.id):
                 # 检查是否有 change_workorder 权限（生产主管）
                 if request.user.has_perm('workorder.change_workorder'):
                     return True
@@ -189,8 +191,9 @@ class WorkOrderTaskPermission(permissions.BasePermission):
         if request.user.has_perm('workorder.change_workorder'):
             # 检查是否是跨部门操作
             if obj.assigned_department:
-                user_departments = request.user.profile.departments.all() if hasattr(request.user, 'profile') else []
-                if obj.assigned_department not in user_departments:
+                # P1 优化: 使用缓存检查跨部门操作
+                user_departments = PermissionCache.get_user_departments(request.user)
+                if obj.assigned_department.id not in user_departments:
                     # 跨部门操作，需要特殊权限（这里允许有 change_workorder 权限的用户）
                     return True
         

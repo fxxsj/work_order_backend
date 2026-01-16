@@ -22,6 +22,8 @@ from ..permissions import (
 )
 from ..export_utils import export_work_orders, export_tasks
 from rest_framework.permissions import DjangoModelPermissions
+# P1 优化: 导入自定义速率限制
+from ..throttling import ApprovalRateThrottle, ExportRateThrottle, CreateRateThrottle
 
 from ..models.base import Customer, Department, Process
 from ..models.products import Product, ProductMaterial
@@ -64,13 +66,14 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         return WorkOrderDetailSerializer
     
     def update(self, request, *args, **kwargs):
-        """重写update方法以捕获详细错误信息"""
+        """重写update方法以捕获详细错误信息（P1 优化：使用日志记录）"""
         try:
             return super().update(request, *args, **kwargs)
         except Exception as e:
             import traceback
-            print(f"Error in WorkOrderViewSet.update: {str(e)}")
-            print(traceback.format_exc())
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in WorkOrderViewSet.update: {str(e)}", exc_info=True)
             raise
     
     def get_queryset(self):
@@ -235,20 +238,28 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(work_order)
         return Response(serializer.data)
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], throttle_classes=[ApprovalRateThrottle])
     def approve(self, request, pk=None):
-        """业务员审核施工单（完善版）"""
+        """业务员审核施工单（完善版 - P1 优化：添加速率限制和输入验证）"""
         from ..models.system import WorkOrderApprovalLog
-        
+
         work_order = self.get_object()
-        
+
+        # P1 优化: 输入验证
+        approval_status = request.data.get('approval_status')
+        if approval_status not in ['approved', 'rejected']:
+            return Response(
+                {'error': '审核状态无效，必须是 approved 或 rejected'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # 检查用户是否为业务员
         if not request.user.groups.filter(name='业务员').exists():
             return Response(
                 {'error': '只有业务员可以审核施工单'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         # 检查业务员是否负责该施工单的客户
         if work_order.customer.salesperson != request.user:
             return Response(
@@ -643,9 +654,9 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             },
         })
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], throttle_classes=[ExportRateThrottle])
     def export(self, request):
-        """导出施工单列表到 Excel"""
+        """导出施工单列表到 Excel（P1 优化：添加速率限制）"""
         # 权限检查：需要查看权限
         if not request.user.has_perm('workorder.view_workorder'):
             return Response(
@@ -1332,10 +1343,14 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
                             reason=f'施工单{work_order.order_number}包装任务数量编辑，出库{abs(stock_increment)}{task.product.unit}'
                         )
                     except ValueError as e:
-                        # 库存不足，记录错误日志
-                        print(f"库存不足警告：{e}")
+                        # 库存不足，记录错误日志（P1 优化：使用日志记录）
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"库存不足警告：{e}")
             except Exception as e:
-                print(f"调整产品库存失败：{e}")
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"调整产品库存失败：{e}")
             
             # 更新已计入库存的数量
             task.stock_accounted_quantity = new_quantity_completed
@@ -2425,9 +2440,9 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
             'failed_tasks': failed_tasks
         })
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], throttle_classes=[ExportRateThrottle])
     def export(self, request):
-        """导出任务列表到 Excel"""
+        """导出任务列表到 Excel（P1 优化：添加速率限制）"""
         # 权限检查：需要查看权限
         if not request.user.has_perm('workorder.view_workorder'):
             return Response(
