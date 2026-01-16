@@ -11,9 +11,9 @@ from .serializers import UserSerializer
 import re
 
 
+@csrf_exempt  # 豁免 CSRF 验证，因为登录时还没有 CSRF token
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@csrf_exempt  # 豁免 CSRF 验证，因为登录时还没有 CSRF token
 def login_view(request):
     """用户登录"""
     username = request.data.get('username')
