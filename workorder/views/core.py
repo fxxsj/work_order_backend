@@ -241,7 +241,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], throttle_classes=[ApprovalRateThrottle])
     def approve(self, request, pk=None):
         """业务员审核施工单（完善版 - P1 优化：添加速率限制和输入验证）"""
-        from ..models.system import WorkOrderApprovalLog
+        from ..models.system import WorkOrderApprovalLog, Notification
 
         work_order = self.get_object()
 

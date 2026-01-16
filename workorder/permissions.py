@@ -117,7 +117,7 @@ class WorkOrderMaterialPermission(permissions.BasePermission):
 class WorkOrderTaskPermission(permissions.BasePermission):
     """
     任务操作权限：细粒度权限控制
-    
+
     规则：
     1. 操作员只能更新自己分派的任务
     2. 生产主管可以更新本部门的所有任务
@@ -128,13 +128,14 @@ class WorkOrderTaskPermission(permissions.BasePermission):
         # 检查用户是否已登录
         if not request.user.is_authenticated:
             return False
-        
+
         # 读取操作：检查是否有查看施工单的权限
         if request.method in permissions.SAFE_METHODS:
             return request.user.has_perm('workorder.view_workorder')
-        
-        # 写入操作：检查是否有编辑施工单的权限
-        return request.user.has_perm('workorder.change_workorder')
+
+        # 写入操作：允许有查看权限的用户访问，具体权限由 has_object_permission 检查
+        # 这样可以让操作员通过 update_quantity 等操作更新自己的任务
+        return request.user.has_perm('workorder.view_workorder')
     
     def has_object_permission(self, request, view, obj):
         """
