@@ -6,7 +6,7 @@
 
 from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.permissions import DjangoModelPermissions
+from ..permissions import SuperuserFriendlyModelPermissions
 
 from ..models.products import Product, ProductMaterial, ProductGroup, ProductGroupItem
 from ..serializers.products import (
@@ -19,7 +19,7 @@ from ..serializers.products import (
 
 class ProductViewSet(viewsets.ModelViewSet):
     """产品视图集"""
-    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
+    permission_classes = [SuperuserFriendlyModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -59,7 +59,7 @@ class ProductMaterialViewSet(viewsets.ModelViewSet):
 
 class ProductGroupViewSet(viewsets.ModelViewSet):
     """产品组视图集"""
-    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
+    permission_classes = [SuperuserFriendlyModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
     queryset = ProductGroup.objects.prefetch_related('items__product')
     serializer_class = ProductGroupSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]

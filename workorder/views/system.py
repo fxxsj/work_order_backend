@@ -8,7 +8,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.permissions import DjangoModelPermissions
+from ..permissions import SuperuserFriendlyModelPermissions
 from django.db.models import Q
 from django.utils import timezone
 
@@ -74,7 +74,7 @@ class TaskAssignmentRuleViewSet(viewsets.ModelViewSet):
     """任务分派规则视图集"""
     queryset = TaskAssignmentRule.objects.select_related('process', 'department').all()
     serializer_class = TaskAssignmentRuleSerializer
-    permission_classes = [DjangoModelPermissions]
+    permission_classes = [SuperuserFriendlyModelPermissions]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['process', 'department', 'is_active']
     search_fields = ['process__name', 'process__code', 'department__name', 'department__code', 'notes']

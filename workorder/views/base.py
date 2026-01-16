@@ -8,16 +8,16 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.permissions import DjangoModelPermissions
 
 from ..models.base import Customer, Department, Process
 from ..serializers.base import CustomerSerializer, DepartmentSerializer, ProcessSerializer
+from ..permissions import SuperuserFriendlyModelPermissions
 
 
 class CustomerViewSet(viewsets.ModelViewSet):
     """客户视图集"""
     queryset = Customer.objects.all()
-    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与施工单权限逻辑一致
+    permission_classes = [SuperuserFriendlyModelPermissions]  # 使用超级用户友好的模型权限
     serializer_class = CustomerSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'contact_person', 'phone']
@@ -52,7 +52,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
 class DepartmentViewSet(viewsets.ModelViewSet):
     """部门视图集"""
-    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
+    permission_classes = [SuperuserFriendlyModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -71,7 +71,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
 class ProcessViewSet(viewsets.ModelViewSet):
     """工序视图集"""
-    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
+    permission_classes = [SuperuserFriendlyModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
     queryset = Process.objects.all()
     serializer_class = ProcessSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]

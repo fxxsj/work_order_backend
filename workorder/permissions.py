@@ -8,6 +8,25 @@ from rest_framework import permissions
 from .permission_utils import PermissionCache
 
 
+class SuperuserFriendlyModelPermissions(permissions.DjangoModelPermissions):
+    """
+    扩展 DjangoModelPermissions，明确处理 superuser
+
+    虽然 DjangoModelPermissions 理论上会自动处理 superuser，
+    但为了确保万无一失，我们显式检查 is_superuser
+    """
+    def has_permission(self, request, view):
+        # 超级用户拥有所有权限
+        if request.user and request.user.is_superuser:
+            print(f"[DEBUG] SuperuserFriendlyModelPermissions: 用户 {request.user.username} 是超级用户，允许访问")
+            return True
+
+        # 其他用户使用 Django 模型权限检查
+        result = super().has_permission(request, view)
+        print(f"[DEBUG] SuperuserFriendlyModelPermissions: 用户 {request.user.username if request.user else 'None'} 权限检查结果: {result}")
+        return result
+
+
 class IsStaffOrReadOnly(permissions.BasePermission):
     """
     自定义权限：只有 staff 用户可以修改，其他用户只能查看
@@ -233,18 +252,26 @@ class WorkOrderDataPermission(permissions.BasePermission):
     def has_permission(self, request, view):
         # 检查用户是否已登录
         if not request.user.is_authenticated:
+            print(f"[DEBUG] WorkOrderDataPermission.has_permission: 用户未认证")
             return False
 
         # 超级用户拥有所有权限
         if request.user.is_superuser:
+            print(f"[DEBUG] WorkOrderDataPermission.has_permission: 用户 {request.user.username} 是超级用户，允许访问")
             return True
+
+        print(f"[DEBUG] WorkOrderDataPermission.has_permission: 用户 {request.user.username} 不是超级用户，检查权限 {request.method}")
 
         # 读取操作：检查是否有查看施工单的权限
         if request.method in permissions.SAFE_METHODS:
-            return request.user.has_perm('workorder.view_workorder')
+            has_perm = request.user.has_perm('workorder.view_workorder')
+            print(f"[DEBUG] 检查 view_workorder 权限: {has_perm}")
+            return has_perm
 
         # 写入操作：检查是否有编辑施工单的权限
-        return request.user.has_perm('workorder.change_workorder')
+        has_perm = request.user.has_perm('workorder.change_workorder')
+        print(f"[DEBUG] 检查 change_workorder 权限: {has_perm}")
+        return has_perm
     
     def has_object_permission(self, request, view, obj):
         """

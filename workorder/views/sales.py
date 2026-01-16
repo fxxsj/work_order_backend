@@ -12,7 +12,7 @@ from django_filters import FilterSet, NumberFilter
 from django.db.models import Q, Count, Sum
 from django.utils import timezone
 
-from rest_framework.permissions import DjangoModelPermissions
+from ..permissions import SuperuserFriendlyModelPermissions
 from ..models.sales import SalesOrder, SalesOrderItem
 from ..models.materials import PurchaseOrder, PurchaseOrderItem
 from ..models.core import WorkOrder, WorkOrderProduct
@@ -33,7 +33,7 @@ from ..models.base import Customer
 class SalesOrderViewSet(viewsets.ModelViewSet):
     """销售订单视图集"""
     queryset = SalesOrder.objects.all()
-    permission_classes = [DjangoModelPermissions]
+    permission_classes = [SuperuserFriendlyModelPermissions]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['order_number', 'customer__name']
     ordering_fields = ['created_at', 'order_date', 'delivery_date']
@@ -264,7 +264,7 @@ class SalesOrderViewSet(viewsets.ModelViewSet):
 class SalesOrderItemViewSet(viewsets.ModelViewSet):
     """销售订单明细视图集"""
     queryset = SalesOrderItem.objects.all()
-    permission_classes = [DjangoModelPermissions]
+    permission_classes = [SuperuserFriendlyModelPermissions]
     serializer_class = SalesOrderItemSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     ordering_fields = ['created_at']
@@ -306,7 +306,7 @@ class SalesOrderItemViewSet(viewsets.ModelViewSet):
 class PurchaseOrderViewSet(viewsets.ModelViewSet):
     """采购单视图集"""
     queryset = PurchaseOrder.objects.all()
-    permission_classes = [DjangoModelPermissions]
+    permission_classes = [SuperuserFriendlyModelPermissions]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['order_number', 'supplier__name']
     ordering_fields = ['created_at', 'order_number', 'total_amount']
@@ -552,7 +552,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 class PurchaseOrderItemViewSet(viewsets.ModelViewSet):
     """采购单明细视图集"""
     queryset = PurchaseOrderItem.objects.all()
-    permission_classes = [DjangoModelPermissions]
+    permission_classes = [SuperuserFriendlyModelPermissions]
     serializer_class = PurchaseOrderItemSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     ordering_fields = ['created_at']

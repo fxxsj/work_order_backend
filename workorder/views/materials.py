@@ -6,7 +6,7 @@
 
 from rest_framework import viewsets, filters, pagination
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.permissions import DjangoModelPermissions
+from ..permissions import SuperuserFriendlyModelPermissions
 
 from ..models.materials import Material, Supplier, MaterialSupplier
 from ..serializers.materials import MaterialSerializer, SupplierSerializer, MaterialSupplierSerializer
@@ -14,7 +14,7 @@ from ..serializers.materials import MaterialSerializer, SupplierSerializer, Mate
 
 class MaterialViewSet(viewsets.ModelViewSet):
     """物料视图集"""
-    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
+    permission_classes = [SuperuserFriendlyModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
     queryset = Material.objects.all()
     serializer_class = MaterialSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -27,7 +27,7 @@ class MaterialViewSet(viewsets.ModelViewSet):
 class SupplierViewSet(viewsets.ModelViewSet):
     """供应商视图集"""
     queryset = Supplier.objects.all()
-    permission_classes = [DjangoModelPermissions]
+    permission_classes = [SuperuserFriendlyModelPermissions]
     serializer_class = SupplierSerializer
     pagination_class = pagination.PageNumberPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -41,7 +41,7 @@ class SupplierViewSet(viewsets.ModelViewSet):
 class MaterialSupplierViewSet(viewsets.ModelViewSet):
     """物料供应商关联视图集"""
     queryset = MaterialSupplier.objects.all()
-    permission_classes = [DjangoModelPermissions]
+    permission_classes = [SuperuserFriendlyModelPermissions]
     serializer_class = MaterialSupplierSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['material', 'supplier', 'is_preferred']

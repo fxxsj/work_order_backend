@@ -8,7 +8,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.permissions import DjangoModelPermissions
+from ..permissions import SuperuserFriendlyModelPermissions
 from django.db.models import Sum
 
 from ..models.assets import (
@@ -28,7 +28,7 @@ from ..models.core import WorkOrder
 
 class ArtworkViewSet(viewsets.ModelViewSet):
     """图稿视图集"""
-    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
+    permission_classes = [SuperuserFriendlyModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
     queryset = Artwork.objects.all()
     serializer_class = ArtworkSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -116,7 +116,7 @@ class ArtworkViewSet(viewsets.ModelViewSet):
 
 class DieViewSet(viewsets.ModelViewSet):
     """刀模视图集"""
-    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
+    permission_classes = [SuperuserFriendlyModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
     queryset = Die.objects.all()
     serializer_class = DieSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -170,7 +170,7 @@ class DieViewSet(viewsets.ModelViewSet):
 
 class FoilingPlateViewSet(viewsets.ModelViewSet):
     """烫金版视图集"""
-    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
+    permission_classes = [SuperuserFriendlyModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
     queryset = FoilingPlate.objects.all()
     serializer_class = FoilingPlateSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -224,7 +224,7 @@ class FoilingPlateViewSet(viewsets.ModelViewSet):
 
 class EmbossingPlateViewSet(viewsets.ModelViewSet):
     """压凸版视图集"""
-    permission_classes = [DjangoModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
+    permission_classes = [SuperuserFriendlyModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
     queryset = EmbossingPlate.objects.all()
     serializer_class = EmbossingPlateSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]

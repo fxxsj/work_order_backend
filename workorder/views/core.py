@@ -21,7 +21,7 @@ from ..permissions import (
     WorkOrderDataPermission
 )
 from ..export_utils import export_work_orders, export_tasks
-from rest_framework.permissions import DjangoModelPermissions
+from ..permissions import SuperuserFriendlyModelPermissions
 # P1 优化: 导入自定义速率限制
 from ..throttling import ApprovalRateThrottle, ExportRateThrottle, CreateRateThrottle
 
