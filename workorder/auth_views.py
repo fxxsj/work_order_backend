@@ -2,15 +2,18 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User, Group, Permission
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
+from django.utils.decorators import method_decorator
 from .serializers import UserSerializer
 import re
 
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@csrf_exempt  # 豁免 CSRF 验证，因为登录时还没有 CSRF token
 def login_view(request):
     """用户登录"""
     username = request.data.get('username')
@@ -26,16 +29,20 @@ def login_view(request):
     
     if user is not None:
         login(request, user)
+
+        # 获取或创建用户的 Token
+        token, created = Token.objects.get_or_create(user=user)
+
         # 获取用户所属的组
         groups = list(user.groups.values_list('name', flat=True))
-        
+
         # 获取用户权限（用于前端权限控制）
         permissions = []
         if user.is_superuser:
             permissions = ['*']
         else:
             permissions = list(user.get_all_permissions())
-        
+
         return Response({
             'id': user.id,
             'username': user.username,
@@ -47,6 +54,7 @@ def login_view(request):
             'groups': groups,
             'is_salesperson': '业务员' in groups,
             'permissions': permissions,  # 添加权限列表
+            'token': token.key,  # 添加认证令牌
         })
     else:
         return Response(
