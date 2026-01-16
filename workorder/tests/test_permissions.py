@@ -253,22 +253,19 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
         )
 
         # 添加一个不需要图稿和刀模的工序以满足审核条件
-        # 使用"包装"工序，因为它通常不需要特殊的版
-        process = Process.objects.filter(
+        # 创建一个全新的测试工序，确保不需要图稿和刀模
+        process = Process.objects.create(
+            name='测试工序',
+            code='TEST_NO_PLATES',
             requires_artwork=False,
-            requires_die=False
-        ).first()
-
-        if not process:
-            # 如果找不到，创建一个简单的工序
-            process = Process.objects.create(
-                name='测试工序',
-                code='TEST',
-                requires_artwork=False,
-                requires_die=False,
-                artwork_required=False,
-                die_required=False
-            )
+            requires_die=False,
+            requires_foiling_plate=False,
+            requires_embossing_plate=False,
+            artwork_required=False,
+            die_required=False,
+            foiling_plate_required=False,
+            embossing_plate_required=False
+        )
 
         WorkOrderProcess.objects.create(
             work_order=self.wo1,
