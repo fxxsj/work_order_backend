@@ -28,6 +28,7 @@ class SalesOrder(models.Model):
         ('paid', '已付款'),
     ]
 
+    @staticmethod
     def generate_order_number():
         """生成销售订单号：SO + yyyymmdd + 4位序号"""
         today = timezone.now().strftime('%Y%m%d')
@@ -152,6 +153,12 @@ class SalesOrder(models.Model):
                 errors.append(f'交货日期不能早于订单日期。交货日期：{self.delivery_date}，订单日期：{self.order_date}')
 
         return errors
+
+    def save(self, *args, **kwargs):
+        """保存销售订单，自动生成订单号"""
+        if not self.order_number:
+            self.order_number = self.generate_order_number()
+        super().save(*args, **kwargs)
 
     def update_totals(self):
         """更新订单总金额"""
