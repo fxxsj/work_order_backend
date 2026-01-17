@@ -64,6 +64,12 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """创建销售订单及其明细"""
         items_data = validated_data.pop('items', [])
+
+        # 打印调试信息
+        import sys
+        print(f"[DEBUG] Creating sales order with data:", validated_data, file=sys.stderr)
+        print(f"[DEBUG] Items data:", items_data, file=sys.stderr)
+
         sales_order = SalesOrder.objects.create(**validated_data)
 
         # 创建订单明细
