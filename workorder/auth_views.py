@@ -190,23 +190,111 @@ def get_salespersons(request):
 def get_users_by_department(request):
     """根据部门获取用户列表"""
     from .models import UserProfile
-    
+
     try:
         department_id = request.query_params.get('department_id')
-        
+
         # 获取所有活跃用户
         users = User.objects.filter(is_active=True).exclude(is_superuser=True)
-        
+
         # 如果指定了部门，则过滤该部门的用户
         if department_id:
             users = users.filter(profile__departments__id=department_id).distinct()
-        
+
         users = users.order_by('username')
         serializer = UserSerializer(users, many=True)
         return Response(serializer.data)
     except Exception as e:
         return Response(
             {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    """修改密码"""
+    old_password = request.data.get('old_password')
+    new_password = request.data.get('new_password')
+    confirm_password = request.data.get('confirm_password')
+
+    # 验证参数
+    if not old_password or not new_password or not confirm_password:
+        return Response(
+            {'error': '请提供旧密码、新密码和确认密码'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # 验证新密码和确认密码是否一致
+    if new_password != confirm_password:
+        return Response(
+            {'error': '新密码和确认密码不一致'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # 验证旧密码是否正确
+    if not request.user.check_password(old_password):
+        return Response(
+            {'error': '旧密码错误'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # 验证新密码长度
+    if len(new_password) < 6:
+        return Response(
+            {'error': '新密码长度至少为6位'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # 修改密码
+    try:
+        request.user.set_password(new_password)
+        request.user.save()
+        return Response({'message': '密码修改成功'})
+    except Exception as e:
+        return Response(
+            {'error': f'密码修改失败: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def update_profile(request):
+    """更新个人信息"""
+    data = request.data
+
+    try:
+        # 更新允许修改的字段
+        if 'email' in data:
+            request.user.email = data['email']
+        if 'first_name' in data:
+            request.user.first_name = data['first_name']
+        if 'last_name' in data:
+            request.user.last_name = data['last_name']
+
+        request.user.save()
+
+        # 返回更新后的用户信息
+        groups = list(request.user.groups.values_list('name', flat=True))
+        permissions = ['*'] if request.user.is_superuser else list(request.user.get_all_permissions())
+
+        return Response({
+            'id': request.user.id,
+            'username': request.user.username,
+            'email': request.user.email,
+            'first_name': request.user.first_name,
+            'last_name': request.user.last_name,
+            'is_staff': request.user.is_staff,
+            'is_superuser': request.user.is_superuser,
+            'groups': groups,
+            'permissions': permissions,
+            'message': '个人信息更新成功'
+        })
+    except Exception as e:
+        return Response(
+            {'error': f'个人信息更新失败: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

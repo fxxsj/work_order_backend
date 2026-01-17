@@ -13,7 +13,10 @@ from .views import (
     SupplierViewSet, MaterialSupplierViewSet, PurchaseOrderViewSet, PurchaseOrderItemViewSet,
     SalesOrderViewSet, SalesOrderItemViewSet
 )
-from .auth_views import LoginView, logout_view, get_current_user, register_view, get_salespersons, get_users_by_department
+from .auth_views import (
+    LoginView, logout_view, get_current_user, register_view,
+    get_salespersons, get_users_by_department, change_password, update_profile
+)
 
 router = DefaultRouter()
 router.register(r'customers', CustomerViewSet)
@@ -55,5 +58,7 @@ urlpatterns = [
     path('auth/register/', register_view, name='register'),
     path('auth/salespersons/', get_salespersons, name='salespersons'),
     path('auth/users/', get_users_by_department, name='users-by-department'),
+    path('auth/change-password/', change_password, name='change-password'),
+    path('auth/update-profile/', update_profile, name='update-profile'),
 ]
 
