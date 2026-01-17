@@ -31,7 +31,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         )
 
         # 获取列表
-        response = self.api_get('/api/workorders/')
+        response = self.api_get('/api/workorders/', user=self.user)
 
         # 应该成功
         self.assertEqual(response.status_code, 200)

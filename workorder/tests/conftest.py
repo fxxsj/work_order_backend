@@ -183,24 +183,41 @@ class APITestCaseMixin:
         # 不自动创建用户，让测试类自己创建
         # 避免用户名冲突
 
-    def api_get(self, url, **kwargs):
+    def _get_auth_header(self, user):
+        """获取用户的认证头"""
+        from rest_framework.authtoken.models import Token
+        # 确保用户有 Token
+        token, created = Token.objects.get_or_create(user=user)
+        return {'HTTP_AUTHORIZATION': f'Token {token.key}'}
+
+    def api_get(self, url, user=None, **kwargs):
         """GET 请求"""
+        if user:
+            kwargs.update(self._get_auth_header(user))
         return self.client.get(url, **kwargs)
 
-    def api_post(self, url, data=None, **kwargs):
+    def api_post(self, url, data=None, user=None, **kwargs):
         """POST 请求"""
+        if user:
+            kwargs.update(self._get_auth_header(user))
         return self.client.post(url, data, content_type='application/json', **kwargs)
 
-    def api_put(self, url, data=None, **kwargs):
+    def api_put(self, url, data=None, user=None, **kwargs):
         """PUT 请求"""
+        if user:
+            kwargs.update(self._get_auth_header(user))
         return self.client.put(url, data, content_type='application/json', **kwargs)
 
-    def api_patch(self, url, data=None, **kwargs):
+    def api_patch(self, url, data=None, user=None, **kwargs):
         """PATCH 请求"""
+        if user:
+            kwargs.update(self._get_auth_header(user))
         return self.client.patch(url, data, content_type='application/json', **kwargs)
 
-    def api_delete(self, url, **kwargs):
+    def api_delete(self, url, user=None, **kwargs):
         """DELETE 请求"""
+        if user:
+            kwargs.update(self._get_auth_header(user))
         return self.client.delete(url, **kwargs)
 
     def assertAPIError(self, response, status_code, message=None):
