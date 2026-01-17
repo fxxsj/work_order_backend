@@ -49,7 +49,7 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
     payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
     submitted_by_name = serializers.CharField(source='submitted_by.username', read_only=True, allow_null=True)
     approved_by_name = serializers.CharField(source='approved_by.username', read_only=True, allow_null=True)
-    items = SalesOrderItemSerializer(many=True, read_only=True)
+    items = SalesOrderItemSerializer(many=True, required=False)
     work_order_numbers = serializers.SerializerMethodField()
 
     class Meta:
@@ -60,3 +60,40 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
     def get_work_order_numbers(self, obj):
         """获取关联的施工单号列表"""
         return [wo.order_number for wo in obj.work_orders.all()]
+
+    def create(self, validated_data):
+        """创建销售订单及其明细"""
+        items_data = validated_data.pop('items', [])
+        sales_order = SalesOrder.objects.create(**validated_data)
+
+        # 创建订单明细
+        for item_data in items_data:
+            SalesOrderItem.objects.create(sales_order=sales_order, **item_data)
+
+        # 更新订单总金额
+        sales_order.update_totals()
+
+        return sales_order
+
+    def update(self, instance, validated_data):
+        """更新销售订单及其明细"""
+        items_data = validated_data.pop('items', None)
+
+        # 更新销售订单基本信息
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # 如果提供了明细数据，更新明细
+        if items_data is not None:
+            # 删除原有明细
+            instance.items.all().delete()
+
+            # 创建新明细
+            for item_data in items_data:
+                SalesOrderItem.objects.create(sales_order=instance, **item_data)
+
+            # 更新订单总金额
+            instance.update_totals()
+
+        return instance
