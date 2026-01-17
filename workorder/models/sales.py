@@ -153,6 +153,30 @@ class SalesOrder(models.Model):
 
         return errors
 
+    def update_totals(self):
+        """更新订单总金额"""
+        from django.db.models import Sum, Q
+        
+        # 计算订单明细总额
+        items_total = self.items.aggregate(
+            subtotal_sum=Sum('subtotal')
+        )['subtotal_sum'] or 0
+        
+        # 计算税额
+        self.tax_amount = items_total * (self.tax_rate / 100)
+        
+        # 计算折扣总额
+        discount_total = self.items.aggregate(
+            discount_sum=Sum('discount_amount')
+        )['discount_sum'] or 0
+        
+        # 更新金额字段
+        self.subtotal = items_total
+        self.discount_amount = discount_total
+        self.total_amount = items_total + self.tax_amount - discount_total
+        
+        self.save(update_fields=['subtotal', 'tax_amount', 'discount_amount', 'total_amount'])
+
 
 class SalesOrderItem(models.Model):
     """销售订单明细"""
