@@ -309,3 +309,72 @@ import os
 LOGS_DIR = os.path.join(BASE_DIR, 'logs')
 if not os.path.exists(LOGS_DIR):
     os.makedirs(LOGS_DIR)
+
+# P1 优化: 缓存配置
+# 根据环境自动选择缓存后端
+REDIS_URL = os.environ.get('REDIS_URL')
+
+if REDIS_URL and not DEBUG:
+    # 生产环境：使用 Redis 缓存
+    try:
+        import django_redis  # noqa: F401
+        CACHES = {
+            'default': {
+                'BACKEND': 'django_redis.cache.RedisCache',
+                'LOCATION': REDIS_URL,
+                'OPTIONS': {
+                    'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                    'SERIALIZER': 'django_redis.serializers.json.JSONSerializer',
+                    'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
+                    'SOCKET_CONNECT_TIMEOUT': 5,
+                    'SOCKET_TIMEOUT': 5,
+                    'RETRY_ON_TIMEOUT': True,
+                    'MAX_RETRIES': 1,
+                    'CONNECTION_POOL_KWARGS': {
+                        'max_connections': 50,
+                        'retry_on_timeout': True,
+                    },
+                },
+                'KEY_PREFIX': 'workorder',
+                'TIMEOUT': 300,  # 5分钟默认超时
+                'VERSION': 1,
+            }
+        }
+    except ImportError:
+        # 如果 django_redis 未安装，降级到本地内存缓存
+        CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': 'workorder-cache',
+                'OPTIONS': {
+                    'MAX_ENTRIES': 1000,
+                }
+            }
+        }
+else:
+    # 开发环境：使用本地内存缓存
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'workorder-cache',
+            'OPTIONS': {
+                'MAX_ENTRIES': 1000,
+            }
+        }
+    }
+
+# 缓存键前缀
+CACHE_KEY_PREFIX = 'workorder'
+
+# 缓存超时设置（秒）
+CACHE_TIMEOUTS = {
+    'SHORT': 60,      # 1分钟
+    'MEDIUM': 300,    # 5分钟
+    'LONG': 900,      # 15分钟
+    'HOUR': 3600,     # 1小时
+    'DAY': 86400,     # 1天
+}
+
+# 会话配置（使用Redis存储）
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'
