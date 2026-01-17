@@ -19,6 +19,18 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['created_at', 'updated_at', 'subtotal']
 
+    def validate(self, attrs):
+        """验证订单明细数据"""
+        import sys
+        print(f"[DEBUG] Validating SalesOrderItem: {attrs}", file=sys.stderr)
+        return attrs
+
+    def create(self, validated_data):
+        """创建订单明细"""
+        import sys
+        print(f"[DEBUG] Creating SalesOrderItem with data: {validated_data}", file=sys.stderr)
+        return super().create(validated_data)
+
 
 class SalesOrderListSerializer(serializers.ModelSerializer):
     """销售订单列表序列化器"""
