@@ -203,8 +203,8 @@ REST_FRAMEWORK = {
         'rest_framework.filters.OrderingFilter',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.TokenAuthentication',  # 添加 Token 认证
+        # 'rest_framework.authentication.SessionAuthentication',  # 暂时禁用，避免 CSRF 冲突
+        'rest_framework.authentication.TokenAuthentication',  # 只使用 Token 认证
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',  # 认证用户可读写，未认证用户只读

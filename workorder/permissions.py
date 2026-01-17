@@ -18,25 +18,19 @@ class SuperuserFriendlyModelPermissions(permissions.DjangoModelPermissions):
     def has_permission(self, request, view):
         # 超级用户拥有所有权限
         if request.user and request.user.is_superuser:
-            print("[DEBUG] SuperuserFriendlyModelPermissions: 用户 {} 是超级用户，允许访问".format(request.user.username))
             return True
 
         # 其他用户使用 Django 模型权限检查
-        result = super().has_permission(request, view)
-        username = request.user.username if request.user else 'None'
-        print("[DEBUG] SuperuserFriendlyModelPermissions: 用户 {} 权限检查结果: {}".format(username, result))
-        return result
+        return super().has_permission(request, view)
 
     def has_object_permission(self, request, view, obj):
         # 超级用户拥有所有权限
         if request.user and request.user.is_superuser:
-            print("[DEBUG] SuperuserFriendlyModelPermissions.has_object_permission: 用户 {} 是超级用户，允许访问对象".format(request.user.username))
             return True
 
         # DjangoModelPermissions 默认不检查对象级权限
         # 它只在 queryset 被过滤时才检查对象权限
         # 所以对于全局 queryset，我们直接返回 True
-        print("[DEBUG] SuperuserFriendlyModelPermissions.has_object_permission: 用户 {} 非超级用户，允许访问（DjangoModelPermissions 不检查对象权限）".format(request.user.username if request.user else 'None'))
         return True
 
 
@@ -265,26 +259,18 @@ class WorkOrderDataPermission(permissions.BasePermission):
     def has_permission(self, request, view):
         # 检查用户是否已登录
         if not request.user.is_authenticated:
-            print(f"[DEBUG] WorkOrderDataPermission.has_permission: 用户未认证")
             return False
 
         # 超级用户拥有所有权限
         if request.user.is_superuser:
-            print(f"[DEBUG] WorkOrderDataPermission.has_permission: 用户 {request.user.username} 是超级用户，允许访问")
             return True
-
-        print(f"[DEBUG] WorkOrderDataPermission.has_permission: 用户 {request.user.username} 不是超级用户，检查权限 {request.method}")
 
         # 读取操作：检查是否有查看施工单的权限
         if request.method in permissions.SAFE_METHODS:
-            has_perm = request.user.has_perm('workorder.view_workorder')
-            print(f"[DEBUG] 检查 view_workorder 权限: {has_perm}")
-            return has_perm
+            return request.user.has_perm('workorder.view_workorder')
 
         # 写入操作：检查是否有编辑施工单的权限
-        has_perm = request.user.has_perm('workorder.change_workorder')
-        print(f"[DEBUG] 检查 change_workorder 权限: {has_perm}")
-        return has_perm
+        return request.user.has_perm('workorder.change_workorder')
     
     def has_object_permission(self, request, view, obj):
         """

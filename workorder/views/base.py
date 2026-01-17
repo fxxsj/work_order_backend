@@ -32,19 +32,19 @@ class CustomerViewSet(viewsets.ModelViewSet):
         - 如果有 view_customer 权限，返回所有客户（只读）
         """
         queryset = super().get_queryset()
-        
+
         # 如果有编辑客户权限，返回所有客户
         if self.request.user.has_perm('workorder.change_customer'):
             return queryset.select_related('salesperson')
-        
+
         # 如果是业务员，只返回自己负责的客户
         if self.request.user.groups.filter(name='业务员').exists():
             return queryset.filter(salesperson=self.request.user).select_related('salesperson')
-        
+
         # 如果有查看客户权限，返回所有客户（只读）
         if self.request.user.has_perm('workorder.view_customer'):
             return queryset.select_related('salesperson')
-        
+
         # 否则返回空查询集
         return queryset.none()
 
