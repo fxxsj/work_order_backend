@@ -60,6 +60,14 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# P2 优化: 性能监控中间件（可选）
+ENABLE_PERFORMANCE_MONITORING = os.environ.get('ENABLE_PERFORMANCE_MONITORING', 'False') == 'True'
+if ENABLE_PERFORMANCE_MONITORING:
+    try:
+        MIDDLEWARE.insert(0, 'monitoring.working_monitor.PerformanceMiddleware')
+    except ImportError:
+        pass
+
 ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
