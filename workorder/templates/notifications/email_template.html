@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统通知 - {{ notification.title }}</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 300;
+        }
+        .content {
+            padding: 30px 20px;
+        }
+        .priority-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+        .priority-urgent {
+            background-color: #ff4757;
+            color: white;
+        }
+        .priority-high {
+            background-color: #ff6348;
+            color: white;
+        }
+        .priority-normal {
+            background-color: #3498db;
+            color: white;
+        }
+        .priority-low {
+            background-color: #95a5a6;
+            color: white;
+        }
+        .notification-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        .notification-message {
+            font-size: 16px;
+            color: #34495e;
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+        .notification-details {
+            background-color: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .detail-label {
+            font-weight: bold;
+            color: #7f8c8d;
+        }
+        .detail-value {
+            color: #2c3e50;
+        }
+        .action-buttons {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+            margin: 0 5px;
+            transition: all 0.3s ease;
+        }
+        .btn-primary {
+            background-color: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #5a6fd8;
+            transform: translateY(-2px);
+        }
+        .btn-secondary {
+            background-color: #ecf0f1;
+            color: #7f8c8d;
+        }
+        .btn-secondary:hover {
+            background-color: #d5dbdc;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #7f8c8d;
+            border-top: 1px solid #ecf0f1;
+        }
+        .event-type-icon {
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+        .timestamp {
+            color: #95a5a6;
+            font-size: 12px;
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .content {
+                padding: 20px 15px;
+            }
+            .detail-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .btn {
+                display: block;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>印刷施工单管理系统</h1>
+            <p>系统通知</p>
+        </div>
+        
+        <div class="content">
+            <!-- 优先级标识 -->
+            <div class="priority-badge priority-{{ notification.priority }}">
+                {% if notification.priority == 'urgent' %}紧急{% elif notification.priority == 'high' %}高{% elif notification.priority == 'normal' %}普通{% else %}低{% endif %}
+            </div>
+            
+            <!-- 事件类型图标 -->
+            <div class="event-type-icon">
+                {% if notification.event_type == 'task_assigned' %}
+                    📋
+                {% elif notification.event_type == 'process_completed' %}
+                    ✅
+                {% elif notification.event_type == 'workorder_approved' %}
+                    👍
+                {% elif notification.event_type == 'workorder_rejected' %}
+                    ❌
+                {% elif notification.event_type == 'deadline_warning' %}
+                    ⏰
+                {% elif notification.event_type == 'system_announcement' %}
+                    📢
+                {% elif notification.event_type == 'urgent_order' %}
+                    🚨
+                {% else %}
+                    📬
+                {% endif %}
+            </div>
+            
+            <!-- 通知标题 -->
+            <div class="notification-title">{{ notification.title }}</div>
+            
+            <!-- 通知消息 -->
+            <div class="notification-message">{{ notification.message }}</div>
+            
+            <!-- 详细信息 -->
+            <div class="notification-details">
+                <div class="detail-row">
+                    <span class="detail-label">事件类型:</span>
+                    <span class="detail-value">
+                        {% if notification.event_type == 'task_assigned' %}
+                            任务分配
+                        {% elif notification.event_type == 'process_completed' %}
+                            工序完成
+                        {% elif notification.event_type == 'workorder_approved' %}
+                            施工单审核通过
+                        {% elif notification.event_type == 'workorder_rejected' %}
+                            施工单审核拒绝
+                        {% elif notification.event_type == 'deadline_warning' %}
+                            交货期预警
+                        {% elif notification.event_type == 'system_announcement' %}
+                            系统公告
+                        {% else %}
+                            其他
+                        {% endif %}
+                    </span>
+                </div>
+                
+                {% if data.workorder_number %}
+                <div class="detail-row">
+                    <span class="detail-label">施工单号:</span>
+                    <span class="detail-value">{{ data.workorder_number }}</span>
+                </div>
+                {% endif %}
+                
+                {% if data.process_name %}
+                <div class="detail-row">
+                    <span class="detail-label">工序名称:</span>
+                    <span class="detail-value">{{ data.process_name }}</span>
+                </div>
+                {% endif %}
+                
+                {% if data.task_name %}
+                <div class="detail-row">
+                    <span class="detail-label">任务名称:</span>
+                    <span class="detail-value">{{ data.task_name }}</span>
+                </div>
+                {% endif %}
+                
+                {% if data.assigned_by %}
+                <div class="detail-row">
+                    <span class="detail-label">操作人:</span>
+                    <span class="detail-value">{{ data.assigned_by }}</span>
+                </div>
+                {% endif %}
+                
+                {% if data.deadline %}
+                <div class="detail-row">
+                    <span class="detail-label">截止日期:</span>
+                    <span class="detail-value">{{ data.deadline }}</span>
+                </div>
+                {% endif %}
+                
+                {% if data.days_remaining %}
+                <div class="detail-row">
+                    <span class="detail-label">剩余天数:</span>
+                    <span class="detail-value">{{ data.days_remaining }} 天</span>
+                </div>
+                {% endif %}
+                
+                <div class="detail-row">
+                    <span class="detail-label">通知时间:</span>
+                    <span class="detail-value">{{ notification.timestamp }}</span>
+                </div>
+            </div>
+            
+            <!-- 操作按钮 -->
+            <div class="action-buttons">
+                <a href="{{ site_url }}/workorders" class="btn btn-primary">
+                    查看施工单
+                </a>
+                <a href="{{ site_url }}/notifications" class="btn btn-secondary">
+                    查看所有通知
+                </a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>此邮件由印刷施工单管理系统自动发送</p>
+            <p>如需帮助，请联系系统管理员</p>
+            <p class="timestamp">发送时间: {{ notification.timestamp }}</p>
+        </div>
+    </div>
+</body>
+</html>
