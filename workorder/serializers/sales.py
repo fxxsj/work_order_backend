@@ -17,7 +17,7 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesOrderItem
         fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at', 'subtotal']
+        read_only_fields = ['created_at', 'updated_at', 'subtotal', 'sales_order']
 
     def validate(self, attrs):
         """验证订单明细数据"""
