@@ -13,6 +13,15 @@ from .views import (
     SupplierViewSet, MaterialSupplierViewSet, PurchaseOrderViewSet, PurchaseOrderItemViewSet,
     SalesOrderViewSet, SalesOrderItemViewSet
 )
+# 暂时注释掉有问题的导入，避免自动重载错误
+# from .views.multi_level_approval import (
+#     ApprovalWorkflowViewSet, ApprovalStepViewSet, MultiLevelApprovalViewSet,
+#     UrgentOrderViewSet, ApprovalReportViewSet
+# )
+# from .views.notification import (
+#     NotificationViewSet, SystemNotificationViewSet, 
+#     UserNotificationSettingsViewSet, NotificationTemplateViewSet
+# )
 from .auth_views import (
     LoginView, logout_view, get_current_user, register_view,
     get_salespersons, get_users_by_department, change_password, update_profile
@@ -49,6 +58,16 @@ router.register(r'foiling-plates', FoilingPlateViewSet)
 router.register(r'foiling-plate-products', FoilingPlateProductViewSet)
 router.register(r'embossing-plates', EmbossingPlateViewSet)
 router.register(r'embossing-plate-products', EmbossingPlateProductViewSet)
+# 暂时注释掉有问题的路由注册，直到模型迁移完成
+# router.register(r'approval-workflows', ApprovalWorkflowViewSet)
+# router.register(r'approval-steps', ApprovalStepViewSet)
+# router.register(r'multi-level-approval', MultiLevelApprovalViewSet, basename='multi-level-approval')
+# router.register(r'urgent-orders', UrgentOrderViewSet, basename='urgent-orders')
+# router.register(r'approval-reports', ApprovalReportViewSet, basename='approval-reports')
+# router.register(r'notifications', NotificationViewSet, basename='notifications')
+# router.register(r'system-notifications', SystemNotificationViewSet, basename='system-notifications')
+# router.register(r'user-notification-settings', UserNotificationSettingsViewSet, basename='user-notification-settings')
+# router.register(r'notification-templates', NotificationTemplateViewSet, basename='notification-templates')
 
 urlpatterns = [
     path('', include(router.urls)),

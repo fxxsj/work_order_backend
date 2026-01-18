@@ -669,46 +669,91 @@ class WorkOrderProcess(models.Model):
     def _update_product_stock_on_packaging(self):
         """包装工序完成时，更新产品的库存数量
         
-        规则：
-        - 包装任务完成时，将任务的完成数量增加到对应产品的库存中
-        - 产品数量 = 任务的生产数量
+        优化规则：
+        - 使用事务确保库存更新的原子性
+        - 避免重复计算已入库的数量
+        - 记录详细的库存变更日志
         """
+        from django.db import transaction
         from .products import Product
+        from .services.data_consistency import StockConsistencyService
 
-        # 获取所有包装任务
-        packaging_tasks = self.tasks.filter(
-            task_type='packaging',
-            status='completed'
-        )
+        with transaction.atomic():
+            # 获取所有未计入库存的包装任务
+            packaging_tasks = self.tasks.filter(
+                task_type='packaging',
+                status='completed'
+            ).select_related('product').all()
 
-        # 按产品分组汇总数量
-        product_quantities = {}
-        for task in packaging_tasks:
-            if task.product:
+            # 按产品分组汇总需要入库的数量
+            product_quantities = {}
+            task_updates = []
+            
+            for task in packaging_tasks:
+                if not task.product:
+                    continue
+                    
                 product_id = task.product.id
-                if product_id not in product_quantities:
-                    product_quantities[product_id] = 0
                 # 计算实际需要入库的数量
                 # 新增数量 = 当前总完成数量 - 上次已计入库存的数量
                 actual_quantity_to_stock = task.quantity_completed - (task.stock_accounted_quantity or 0)
+                
                 if actual_quantity_to_stock > 0:
+                    if product_id not in product_quantities:
+                        product_quantities[product_id] = 0
                     product_quantities[product_id] += actual_quantity_to_stock
-                    # 更新已计入库存的数量
+                    
+                    # 准备任务更新
                     task.stock_accounted_quantity = task.quantity_completed
-                    task.save(update_fields=['stock_accounted_quantity'])
+                    task_updates.append(task)
 
-        # 更新产品库存
-        for product_id, quantity in product_quantities.items():
-            try:
-                product = Product.objects.get(id=product_id)
-                product.add_stock(
-                    quantity=quantity,
-                    user=None,
-                    reason=f'施工单{self.work_order.order_number}包装工序完成，入库{quantity}{product.unit}'
+            # 批量更新任务状态
+            if task_updates:
+                WorkOrderTask.objects.bulk_update(
+                    task_updates, 
+                    ['stock_accounted_quantity']
                 )
-            except Product.DoesNotExist:
-                # 产品已被删除，忽略
-                pass
+
+            # 批量更新产品库存
+            stock_updates = []
+            for product_id, quantity in product_quantities.items():
+                try:
+                    # 使用select_for_update锁定产品记录
+                    product = Product.objects.select_for_update().get(id=product_id)
+                    old_quantity = product.stock_quantity
+                    new_quantity = old_quantity + quantity
+                    product.stock_quantity = new_quantity
+                    stock_updates.append((product, old_quantity, new_quantity, quantity))
+                except Product.DoesNotExist:
+                    # 产品已被删除，记录日志但继续处理
+                    logger.warning(f"产品ID {product_id} 不存在，跳过库存更新")
+                    continue
+
+            # 批量保存产品库存
+            if stock_updates:
+                products_to_update = [item[0] for item in stock_updates]
+                Product.objects.bulk_update(products_to_update, ['stock_quantity'])
+
+                # 创建库存变更日志
+                from .products import ProductStockLog
+                log_entries = []
+                for product, old_quantity, new_quantity, quantity in stock_updates:
+                    log_entries.append(ProductStockLog(
+                        product=product,
+                        change_type='add',
+                        quantity=quantity,
+                        old_quantity=old_quantity,
+                        new_quantity=new_quantity,
+                        reason=f'施工单{self.work_order.order_number}包装工序完成，入库{quantity}{product.unit}',
+                        created_by=None
+                    ))
+                
+                ProductStockLog.objects.bulk_create(log_entries)
+
+                # 检查库存预警
+                for product, _, new_quantity, _ in stock_updates:
+                    if product.is_low_stock():
+                        product._send_low_stock_warning()
 
     def _select_operator_by_strategy(self, department, strategy):
         """根据策略从部门中选择操作员"""

@@ -71,6 +71,15 @@ from .sales import (
     SalesOrderItem,
 )
 
+from .multi_level_approval import (
+    ApprovalWorkflow,
+    ApprovalStep,
+    ApprovalRule,
+    ApprovalEscalation,
+    MultiLevelApprovalService,
+    UrgentOrderService,
+)
+
 __all__ = [
     # 基础模型
     'Customer',
@@ -121,4 +130,12 @@ __all__ = [
     # 销售模型
     'SalesOrder',
     'SalesOrderItem',
+
+    # 多级审核模型
+    'ApprovalWorkflow',
+    'ApprovalStep',
+    'ApprovalRule',
+    'ApprovalEscalation',
+    'MultiLevelApprovalService',
+    'UrgentOrderService',
 ]

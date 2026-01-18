@@ -77,55 +77,43 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             raise
     
     def get_queryset(self):
-        """根据用户权限过滤查询集，优化查询性能"""
-        queryset = super().get_queryset()
-        user = self.request.user
-
-        # 预加载所有关联数据，避免 N+1 查询
-        queryset = queryset.select_related(
-            'customer',
-            'customer__salesperson',
-            'manager',
-            'created_by',
-            'approved_by'
-        ).prefetch_related(
-            'products__product',
-            'artworks',
-            'dies',
-            'foiling_plates',
-            'embossing_plates',
-            'order_processes__process',
-            'materials__material',
-            'order_processes__tasks__assigned_department'
+        """根据用户权限过滤查询集，使用查询优化器提升性能"""
+        from ..services.query_optimizer import QueryOptimizer, QueryCache
+        
+        # 使用查询优化器获取基础查询集
+        queryset = QueryOptimizer.optimize_workorder_queryset(
+            super().get_queryset(), 
+            include_details=False  # 列表视图不需要详细信息
         )
+        
+        user = self.request.user
+        cache_key = f'workorder_queryset_{user.id}_{user.is_superuser}'
 
         # 管理员可以查看所有数据
         if user.is_superuser:
             return queryset
 
-        # 业务员只能查看自己负责的客户的施工单
-        if user.groups.filter(name='业务员').exists():
-            queryset = queryset.filter(customer__salesperson=user)
-        # 生产主管可以查看本部门有任务的施工单
-        elif user.has_perm('workorder.change_workorder'):
-            user_departments = user.profile.departments.all() if hasattr(user, 'profile') else []
-            if user_departments:
-                # 查询有任务分派到用户部门的施工单
-                from ..models.core import WorkOrderTask
-                work_order_ids = WorkOrderTask.objects.filter(
-                    assigned_department__in=user_departments
-                ).values_list('work_order_process__work_order_id', flat=True).distinct()
-                queryset = queryset.filter(id__in=work_order_ids)
+        # 使用缓存优化权限查询
+        def get_filtered_queryset():
+            if user.groups.filter(name='业务员').exists():
+                return queryset.filter(customer__salesperson=user)
+            
+            elif user.has_perm('workorder.change_workorder'):
+                user_departments = user.profile.departments.all() if hasattr(user, 'profile') else []
+                if user_departments:
+                    # 使用优化的子查询
+                    from ..models.core import WorkOrderTask
+                    work_order_ids = WorkOrderTask.objects.filter(
+                        assigned_department__in=user_departments
+                    ).values_list('work_order_process__work_order_id', flat=True).distinct()
+                    return queryset.filter(id__in=work_order_ids)
+                else:
+                    return queryset.filter(created_by=user)
+            
             else:
-                # 如果没有部门信息，只能查看自己创建的施工单
-                queryset = queryset.filter(created_by=user)
-        # 其他用户只能查看自己创建的施工单
-        else:
-            queryset = queryset.filter(created_by=user)
-
-        queryset = queryset.select_related('customer', 'customer__salesperson', 'manager', 'created_by', 'approved_by')
-        queryset = queryset.prefetch_related('order_processes', 'materials', 'products__product', 'artworks', 'dies')
-        return queryset
+                return queryset.filter(created_by=user)
+        
+        return QueryCache.get_cached_queryset(cache_key, get_filtered_queryset, timeout=300)
     
     def perform_create(self, serializer):
         # 自动设置创建人和制表人为当前用户
@@ -1076,31 +1064,15 @@ class WorkOrderProcessViewSet(viewsets.ModelViewSet):
 
 
 class WorkOrderTaskViewSet(viewsets.ModelViewSet):
-    """施工单任务视图集"""
-    queryset = WorkOrderTask.objects.select_related(
-        'work_order_process', 'work_order_process__process',
-        'work_order_process__work_order', 'artwork', 'die', 'product', 'material',
-        'foiling_plate', 'embossing_plate', 'assigned_department', 'assigned_operator',
-        'parent_task'
-    ).prefetch_related('logs', 'logs__operator', 'subtasks')
+    """施工单任务视图集 - 使用查询优化器"""
     permission_classes = [WorkOrderTaskPermission]  # 使用细粒度任务权限
     serializer_class = WorkOrderTaskSerializer
+    queryset = WorkOrderTask.objects.all()  # 添加 queryset 属性以便路由器确定 basename
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['work_content', 'production_requirements']
     ordering_fields = ['created_at', 'updated_at', 'assigned_department', 'assigned_operator']
     ordering = ['-created_at']
 
-    def get_filterset(self):
-        """动态创建 FilterSet，避免模块加载时的关系解析问题"""
-        from django_filters import FilterSet
-
-        class WorkOrderTaskFilterSet(FilterSet):
-            class Meta:
-                model = WorkOrderTask
-                fields = ['status', 'assigned_department', 'assigned_operator']
-
-        return WorkOrderTaskFilterSet
-    
     def get_queryset(self):
         """根据用户权限过滤查询集"""
         queryset = super().get_queryset()
