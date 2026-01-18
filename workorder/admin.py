@@ -10,7 +10,11 @@ from .models import (
     Die, DieProduct, FoilingPlate, FoilingPlateProduct, EmbossingPlate, EmbossingPlateProduct,
     WorkOrderTask, ProductGroup, ProductGroupItem, UserProfile, WorkOrderApprovalLog,
     TaskAssignmentRule, Notification,
-    Supplier, MaterialSupplier, PurchaseOrder, PurchaseOrderItem, SalesOrder, SalesOrderItem
+    Supplier, MaterialSupplier, PurchaseOrder, PurchaseOrderItem, SalesOrder, SalesOrderItem,
+    # 财务模型
+    CostCenter, CostItem, ProductionCost, Invoice, Payment, PaymentPlan, Statement,
+    # 库存模型
+    ProductStock, StockIn, StockOut, DeliveryOrder, DeliveryItem, QualityInspection
 )
 
 
@@ -1273,4 +1277,673 @@ class SalesOrderItemAdmin(admin.ModelAdmin):
         """显示产品名称"""
         return obj.product.name
     product_name.short_description = '产品名称'
+
+
+# ==================== 财务管理 ====================
+
+@admin.register(CostCenter)
+class CostCenterAdmin(admin.ModelAdmin):
+    """成本中心管理"""
+    list_display = ['code', 'name', 'type', 'parent', 'is_active', 'created_at']
+    search_fields = ['code', 'name', 'description']
+    list_filter = ['type', 'is_active', 'created_at']
+    list_editable = ['is_active']
+    ordering = ['code']
+    autocomplete_fields = ['parent', 'manager']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('code', 'name', 'type', 'parent', 'is_active')
+        }),
+        ('详细信息', {
+            'fields': ('description', 'manager')
+        }),
+        ('系统信息', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(CostItem)
+class CostItemAdmin(admin.ModelAdmin):
+    """成本项目管理"""
+    list_display = ['code', 'name', 'type', 'allocation_method', 'is_active', 'created_at']
+    search_fields = ['code', 'name', 'description']
+    list_filter = ['type', 'allocation_method', 'is_active', 'created_at']
+    list_editable = ['is_active']
+    ordering = ['code']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('code', 'name', 'type', 'allocation_method', 'is_active')
+        }),
+        ('详细信息', {
+            'fields': ('description',)
+        }),
+        ('系统信息', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(ProductionCost)
+class ProductionCostAdmin(admin.ModelAdmin):
+    """生产成本管理"""
+    list_display = [
+        'work_order', 'period',
+        'material_cost', 'labor_cost', 'equipment_cost', 'overhead_cost',
+        'total_cost', 'standard_cost', 'variance', 'variance_rate',
+        'calculated_at', 'created_at'
+    ]
+    search_fields = ['work_order__order_number', 'period']
+    list_filter = ['calculated_at', 'created_at']
+    readonly_fields = ['created_at', 'updated_at']
+    autocomplete_fields = ['work_order', 'calculated_by']
+    ordering = ['-created_at']
+
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('work_order', 'period')
+        }),
+        ('实际成本', {
+            'fields': ('material_cost', 'labor_cost', 'equipment_cost', 'overhead_cost', 'total_cost')
+        }),
+        ('标准成本', {
+            'fields': ('standard_cost',)
+        }),
+        ('差异分析', {
+            'fields': ('variance', 'variance_rate')
+        }),
+        ('其他信息', {
+            'fields': ('calculated_at', 'calculated_by', 'notes')
+        }),
+        ('系统信息', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(Invoice)
+class InvoiceAdmin(admin.ModelAdmin):
+    """发票管理"""
+    list_display = [
+        'invoice_number', 'customer', 'invoice_type',
+        'status', 'issue_date', 'amount', 'tax_amount',
+        'total_amount', 'submitted_by', 'approved_by', 'created_at'
+    ]
+    search_fields = ['invoice_number', 'customer__name', 'notes']
+    list_filter = ['invoice_type', 'status', 'issue_date', 'submitted_at', 'approved_at', 'created_at']
+    autocomplete_fields = ['customer', 'submitted_by', 'approved_by', 'created_by', 'sales_order', 'work_order']
+    readonly_fields = ['invoice_number', 'tax_amount', 'total_amount', 'created_at', 'updated_at']
+    ordering = ['-created_at']
+
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('invoice_number', 'customer', 'invoice_type', 'status')
+        }),
+        ('金额信息', {
+            'fields': ('amount', 'tax_rate', 'tax_amount', 'total_amount')
+        }),
+        ('关联信息', {
+            'fields': ('sales_order', 'work_order', 'notes')
+        }),
+        ('日期信息', {
+            'fields': ('issue_date',)
+        }),
+        ('审核信息', {
+            'fields': ('submitted_by', 'submitted_at', 'approved_by', 'approved_at')
+        }),
+        ('其他信息', {
+            'fields': ('customer_tax_number', 'customer_address', 'customer_phone',
+                      'customer_bank', 'customer_account', 'attachment')
+        }),
+        ('系统信息', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+#@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    """收款记录管理"""
+    list_display = [
+        'payment_number', 'customer_name', 'payment_date',
+        'payment_method_display', 'amount', 'applied_amount',
+        'remaining_amount', 'created_by_name', 'created_at'
+    ]
+    search_fields = ['payment_number', 'customer__name', 'transaction_number', 'bank_account']
+    list_filter = ['payment_method', 'payment_date', 'created_at']
+    autocomplete_fields = ['customer', 'created_by']
+    readonly_fields = ['payment_number', 'created_at', 'updated_at']
+    ordering = ['-created_at']
+
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('payment_number', 'customer', 'payment_date', 'payment_method')
+        }),
+        ('金额信息', {
+            'fields': ('amount', 'applied_amount', 'remaining_amount')
+        }),
+        ('支付信息', {
+            'fields': ('bank_account', 'transaction_number')
+        }),
+        ('其他信息', {
+            'fields': ('notes', 'attachment')
+        }),
+        ('系统信息', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def customer_name(self, obj):
+        """显示客户名称"""
+        return obj.customer.name
+    customer_name.short_description = '客户'
+
+    def created_by_name(self, obj):
+        """显示创建人"""
+        return obj.created_by.username if obj.created_by else '-'
+    created_by_name.short_description = '创建人'
+
+
+#@admin.register(PaymentPlan)
+class PaymentPlanAdmin(admin.ModelAdmin):
+    """收款计划管理"""
+    list_display = [
+        'sales_order_number', 'customer_name', 'plan_name',
+        'amount', 'planned_date', 'status_display',
+        'paid_amount', 'remaining_amount', 'created_at'
+    ]
+    search_fields = ['sales_order__order_number', 'customer__name', 'plan_name']
+    list_filter = ['status', 'planned_date', 'actual_payment_date', 'created_at']
+    autocomplete_fields = ['sales_order', 'customer', 'payment']
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['planned_date']
+
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('sales_order', 'customer', 'plan_name', 'status')
+        }),
+        ('金额信息', {
+            'fields': ('amount', 'payment_ratio', 'paid_amount', 'remaining_amount')
+        }),
+        ('日期信息', {
+            'fields': ('planned_date', 'actual_payment_date')
+        }),
+        ('关联收款', {
+            'fields': ('payment',)
+        }),
+        ('其他信息', {
+            'fields': ('notes',)
+        }),
+        ('系统信息', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def sales_order_number(self, obj):
+        """显示销售订单号"""
+        return obj.sales_order.order_number if obj.sales_order else '-'
+    sales_order_number.short_description = '销售订单'
+
+    def customer_name(self, obj):
+        """显示客户名称"""
+        return obj.customer.name
+    customer_name.short_description = '客户'
+
+
+#@admin.register(Statement)
+class StatementAdmin(admin.ModelAdmin):
+    """对账单管理"""
+    list_display = [
+        'statement_number', 'statement_type_display', 'partner_name',
+        'period_start', 'period_end', 'opening_balance',
+        'debit_amount', 'credit_amount', 'closing_balance',
+        'status_badge', 'confirmed_at', 'created_at'
+    ]
+    search_fields = ['statement_number', 'partner__name']
+    list_filter = ['statement_type', 'status', 'period_start', 'period_end', 'confirmed_at', 'created_at']
+    autocomplete_fields = ['partner', 'confirmed_by', 'created_by']
+    readonly_fields = ['statement_number', 'created_at', 'updated_at']
+    ordering = ['-created_at']
+
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('statement_number', 'statement_type', 'partner', 'status')
+        }),
+        ('对账期间', {
+            'fields': ('period_start', 'period_end', 'statement_date')
+        }),
+        ('余额信息', {
+            'fields': ('opening_balance', 'debit_amount', 'credit_amount', 'closing_balance')
+        }),
+        ('确认信息', {
+            'fields': ('confirmed_by', 'confirmed_at', 'confirm_notes')
+        }),
+        ('其他信息', {
+            'fields': ('notes', 'attachment')
+        }),
+        ('系统信息', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def partner_name(self, obj):
+        """显示对方单位名称"""
+        return obj.partner.name if hasattr(obj.partner, 'name') else str(obj.partner)
+    partner_name.short_description = '对方单位'
+
+    def status_badge(self, obj):
+        """状态徽章"""
+        colors = {
+            'draft': '#909399',
+            'confirmed': '#67C23A',
+            'cancelled': '#F56C6C',
+        }
+        return format_html(
+            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
+            'background-color: {};">{}</span>',
+            colors.get(obj.status, '#909399'),
+            obj.get_status_display()
+        )
+    status_badge.short_description = '状态'
+
+
+# ==================== 库存管理 ====================
+
+#@admin.register(ProductStock)
+class ProductStockAdmin(admin.ModelAdmin):
+    """成品库存管理"""
+    list_display = [
+        'product_code', 'product_name', 'batch_number',
+        'quantity', 'reserved_quantity', 'available_quantity',
+        'location', 'status_badge', 'production_date',
+        'expiry_date', 'days_until_expiry', 'created_at'
+    ]
+    search_fields = ['product__name', 'product__code', 'batch_number', 'location']
+    list_filter = ['status', 'production_date', 'expiry_date', 'created_at']
+    autocomplete_fields = ['product']
+    readonly_fields = ['created_at', 'updated_at', 'days_until_expiry', 'total_value']
+    ordering = ['-created_at']
+
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('product', 'batch_number', 'status')
+        }),
+        ('数量信息', {
+            'fields': ('quantity', 'reserved_quantity', 'available_quantity', 'min_stock_level')
+        }),
+        ('位置信息', {
+            'fields': ('location', 'warehouse_area')
+        }),
+        ('日期信息', {
+            'fields': ('production_date', 'expiry_date')
+        }),
+        ('成本信息', {
+            'fields': ('unit_cost', 'total_value')
+        }),
+        ('其他信息', {
+            'fields': ('notes',)
+        }),
+        ('系统信息', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def product_code(self, obj):
+        """显示产品编码"""
+        return obj.product.code
+    product_code.short_description = '产品编码'
+
+    def product_name(self, obj):
+        """显示产品名称"""
+        return obj.product.name
+    product_name.short_description = '产品'
+
+    def available_quantity(self, obj):
+        """计算可用数量"""
+        return obj.quantity - obj.reserved_quantity
+    available_quantity.short_description = '可用数量'
+
+    def status_badge(self, obj):
+        """状态徽章"""
+        colors = {
+            'in_stock': '#67C23A',
+            'reserved': '#E6A23C',
+            'quality_check': '#409EFF',
+            'defective': '#F56C6C',
+        }
+        return format_html(
+            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
+            'background-color: {};">{}</span>',
+            colors.get(obj.status, '#909399'),
+            obj.get_status_display()
+        )
+    status_badge.short_description = '状态'
+
+
+#@admin.register(StockIn)
+class StockInAdmin(admin.ModelAdmin):
+    """入库单管理"""
+    list_display = [
+        'order_number', 'product_name', 'batch_number',
+        'quantity', 'unit', 'status_badge',
+        'stock_in_date', 'approved_by_name', 'created_at'
+    ]
+    search_fields = ['order_number', 'product__name', 'batch_number']
+    list_filter = ['status', 'stock_in_date', 'approved_at', 'created_at']
+    autocomplete_fields = ['product', 'work_order', 'approved_by', 'created_by']
+    readonly_fields = ['order_number', 'created_at', 'updated_at']
+    ordering = ['-created_at']
+
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('order_number', 'product', 'work_order', 'status')
+        }),
+        ('数量信息', {
+            'fields': ('quantity', 'unit', 'batch_number')
+        }),
+        ('位置信息', {
+            'fields': ('location', 'warehouse_area')
+        }),
+        ('日期信息', {
+            'fields': ('production_date', 'expiry_date', 'stock_in_date')
+        }),
+        ('质量信息', {
+            'fields': ('quality_inspection', 'inspection_result')
+        }),
+        ('审核信息', {
+            'fields': ('approved_by', 'approved_at', 'approval_notes')
+        }),
+        ('其他信息', {
+            'fields': ('notes', 'attachment')
+        }),
+        ('系统信息', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def product_name(self, obj):
+        """显示产品名称"""
+        return obj.product.name
+    product_name.short_description = '产品'
+
+    def status_badge(self, obj):
+        """状态徽章"""
+        colors = {
+            'draft': '#909399',
+            'submitted': '#E6A23C',
+            'approved': '#67C23A',
+            'rejected': '#F56C6C',
+        }
+        return format_html(
+            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
+            'background-color: {};">{}</span>',
+            colors.get(obj.status, '#909399'),
+            obj.get_status_display()
+        )
+    status_badge.short_description = '状态'
+
+    def approved_by_name(self, obj):
+        """显示审核人"""
+        return obj.approved_by.username if obj.approved_by else '-'
+    approved_by_name.short_description = '审核人'
+
+
+#@admin.register(StockOut)
+class StockOutAdmin(admin.ModelAdmin):
+    """出库单管理"""
+    list_display = [
+        'order_number', 'product_name', 'outbound_type_display',
+        'quantity', 'unit', 'status_badge',
+        'outbound_date', 'created_at'
+    ]
+    search_fields = ['order_number', 'product__name']
+    list_filter = ['outbound_type', 'status', 'outbound_date', 'created_at']
+    autocomplete_fields = ['product', 'delivery_order', 'created_by']
+    readonly_fields = ['order_number', 'created_at', 'updated_at']
+    ordering = ['-created_at']
+
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('order_number', 'product', 'outbound_type', 'status')
+        }),
+        ('数量信息', {
+            'fields': ('quantity', 'unit', 'batch_number')
+        }),
+        ('关联信息', {
+            'fields': ('delivery_order', 'related_order')
+        }),
+        ('日期信息', {
+            'fields': ('outbound_date',)
+        }),
+        ('其他信息', {
+            'fields': ('notes',)
+        }),
+        ('系统信息', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def product_name(self, obj):
+        """显示产品名称"""
+        return obj.product.name
+    product_name.short_description = '产品'
+
+    def status_badge(self, obj):
+        """状态徽章"""
+        colors = {
+            'pending': '#909399',
+            'completed': '#67C23A',
+            'cancelled': '#F56C6C',
+        }
+        return format_html(
+            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
+            'background-color: {};">{}</span>',
+            colors.get(obj.status, '#909399'),
+            obj.get_status_display()
+        )
+    status_badge.short_description = '状态'
+
+
+class DeliveryItemInline(FixedInlineModelAdminMixin, admin.TabularInline):
+    """发货明细内联"""
+    model = DeliveryItem
+    extra = 1
+    fields = ['product', 'quantity', 'unit', 'unit_price', 'subtotal']
+
+
+@admin.register(DeliveryOrder)
+class DeliveryOrderAdmin(admin.ModelAdmin):
+    """发货单管理"""
+    list_display = [
+        'order_number', 'customer_name', 'sales_order_number',
+        'receiver_name', 'logistics_company', 'tracking_number',
+        'status_badge', 'delivery_date', 'created_at'
+    ]
+    search_fields = ['order_number', 'customer__name', 'sales_order__order_number', 'tracking_number']
+    list_filter = ['status', 'delivery_date', 'created_at']
+    autocomplete_fields = ['customer', 'sales_order', 'created_by']
+    readonly_fields = ['order_number', 'created_at', 'updated_at']
+    ordering = ['-created_at']
+    inlines = [DeliveryItemInline]
+
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('order_number', 'customer', 'sales_order', 'status')
+        }),
+        ('收货信息', {
+            'fields': ('receiver_name', 'receiver_phone', 'delivery_address')
+        }),
+        ('物流信息', {
+            'fields': ('logistics_company', 'tracking_number', 'logistics_fee')
+        }),
+        ('发货信息', {
+            'fields': ('delivery_date', 'freight', 'package_count')
+        }),
+        ('签收信息', {
+            'fields': ('received', 'received_date', 'received_notes', 'receiver_signature')
+        }),
+        ('其他信息', {
+            'fields': ('notes', 'attachment')
+        }),
+        ('系统信息', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def customer_name(self, obj):
+        """显示客户名称"""
+        return obj.customer.name
+    customer_name.short_description = '客户'
+
+    def sales_order_number(self, obj):
+        """显示销售订单号"""
+        return obj.sales_order.order_number if obj.sales_order else '-'
+    sales_order_number.short_description = '销售订单'
+
+    def status_badge(self, obj):
+        """状态徽章"""
+        colors = {
+            'pending': '#909399',
+            'shipped': '#409EFF',
+            'in_transit': '#E6A23C',
+            'received': '#67C23A',
+            'rejected': '#F56C6C',
+            'returned': '#909399',
+        }
+        return format_html(
+            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
+            'background-color: {};">{}</span>',
+            colors.get(obj.status, '#909399'),
+            obj.get_status_display()
+        )
+    status_badge.short_description = '状态'
+
+
+@admin.register(DeliveryItem)
+class DeliveryItemAdmin(admin.ModelAdmin):
+    """发货明细管理"""
+    list_display = [
+        'delivery_order_number', 'product_code', 'product_name',
+        'quantity', 'unit', 'unit_price', 'subtotal', 'created_at'
+    ]
+    search_fields = ['delivery_order__order_number', 'product__name']
+    list_filter = ['created_at']
+    autocomplete_fields = ['delivery_order', 'product']
+    readonly_fields = ['created_at']
+    ordering = ['delivery_order', 'id']
+
+    def delivery_order_number(self, obj):
+        """显示发货单号"""
+        return obj.delivery_order.order_number
+    delivery_order_number.short_description = '发货单号'
+
+    def product_code(self, obj):
+        """显示产品编码"""
+        return obj.product.code
+    product_code.short_description = '产品编码'
+
+    def product_name(self, obj):
+        """显示产品名称"""
+        return obj.product.name
+    product_name.short_description = '产品'
+
+
+#@admin.register(QualityInspection)
+class QualityInspectionAdmin(admin.ModelAdmin):
+    """质量检验管理"""
+    list_display = [
+        'inspection_number', 'product_name', 'batch_number',
+        'inspection_type_display', 'result_badge', 'status_badge',
+        'inspection_date', 'inspector_name', 'defective_rate', 'created_at'
+    ]
+    search_fields = ['inspection_number', 'product__name', 'batch_number']
+    list_filter = ['inspection_type', 'result', 'status', 'inspection_date', 'created_at']
+    autocomplete_fields = ['product', 'work_order', 'stock_in', 'inspector', 'created_by']
+    readonly_fields = ['inspection_number', 'defective_rate', 'qualified_rate', 'created_at', 'updated_at']
+    ordering = ['-created_at']
+
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('inspection_number', 'product', 'work_order', 'stock_in')
+        }),
+        ('检验信息', {
+            'fields': ('inspection_type', 'status', 'inspection_date', 'inspector', 'standard')
+        }),
+        ('数量信息', {
+            'fields': ('inspection_quantity', 'sample_quantity', 'qualified_quantity', 'defective_quantity')
+        }),
+        ('质量指标', {
+            'fields': ('defective_rate', 'qualified_rate')
+        }),
+        ('结果信息', {
+            'fields': ('result', 'disposition', 'inspection_notes')
+        }),
+        ('处理信息', {
+            'fields': ('rework_quantity', 'scrap_quantity', 'return_quantity', 'special_use_quantity'),
+            'classes': ('collapse',)
+        }),
+        ('附件', {
+            'fields': ('attachment',),
+            'classes': ('collapse',)
+        }),
+        ('系统信息', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def product_name(self, obj):
+        """显示产品名称"""
+        return obj.product.name
+    product_name.short_description = '产品'
+
+    def inspector_name(self, obj):
+        """显示检验员"""
+        return obj.inspector.username if obj.inspector else '-'
+    inspector_name.short_description = '检验员'
+
+    def result_badge(self, obj):
+        """结果徽章"""
+        colors = {
+            'passed': '#67C23A',
+            'failed': '#F56C6C',
+            'conditional': '#E6A23C',
+        }
+        return format_html(
+            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
+            'background-color: {};">{}</span>',
+            colors.get(obj.result, '#909399'),
+            obj.get_result_display()
+        )
+    result_badge.short_description = '检验结果'
+
+    def status_badge(self, obj):
+        """状态徽章"""
+        colors = {
+            'pending': '#909399',
+            'in_progress': '#E6A23C',
+            'completed': '#67C23A',
+        }
+        return format_html(
+            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
+            'background-color: {};">{}</span>',
+            colors.get(obj.status, '#909399'),
+            obj.get_status_display()
+        )
+    status_badge.short_description = '状态'
 

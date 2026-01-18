@@ -11,7 +11,13 @@ from .views import (
     WorkOrderTaskViewSet, ProductGroupViewSet, ProductGroupItemViewSet,
     TaskAssignmentRuleViewSet, NotificationViewSet,
     SupplierViewSet, MaterialSupplierViewSet, PurchaseOrderViewSet, PurchaseOrderItemViewSet,
-    SalesOrderViewSet, SalesOrderItemViewSet
+    SalesOrderViewSet, SalesOrderItemViewSet,
+    # 财务视图集
+    CostCenterViewSet, CostItemViewSet, ProductionCostViewSet,
+    InvoiceViewSet, PaymentViewSet, PaymentPlanViewSet, StatementViewSet,
+    # 库存视图集
+    ProductStockViewSet, StockInViewSet, StockOutViewSet,
+    DeliveryOrderViewSet, DeliveryItemViewSet, QualityInspectionViewSet,
 )
 # 暂时注释掉有问题的导入，避免自动重载错误
 # from .views.multi_level_approval import (
@@ -58,6 +64,24 @@ router.register(r'foiling-plates', FoilingPlateViewSet)
 router.register(r'foiling-plate-products', FoilingPlateProductViewSet)
 router.register(r'embossing-plates', EmbossingPlateViewSet)
 router.register(r'embossing-plate-products', EmbossingPlateProductViewSet)
+
+# 财务路由
+router.register(r'cost-centers', CostCenterViewSet, basename='cost-center')
+router.register(r'cost-items', CostItemViewSet, basename='cost-item')
+router.register(r'production-costs', ProductionCostViewSet, basename='production-cost')
+router.register(r'invoices', InvoiceViewSet, basename='invoice')
+router.register(r'payments', PaymentViewSet, basename='payment')
+router.register(r'payment-plans', PaymentPlanViewSet, basename='payment-plan')
+router.register(r'statements', StatementViewSet, basename='statement')
+
+# 库存路由
+router.register(r'product-stocks', ProductStockViewSet, basename='product-stock')
+router.register(r'stock-ins', StockInViewSet, basename='stock-in')
+router.register(r'stock-outs', StockOutViewSet, basename='stock-out')
+router.register(r'delivery-orders', DeliveryOrderViewSet, basename='delivery-order')
+router.register(r'delivery-items', DeliveryItemViewSet, basename='delivery-item')
+router.register(r'quality-inspections', QualityInspectionViewSet, basename='quality-inspection')
+
 # 暂时注释掉有问题的路由注册，直到模型迁移完成
 # router.register(r'approval-workflows', ApprovalWorkflowViewSet)
 # router.register(r'approval-steps', ApprovalStepViewSet)

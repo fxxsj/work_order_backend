@@ -64,6 +64,38 @@ from .sales import (
     SalesOrderItemSerializer,
 )
 
+from .finance import (
+    CostCenterSerializer,
+    CostItemSerializer,
+    ProductionCostSerializer,
+    ProductionCostUpdateSerializer,
+    InvoiceSerializer,
+    InvoiceCreateSerializer,
+    InvoiceUpdateSerializer,
+    PaymentSerializer,
+    PaymentCreateSerializer,
+    PaymentUpdateSerializer,
+    PaymentPlanSerializer,
+    StatementSerializer,
+    StatementCreateSerializer,
+)
+
+from .inventory import (
+    ProductStockSerializer,
+    ProductStockUpdateSerializer,
+    StockInSerializer,
+    StockInCreateSerializer,
+    StockOutSerializer,
+    DeliveryItemSerializer,
+    DeliveryOrderSerializer,
+    DeliveryOrderListSerializer,
+    DeliveryOrderCreateSerializer,
+    DeliveryOrderUpdateSerializer,
+    QualityInspectionSerializer,
+    QualityInspectionCreateSerializer,
+    QualityInspectionUpdateSerializer,
+)
+
 __all__ = [
     # 基础序列化器
     'UserSerializer',
@@ -116,4 +148,34 @@ __all__ = [
     'SalesOrderListSerializer',
     'SalesOrderDetailSerializer',
     'SalesOrderItemSerializer',
+
+    # 财务序列化器
+    'CostCenterSerializer',
+    'CostItemSerializer',
+    'ProductionCostSerializer',
+    'ProductionCostUpdateSerializer',
+    'InvoiceSerializer',
+    'InvoiceCreateSerializer',
+    'InvoiceUpdateSerializer',
+    'PaymentSerializer',
+    'PaymentCreateSerializer',
+    'PaymentUpdateSerializer',
+    'PaymentPlanSerializer',
+    'StatementSerializer',
+    'StatementCreateSerializer',
+
+    # 库存序列化器
+    'ProductStockSerializer',
+    'ProductStockUpdateSerializer',
+    'StockInSerializer',
+    'StockInCreateSerializer',
+    'StockOutSerializer',
+    'DeliveryItemSerializer',
+    'DeliveryOrderSerializer',
+    'DeliveryOrderListSerializer',
+    'DeliveryOrderCreateSerializer',
+    'DeliveryOrderUpdateSerializer',
+    'QualityInspectionSerializer',
+    'QualityInspectionCreateSerializer',
+    'QualityInspectionUpdateSerializer',
 ]

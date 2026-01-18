@@ -71,6 +71,25 @@ from .sales import (
     SalesOrderItem,
 )
 
+from .finance import (
+    CostCenter,
+    CostItem,
+    ProductionCost,
+    Invoice,
+    Payment,
+    PaymentPlan,
+    Statement,
+)
+
+from .inventory import (
+    ProductStock,
+    StockIn,
+    StockOut,
+    DeliveryOrder,
+    DeliveryItem,
+    QualityInspection,
+)
+
 from .multi_level_approval import (
     ApprovalWorkflow,
     ApprovalStep,
@@ -138,4 +157,21 @@ __all__ = [
     'ApprovalEscalation',
     'MultiLevelApprovalService',
     'UrgentOrderService',
+
+    # 财务模型
+    'CostCenter',
+    'CostItem',
+    'ProductionCost',
+    'Invoice',
+    'Payment',
+    'PaymentPlan',
+    'Statement',
+
+    # 库存模型
+    'ProductStock',
+    'StockIn',
+    'StockOut',
+    'DeliveryOrder',
+    'DeliveryItem',
+    'QualityInspection',
 ]

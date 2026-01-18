@@ -56,6 +56,25 @@ from .sales import (
     PurchaseOrderItemViewSet,
 )
 
+from .finance import (
+    CostCenterViewSet,
+    CostItemViewSet,
+    ProductionCostViewSet,
+    InvoiceViewSet,
+    PaymentViewSet,
+    PaymentPlanViewSet,
+    StatementViewSet,
+)
+
+from .inventory import (
+    ProductStockViewSet,
+    StockInViewSet,
+    StockOutViewSet,
+    DeliveryOrderViewSet,
+    DeliveryItemViewSet,
+    QualityInspectionViewSet,
+)
+
 __all__ = [
     # 基础视图集
     'CustomerViewSet',
@@ -100,4 +119,21 @@ __all__ = [
     'SalesOrderItemViewSet',
     'PurchaseOrderViewSet',
     'PurchaseOrderItemViewSet',
+
+    # 财务视图集
+    'CostCenterViewSet',
+    'CostItemViewSet',
+    'ProductionCostViewSet',
+    'InvoiceViewSet',
+    'PaymentViewSet',
+    'PaymentPlanViewSet',
+    'StatementViewSet',
+
+    # 库存视图集
+    'ProductStockViewSet',
+    'StockInViewSet',
+    'StockOutViewSet',
+    'DeliveryOrderViewSet',
+    'DeliveryItemViewSet',
+    'QualityInspectionViewSet',
 ]
