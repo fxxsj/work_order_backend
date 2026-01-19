@@ -411,8 +411,8 @@ class StatementViewSet(viewsets.ModelViewSet):
         """支持过滤和搜索"""
         queryset = super().get_queryset()
 
-        # 按对账单类型过滤
-        statement_type = self.request.query_params.get('type')
+        # 按对账单类型过滤（兼容前端参数 statement_type 和后端参数 type）
+        statement_type = self.request.query_params.get('statement_type') or self.request.query_params.get('type')
         if statement_type:
             queryset = queryset.filter(statement_type=statement_type)
 
@@ -421,10 +421,23 @@ class StatementViewSet(viewsets.ModelViewSet):
         if statement_status:
             queryset = queryset.filter(status=statement_status)
 
-        # 按客户过滤
-        customer_id = self.request.query_params.get('customer')
+        # 按客户过滤（兼容前端参数 partner 和后端参数 customer）
+        customer_id = self.request.query_params.get('partner') or self.request.query_params.get('customer')
         if customer_id:
             queryset = queryset.filter(customer_id=customer_id)
+
+        # 按供应商过滤
+        supplier_id = self.request.query_params.get('supplier')
+        if supplier_id:
+            queryset = queryset.filter(supplier_id=supplier_id)
+
+        # 按期间范围过滤
+        period_start = self.request.query_params.get('period_start')
+        period_end = self.request.query_params.get('period_end')
+        if period_start:
+            queryset = queryset.filter(start_date__gte=period_start)
+        if period_end:
+            queryset = queryset.filter(end_date__lte=period_end)
 
         # 搜索
         search = self.request.query_params.get('search')
@@ -441,14 +454,14 @@ class StatementViewSet(viewsets.ModelViewSet):
         """确认对账单"""
         statement = self.get_object()
 
-        if statement.status != 'sent':
+        if statement.status not in ['draft', 'sent']:
             return Response({
-                'error': '只有已发送状态的对账单可以确认'
+                'error': '只有草稿或已发送状态的对账单可以确认'
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # 获取确认信息
         confirmed = request.data.get('confirmed', True)
-        confirmation_notes = request.data.get('confirmation_notes')
+        confirmation_notes = request.data.get('confirm_notes') or request.data.get('confirmation_notes')
 
         statement.confirmed_by = request.user
         statement.confirmed_at = timezone.now()

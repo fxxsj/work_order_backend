@@ -284,6 +284,7 @@ class StatementSerializer(serializers.ModelSerializer):
     supplier_name = serializers.CharField(
         source='supplier.name', read_only=True, allow_null=True
     )
+    partner_name = serializers.SerializerMethodField()  # 统一的对方单位名称
     created_by_name = serializers.CharField(
         source='created_by.username', read_only=True, allow_null=True
     )
@@ -291,10 +292,25 @@ class StatementSerializer(serializers.ModelSerializer):
         source='confirmed_by.username', read_only=True, allow_null=True
     )
 
+    # 兼容前端字段名
+    period_start = serializers.DateField(source='start_date', read_only=True)
+    period_end = serializers.DateField(source='end_date', read_only=True)
+    debit_amount = serializers.DecimalField(source='total_debit', read_only=True, max_digits=12, decimal_places=2)
+    credit_amount = serializers.DecimalField(source='total_credit', read_only=True, max_digits=12, decimal_places=2)
+    statement_date = serializers.DateField(source='created_at', read_only=True)
+
     class Meta:
         model = Statement
         fields = '__all__'
         read_only_fields = ['statement_number', 'closing_balance']
+
+    def get_partner_name(self, obj):
+        """获取对方单位名称（兼容前端）"""
+        if obj.statement_type == 'customer' and obj.customer:
+            return obj.customer.name
+        elif obj.statement_type == 'supplier' and obj.supplier:
+            return obj.supplier.name
+        return None
 
 
 class StatementCreateSerializer(serializers.ModelSerializer):
@@ -329,6 +345,14 @@ class StatementCreateSerializer(serializers.ModelSerializer):
             })
 
         return data
+
+    def create(self, validated_data):
+        """创建对账单时自动设置创建人"""
+        # 从 context 中获取 user
+        request = self.context.get('request')
+        if request and request.user:
+            validated_data['created_by'] = request.user
+        return super().create(validated_data)
 
 
 # ==================== 成本分析序列化器 ====================
