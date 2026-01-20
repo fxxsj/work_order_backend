@@ -596,6 +596,13 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         required=False,
         help_text='产品列表数据，格式：[{"product": id, "quantity": 1, "unit": "件", "specification": "", "sort_order": 0}]'
     )
+    # 支持物料列表（与施工单一起创建）
+    materials_data = serializers.ListField(
+        child=serializers.DictField(),
+        write_only=True,
+        required=False,
+        help_text='物料列表数据，格式：[{"material": id, "material_size": "", "material_usage": "", "need_cutting": false, "notes": ""}]'
+    )
     # 工序ID列表（用于验证版的选择）
     # 使用自定义方法来过滤 null 值
     processes = serializers.ListField(
@@ -623,7 +630,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             'total_amount', 'design_file', 'notes',
             'artworks', 'dies', 'foiling_plates', 'embossing_plates',
             'printing_type', 'printing_cmyk_colors', 'printing_other_colors',
-            'products_data', 'processes'
+            'products_data', 'materials_data', 'processes'
         ]
         read_only_fields = ['order_number']
 
@@ -726,6 +733,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """创建施工单并处理多个产品和图稿"""
         products_data = validated_data.pop('products_data', [])
+        materials_data = validated_data.pop('materials_data', [])
         artworks = validated_data.pop('artworks', [])
         dies = validated_data.pop('dies', [])
         foiling_plates = validated_data.pop('foiling_plates', [])
@@ -762,6 +770,19 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                     sort_order=item.get('sort_order', 0)
                 )
 
+        # 创建关联的物料记录
+        if materials_data:
+            for item in materials_data:
+                WorkOrderMaterial.objects.create(
+                    work_order=work_order,
+                    material_id=item.get('material'),
+                    material_size=item.get('material_size', ''),
+                    material_usage=item.get('material_usage', ''),
+                    need_cutting=item.get('need_cutting', False),
+                    notes=item.get('notes', ''),
+                    purchase_status=item.get('purchase_status', 'pending')
+                )
+
         # 自动创建工序（使用用户选择的工序ID列表）
         self._create_work_order_processes(work_order, process_ids=process_ids)
 
@@ -773,6 +794,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
         # 先 pop 出需要特殊处理的字段
         products_data = validated_data.pop('products_data', None)
+        materials_data = validated_data.pop('materials_data', None)
         artworks = validated_data.pop('artworks', None)
         dies = validated_data.pop('dies', None)
         foiling_plates = validated_data.pop('foiling_plates', None)
@@ -907,6 +929,23 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
             # 重新创建工序（如果process_ids为空，则使用产品的默认工序）
             self._create_work_order_processes(instance, process_ids=process_ids if process_ids else None)
+
+        # 如果提供了 materials_data，更新物料列表
+        if materials_data is not None:
+            # 删除现有物料关联
+            WorkOrderMaterial.objects.filter(work_order=instance).delete()
+
+            # 创建新的物料关联
+            for item in materials_data:
+                WorkOrderMaterial.objects.create(
+                    work_order=instance,
+                    material_id=item.get('material'),
+                    material_size=item.get('material_size', ''),
+                    material_usage=item.get('material_usage', ''),
+                    need_cutting=item.get('need_cutting', False),
+                    notes=item.get('notes', ''),
+                    purchase_status=item.get('purchase_status', 'pending')
+                )
 
         return instance
 
