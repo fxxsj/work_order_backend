@@ -80,12 +80,30 @@ class CustomerSerializer(serializers.ModelSerializer):
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
-    """部门序列化器"""
-    processes = serializers.PrimaryKeyRelatedField(many=True, queryset=Process.objects.all(), required=False)
+    """部门序列化器
+
+    提供完整的字段验证和业务规则检查。
+
+    验证规则：
+        - code: 只能包含小写字母、数字和下划线，长度2-20
+        - name: 必填，长度2-50
+        - sort_order: 非负整数，最大99999
+        - parent: 不能形成循环引用，层级深度不能超过3级
+    """
+    processes = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Process.objects.all(),
+        required=False
+    )
     process_names = serializers.SerializerMethodField()
-    parent = serializers.PrimaryKeyRelatedField(queryset=Department.objects.all(), required=False, allow_null=True)
+    parent = serializers.PrimaryKeyRelatedField(
+        queryset=Department.objects.all(),
+        required=False,
+        allow_null=True
+    )
     parent_name = serializers.SerializerMethodField()
     children_count = serializers.SerializerMethodField()
+    level = serializers.SerializerMethodField()
 
     class Meta:
         model = Department
@@ -108,6 +126,88 @@ class DepartmentSerializer(serializers.ModelSerializer):
         if hasattr(obj, 'children'):
             return obj.children.count()
         return 0
+
+    def get_level(self, obj):
+        """获取部门层级"""
+        return obj.get_level()
+
+    def validate_code(self, value):
+        """验证部门编码格式
+
+        确保编码只包含小写字母、数字和下划线。
+        """
+        import re
+
+        if not value:
+            raise serializers.ValidationError("部门编码不能为空")
+
+        if not re.match(r'^[a-z0-9_]+$', value):
+            raise serializers.ValidationError(
+                "部门编码只能包含小写字母、数字和下划线"
+            )
+
+        if len(value) < 2 or len(value) > 20:
+            raise serializers.ValidationError("部门编码长度必须在2-20个字符之间")
+
+        # 编辑时不允许修改编码
+        if self.instance and value != self.instance.code:
+            raise serializers.ValidationError("部门编码不可修改")
+
+        return value
+
+    def validate_name(self, value):
+        """验证部门名称"""
+        if not value:
+            raise serializers.ValidationError("部门名称不能为空")
+
+        if len(value) < 2 or len(value) > 50:
+            raise serializers.ValidationError("部门名称长度必须在2-50个字符之间")
+
+        return value
+
+    def validate_sort_order(self, value):
+        """验证排序字段"""
+        if value < 0:
+            raise serializers.ValidationError("排序值不能为负数")
+        if value > 99999:
+            raise serializers.ValidationError("排序值超出合理范围（最大99999）")
+        return value
+
+    def validate(self, attrs):
+        """对象级验证
+
+        检查：
+            1. 不能将自己设为上级部门（循环引用）
+            2. 不能将自己的子孙设为上级部门（循环引用）
+            3. 层级深度不能超过3级
+        """
+        parent = attrs.get('parent')
+
+        if parent:
+            # 编辑时检查循环引用
+            if self.instance:
+                # 不能将自己设为上级
+                if parent.id == self.instance.id:
+                    raise serializers.ValidationError({
+                        'parent': '不能将自己设为上级部门'
+                    })
+
+                # 不能将自己的子孙设为上级
+                descendants = self.instance.get_descendants()
+                descendant_ids = [d.id for d in descendants]
+                if parent.id in descendant_ids:
+                    raise serializers.ValidationError({
+                        'parent': '不能将子部门设为上级部门，这会造成循环引用'
+                    })
+
+            # 检查层级深度（最多3级：0, 1, 2）
+            parent_level = parent.get_level()
+            if parent_level >= 2:
+                raise serializers.ValidationError({
+                    'parent': '部门层级不能超过3级'
+                })
+
+        return attrs
 
 
 class ProcessSerializer(serializers.ModelSerializer):

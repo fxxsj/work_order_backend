@@ -35,22 +35,74 @@ class Customer(models.Model):
 
 
 class Department(models.Model):
-    """部门"""
-    name = models.CharField('部门名称', max_length=50, unique=True)
-    code = models.CharField('部门编码', max_length=20, unique=True)
-    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True,
-                               related_name='children', verbose_name='上级部门',
-                               help_text='上级部门，用于建立部门层级关系（如生产部下有多个车间）')
-    sort_order = models.IntegerField('排序', default=0)
-    is_active = models.BooleanField('是否启用', default=True)
-    processes = models.ManyToManyField('Process', blank=True, verbose_name='工序',
-                                       help_text='该部门负责的工序')
+    """部门
+
+    部门信息管理，支持层级结构（最多3级）。
+
+    Attributes:
+        name: 部门名称，唯一
+        code: 部门编码，唯一，只能包含小写字母、数字和下划线
+        parent: 上级部门，用于建立层级关系
+        sort_order: 排序值，数字越小越靠前
+        is_active: 是否启用
+        processes: 该部门负责的工序
+    """
+    name = models.CharField(
+        '部门名称',
+        max_length=50,
+        unique=True,
+        help_text='部门名称，必须唯一'
+    )
+    code = models.CharField(
+        '部门编码',
+        max_length=20,
+        unique=True,
+        help_text='部门编码，只能包含小写字母、数字和下划线'
+    )
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='children',
+        verbose_name='上级部门',
+        help_text='上级部门，用于建立部门层级关系（如生产部下有多个车间）'
+    )
+    sort_order = models.IntegerField(
+        '排序',
+        default=0,
+        help_text='排序值，数字越小越靠前'
+    )
+    is_active = models.BooleanField(
+        '是否启用',
+        default=True,
+        help_text='禁用后部门将不可用于新的施工单'
+    )
+    processes = models.ManyToManyField(
+        'Process',
+        blank=True,
+        verbose_name='工序',
+        help_text='该部门负责的工序'
+    )
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
 
     class Meta:
         verbose_name = '部门'
         verbose_name_plural = '部门管理'
         ordering = ['sort_order', 'code']
+
+        # 性能优化：为高频查询字段添加索引
+        indexes = [
+            models.Index(fields=['name'], name='department_name_idx'),
+            models.Index(fields=['code'], name='department_code_idx'),
+            models.Index(fields=['is_active'], name='department_is_active_idx'),
+            models.Index(fields=['sort_order'], name='department_sort_order_idx'),
+            models.Index(
+                fields=['is_active', 'sort_order'],
+                name='dept_active_sort_idx'
+            ),
+        ]
 
     def __str__(self):
         return self.name
@@ -69,6 +121,44 @@ class Department(models.Model):
     def get_by_natural_key(cls, code):
         """通过自然键获取对象：用于 fixtures 反序列化"""
         return cls.objects.get(code=code)
+
+    def get_ancestors(self):
+        """获取所有祖先部门（从直接上级到顶级）
+
+        Returns:
+            list: 祖先部门列表，按层级从近到远排序
+        """
+        ancestors = []
+        current = self.parent
+        while current:
+            ancestors.append(current)
+            current = current.parent
+        return ancestors
+
+    def get_descendants(self):
+        """获取所有子孙部门（递归）
+
+        Returns:
+            list: 子孙部门列表
+        """
+        descendants = []
+        for child in self.children.all():
+            descendants.append(child)
+            descendants.extend(child.get_descendants())
+        return descendants
+
+    def get_level(self):
+        """获取部门层级（顶级为0）
+
+        Returns:
+            int: 层级深度
+        """
+        level = 0
+        current = self.parent
+        while current:
+            level += 1
+            current = current.parent
+        return level
 
 
 class Process(models.Model):
