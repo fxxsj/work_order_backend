@@ -13,6 +13,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from ..models import CostCenter, CostItem, ProductionCost, Invoice, Payment, PaymentPlan, Statement
+from .utils import create_status_badge_method, FINANCE_STATUS_COLORS
 
 
 @admin.register(CostCenter)
@@ -276,17 +277,9 @@ class StatementAdmin(admin.ModelAdmin):
         return obj.partner.name if hasattr(obj.partner, 'name') else str(obj.partner)
     partner_name.short_description = '对方单位'
 
-    def status_badge(self, obj):
-        """状态徽章"""
-        colors = {
-            'draft': '#909399',
-            'confirmed': '#67C23A',
-            'cancelled': '#F56C6C',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.status, '#909399'),
-            obj.get_status_display()
-        )
-    status_badge.short_description = '状态'
+    # 发票状态徽章
+    status_badge = create_status_badge_method({
+        'draft': '#909399',
+        'confirmed': '#67C23A',
+        'cancelled': '#F56C6C',
+    })

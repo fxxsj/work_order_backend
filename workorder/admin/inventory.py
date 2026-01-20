@@ -16,6 +16,12 @@ from django.contrib import admin
 from django.utils.html import format_html
 from ..models import ProductStock, StockIn, StockOut, DeliveryOrder, DeliveryItem, QualityInspection
 from .mixins import FixedInlineModelAdminMixin
+from .utils import (
+    create_status_badge_method,
+    STOCK_STATUS_COLORS,
+    IN_OUT_ORDER_STATUS_COLORS,
+    QUALITY_STATUS_COLORS,
+)
 
 
 # ==================== Inline 类 ====================
@@ -84,21 +90,8 @@ class ProductStockAdmin(admin.ModelAdmin):
         return obj.quantity - obj.reserved_quantity
     available_quantity.short_description = '可用数量'
 
-    def status_badge(self, obj):
-        """状态徽章"""
-        colors = {
-            'in_stock': '#67C23A',
-            'reserved': '#E6A23C',
-            'quality_check': '#409EFF',
-            'defective': '#F56C6C',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.status, '#909399'),
-            obj.get_status_display()
-        )
-    status_badge.short_description = '状态'
+    # 库存状态徽章
+    status_badge = create_status_badge_method(STOCK_STATUS_COLORS)
 
 
 # @admin.register(StockIn)
@@ -148,21 +141,13 @@ class StockInAdmin(admin.ModelAdmin):
         return obj.product.name
     product_name.short_description = '产品'
 
-    def status_badge(self, obj):
-        """状态徽章"""
-        colors = {
-            'draft': '#909399',
-            'submitted': '#E6A23C',
-            'approved': '#67C23A',
-            'rejected': '#F56C6C',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.status, '#909399'),
-            obj.get_status_display()
-        )
-    status_badge.short_description = '状态'
+    # 入库单状态徽章
+    status_badge = create_status_badge_method({
+        'draft': '#909399',
+        'submitted': '#E6A23C',
+        'approved': '#67C23A',
+        'rejected': '#F56C6C',
+    })
 
     def approved_by_name(self, obj):
         """显示审核人"""
@@ -211,20 +196,12 @@ class StockOutAdmin(admin.ModelAdmin):
         return obj.product.name
     product_name.short_description = '产品'
 
-    def status_badge(self, obj):
-        """状态徽章"""
-        colors = {
-            'pending': '#909399',
-            'completed': '#67C23A',
-            'cancelled': '#F56C6C',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.status, '#909399'),
-            obj.get_status_display()
-        )
-    status_badge.short_description = '状态'
+    # 出库单状态徽章
+    status_badge = create_status_badge_method({
+        'pending': '#909399',
+        'completed': '#67C23A',
+        'cancelled': '#F56C6C',
+    })
 
 
 @admin.register(DeliveryOrder)
@@ -277,23 +254,15 @@ class DeliveryOrderAdmin(admin.ModelAdmin):
         return obj.sales_order.order_number if obj.sales_order else '-'
     sales_order_number.short_description = '销售订单'
 
-    def status_badge(self, obj):
-        """状态徽章"""
-        colors = {
-            'pending': '#909399',
-            'shipped': '#409EFF',
-            'in_transit': '#E6A23C',
-            'received': '#67C23A',
-            'rejected': '#F56C6C',
-            'returned': '#909399',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.status, '#909399'),
-            obj.get_status_display()
-        )
-    status_badge.short_description = '状态'
+    # 发货单状态徽章
+    status_badge = create_status_badge_method({
+        'pending': '#909399',
+        'shipped': '#409EFF',
+        'in_transit': '#E6A23C',
+        'received': '#67C23A',
+        'rejected': '#F56C6C',
+        'returned': '#909399',
+    })
 
 
 @admin.register(DeliveryItem)
@@ -394,17 +363,9 @@ class QualityInspectionAdmin(admin.ModelAdmin):
         )
     result_badge.short_description = '检验结果'
 
-    def status_badge(self, obj):
-        """状态徽章"""
-        colors = {
-            'pending': '#909399',
-            'in_progress': '#E6A23C',
-            'completed': '#67C23A',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.status, '#909399'),
-            obj.get_status_display()
-        )
-    status_badge.short_description = '状态'
+    # 质检状态徽章
+    status_badge = create_status_badge_method({
+        'pending': '#909399',
+        'in_progress': '#E6A23C',
+        'completed': '#67C23A',
+    })

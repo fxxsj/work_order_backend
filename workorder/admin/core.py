@@ -20,6 +20,13 @@ from ..models import (
     ProcessLog, WorkOrderTask
 )
 from .mixins import FixedInlineModelAdminMixin
+from .utils import (
+    create_status_badge_method,
+    create_priority_badge_method,
+    WORKORDER_STATUS_COLORS,
+    TASK_STATUS_COLORS,
+    PURCHASE_STATUS_COLORS,
+)
 
 
 # ==================== Inline 类 ====================
@@ -136,43 +143,14 @@ class WorkOrderAdmin(admin.ModelAdmin):
         }),
     )
 
+    # 使用工具方法创建状态和优先级徽章
+    status_badge = create_status_badge_method(WORKORDER_STATUS_COLORS)
+    priority_badge = create_priority_badge_method()
+
     def save_model(self, request, obj, form, change):
         if not change:  # 如果是新建
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
-
-    def status_badge(self, obj):
-        """状态徽章"""
-        colors = {
-            'pending': '#909399',
-            'in_progress': '#409EFF',
-            'paused': '#E6A23C',
-            'completed': '#67C23A',
-            'cancelled': '#F56C6C',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.status, '#909399'),
-            obj.get_status_display()
-        )
-    status_badge.short_description = '状态'
-
-    def priority_badge(self, obj):
-        """优先级徽章"""
-        colors = {
-            'low': '#909399',
-            'normal': '#409EFF',
-            'high': '#E6A23C',
-            'urgent': '#F56C6C',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.priority, '#409EFF'),
-            obj.get_priority_display()
-        )
-    priority_badge.short_description = '优先级'
 
     def progress_bar(self, obj):
         """进度条"""
@@ -259,21 +237,13 @@ class WorkOrderProcessAdmin(admin.ModelAdmin):
         }),
     )
 
-    def status_badge(self, obj):
-        """状态徽章"""
-        colors = {
-            'pending': '#909399',
-            'in_progress': '#409EFF',
-            'completed': '#67C23A',
-            'skipped': '#E6A23C',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.status, '#909399'),
-            obj.get_status_display()
-        )
-    status_badge.short_description = '状态'
+    # 工序状态徽章（自定义状态包含 'skipped'）
+    status_badge = create_status_badge_method({
+        'pending': '#909399',
+        'in_progress': '#409EFF',
+        'completed': '#67C23A',
+        'skipped': '#E6A23C',
+    })
 
 
 @admin.register(WorkOrderMaterial)
@@ -305,22 +275,14 @@ class WorkOrderMaterialAdmin(admin.ModelAdmin):
         }),
     )
 
-    def purchase_status_badge(self, obj):
-        """采购状态徽章"""
-        colors = {
-            'pending': '#909399',
-            'ordered': '#409EFF',
-            'received': '#67C23A',
-            'cut': '#E6A23C',
-            'completed': '#67C23A',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.purchase_status, '#909399'),
-            obj.get_purchase_status_display()
-        )
-    purchase_status_badge.short_description = '采购状态'
+    # 采购状态徽章（使用预定义的颜色）
+    purchase_status_badge = create_status_badge_method({
+        'pending': '#909399',
+        'ordered': '#409EFF',
+        'received': '#67C23A',
+        'cut': '#E6A23C',
+        'completed': '#67C23A',
+    })
 
 
 @admin.register(ProcessLog)
@@ -337,22 +299,14 @@ class ProcessLogAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at']
     date_hierarchy = 'created_at'
 
-    def log_type_badge(self, obj):
-        """日志类型徽章"""
-        colors = {
-            'start': '#409EFF',
-            'pause': '#E6A23C',
-            'resume': '#67C23A',
-            'complete': '#67C23A',
-            'note': '#909399',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.log_type, '#909399'),
-            obj.get_log_type_display()
-        )
-    log_type_badge.short_description = '类型'
+    # 日志类型徽章
+    log_type_badge = create_status_badge_method({
+        'start': '#409EFF',
+        'pause': '#E6A23C',
+        'resume': '#67C23A',
+        'complete': '#67C23A',
+        'note': '#909399',
+    })
 
     def content_preview(self, obj):
         """内容预览"""
@@ -412,21 +366,8 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
         }),
     )
 
-    def status_badge(self, obj):
-        """状态徽章"""
-        colors = {
-            'pending': '#909399',
-            'in_progress': '#409EFF',
-            'completed': '#67C23A',
-            'cancelled': '#F56C6C',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.status, '#909399'),
-            obj.get_status_display()
-        )
-    status_badge.short_description = '状态'
+    # 任务状态徽章
+    status_badge = create_status_badge_method(TASK_STATUS_COLORS)
 
     def get_queryset(self, request):
         """优化查询"""

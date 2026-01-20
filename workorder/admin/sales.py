@@ -12,6 +12,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from ..models import SalesOrder, SalesOrderItem
 from .mixins import FixedInlineModelAdminMixin
+from .utils import create_status_badge_method, WORKORDER_STATUS_COLORS
 
 
 # ==================== Inline 类 ====================
@@ -79,38 +80,22 @@ class SalesOrderAdmin(admin.ModelAdmin):
         return obj.customer.name
     customer_name.short_description = '客户'
 
-    def status_badge(self, obj):
-        """状态徽章"""
-        colors = {
-            'draft': '#909399',
-            'submitted': '#E6A23C',
-            'approved': '#409EFF',
-            'in_production': '#67C23A',
-            'completed': '#67C23A',
-            'cancelled': '#F56C6C',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.status, '#909399'),
-            obj.get_status_display()
-        )
-    status_badge.short_description = '状态'
+    # 销售订单状态徽章
+    status_badge = create_status_badge_method({
+        'draft': '#909399',
+        'submitted': '#E6A23C',
+        'approved': '#409EFF',
+        'in_production': '#67C23A',
+        'completed': '#67C23A',
+        'cancelled': '#F56C6C',
+    })
 
-    def payment_status_badge(self, obj):
-        """付款状态徽章"""
-        colors = {
-            'unpaid': '#F56C6C',
-            'partial': '#E6A23C',
-            'paid': '#67C23A',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.payment_status, '#909399'),
-            obj.get_payment_status_display()
-        )
-    payment_status_badge.short_description = '付款状态'
+    # 付款状态徽章
+    payment_status_badge = create_status_badge_method({
+        'unpaid': '#F56C6C',
+        'partial': '#E6A23C',
+        'paid': '#67C23A',
+    })
 
     def submitted_by_name(self, obj):
         """显示提交人"""

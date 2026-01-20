@@ -15,6 +15,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from ..models import Material, Supplier, MaterialSupplier, PurchaseOrder, PurchaseOrderItem
 from .mixins import FixedInlineModelAdminMixin
+from .utils import create_status_badge_method, PURCHASE_STATUS_COLORS
 
 
 # ==================== Inline 类 ====================
@@ -164,23 +165,15 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
         )
     received_progress.short_description = '收货进度'
 
-    def status_badge(self, obj):
-        """状态徽章"""
-        colors = {
-            'draft': '#909399',
-            'submitted': '#E6A23C',
-            'approved': '#409EFF',
-            'ordered': '#67C23A',
-            'received': '#67C23A',
-            'cancelled': '#F56C6C',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.status, '#909399'),
-            obj.get_status_display()
-        )
-    status_badge.short_description = '状态'
+    # 采购单状态徽章
+    status_badge = create_status_badge_method({
+        'draft': '#909399',
+        'submitted': '#E6A23C',
+        'approved': '#409EFF',
+        'ordered': '#67C23A',
+        'received': '#67C23A',
+        'cancelled': '#F56C6C',
+    })
 
 
 @admin.register(PurchaseOrderItem)
@@ -220,17 +213,9 @@ class PurchaseOrderItemAdmin(admin.ModelAdmin):
     subtotal.short_description = '小计'
     subtotal.admin_order_field = 'subtotal'
 
-    def status_badge(self, obj):
-        """状态徽章"""
-        colors = {
-            'pending': '#909399',
-            'partial': '#E6A23C',
-            'received': '#67C23A',
-        }
-        return format_html(
-            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
-            'background-color: {};">{}</span>',
-            colors.get(obj.status, '#909399'),
-            obj.get_status_display()
-        )
-    status_badge.short_description = '收货状态'
+    # 收货状态徽章
+    status_badge = create_status_badge_method({
+        'pending': '#909399',
+        'partial': '#E6A23C',
+        'received': '#67C23A',
+    })
