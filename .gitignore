@@ -58,3 +58,4 @@ htmlcov/
 *.tmp
 *.bak
 *.orig
+workorder/admin.py.backup
