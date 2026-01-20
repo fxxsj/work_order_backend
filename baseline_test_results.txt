@@ -1,0 +1,224 @@
+Creating test database for alias 'default'...
+Found 68 test(s).
+✓ 已为 设计部 配置 1 个工序
+✓ 已为 生产部 配置 20 个工序
+✓ 已为 裁切车间 配置 3 个工序
+✓ 已为 印刷车间 配置 2 个工序
+✓ 已为 外协车间 配置 15 个工序
+✓ 已为 模切车间 配置 5 个工序
+✓ 已为 包装车间 配置 9 个工序
+✓ 成功创建用户组: 业务员
+✗ 权限不存在: add_workorder
+✗ 权限不存在: view_workorder
+✗ 权限不存在: change_workorder
+✗ 权限不存在: add_customer
+✗ 权限不存在: view_customer
+✗ 权限不存在: change_customer
+✗ 权限不存在: add_department
+✗ 权限不存在: view_department
+✗ 权限不存在: change_department
+✗ 权限不存在: add_process
+✗ 权限不存在: view_process
+✗ 权限不存在: change_process
+✗ 权限不存在: add_product
+✗ 权限不存在: view_product
+✗ 权限不存在: change_product
+✗ 权限不存在: add_material
+✗ 权限不存在: view_material
+✗ 权限不存在: change_material
+✗ 权限不存在: add_artwork
+✗ 权限不存在: view_artwork
+✗ 权限不存在: change_artwork
+✗ 权限不存在: add_die
+✗ 权限不存在: view_die
+✗ 权限不存在: change_die
+✗ 权限不存在: add_productgroup
+✗ 权限不存在: view_productgroup
+✗ 权限不存在: change_productgroup
+⚠ 业务员 组权限未变更
+创建规则: 制版 -> 设计部 (优先级: 100)
+创建规则: 模切 -> 模切车间 (优先级: 90)
+创建规则: 印刷 -> 印刷车间 (优先级: 90)
+创建规则: 过油 -> 印刷车间 (优先级: 90)
+创建规则: 开料 -> 裁切车间 (优先级: 90)
+创建规则: 压线 -> 裁切车间 (优先级: 90)
+创建规则: 切成品 -> 裁切车间 (优先级: 90)
+创建规则: 烫金 -> 模切车间 (优先级: 90)
+创建规则: 烫银 -> 模切车间 (优先级: 90)
+创建规则: 压凸 -> 模切车间 (优先级: 90)
+创建规则: 包装 -> 包装车间 (优先级: 90)
+创建规则: 裱坑 -> 包装车间 (优先级: 90)
+创建规则: 对裱 -> 包装车间 (优先级: 90)
+创建规则: 粘胶 -> 包装车间 (优先级: 90)
+创建规则: 粘盒 -> 包装车间 (优先级: 90)
+创建规则: 粘窗口 -> 包装车间 (优先级: 90)
+创建规则: 打钉 -> 包装车间 (优先级: 90)
+创建规则: 压纹 -> 包装车间 (优先级: 90)
+创建规则: UV -> 印刷车间 (优先级: 75)
+创建规则: 覆光膜 -> 印刷车间 (优先级: 75)
+创建规则: 覆哑膜 -> 印刷车间 (优先级: 75)
+创建规则: 开料 -> 外协车间 (优先级: 15)
+创建规则: 印刷 -> 外协车间 (优先级: 15)
+创建规则: 过油 -> 外协车间 (优先级: 15)
+创建规则: 覆光膜 -> 外协车间 (优先级: 15)
+创建规则: 覆哑膜 -> 外协车间 (优先级: 15)
+创建规则: UV -> 外协车间 (优先级: 15)
+创建规则: 烫金 -> 外协车间 (优先级: 15)
+创建规则: 烫银 -> 外协车间 (优先级: 15)
+创建规则: 压凸 -> 外协车间 (优先级: 15)
+创建规则: 压纹 -> 外协车间 (优先级: 15)
+创建规则: 模切 -> 外协车间 (优先级: 15)
+创建规则: 对裱 -> 外协车间 (优先级: 15)
+创建规则: 裱坑 -> 外协车间 (优先级: 15)
+创建规则: 粘盒 -> 外协车间 (优先级: 15)
+创建规则: 打钉 -> 外协车间 (优先级: 15)
+创建规则: 开料 -> 生产部 (优先级: 5)
+创建规则: 印刷 -> 生产部 (优先级: 5)
+创建规则: 过油 -> 生产部 (优先级: 5)
+创建规则: 覆光膜 -> 生产部 (优先级: 5)
+创建规则: 覆哑膜 -> 生产部 (优先级: 5)
+创建规则: UV -> 生产部 (优先级: 5)
+创建规则: 烫金 -> 生产部 (优先级: 5)
+创建规则: 烫银 -> 生产部 (优先级: 5)
+创建规则: 压凸 -> 生产部 (优先级: 5)
+创建规则: 压纹 -> 生产部 (优先级: 5)
+创建规则: 压线 -> 生产部 (优先级: 5)
+创建规则: 模切 -> 生产部 (优先级: 5)
+创建规则: 切成品 -> 生产部 (优先级: 5)
+创建规则: 对裱 -> 生产部 (优先级: 5)
+创建规则: 裱坑 -> 生产部 (优先级: 5)
+创建规则: 粘胶 -> 生产部 (优先级: 5)
+创建规则: 粘盒 -> 生产部 (优先级: 5)
+创建规则: 粘窗口 -> 生产部 (优先级: 5)
+创建规则: 打钉 -> 生产部 (优先级: 5)
+创建规则: 包装 -> 生产部 (优先级: 5)
+分派规则加载完成: 创建 56 条，更新 0 条，跳过 0 条
+System check identified no issues (0 silenced).
+EEEEEEE.EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE.....EEEEEEEEE
+======================================================================
+ERROR: workorder.management.commands.test_notification (unittest.loader._FailedTest.workorder.management.commands.test_notification)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: workorder.management.commands.test_notification
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/loader.py", line 394, in _find_test_path
+    module = self._get_module_from_name(name)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/loader.py", line 337, in _get_module_from_name
+    __import__(name)
+  File "/home/chenjiaxing/文档/work_order/backend/workorder/management/commands/test_notification.py", line 12, in <module>
+    from workorder.services.realtime_notification import (
+  File "/home/chenjiaxing/文档/work_order/backend/workorder/services/realtime_notification.py", line 11, in <module>
+    from channels.generic.websocket import AsyncWebsocketConsumer
+ModuleNotFoundError: No module named 'channels'
+
+
+======================================================================
+ERROR: test_create_workorder (workorder.tests.test_api.WorkOrderAPITest.test_create_workorder)
+测试创建施工单
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/backends/utils.py", line 89, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/backends/sqlite3/base.py", line 328, in execute
+    return super().execute(query, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.IntegrityError: NOT NULL constraint failed: workorder_workorder.multi_level_approval_enabled
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/chenjiaxing/文档/work_order/backend/workorder/tests/test_api.py", line 56, in test_create_workorder
+    response = self.api_post('/api/workorders/', data, user=self.user)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/workorder/tests/conftest.py", line 203, in api_post
+    return self.client.post(url, data, content_type='application/json', **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/test/client.py", line 948, in post
+    response = super().post(
+               ^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/test/client.py", line 482, in post
+    return self.generic(
+           ^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/test/client.py", line 609, in generic
+    return self.request(**r)
+           ^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/test/client.py", line 891, in request
+    self.check_exception(response)
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/test/client.py", line 738, in check_exception
+    raise exc_value
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 56, in wrapper_view
+    return view_func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/rest_framework/viewsets.py", line 125, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/rest_framework/mixins.py", line 19, in create
+    self.perform_create(serializer)
+  File "/home/chenjiaxing/文档/work_order/backend/workorder/views/core.py", line 120, in perform_create
+    serializer.save(
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/rest_framework/serializers.py", line 212, in save
+    self.instance = self.create(validated_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/workorder/serializers/core.py", line 735, in create
+    work_order = WorkOrder.objects.create(**validated_data)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/models/query.py", line 658, in create
+    obj.save(force_insert=True, using=self.db)
+  File "/home/chenjiaxing/文档/work_order/backend/workorder/models/core.py", line 376, in save
+    super().save(*args, **kwargs)
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/models/base.py", line 814, in save
+    self.save_base(
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/models/base.py", line 877, in save_base
+    updated = self._save_table(
+              ^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/models/base.py", line 1020, in _save_table
+    results = self._do_insert(
+              ^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/models/base.py", line 1061, in _do_insert
+    return manager._insert(
+           ^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/models/query.py", line 1805, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/models/sql/compiler.py", line 1822, in execute_sql
+    cursor.execute(sql, params)
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/backends/utils.py", line 67, in execute
+    return self._execute_with_wrappers(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/backends/utils.py", line 80, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/backends/utils.py", line 84, in _execute
+    with self.db.wrap_database_errors:
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/backends/utils.py", line 89, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chenjiaxing/文档/work_order/backend/venv/lib/python3.12/site-packages/django/db/backends/sqlite3/base.py", line 328, in execute
+    return super().execute(query, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+django.db.utils.IntegrityError: NOT NULL constraint failed: workorder_workorder.multi_level_approval_enabled
