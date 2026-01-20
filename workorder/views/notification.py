@@ -56,7 +56,6 @@ class NotificationViewSet(viewsets.GenericViewSet):
         """获取当前用户的通知查询集"""
         return Notification.objects.filter(user=self.request.user).order_by('-created_at')
     
-    @action(detail=False, methods=['get'])
     def list(self, request):
         """获取通知列表"""
         notifications = self.get_queryset()

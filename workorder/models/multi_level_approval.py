@@ -26,7 +26,7 @@ class ApprovalWorkflow(models.Model):
     description = models.TextField('描述', blank=True)
     steps = models.JSONField('审核步骤配置', default=dict)
     is_active = models.BooleanField('是否激活', default=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='创建人')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='创建人', null=True, blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
     
@@ -107,12 +107,12 @@ class ApprovalRule(models.Model):
         ('department_based', '基于部门'),
     ]
     
-    name = models.CharField('规则名称', max_length=100)
-    rule_type = models.CharField('规则类型', max_length=20, choices=RULE_TYPES)
+    name = models.CharField('规则名称', max_length=100, default='默认规则')
+    rule_type = models.CharField('规则类型', max_length=20, choices=RULE_TYPES, default='value_based')
     conditions = models.JSONField('触发条件', default=dict)
-    workflow_type = models.CharField('工作流类型', max_length=20, choices=ApprovalWorkflow.WORKFLOW_TYPES)
+    workflow_type = models.CharField('工作流类型', max_length=20, choices=ApprovalWorkflow.WORKFLOW_TYPES, default='standard')
     is_active = models.BooleanField('是否激活', default=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='创建人')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='创建人', null=True, blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
     

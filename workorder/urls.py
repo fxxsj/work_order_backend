@@ -9,7 +9,7 @@ from .views import (
     DieViewSet, DieProductViewSet, FoilingPlateViewSet, FoilingPlateProductViewSet,
     EmbossingPlateViewSet, EmbossingPlateProductViewSet,
     WorkOrderTaskViewSet, ProductGroupViewSet, ProductGroupItemViewSet,
-    TaskAssignmentRuleViewSet, NotificationViewSet,
+    TaskAssignmentRuleViewSet, ProductGroupViewSet, ProductGroupItemViewSet,
     SupplierViewSet, MaterialSupplierViewSet, PurchaseOrderViewSet, PurchaseOrderItemViewSet,
     SalesOrderViewSet, SalesOrderItemViewSet,
     # 财务视图集
@@ -28,14 +28,14 @@ from .views import (
 # 4. 测试多级审批功能是否正常
 # 相关 issue: #XXX
 #
-# from .views.multi_level_approval import (
-#     ApprovalWorkflowViewSet, ApprovalStepViewSet, MultiLevelApprovalViewSet,
-#     UrgentOrderViewSet, ApprovalReportViewSet
-# )
-# from .views.notification import (
-#     NotificationViewSet, SystemNotificationViewSet,
-#     UserNotificationSettingsViewSet, NotificationTemplateViewSet
-# )
+from .views.multi_level_approval import (
+    ApprovalWorkflowViewSet, ApprovalStepViewSet, MultiLevelApprovalViewSet,
+    UrgentOrderViewSet, ApprovalReportViewSet
+)
+from .views.notification import (
+    NotificationViewSet, SystemNotificationViewSet,
+    UserNotificationSettingsViewSet, NotificationTemplateViewSet
+)
 from .auth_views import (
     LoginView, logout_view, get_current_user, register_view,
     get_salespersons, get_users_by_department, change_password, update_profile
@@ -63,7 +63,7 @@ router.register(r'product-groups', ProductGroupViewSet)
 router.register(r'product-group-items', ProductGroupItemViewSet)
 router.register(r'process-logs', ProcessLogViewSet)
 router.register(r'task-assignment-rules', TaskAssignmentRuleViewSet)
-router.register(r'notifications', NotificationViewSet)
+router.register(r'notifications', NotificationViewSet, basename='notifications')
 router.register(r'artworks', ArtworkViewSet)
 router.register(r'artwork-products', ArtworkProductViewSet)
 router.register(r'dies', DieViewSet)
@@ -92,14 +92,14 @@ router.register(r'quality-inspections', QualityInspectionViewSet, basename='qual
 
 # TODO: 多级审批功能待恢复（见上方第22-30行的详细说明）
 # 暂时注释掉有问题的路由注册，直到模型迁移完成
-# router.register(r'approval-workflows', ApprovalWorkflowViewSet)
-# router.register(r'approval-steps', ApprovalStepViewSet)
-# router.register(r'multi-level-approval', MultiLevelApprovalViewSet, basename='multi-level-approval')
-# router.register(r'urgent-orders', UrgentOrderViewSet, basename='urgent-orders')
-# router.register(r'approval-reports', ApprovalReportViewSet, basename='approval-reports')
-# router.register(r'system-notifications', SystemNotificationViewSet, basename='system-notifications')
-# router.register(r'user-notification-settings', UserNotificationSettingsViewSet, basename='user-notification-settings')
-# router.register(r'notification-templates', NotificationTemplateViewSet, basename='notification-templates')
+router.register(r'approval-workflows', ApprovalWorkflowViewSet)
+router.register(r'approval-steps', ApprovalStepViewSet)
+router.register(r'multi-level-approval', MultiLevelApprovalViewSet, basename='multi-level-approval')
+router.register(r'urgent-orders', UrgentOrderViewSet, basename='urgent-orders')
+router.register(r'approval-reports', ApprovalReportViewSet, basename='approval-reports')
+router.register(r'system-notifications', SystemNotificationViewSet, basename='system-notifications')
+router.register(r'user-notification-settings', UserNotificationSettingsViewSet, basename='user-notification-settings')
+router.register(r'notification-templates', NotificationTemplateViewSet, basename='notification-templates')
 
 urlpatterns = [
     path('', include(router.urls)),

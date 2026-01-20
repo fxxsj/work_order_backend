@@ -44,7 +44,6 @@ from .work_order_materials import WorkOrderMaterialViewSet
 from .process_logs import ProcessLogViewSet
 
 from .system import (
-    NotificationViewSet,
     TaskAssignmentRuleViewSet,
 )
 
@@ -72,6 +71,21 @@ from .inventory import (
     DeliveryOrderViewSet,
     DeliveryItemViewSet,
     QualityInspectionViewSet,
+)
+
+from .multi_level_approval import (
+    ApprovalWorkflowViewSet,
+    ApprovalStepViewSet,
+    MultiLevelApprovalViewSet,
+    UrgentOrderViewSet,
+    ApprovalReportViewSet,
+)
+
+from .notification import (
+    NotificationViewSet,
+    SystemNotificationViewSet,
+    UserNotificationSettingsViewSet,
+    NotificationTemplateViewSet,
 )
 
 __all__ = [
@@ -135,4 +149,17 @@ __all__ = [
     'DeliveryOrderViewSet',
     'DeliveryItemViewSet',
     'QualityInspectionViewSet',
+
+    # 审批视图集
+    'ApprovalWorkflowViewSet',
+    'ApprovalStepViewSet',
+    'MultiLevelApprovalViewSet',
+    'UrgentOrderViewSet',
+    'ApprovalReportViewSet',
+
+    # 通知视图集
+    'NotificationViewSet',
+    'SystemNotificationViewSet',
+    'UserNotificationSettingsViewSet',
+    'NotificationTemplateViewSet',
 ]

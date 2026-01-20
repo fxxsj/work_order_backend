@@ -19,18 +19,6 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['created_at', 'updated_at', 'subtotal', 'sales_order']
 
-    def validate(self, attrs):
-        """验证订单明细数据"""
-        import sys
-        print(f"[DEBUG] Validating SalesOrderItem: {attrs}", file=sys.stderr)
-        return attrs
-
-    def create(self, validated_data):
-        """创建订单明细"""
-        import sys
-        print(f"[DEBUG] Creating SalesOrderItem with data: {validated_data}", file=sys.stderr)
-        return super().create(validated_data)
-
 
 class SalesOrderListSerializer(serializers.ModelSerializer):
     """销售订单列表序列化器"""
@@ -77,35 +65,24 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         """创建销售订单及其明细"""
         items_data = validated_data.pop('items', [])
         
-        # 打印调试信息
-        import sys
-        print(f"[DEBUG] Creating sales order with data:", validated_data, file=sys.stderr)
-        print(f"[DEBUG] Items data:", items_data, file=sys.stderr)
-        
         try:
             sales_order = SalesOrder.objects.create(**validated_data)
-            print(f"[DEBUG] SalesOrder created successfully with ID: {sales_order.id}", file=sys.stderr)
         except Exception as e:
-            print(f"[DEBUG] Failed to create SalesOrder: {str(e)}", file=sys.stderr)
             raise serializers.ValidationError(f'创建销售订单失败: {str(e)}')
         
         # 创建订单明细
         for i, item_data in enumerate(items_data):
             try:
-                print(f"[DEBUG] Creating item {i+1} with data: {item_data}", file=sys.stderr)
                 SalesOrderItem.objects.create(sales_order=sales_order, **item_data)
-                print(f"[DEBUG] Item {i+1} created successfully", file=sys.stderr)
             except Exception as e:
-                print(f"[DEBUG] Failed to create item {i+1}: {str(e)}", file=sys.stderr)
                 raise serializers.ValidationError(f'创建订单明细失败 (第{i+1}项): {str(e)}')
         
         # 更新订单总金额
         try:
             sales_order.update_totals()
-            print(f"[DEBUG] Totals updated successfully", file=sys.stderr)
         except Exception as e:
-            print(f"[DEBUG] Failed to update totals: {str(e)}", file=sys.stderr)
             # 不阻止流程，记录错误即可
+            pass
         
         return sales_order
 
