@@ -13,6 +13,7 @@
 """
 from django.contrib import admin
 from django.utils.html import format_html
+from django.db.models import Count, Sum
 from ..models import Material, Supplier, MaterialSupplier, PurchaseOrder, PurchaseOrderItem
 from .mixins import FixedInlineModelAdminMixin
 from .utils import create_status_badge_method, PURCHASE_STATUS_COLORS
@@ -42,7 +43,7 @@ class MaterialAdmin(admin.ModelAdmin):
 
 @admin.register(Supplier)
 class SupplierAdmin(admin.ModelAdmin):
-    """供应商管理"""
+    """供应商管理（优化版）"""
     list_display = ['code', 'name', 'contact_person', 'phone', 'email', 'status', 'material_count', 'created_at']
     search_fields = ['code', 'name', 'contact_person', 'phone', 'email']
     list_filter = ['status', 'created_at']
@@ -50,11 +51,20 @@ class SupplierAdmin(admin.ModelAdmin):
     ordering = ['code']
     readonly_fields = ['created_at', 'updated_at']
 
+    def get_queryset(self, request):
+        """优化查询性能"""
+        qs = super().get_queryset(request)
+        # 使用注解预计算物料数量
+        qs = qs.annotate(
+            _material_count=Count('materialsupplier')
+        )
+        return qs
+
     def material_count(self, obj):
-        """显示供应物料数量"""
-        return obj.default_materials.count()
+        """显示供应物料数量（优化版）"""
+        return getattr(obj, '_material_count', obj.default_materials.count())
     material_count.short_description = '供应物料数'
-    material_count.admin_order_field = 'material_count'
+    material_count.admin_order_field = '_material_count'
 
 
 @admin.register(MaterialSupplier)
@@ -90,7 +100,7 @@ class MaterialSupplierAdmin(admin.ModelAdmin):
 
 @admin.register(PurchaseOrder)
 class PurchaseOrderAdmin(admin.ModelAdmin):
-    """采购单管理"""
+    """采购单管理（优化版）"""
     list_display = [
         'order_number', 'supplier_name', 'status_badge', 'total_amount',
         'submitted_by_name', 'approved_by_name', 'items_count',
@@ -122,6 +132,24 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
         }),
     )
 
+    def get_queryset(self, request):
+        """优化查询性能"""
+        qs = super().get_queryset(request)
+        qs = qs.select_related(
+            'supplier', 'submitted_by', 'approved_by'
+        ).prefetch_related(
+            'items__material'
+        )
+
+        # 使用注解优化items_count和received_progress
+        qs = qs.annotate(
+            _items_count=Count('items'),
+            _total_quantity=Sum('items__quantity'),
+            _total_received=Sum('items__received_quantity')
+        )
+
+        return qs
+
     def supplier_name(self, obj):
         """显示供应商名称"""
         return obj.supplier.name
@@ -138,18 +166,23 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
     approved_by_name.short_description = '审核人'
 
     def items_count(self, obj):
-        """显示明细数量"""
-        return obj.items.count()
+        """显示明细数量（优化版）"""
+        return getattr(obj, '_items_count', obj.items.count())
     items_count.short_description = '明细数量'
 
     def received_progress(self, obj):
-        """显示收货进度"""
-        items = obj.items.all()
-        if not items:
-            return '-'
-
-        total_quantity = sum(item.quantity for item in items)
-        total_received = sum(item.received_quantity for item in items)
+        """显示收货进度（优化版）"""
+        # 使用预计算的注解字段
+        if hasattr(obj, '_total_quantity') and hasattr(obj, '_total_received'):
+            total_quantity = obj._total_quantity or 0
+            total_received = obj._total_received or 0
+        else:
+            # 回退方案
+            items = obj.items.all()
+            if not items:
+                return '-'
+            total_quantity = sum(item.quantity for item in items)
+            total_received = sum(item.received_quantity for item in items)
 
         if total_quantity == 0:
             return '0%'
@@ -159,8 +192,8 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
 
         return format_html(
             '<div style="width: 100px; background-color: #f0f0f0; border-radius: 3px;">'
-            '<div style="width: {}%; height: 20px; background-color: {}; border-radius: 3px; text-align: center; color: white; line-height: 20px;">'
-            '{}%</div></div>',
+            '<div style="width: {}%; height: 20px; background-color: {}; border-radius: 3px; '
+            'text-align: center; color: white; line-height: 20px;">{}%</div></div>',
             percentage, color, percentage
         )
     received_progress.short_description = '收货进度'

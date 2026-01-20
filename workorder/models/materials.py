@@ -21,15 +21,17 @@ class Material(models.Model):
     code = models.CharField('物料编码', max_length=50, unique=True)
     specification = models.CharField('规格', max_length=200, blank=True)
     unit = models.CharField('单位', max_length=20, default='个')
-    unit_price = models.DecimalField('单价', max_digits=10, decimal_places=2, default=0)
-    stock_quantity = models.DecimalField('库存数量', max_digits=10, decimal_places=2, default=0)
+    unit_price = models.DecimalField('单价', max_digits=12, decimal_places=2, default=0,
+                                     help_text='物料单价，最大值: 999999999.99')
+    stock_quantity = models.DecimalField('库存数量', max_digits=12, decimal_places=3, default=0,
+                                        help_text='当前库存数量')
     # 库存预警设置
-    min_stock_quantity = models.DecimalField('最小库存', max_digits=10, decimal_places=2, default=0,
+    min_stock_quantity = models.DecimalField('最小库存', max_digits=12, decimal_places=3, default=0,
                                              help_text='库存低于此数量时触发预警')
     # 采购相关
-    default_supplier = models.ForeignKey('Supplier', on_delete=models.SET_NULL, null=True, blank=True,
+    default_supplier = models.ForeignKey('Supplier', on_delete=models.PROTECT, null=True, blank=True,
                                          related_name='default_materials', verbose_name='默认供应商',
-                                         help_text='该物料的默认供应商')
+                                         help_text='该物料的默认供应商（保护模式，防止误删供应商）')
     lead_time_days = models.IntegerField('采购周期（天）', default=7,
                                        help_text='从下单到收货的天数')
     need_cutting = models.BooleanField('需要开料', default=False,
@@ -42,6 +44,12 @@ class Material(models.Model):
         verbose_name = '物料'
         verbose_name_plural = '物料管理'
         ordering = ['code']
+        indexes = [
+            models.Index(fields=['name'], name='material_name_idx'),
+            models.Index(fields=['code'], name='material_code_idx'),
+            models.Index(fields=['stock_quantity'], name='material_stock_idx'),
+            models.Index(fields=['default_supplier'], name='material_supplier_idx'),
+        ]
 
     def __str__(self):
         return f"{self.code} - {self.name}"
@@ -78,6 +86,11 @@ class Supplier(models.Model):
         verbose_name = '供应商'
         verbose_name_plural = '供应商管理'
         ordering = ['code']
+        indexes = [
+            models.Index(fields=['name'], name='supplier_name_idx'),
+            models.Index(fields=['code'], name='supplier_code_idx'),
+            models.Index(fields=['status'], name='supplier_status_idx'),
+        ]
 
     def __str__(self):
         return f"{self.code} - {self.name}"
@@ -106,6 +119,11 @@ class MaterialSupplier(models.Model):
         verbose_name_plural = '物料供应商关联管理'
         ordering = ['material', 'supplier']
         unique_together = ['material', 'supplier']
+        indexes = [
+            models.Index(fields=['material'], name='ms_material_idx'),
+            models.Index(fields=['supplier'], name='ms_supplier_idx'),
+            models.Index(fields=['is_preferred'], name='ms_preferred_idx'),
+        ]
 
     def __str__(self):
         return f"{self.material.name} - {self.supplier.name}"
@@ -168,6 +186,12 @@ class PurchaseOrder(models.Model):
         verbose_name = '采购单'
         verbose_name_plural = '采购单管理'
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['order_number'], name='po_number_idx'),
+            models.Index(fields=['status'], name='po_status_idx'),
+            models.Index(fields=['supplier'], name='po_supplier_idx'),
+            models.Index(fields=['created_at'], name='po_created_idx'),
+        ]
 
     def __str__(self):
         return f"{self.order_number} - {self.supplier.name}"

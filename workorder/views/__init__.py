@@ -22,6 +22,8 @@ from .materials import (
     MaterialViewSet,
     SupplierViewSet,
     MaterialSupplierViewSet,
+    PurchaseOrderViewSet,
+    PurchaseOrderItemViewSet,
 )
 
 from .assets import (
@@ -50,8 +52,6 @@ from .system import (
 from .sales import (
     SalesOrderViewSet,
     SalesOrderItemViewSet,
-    PurchaseOrderViewSet,
-    PurchaseOrderItemViewSet,
 )
 
 from .finance import (
