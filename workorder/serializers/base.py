@@ -1,12 +1,55 @@
 """
 基础序列化器模块
 
-包含用户、客户、部门和工序的序列化器。
+包含基础序列化器类和具体模型的序列化器。
 """
 
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from django.utils import timezone
 from ..models.base import Customer, Department, Process
+
+
+class BaseModelSerializer(serializers.ModelSerializer):
+    """
+    基础序列化器
+
+    提供通用的字段和验证逻辑，所有序列化器应继承此类。
+
+    特性:
+        - 自动包含 created_at 和 updated_at 字段
+        - 自动验证创建时间不能是未来时间
+
+    使用示例:
+        class MySerializer(BaseModelSerializer):
+            class Meta:
+                model = MyModel
+                fields = '__all__'
+    """
+
+    # 如果模型有这些字段，自动定义为只读
+    created_at = serializers.DateTimeField(read_only=True, required=False)
+    updated_at = serializers.DateTimeField(read_only=True, required=False)
+
+    class Meta:
+        abstract = True
+
+    def validate_created_at(self, value):
+        """
+        验证创建时间不能是未来时间
+
+        Args:
+            value: 创建时间值
+
+        Returns:
+            验证通过的时间值
+
+        Raises:
+            ValidationError: 如果创建时间是未来时间
+        """
+        if value and value > timezone.now():
+            raise serializers.ValidationError("创建时间不能是未来时间")
+        return value
 
 
 class UserSerializer(serializers.ModelSerializer):
