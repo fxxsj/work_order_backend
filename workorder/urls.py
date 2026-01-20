@@ -19,13 +19,21 @@ from .views import (
     ProductStockViewSet, StockInViewSet, StockOutViewSet,
     DeliveryOrderViewSet, DeliveryItemViewSet, QualityInspectionViewSet,
 )
+# TODO: 多级审批功能待恢复（等待模型迁移完成）
 # 暂时注释掉有问题的导入，避免自动重载错误
+# 恢复步骤：
+# 1. 取消注释下面的导入语句
+# 2. 取消注释下面的路由注册（第85-94行附近）
+# 3. 运行数据库迁移: python manage.py migrate
+# 4. 测试多级审批功能是否正常
+# 相关 issue: #XXX
+#
 # from .views.multi_level_approval import (
 #     ApprovalWorkflowViewSet, ApprovalStepViewSet, MultiLevelApprovalViewSet,
 #     UrgentOrderViewSet, ApprovalReportViewSet
 # )
 # from .views.notification import (
-#     NotificationViewSet, SystemNotificationViewSet, 
+#     NotificationViewSet, SystemNotificationViewSet,
 #     UserNotificationSettingsViewSet, NotificationTemplateViewSet
 # )
 from .auth_views import (
@@ -82,13 +90,13 @@ router.register(r'delivery-orders', DeliveryOrderViewSet, basename='delivery-ord
 router.register(r'delivery-items', DeliveryItemViewSet, basename='delivery-item')
 router.register(r'quality-inspections', QualityInspectionViewSet, basename='quality-inspection')
 
+# TODO: 多级审批功能待恢复（见上方第22-30行的详细说明）
 # 暂时注释掉有问题的路由注册，直到模型迁移完成
 # router.register(r'approval-workflows', ApprovalWorkflowViewSet)
 # router.register(r'approval-steps', ApprovalStepViewSet)
 # router.register(r'multi-level-approval', MultiLevelApprovalViewSet, basename='multi-level-approval')
 # router.register(r'urgent-orders', UrgentOrderViewSet, basename='urgent-orders')
 # router.register(r'approval-reports', ApprovalReportViewSet, basename='approval-reports')
-# router.register(r'notifications', NotificationViewSet, basename='notifications')
 # router.register(r'system-notifications', SystemNotificationViewSet, basename='system-notifications')
 # router.register(r'user-notification-settings', UserNotificationSettingsViewSet, basename='user-notification-settings')
 # router.register(r'notification-templates', NotificationTemplateViewSet, basename='notification-templates')
