@@ -210,11 +210,8 @@ class WorkOrder(models.Model):
         return int((completed_processes / total_processes) * 100)
     
     def validate_before_approval(self):
-        """
-        审核前验证施工单数据完整性
-
-        使用 WorkOrderValidator 进行验证，提高代码可维护性和可测试性。
-
+        """审核前验证施工单数据完整性（增强版）
+        
         验证内容：
         1. 基础信息验证（客户、产品、工序、交货日期）
         2. 版与工序匹配验证（图稿、刀模、烫金版、压凸版）
@@ -222,14 +219,135 @@ class WorkOrder(models.Model):
         4. 日期验证（交货日期合理性）
         5. 物料验证（物料信息完整性、开料物料用量）
         6. 工序顺序验证（工序顺序合理性）
-
+        
         Returns:
             list: 错误信息列表，如果为空则表示验证通过
         """
-        from .validation import WorkOrderValidator
+        errors = []
+        
+        # ========== 基础信息验证 ==========
 
-        validator = WorkOrderValidator(self)
-        return validator.validate_all()
+        # 检查客户信息（使用 getattr 避免 RelatedObjectDoesNotExist 异常）
+        if getattr(self, 'customer_id', None) is None:
+            errors.append('缺少客户信息')
+        
+        # 检查产品信息
+        if not self.products.exists():
+            errors.append('缺少产品信息')
+        
+        # 检查工序信息
+        if not self.order_processes.exists():
+            errors.append('缺少工序信息')
+        
+        # 检查交货日期
+        if not self.delivery_date:
+            errors.append('缺少交货日期')
+        
+        # ========== 版与工序匹配验证 ==========
+        
+        # 获取所有选中的工序
+        selected_processes = self.order_processes.values_list('process', flat=True)
+        processes = Process.objects.filter(id__in=selected_processes, is_active=True)
+
+        # 检查图稿（任一字段为True即需要图稿）
+        processes_requiring_artwork = processes.filter(
+            models.Q(requires_artwork=True) | models.Q(artwork_required=True)
+        )
+        if processes_requiring_artwork.exists() and not self.artworks.exists():
+            process_names = ', '.join([p.name for p in processes_requiring_artwork])
+            errors.append(f'选择了需要图稿的工序（{process_names}），请至少选择一个图稿')
+
+        # 检查刀模（任一字段为True即需要刀模）
+        processes_requiring_die = processes.filter(
+            models.Q(requires_die=True) | models.Q(die_required=True)
+        )
+        if processes_requiring_die.exists() and not self.dies.exists():
+            process_names = ', '.join([p.name for p in processes_requiring_die])
+            errors.append(f'选择了需要刀模的工序（{process_names}），请至少选择一个刀模')
+        
+        # 检查烫金版
+        processes_requiring_foiling_plate = processes.filter(requires_foiling_plate=True, foiling_plate_required=True)
+        if processes_requiring_foiling_plate.exists() and not self.foiling_plates.exists():
+            process_names = ', '.join([p.name for p in processes_requiring_foiling_plate])
+            errors.append(f'选择了需要烫金版的工序（{process_names}），请至少选择一个烫金版')
+        
+        # 检查压凸版
+        processes_requiring_embossing_plate = processes.filter(requires_embossing_plate=True, embossing_plate_required=True)
+        if processes_requiring_embossing_plate.exists() and not self.embossing_plates.exists():
+            process_names = ', '.join([p.name for p in processes_requiring_embossing_plate])
+            errors.append(f'选择了需要压凸版的工序（{process_names}），请至少选择一个压凸版')
+        
+        # ========== 数量验证 ==========
+        
+        # 检查生产数量
+        if self.production_quantity is None:
+            errors.append('缺少生产数量')
+        elif self.production_quantity <= 0:
+            errors.append(f'生产数量必须大于0，当前值为{self.production_quantity}')
+        
+        # 检查产品数量总和
+        if self.products.exists():
+            # 使用 select_related 优化查询，避免 N+1 问题
+            products = self.products.select_related('product').all()
+            total_product_quantity = sum([p.quantity or 0 for p in products])
+            if total_product_quantity <= 0:
+                errors.append(f'产品数量总和必须大于0，当前总和为{total_product_quantity}')
+
+        # ========== 日期验证 ==========
+
+        # 检查交货日期是否早于下单日期
+        if self.delivery_date and self.order_date:
+            # 确保 order_date 是 date 对象（处理可能从 timezone.now() 返回的 datetime）
+            order_date = self.order_date
+            if hasattr(order_date, 'date'):
+                order_date = order_date.date()
+
+            if self.delivery_date < order_date:
+                errors.append(f'交货日期不能早于下单日期。交货日期：{self.delivery_date}，下单日期：{order_date}')
+
+        # 检查交货日期是否在过去（允许今天）
+        from django.utils import timezone
+        today = timezone.now().date()
+        if self.delivery_date and self.delivery_date < today:
+            errors.append(f'交货日期不能早于今天。交货日期：{self.delivery_date}，今天：{today}')
+
+        # ========== 物料验证 ==========
+
+        # 检查是否有需要开料的物料但未填写用量
+        if self.materials.exists():
+            # 使用 select_related 优化查询，避免 N+1 问题
+            materials = self.materials.select_related('material').all()
+            for material_item in materials:
+                if material_item.need_cutting and not material_item.material_usage:
+                    errors.append(f'物料"{material_item.material.name}"需要开料，请填写物料用量')
+        
+        # ========== 工序顺序验证 ==========
+
+        # 检查制版工序是否在印刷工序之前
+        processes_ordered = self.order_processes.filter(
+            process__code__in=['CTP', 'PRT', 'CUT']
+        ).select_related('process').order_by('sequence')
+
+        ctp_sequence = None
+        prt_sequence = None
+        cut_sequence = None
+        for wp in processes_ordered:
+            if wp.process.code == 'CTP':
+                ctp_sequence = wp.sequence
+            elif wp.process.code == 'PRT':
+                prt_sequence = wp.sequence
+            elif wp.process.code == 'CUT':
+                cut_sequence = wp.sequence
+
+        if ctp_sequence is not None and prt_sequence is not None:
+            if ctp_sequence > prt_sequence:
+                errors.append('制版工序（CTP）应该在印刷工序（PRT）之前，请调整工序顺序')
+
+        if cut_sequence is not None and prt_sequence is not None:
+            if cut_sequence > prt_sequence:
+                errors.append('开料工序（CUT）应该在印刷工序（PRT）之前，请调整工序顺序')
+
+        return errors
     
     @classmethod
     def generate_order_number(cls):

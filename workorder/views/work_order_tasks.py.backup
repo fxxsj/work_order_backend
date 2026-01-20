@@ -1,0 +1,1651 @@
+"""
+WorkOrderTask 视图集
+"""
+
+"""
+核心业务视图集
+
+包含施工单、工序、任务、产品、物料、日志等核心业务视图集。
+"""
+
+from rest_framework import viewsets, status, filters
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
+from django_filters import FilterSet, NumberFilter, CharFilter
+from django.db.models import Q, Count, Sum, Max, Avg, F
+from django.db import models
+from django.utils import timezone
+from decimal import Decimal
+
+from ..permissions import (
+    WorkOrderProcessPermission,
+    WorkOrderMaterialPermission,
+    WorkOrderTaskPermission,
+    WorkOrderDataPermission
+)
+from ..export_utils import export_work_orders, export_tasks
+from ..permissions import SuperuserFriendlyModelPermissions
+# P1 优化: 导入自定义速率限制
+from ..throttling import ApprovalRateThrottle, ExportRateThrottle, CreateRateThrottle
+
+from ..models.base import Customer, Department, Process
+from ..models.products import Product, ProductMaterial
+from ..models.materials import Material
+from ..models.core import (
+    WorkOrder, WorkOrderProcess, WorkOrderMaterial,
+    WorkOrderProduct, ProcessLog, WorkOrderTask
+)
+from ..models.assets import Artwork, Die
+
+from ..serializers.base import ProcessSerializer
+from ..serializers.core import (
+    WorkOrderListSerializer,
+    WorkOrderDetailSerializer,
+    WorkOrderCreateUpdateSerializer,
+    WorkOrderProcessSerializer,
+    WorkOrderProcessUpdateSerializer,
+    WorkOrderMaterialSerializer,
+    WorkOrderProductSerializer,
+    ProcessLogSerializer,
+    WorkOrderTaskSerializer
+)
+
+
+
+class WorkOrderTaskViewSet(viewsets.ModelViewSet):
+    """施工单任务视图集 - 使用查询优化器"""
+    permission_classes = [WorkOrderTaskPermission]  # 使用细粒度任务权限
+    serializer_class = WorkOrderTaskSerializer
+    queryset = WorkOrderTask.objects.all()  # 添加 queryset 属性以便路由器确定 basename
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['work_content', 'production_requirements']
+    ordering_fields = ['created_at', 'updated_at', 'assigned_department', 'assigned_operator']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        """根据用户权限过滤查询集"""
+        queryset = super().get_queryset()
+        user = self.request.user
+        
+        # 管理员可以查看所有任务
+        if user.is_superuser:
+            return queryset
+        
+        # 操作员只能查看自己分派的任务
+        if not user.has_perm('workorder.change_workorder'):
+            queryset = queryset.filter(assigned_operator=user)
+        # 生产主管可以查看本部门的所有任务
+        else:
+            user_departments = user.profile.departments.all() if hasattr(user, 'profile') else []
+            if user_departments:
+                # 可以查看本部门的任务或自己创建的施工单的任务
+                queryset = queryset.filter(
+                    Q(assigned_department__in=user_departments) |
+                    Q(work_order_process__work_order__created_by=user)
+                )
+            else:
+                # 如果没有部门信息，只能查看自己创建的施工单的任务
+                queryset = queryset.filter(work_order_process__work_order__created_by=user)
+        
+        return queryset
+    
+    def perform_update(self, serializer):
+        """更新任务时，检查工序是否完成"""
+        task = serializer.save()
+        
+        # 验证完成数量不能超过生产数量
+        if task.quantity_completed is not None and task.production_quantity:
+            if task.quantity_completed > task.production_quantity:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError(f'完成数量（{task.quantity_completed}）不能超过生产数量（{task.production_quantity}）')
+        
+        # 如果任务完成，检查工序是否完成
+        if task.status == 'completed':
+            task.work_order_process.check_and_update_status()
+    
+    @action(detail=True, methods=['post'])
+    def update_quantity(self, request, pk=None):
+        """更新任务数量（包含业务条件验证，根据数量自动判断状态，记录操作人）"""
+        from ..models.core import TaskLog
+        
+        task = self.get_object()
+        
+        # 权限检查：操作员只能更新自己分派的任务
+        user = request.user
+        if not user.is_superuser:
+            if task.assigned_operator != user:
+                # 检查是否是生产主管（本部门任务）
+                if task.assigned_department:
+                    user_departments = user.profile.departments.all() if hasattr(user, 'profile') else []
+                    if task.assigned_department not in user_departments or not user.has_perm('workorder.change_workorder'):
+                        # 检查是否是施工单创建人
+                        if task.work_order_process.work_order.created_by != user:
+                            return Response(
+                                {'error': '您没有权限更新此任务。只能更新自己分派的任务或本部门的任务。'},
+                                status=status.HTTP_403_FORBIDDEN
+                            )
+                else:
+                    # 任务未分派，只有施工单创建人可以更新
+                    if task.work_order_process.work_order.created_by != user:
+                        return Response(
+                            {'error': '您没有权限更新此任务。只能更新自己分派的任务或本部门的任务。'},
+                            status=status.HTTP_403_FORBIDDEN
+                        )
+        
+        from ..process_codes import ProcessCodes
+        
+        # 并发控制：检查版本号（乐观锁）
+        expected_version = request.data.get('version')
+        if expected_version is not None:
+            if task.version != expected_version:
+                return Response(
+                    {'error': '任务已被其他操作员更新，请刷新后重试', 'current_version': task.version},
+                    status=status.HTTP_409_CONFLICT
+                )
+        
+        work_order_process = task.work_order_process
+        work_order = work_order_process.work_order
+        process_code = work_order_process.process.code
+        
+        # 获取前端传递的数据
+        quantity_increment = request.data.get('quantity_increment')
+        quantity_defective = request.data.get('quantity_defective', 0)  # 不良品数量（增量或绝对值）
+        notes = request.data.get('notes', '')
+        artwork_ids = request.data.get('artwork_ids', [])
+        die_ids = request.data.get('die_ids', [])
+        
+        if quantity_increment is None:
+            return Response(
+                {'error': '请提供本次完成数量'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 计算新的完成数量（增量更新）
+        quantity_before = task.quantity_completed
+        new_quantity_completed = quantity_before + quantity_increment
+
+        # 计算库存差异（用于编辑数量时调整库存）
+        # 差异 = 新完成数量 - 上次已计入库存的完成数量
+        # 包装任务完成时已计入库存的数量 = 上次生产数量（如果任务已完成）
+        stock_adjustment = new_quantity_completed - (task.stock_accounted_quantity or 0)
+
+        # 业务条件验证：制版任务需图稿/刀模等已确认
+        if task.task_type == 'plate_making':
+            if task.artwork and not task.artwork.confirmed:
+                return Response(
+                    {'error': '图稿未确认，无法更新任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if task.die and not task.die.confirmed:
+                return Response(
+                    {'error': '刀模未确认，无法更新任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if task.foiling_plate and not task.foiling_plate.confirmed:
+                return Response(
+                    {'error': '烫金版未确认，无法更新任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if task.embossing_plate and not task.embossing_plate.confirmed:
+                return Response(
+                    {'error': '压凸版未确认，无法更新任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # 业务条件验证：开料任务需物料状态满足条件
+        if task.task_type == 'cutting' and task.material:
+            work_order_material = work_order.materials.filter(material=task.material).first()
+            if work_order_material:
+                if ProcessCodes.requires_material_cut_status(process_code):
+                    if work_order_material.purchase_status != 'cut':
+                        return Response(
+                            {'error': '物料未开料，无法更新开料任务'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+        
+        # 验证增量数量
+        if new_quantity_completed < 0:
+            return Response(
+                {'error': '更新后完成数量不能小于0'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if task.production_quantity and new_quantity_completed > task.production_quantity:
+            return Response(
+                {'error': f'更新后完成数量（{new_quantity_completed}）不能超过生产数量（{task.production_quantity}）'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 记录更新前的状态和数量
+        status_before = task.status
+        
+        # 处理设计图稿/设计刀模任务
+        # 注意：设计不属于施工单工序，设计任务通过其他系统管理
+        # 以下逻辑用于兼容可能已存在的设计任务（手动创建或历史数据）
+        is_design_task = '设计图稿' in task.work_content or '更新图稿' in task.work_content
+        is_die_design_task = '设计刀模' in task.work_content or '更新刀模' in task.work_content
+        
+        if is_design_task:
+            if not artwork_ids or len(artwork_ids) == 0:
+                return Response(
+                    {'error': '请至少选择一个图稿'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            from ..models.assets import Artwork
+            artworks = Artwork.objects.filter(id__in=artwork_ids)
+            if artworks.count() != len(artwork_ids):
+                return Response(
+                    {'error': '部分图稿不存在'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            work_order.artworks.add(*artworks)
+            task.artwork = artworks.first()
+        elif is_die_design_task:
+            if not die_ids or len(die_ids) == 0:
+                return Response(
+                    {'error': '请至少选择一个刀模'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            from ..models.assets import Die
+            dies = Die.objects.filter(id__in=die_ids)
+            if dies.count() != len(die_ids):
+                return Response(
+                    {'error': '部分刀模不存在'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            work_order.dies.add(*dies)
+            task.die = dies.first()
+        
+        # 更新任务数量（增量更新）
+        task.quantity_completed = new_quantity_completed
+        
+        # 更新不良品数量（如果提供了）
+        if quantity_defective is not None:
+            # 如果quantity_defective是增量，则累加；如果是绝对值，则直接设置
+            # 这里假设前端传递的是增量值，如果需要支持绝对值，可以添加参数
+            task.quantity_defective = (task.quantity_defective or 0) + quantity_defective
+        
+        if notes:
+            task.production_requirements = notes
+        
+        # 根据数量自动判断状态
+        # 如果完成数量 >= 生产数量，状态自动标志为已完成
+        # 否则为进行中
+        if task.production_quantity and new_quantity_completed >= task.production_quantity:
+            task.status = 'completed'
+        else:
+            # 如果任务还未开始，设置为进行中
+            if task.status == 'pending':
+                task.status = 'in_progress'
+            # 如果任务已完成但数量不足，设置为进行中
+            elif task.status == 'completed' and new_quantity_completed < task.production_quantity:
+                task.status = 'in_progress'
+
+        # 保存任务（模型会自动处理版本号）
+        task.save()
+
+        # 如果是包装任务，调整库存差异
+        # 计算库存差异：新完成数量 - 上次已计入库存的完成数量
+        stock_increment = new_quantity_completed - (task.stock_accounted_quantity or 0)
+        if stock_increment != 0 and task.product:
+            try:
+                if stock_increment > 0:
+                    # 库存增加（编辑后数量增加）
+                    task.product.add_stock(
+                        quantity=stock_increment,
+                        user=None,
+                        reason=f'施工单{work_order.order_number}包装任务数量编辑，入库{stock_increment}{task.product.unit}'
+                    )
+                else:
+                    # 库存减少（编辑后数量减少）
+                    try:
+                        task.product.reduce_stock(
+                            quantity=abs(stock_increment),
+                            user=None,
+                            reason=f'施工单{work_order.order_number}包装任务数量编辑，出库{abs(stock_increment)}{task.product.unit}'
+                        )
+                    except ValueError as e:
+                        # 库存不足，记录错误日志（P1 优化：使用日志记录）
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"库存不足警告：{e}")
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"调整产品库存失败：{e}")
+            
+            # 更新已计入库存的数量
+            task.stock_accounted_quantity = new_quantity_completed
+            task.save(update_fields=['stock_accounted_quantity'])
+
+        # 记录操作日志（增强协作追踪）
+        defective_increment = quantity_defective if quantity_defective else 0
+        TaskLog.objects.create(
+            task=task,
+            log_type='update_quantity',
+            content=f'更新完成数量：{quantity_before} → {new_quantity_completed}，本次完成：{quantity_increment}，不良品：{defective_increment}，状态：{status_before} → {task.status}' + (f'，备注：{notes}' if notes else ''),
+            quantity_before=quantity_before,
+            quantity_after=new_quantity_completed,
+            quantity_increment=quantity_increment,
+            quantity_defective_increment=defective_increment,
+            status_before=status_before,
+            status_after=task.status,
+            operator=request.user
+        )
+        
+        # 如果是子任务，更新父任务
+        if task.is_subtask() and task.parent_task:
+            task.parent_task.update_from_subtasks()
+        
+        # 检查工序是否完成
+        task.work_order_process.check_and_update_status()
+        
+        serializer = self.get_serializer(task)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """强制完成任务（用于完成数量小于生产数量但需要强制标志为已完成的情况）"""
+        from ..models.core import TaskLog
+        
+        task = self.get_object()
+        
+        # 权限检查：操作员只能完成自己分派的任务
+        user = request.user
+        if not user.is_superuser:
+            if task.assigned_operator != user:
+                # 检查是否是生产主管（本部门任务）
+                if task.assigned_department:
+                    user_departments = user.profile.departments.all() if hasattr(user, 'profile') else []
+                    if task.assigned_department not in user_departments or not user.has_perm('workorder.change_workorder'):
+                        # 检查是否是施工单创建人
+                        if task.work_order_process.work_order.created_by != user:
+                            return Response(
+                                {'error': '您没有权限完成此任务。只能完成自己分派的任务或本部门的任务。'},
+                                status=status.HTTP_403_FORBIDDEN
+                            )
+                else:
+                    # 任务未分派，只有施工单创建人可以完成
+                    if task.work_order_process.work_order.created_by != user:
+                        return Response(
+                            {'error': '您没有权限完成此任务。只能完成自己分派的任务或本部门的任务。'},
+                            status=status.HTTP_403_FORBIDDEN
+                        )
+        
+        from ..process_codes import ProcessCodes
+        
+        # 并发控制：检查版本号（乐观锁）
+        expected_version = request.data.get('version')
+        if expected_version is not None:
+            if task.version != expected_version:
+                return Response(
+                    {'error': '任务已被其他操作员更新，请刷新后重试', 'current_version': task.version},
+                    status=status.HTTP_409_CONFLICT
+                )
+        
+        work_order_process = task.work_order_process
+        work_order = work_order_process.work_order
+        process_code = work_order_process.process.code
+        
+        # 获取前端传递的数据
+        completion_reason = request.data.get('completion_reason', '')
+        quantity_defective = request.data.get('quantity_defective', 0)  # 不良品数量
+        notes = request.data.get('notes', '')
+        artwork_ids = request.data.get('artwork_ids', [])
+        die_ids = request.data.get('die_ids', [])
+        
+        # 业务条件验证：制版任务需图稿/刀模等已确认
+        if task.task_type == 'plate_making' and task.artwork:
+            if not task.artwork.confirmed:
+                return Response(
+                    {'error': '图稿未确认，无法完成任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # 业务条件验证：制版任务需图稿/刀模等已确认
+        if task.task_type == 'plate_making':
+            if task.artwork and not task.artwork.confirmed:
+                return Response(
+                    {'error': '图稿未确认，无法完成任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if task.die and not task.die.confirmed:
+                return Response(
+                    {'error': '刀模未确认，无法完成任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if task.foiling_plate and not task.foiling_plate.confirmed:
+                return Response(
+                    {'error': '烫金版未确认，无法完成任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if task.embossing_plate and not task.embossing_plate.confirmed:
+                return Response(
+                    {'error': '压凸版未确认，无法完成任务'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # 业务条件验证：开料任务需物料状态满足条件
+        if task.task_type == 'cutting' and task.material:
+            work_order_material = work_order.materials.filter(material=task.material).first()
+            if work_order_material:
+                if ProcessCodes.requires_material_cut_status(process_code):
+                    if work_order_material.purchase_status != 'cut':
+                        return Response(
+                            {'error': '物料未开料，无法完成开料任务'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+        
+        # 记录更新前的状态和数量
+        status_before = task.status
+        quantity_before = task.quantity_completed
+        
+        # 处理设计图稿/设计刀模任务
+        # 注意：设计不属于施工单工序，设计任务通过其他系统管理
+        # 以下逻辑用于兼容可能已存在的设计任务（手动创建或历史数据）
+        is_design_task = '设计图稿' in task.work_content or '更新图稿' in task.work_content
+        is_die_design_task = '设计刀模' in task.work_content or '更新刀模' in task.work_content
+        
+        if is_design_task:
+            if not artwork_ids or len(artwork_ids) == 0:
+                return Response(
+                    {'error': '请至少选择一个图稿'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            from ..models.assets import Artwork
+            artworks = Artwork.objects.filter(id__in=artwork_ids)
+            if artworks.count() != len(artwork_ids):
+                return Response(
+                    {'error': '部分图稿不存在'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            work_order.artworks.add(*artworks)
+            task.artwork = artworks.first()
+        elif is_die_design_task:
+            if not die_ids or len(die_ids) == 0:
+                return Response(
+                    {'error': '请至少选择一个刀模'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            from ..models.assets import Die
+            dies = Die.objects.filter(id__in=die_ids)
+            if dies.count() != len(die_ids):
+                return Response(
+                    {'error': '部分刀模不存在'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            work_order.dies.add(*dies)
+            task.die = dies.first()
+        
+        # 强制设置为已完成（不根据数量判断）
+        task.status = 'completed'
+        if notes:
+            task.production_requirements = notes
+
+        # 制版任务：完成数量固定为1
+        if task.task_type == 'plate_making':
+            task.quantity_completed = 1
+        else:
+            # 其他任务：完成数量自动更新为生产数量
+            task.quantity_completed = task.production_quantity
+
+        # 更新不良品数量（如果提供了）
+        if quantity_defective is not None:
+            task.quantity_defective = quantity_defective
+
+        # 保存任务（模型会自动处理版本号）
+        task.save()
+        
+        # 计算数量增量
+        quantity_increment = task.quantity_completed - quantity_before
+        defective_increment = quantity_defective if quantity_defective else 0
+        
+        # 记录操作日志（增强协作追踪）
+        log_content = f'强制完成任务，完成数量：{quantity_before} → {task.quantity_completed}，不良品：{defective_increment}，状态：{status_before} → completed'
+        if quantity_increment != 0:
+            log_content += f'，本次完成：{quantity_increment}'
+        if completion_reason:
+            log_content += f'，完成理由：{completion_reason}'
+        if notes:
+            log_content += f'，备注：{notes}'
+        
+        TaskLog.objects.create(
+            task=task,
+            log_type='complete',
+            content=log_content,
+            quantity_before=quantity_before,
+            quantity_after=task.quantity_completed,
+            quantity_increment=quantity_increment,
+            quantity_defective_increment=defective_increment,
+            status_before=status_before,
+            status_after='completed',
+            completion_reason=completion_reason,
+            operator=request.user
+        )
+        
+        # 如果是子任务，更新父任务
+        if task.is_subtask() and task.parent_task:
+            task.parent_task.update_from_subtasks()
+        
+        # 检查工序是否完成
+        task.work_order_process.check_and_update_status()
+        
+        serializer = self.get_serializer(task)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def split(self, request, pk=None):
+        """拆分任务为多个子任务（支持多人协作）
+        
+        请求参数：
+        - splits: 子任务列表，每个子任务包含：
+          - production_quantity: 生产数量
+          - assigned_department: 分派部门ID（可选）
+          - assigned_operator: 分派操作员ID（可选）
+          - work_content: 工作内容（可选，默认使用父任务内容）
+        """
+        from ..models.core import WorkOrderTask, TaskLog
+        
+        task = self.get_object()
+        
+        # 检查任务是否已经拆分
+        if task.subtasks.exists():
+            return Response(
+                {'error': '该任务已经拆分，无法再次拆分'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 检查任务是否已完成
+        if task.status == 'completed':
+            return Response(
+                {'error': '已完成的任务无法拆分'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        splits = request.data.get('splits', [])
+        if not splits or len(splits) < 2:
+            return Response(
+                {'error': '至少需要拆分为2个子任务'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 验证拆分数量总和不超过父任务数量
+        total_split_quantity = sum(s.get('production_quantity', 0) for s in splits)
+        if total_split_quantity > task.production_quantity:
+            return Response(
+                {'error': f'子任务数量总和（{total_split_quantity}）不能超过父任务数量（{task.production_quantity}）'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 创建子任务
+        created_subtasks = []
+        for idx, split_data in enumerate(splits):
+            production_quantity = split_data.get('production_quantity', 0)
+            if production_quantity <= 0:
+                return Response(
+                    {'error': f'第{idx+1}个子任务的生产数量必须大于0'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 获取分派信息
+            assigned_department_id = split_data.get('assigned_department')
+            assigned_operator_id = split_data.get('assigned_operator')
+            work_content = split_data.get('work_content', f"{task.work_content}（子任务{idx+1}）")
+            
+            # 创建子任务
+            subtask = WorkOrderTask.objects.create(
+                work_order_process=task.work_order_process,
+                task_type=task.task_type,
+                work_content=work_content,
+                production_quantity=production_quantity,
+                quantity_completed=0,
+                quantity_defective=0,
+                parent_task=task,
+                assigned_department_id=assigned_department_id,
+                assigned_operator_id=assigned_operator_id,
+                artwork=task.artwork,
+                die=task.die,
+                product=task.product,
+                material=task.material,
+                foiling_plate=task.foiling_plate,
+                embossing_plate=task.embossing_plate,
+                production_requirements=task.production_requirements,
+                status='pending',
+                auto_calculate_quantity=task.auto_calculate_quantity
+            )
+            created_subtasks.append(subtask)
+        
+        # 将父任务状态设置为进行中（因为已拆分）
+        if task.status == 'pending':
+            task.status = 'in_progress'
+            task.version += 1
+            task.save()
+        
+        # 记录拆分日志
+        TaskLog.objects.create(
+            task=task,
+            log_type='status_change',
+            content=f'任务已拆分为{len(created_subtasks)}个子任务，子任务数量总和：{total_split_quantity}',
+            operator=request.user
+        )
+        
+        serializer = self.get_serializer(task)
+        return Response({
+            'message': f'任务已成功拆分为{len(created_subtasks)}个子任务',
+            'parent_task': serializer.data,
+            'subtasks_count': len(created_subtasks)
+        }, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['post'])
+    def assign(self, request, pk=None):
+        """分派任务到部门和操作员（支持调整分派）
+        
+        使用场景：
+        - 自动分派后需要调整（如从包装车间调整为外协车间）
+        - 手动调整任务分派
+        - 记录调整原因和备注
+        """
+        from ..models.core import TaskLog
+        
+        task = self.get_object()
+        department_id = request.data.get('assigned_department')
+        operator_id = request.data.get('assigned_operator')
+        reason = request.data.get('reason', '')  # 调整原因
+        notes = request.data.get('notes', '')  # 备注
+        
+        # 记录调整前的状态
+        old_department = task.assigned_department
+        old_operator = task.assigned_operator
+        changes = []
+        
+        # 更新分派部门
+        if department_id is not None:
+            if department_id:
+                try:
+                    from ..models.base import Department
+                    department = Department.objects.get(id=department_id)
+                    if task.assigned_department != department:
+                        changes.append(f'部门：{old_department.name if old_department else "未分配"} → {department.name}')
+                        task.assigned_department = department
+                except Department.DoesNotExist:
+                    return Response(
+                        {'error': '部门不存在'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            else:
+                if task.assigned_department:
+                    changes.append(f'部门：{old_department.name if old_department else "未分配"} → 未分配')
+                    task.assigned_department = None
+        
+        # 更新分派操作员
+        if operator_id is not None:
+            if operator_id:
+                try:
+                    from django.contrib.auth.models import User
+                    operator = User.objects.get(id=operator_id)
+                    old_operator_name = f"{old_operator.first_name}{old_operator.last_name}" if old_operator else "未分配"
+                    new_operator_name = f"{operator.first_name}{operator.last_name}"
+                    if task.assigned_operator != operator:
+                        changes.append(f'操作员：{old_operator_name} → {new_operator_name}')
+                        task.assigned_operator = operator
+                except User.DoesNotExist:
+                    return Response(
+                        {'error': '操作员不存在'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            else:
+                if task.assigned_operator:
+                    old_operator_name = f"{old_operator.first_name}{old_operator.last_name}" if old_operator else "未分配"
+                    changes.append(f'操作员：{old_operator_name} → 未分配')
+                    task.assigned_operator = None
+        
+        # 如果有变更，保存并记录日志
+        if changes:
+            task.save()
+            
+            # 记录调整日志
+            log_content = f'调整任务分派：{", ".join(changes)}'
+            if reason:
+                log_content += f'，原因：{reason}'
+            if notes:
+                log_content += f'，备注：{notes}'
+            
+            TaskLog.objects.create(
+                task=task,
+                log_type='status_change',
+                content=log_content,
+                operator=request.user
+            )
+        
+        serializer = self.get_serializer(task)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """取消任务
+        
+        请求参数：
+        - cancellation_reason: 取消原因（必填）
+        - notes: 备注（可选）
+        
+        权限控制：
+        - 只有生产主管、创建人或任务分派的操作员可以取消任务
+        - 已开始的任务需要特殊权限才能取消
+        """
+        from ..models.core import TaskLog
+        from django.contrib.auth.models import User
+        
+        task = self.get_object()
+        cancellation_reason = request.data.get('cancellation_reason', '').strip()
+        notes = request.data.get('notes', '')
+        
+        # 验证取消原因
+        if not cancellation_reason:
+            return Response(
+                {'error': '请填写取消原因'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 检查任务状态
+        if task.status == 'cancelled':
+            return Response(
+                {'error': '任务已经取消，无法重复取消'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if task.status == 'completed':
+            return Response(
+                {'error': '已完成的任务无法取消'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 权限检查：生产主管、创建人或任务分派的操作员可以取消
+        # 这里简化处理，实际可以根据用户角色和部门进行更细粒度的控制
+        user = request.user
+        can_cancel = False
+        
+        # 检查是否为生产主管（简化：检查用户是否有管理权限）
+        if user.has_perm('workorder.change_workorder'):
+            can_cancel = True
+        # 检查是否为任务分派的操作员
+        elif task.assigned_operator == user:
+            can_cancel = True
+        # 检查是否为施工单创建人
+        elif task.work_order_process.work_order.created_by == user:
+            can_cancel = True
+        
+        if not can_cancel:
+            return Response(
+                {'error': '您没有权限取消此任务'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 检查是否会影响工序完成状态
+        work_order_process = task.work_order_process
+        # 如果工序只有一个任务且该任务被取消，工序无法完成
+        if work_order_process.tasks.count() == 1:
+            # 如果工序状态不是pending，需要特殊处理
+            if work_order_process.status != 'pending':
+                return Response(
+                    {'error': '该任务是工序的唯一任务，取消后工序无法完成。请先处理工序状态'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # 记录取消前的状态
+        status_before = task.status
+        quantity_before = task.quantity_completed
+        
+        # 取消任务
+        task.status = 'cancelled'
+        task.version += 1
+        task.save()
+        
+        # 记录操作日志
+        log_content = f'取消任务，原因：{cancellation_reason}'
+        if notes:
+            log_content += f'，备注：{notes}'
+        
+        TaskLog.objects.create(
+            task=task,
+            log_type='status_change',
+            content=log_content,
+            status_before=status_before,
+            status_after='cancelled',
+            operator=user
+        )
+        
+        # 创建任务取消通知
+        if task.assigned_operator:
+            Notification.create_notification(
+                recipient=task.assigned_operator,
+                notification_type='task_cancelled',
+                title=f'任务已取消：{task.work_content}',
+                content=f'任务"{task.work_content}"已被取消。取消原因：{cancellation_reason}',
+                priority='normal',
+                work_order=work_order_process.work_order,
+                work_order_process=work_order_process,
+                task=task
+            )
+        
+        # 检查工序状态：如果所有任务都取消或完成，需要更新工序状态
+        remaining_tasks = work_order_process.tasks.exclude(status='cancelled')
+        if not remaining_tasks.exists():
+            # 所有任务都已取消或完成，工序状态需要调整
+            if work_order_process.status == 'in_progress':
+                # 如果工序进行中但没有可用任务，可能需要暂停或取消工序
+                # 这里暂时不自动处理，由用户手动处理
+                pass
+        
+        serializer = self.get_serializer(task)
+        return Response({
+            'message': '任务已成功取消',
+            'task': serializer.data
+        })
+    
+    @action(detail=False, methods=['post'])
+    def batch_update_quantity(self, request):
+        """批量更新任务完成数量
+        
+        请求参数：
+        - task_ids: 任务ID列表（必填）
+        - quantity_increment: 每个任务的增量数量（可以是列表，对应每个任务；也可以是单个值，应用到所有任务）
+        - quantity_defective: 不良品数量（可选，同上）
+        - notes: 备注（可选）
+        """
+        from ..models.core import TaskLog
+        
+        task_ids = request.data.get('task_ids', [])
+        quantity_increment = request.data.get('quantity_increment')
+        quantity_defective = request.data.get('quantity_defective', 0)
+        notes = request.data.get('notes', '')
+        
+        if not task_ids:
+            return Response(
+                {'error': '请提供任务ID列表'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if quantity_increment is None:
+            return Response(
+                {'error': '请提供完成数量增量'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 获取任务
+        tasks = WorkOrderTask.objects.filter(id__in=task_ids)
+        if tasks.count() != len(task_ids):
+            return Response(
+                {'error': '部分任务不存在'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 检查权限：操作员只能更新自己分派的任务
+        user = request.user
+        unauthorized_tasks = []
+        for task in tasks:
+            # 检查权限：生产主管、任务分派的操作员、施工单创建人可以更新
+            can_update = False
+            if user.has_perm('workorder.change_workorder'):
+                can_update = True
+            elif task.assigned_operator == user:
+                can_update = True
+            elif task.work_order_process.work_order.created_by == user:
+                can_update = True
+            
+            if not can_update:
+                unauthorized_tasks.append(task.id)
+        
+        if unauthorized_tasks:
+            return Response(
+                {'error': f'您没有权限更新以下任务：{unauthorized_tasks}'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 处理数量增量（支持列表或单个值）
+        if isinstance(quantity_increment, list):
+            if len(quantity_increment) != len(task_ids):
+                return Response(
+                    {'error': '数量增量列表长度必须与任务ID列表长度相同'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            increments = quantity_increment
+        else:
+            increments = [quantity_increment] * len(task_ids)
+        
+        # 处理不良品数量
+        if isinstance(quantity_defective, list):
+            if len(quantity_defective) != len(task_ids):
+                return Response(
+                    {'error': '不良品数量列表长度必须与任务ID列表长度相同'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            defectives = quantity_defective
+        else:
+            defectives = [quantity_defective] * len(task_ids)
+        
+        # 批量更新任务
+        updated_tasks = []
+        failed_tasks = []
+        
+        for task, increment, defective in zip(tasks, increments, defectives):
+            try:
+                # 并发控制：检查版本号
+                expected_version = request.data.get('versions', {}).get(str(task.id))
+                if expected_version is not None and task.version != expected_version:
+                    failed_tasks.append({
+                        'task_id': task.id,
+                        'error': '任务已被其他操作员更新，请刷新后重试'
+                    })
+                    continue
+                
+                # 计算新的完成数量
+                quantity_before = task.quantity_completed
+                new_quantity_completed = quantity_before + increment
+                
+                # 验证数量
+                if new_quantity_completed < 0:
+                    failed_tasks.append({
+                        'task_id': task.id,
+                        'error': '更新后完成数量不能小于0'
+                    })
+                    continue
+                
+                if task.production_quantity and new_quantity_completed > task.production_quantity:
+                    failed_tasks.append({
+                        'task_id': task.id,
+                        'error': f'更新后完成数量（{new_quantity_completed}）不能超过生产数量（{task.production_quantity}）'
+                    })
+                    continue
+                
+                # 更新任务
+                task.quantity_completed = new_quantity_completed
+                if defective:
+                    task.quantity_defective = (task.quantity_defective or 0) + defective
+                
+                if notes:
+                    task.production_requirements = notes
+                
+                # 根据数量自动判断状态
+                if task.production_quantity and new_quantity_completed >= task.production_quantity:
+                    task.status = 'completed'
+                elif task.status == 'pending':
+                    task.status = 'in_progress'
+                elif task.status == 'completed' and new_quantity_completed < task.production_quantity:
+                    task.status = 'in_progress'
+                
+                # 更新版本号
+                task.version += 1
+                task.save()
+                
+                # 记录操作日志
+                TaskLog.objects.create(
+                    task=task,
+                    log_type='update_quantity',
+                    content=f'批量更新完成数量：{quantity_before} → {new_quantity_completed}，本次完成：{increment}，不良品：{defective}' + (f'，备注：{notes}' if notes else ''),
+                    quantity_before=quantity_before,
+                    quantity_after=new_quantity_completed,
+                    quantity_increment=increment,
+                    quantity_defective_increment=defective,
+                    operator=user
+                )
+                
+                # 如果任务完成，检查工序是否完成
+                if task.status == 'completed':
+                    task.work_order_process.check_and_update_status()
+                
+                updated_tasks.append(task.id)
+                
+            except Exception as e:
+                failed_tasks.append({
+                    'task_id': task.id,
+                    'error': str(e)
+                })
+        
+        return Response({
+            'message': f'成功更新 {len(updated_tasks)} 个任务，失败 {len(failed_tasks)} 个',
+            'updated_count': len(updated_tasks),
+            'failed_count': len(failed_tasks),
+            'updated_task_ids': updated_tasks,
+            'failed_tasks': failed_tasks
+        })
+    
+    @action(detail=False, methods=['post'])
+    def batch_complete(self, request):
+        """批量完成任务
+        
+        请求参数：
+        - task_ids: 任务ID列表（必填）
+        - completion_reason: 完成理由（可选）
+        - notes: 备注（可选）
+        """
+        from ..models.core import TaskLog
+        
+        task_ids = request.data.get('task_ids', [])
+        completion_reason = request.data.get('completion_reason', '')
+        notes = request.data.get('notes', '')
+        
+        if not task_ids:
+            return Response(
+                {'error': '请提供任务ID列表'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 获取任务
+        tasks = WorkOrderTask.objects.filter(id__in=task_ids)
+        if tasks.count() != len(task_ids):
+            return Response(
+                {'error': '部分任务不存在'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 检查权限
+        user = request.user
+        unauthorized_tasks = []
+        for task in tasks:
+            can_complete = False
+            if user.has_perm('workorder.change_workorder'):
+                can_complete = True
+            elif task.assigned_operator == user:
+                can_complete = True
+            elif task.work_order_process.work_order.created_by == user:
+                can_complete = True
+            
+            if not can_complete:
+                unauthorized_tasks.append(task.id)
+        
+        if unauthorized_tasks:
+            return Response(
+                {'error': f'您没有权限完成以下任务：{unauthorized_tasks}'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 批量完成任务
+        completed_tasks = []
+        failed_tasks = []
+        
+        for task in tasks:
+            try:
+                # 检查任务状态
+                if task.status == 'completed':
+                    failed_tasks.append({
+                        'task_id': task.id,
+                        'error': '任务已经完成'
+                    })
+                    continue
+                
+                if task.status == 'cancelled':
+                    failed_tasks.append({
+                        'task_id': task.id,
+                        'error': '已取消的任务无法完成'
+                    })
+                    continue
+                
+                # 记录更新前的状态和数量
+                status_before = task.status
+                quantity_before = task.quantity_completed
+                
+                # 强制设置为已完成
+                task.status = 'completed'
+                if notes:
+                    task.production_requirements = notes
+                
+                # 如果完成数量为0，设置为生产数量
+                if not task.quantity_completed and task.production_quantity:
+                    task.quantity_completed = task.production_quantity
+                
+                # 更新版本号
+                task.version += 1
+                task.save()
+                
+                # 记录操作日志
+                log_content = f'批量强制完成任务，完成数量：{quantity_before} → {task.quantity_completed}，状态：{status_before} → completed'
+                if completion_reason:
+                    log_content += f'，完成理由：{completion_reason}'
+                if notes:
+                    log_content += f'，备注：{notes}'
+                
+                TaskLog.objects.create(
+                    task=task,
+                    log_type='complete',
+                    content=log_content,
+                    quantity_before=quantity_before,
+                    quantity_after=task.quantity_completed,
+                    status_before=status_before,
+                    status_after='completed',
+                    completion_reason=completion_reason,
+                    operator=user
+                )
+                
+                # 检查工序是否完成
+                task.work_order_process.check_and_update_status()
+                
+                completed_tasks.append(task.id)
+                
+            except Exception as e:
+                failed_tasks.append({
+                    'task_id': task.id,
+                    'error': str(e)
+                })
+        
+        return Response({
+            'message': f'成功完成 {len(completed_tasks)} 个任务，失败 {len(failed_tasks)} 个',
+            'completed_count': len(completed_tasks),
+            'failed_count': len(failed_tasks),
+            'completed_task_ids': completed_tasks,
+            'failed_tasks': failed_tasks
+        })
+    
+    @action(detail=False, methods=['post'])
+    def batch_cancel(self, request):
+        """批量取消任务
+        
+        请求参数：
+        - task_ids: 任务ID列表（必填）
+        - cancellation_reason: 取消原因（必填）
+        - notes: 备注（可选）
+        """
+        from ..models.core import TaskLog
+        
+        task_ids = request.data.get('task_ids', [])
+        cancellation_reason = request.data.get('cancellation_reason', '').strip()
+        notes = request.data.get('notes', '')
+        
+        if not task_ids:
+            return Response(
+                {'error': '请提供任务ID列表'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not cancellation_reason:
+            return Response(
+                {'error': '请填写取消原因'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 获取任务
+        tasks = WorkOrderTask.objects.filter(id__in=task_ids)
+        if tasks.count() != len(task_ids):
+            return Response(
+                {'error': '部分任务不存在'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 检查权限
+        user = request.user
+        unauthorized_tasks = []
+        for task in tasks:
+            can_cancel = False
+            if user.has_perm('workorder.change_workorder'):
+                can_cancel = True
+            elif task.assigned_operator == user:
+                can_cancel = True
+            elif task.work_order_process.work_order.created_by == user:
+                can_cancel = True
+            
+            if not can_cancel:
+                unauthorized_tasks.append(task.id)
+        
+        if unauthorized_tasks:
+            return Response(
+                {'error': f'您没有权限取消以下任务：{unauthorized_tasks}'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 批量取消任务
+        cancelled_tasks = []
+        failed_tasks = []
+        
+        for task in tasks:
+            try:
+                # 检查任务状态
+                if task.status == 'cancelled':
+                    failed_tasks.append({
+                        'task_id': task.id,
+                        'error': '任务已经取消'
+                    })
+                    continue
+                
+                if task.status == 'completed':
+                    failed_tasks.append({
+                        'task_id': task.id,
+                        'error': '已完成的任务无法取消'
+                    })
+                    continue
+                
+                # 记录取消前的状态
+                status_before = task.status
+                quantity_before = task.quantity_completed
+                
+                # 取消任务
+                task.status = 'cancelled'
+                task.version += 1
+                task.save()
+                
+                # 记录操作日志
+                log_content = f'批量取消任务，原因：{cancellation_reason}'
+                if notes:
+                    log_content += f'，备注：{notes}'
+                
+                TaskLog.objects.create(
+                    task=task,
+                    log_type='status_change',
+                    content=log_content,
+                    status_before=status_before,
+                    status_after='cancelled',
+                    operator=user
+                )
+                
+                # 创建取消通知
+                if task.assigned_operator:
+                    Notification.create_notification(
+                        recipient=task.assigned_operator,
+                        notification_type='task_cancelled',
+                        title=f'任务已取消：{task.work_content}',
+                        content=f'任务"{task.work_content}"已被取消。取消原因：{cancellation_reason}',
+                        priority='normal',
+                        work_order=task.work_order_process.work_order,
+                        work_order_process=task.work_order_process,
+                        task=task
+                    )
+                
+                cancelled_tasks.append(task.id)
+                
+            except Exception as e:
+                failed_tasks.append({
+                    'task_id': task.id,
+                    'error': str(e)
+                })
+        
+        return Response({
+            'message': f'成功取消 {len(cancelled_tasks)} 个任务，失败 {len(failed_tasks)} 个',
+            'cancelled_count': len(cancelled_tasks),
+            'failed_count': len(failed_tasks),
+            'cancelled_task_ids': cancelled_tasks,
+            'failed_tasks': failed_tasks
+        })
+    
+    @action(detail=False, methods=['post'])
+    def batch_assign(self, request):
+        """批量分派任务到部门和操作员
+        
+        请求参数：
+        - task_ids: 任务ID列表（必填）
+        - assigned_department: 分派部门ID（可选）
+        - assigned_operator: 分派操作员ID（可选）
+        - reason: 调整原因（可选）
+        - notes: 备注（可选）
+        """
+        from ..models.core import TaskLog, Department
+        from django.contrib.auth.models import User
+        
+        task_ids = request.data.get('task_ids', [])
+        department_id = request.data.get('assigned_department')
+        operator_id = request.data.get('assigned_operator')
+        reason = request.data.get('reason', '')
+        notes = request.data.get('notes', '')
+        
+        if not task_ids:
+            return Response(
+                {'error': '请提供任务ID列表'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 获取任务
+        tasks = WorkOrderTask.objects.filter(id__in=task_ids)
+        if tasks.count() != len(task_ids):
+            return Response(
+                {'error': '部分任务不存在'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 验证部门和操作员
+        department = None
+        if department_id:
+            try:
+                department = Department.objects.get(id=department_id)
+            except Department.DoesNotExist:
+                return Response(
+                    {'error': '部门不存在'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        
+        operator = None
+        if operator_id:
+            try:
+                operator = User.objects.get(id=operator_id)
+            except User.DoesNotExist:
+                return Response(
+                    {'error': '操作员不存在'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        
+        # 批量分派任务
+        assigned_tasks = []
+        failed_tasks = []
+        
+        for task in tasks:
+            try:
+                # 记录调整前的状态
+                old_department = task.assigned_department
+                old_operator = task.assigned_operator
+                changes = []
+                
+                # 更新分派部门
+                if department_id is not None:
+                    if department:
+                        if task.assigned_department != department:
+                            changes.append(f'部门：{old_department.name if old_department else "未分配"} → {department.name}')
+                            task.assigned_department = department
+                    else:
+                        if task.assigned_department:
+                            changes.append(f'部门：{old_department.name if old_department else "未分配"} → 未分配')
+                            task.assigned_department = None
+                
+                # 更新分派操作员
+                if operator_id is not None:
+                    if operator:
+                        old_operator_name = f"{old_operator.first_name}{old_operator.last_name}" if old_operator else "未分配"
+                        new_operator_name = f"{operator.first_name}{operator.last_name}"
+                        if task.assigned_operator != operator:
+                            changes.append(f'操作员：{old_operator_name} → {new_operator_name}')
+                            task.assigned_operator = operator
+                    else:
+                        if task.assigned_operator:
+                            old_operator_name = f"{old_operator.first_name}{old_operator.last_name}" if old_operator else "未分配"
+                            changes.append(f'操作员：{old_operator_name} → 未分配')
+                            task.assigned_operator = None
+                
+                # 如果有变更，保存并记录日志
+                if changes:
+                    task.save()
+                    
+                    # 记录调整日志
+                    log_content = f'批量调整任务分派：{", ".join(changes)}'
+                    if reason:
+                        log_content += f'，原因：{reason}'
+                    if notes:
+                        log_content += f'，备注：{notes}'
+                    
+                    TaskLog.objects.create(
+                        task=task,
+                        log_type='status_change',
+                        content=log_content,
+                        operator=request.user
+                    )
+                    
+                    # 如果分派了新的操作员，创建通知
+                    if operator and task.assigned_operator == operator:
+                        Notification.create_notification(
+                            recipient=operator,
+                            notification_type='task_assigned',
+                            title=f'新任务分派：{task.work_content}',
+                            content=f'您有一个新任务：{task.work_content}（施工单：{task.work_order_process.work_order.order_number}）',
+                            priority='normal',
+                            work_order=task.work_order_process.work_order,
+                            work_order_process=task.work_order_process,
+                            task=task
+                        )
+                
+                assigned_tasks.append(task.id)
+                
+            except Exception as e:
+                failed_tasks.append({
+                    'task_id': task.id,
+                    'error': str(e)
+                })
+        
+        return Response({
+            'message': f'成功分派 {len(assigned_tasks)} 个任务，失败 {len(failed_tasks)} 个',
+            'assigned_count': len(assigned_tasks),
+            'failed_count': len(failed_tasks),
+            'assigned_task_ids': assigned_tasks,
+            'failed_tasks': failed_tasks
+        })
+    
+    @action(detail=False, methods=['get'], throttle_classes=[ExportRateThrottle])
+    def export(self, request):
+        """导出任务列表到 Excel（P1 优化：添加速率限制）"""
+        # 权限检查：需要查看权限
+        if not request.user.has_perm('workorder.view_workorder'):
+            return Response(
+                {'error': '您没有权限导出任务数据'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 获取过滤后的查询集（使用 get_queryset 确保权限过滤）
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # 记录导出日志（可选）
+        # 这里可以添加导出日志记录功能
+        
+        # 导出 Excel
+        filename = request.query_params.get('filename')
+        return export_tasks(queryset, filename)
+    
+    @action(detail=False, methods=['get'])
+    def assignment_history(self, request):
+        """分派历史查询：查询任务分派调整历史记录"""
+        from ..models.core import TaskLog
+        from django.db.models import Q
+        
+        # 获取查询参数
+        task_id = request.query_params.get('task_id')
+        department_id = request.query_params.get('department_id')
+        operator_id = request.query_params.get('operator_id')
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        
+        # 构建查询条件：筛选包含"调整任务分派"的日志
+        query = Q(log_type='status_change', content__contains='调整任务分派')
+        
+        if task_id:
+            query &= Q(task_id=task_id)
+        
+        if department_id:
+            # 通过任务查询部门
+            query &= Q(task__assigned_department_id=department_id)
+        
+        if operator_id:
+            # 通过任务或日志操作员查询
+            query &= (Q(task__assigned_operator_id=operator_id) | Q(operator_id=operator_id))
+        
+        if start_date:
+            try:
+                from datetime import datetime
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+                query &= Q(created_at__gte=start_date_obj)
+            except ValueError:
+                pass
+        
+        if end_date:
+            try:
+                from datetime import datetime, timedelta
+                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+                query &= Q(created_at__lt=end_date_obj)
+            except ValueError:
+                pass
+        
+        # 查询日志
+        logs = TaskLog.objects.filter(query).select_related(
+            'task', 'task__assigned_department', 'task__assigned_operator',
+            'operator', 'task__work_order_process', 'task__work_order_process__work_order'
+        ).order_by('-created_at')
+        
+        # 分页
+        total = logs.count()
+        start = (page - 1) * page_size
+        end = start + page_size
+        logs = logs[start:end]
+        
+        # 序列化结果
+        from workorder.serializers.core import TaskLogSerializer
+        serializer = TaskLogSerializer()
+        
+        # 构建响应数据，包含额外信息
+        results = []
+        for log in logs:
+            log_data = serializer.to_representation(log)
+            # 添加任务和施工单信息
+            if log.task:
+                log_data['task_info'] = {
+                    'id': log.task.id,
+                    'work_content': log.task.work_content,
+                    'assigned_department': log.task.assigned_department.name if log.task.assigned_department else None,
+                    'assigned_operator': log.task.assigned_operator.username if log.task.assigned_operator else None,
+                }
+                if log.task.work_order_process and log.task.work_order_process.work_order:
+                    wo = log.task.work_order_process.work_order
+                    log_data['work_order_info'] = {
+                        'id': wo.id,
+                        'order_number': wo.order_number,
+                        'customer_name': wo.customer.name if wo.customer else None,
+                    }
+            # 添加操作员名称
+            if log.operator:
+                log_data['operator_name'] = log.operator.username
+            results.append(log_data)
+        
+        return Response({
+            'results': results,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total + page_size - 1) // page_size
+        })
+    
+    @action(detail=False, methods=['get'])
+    def collaboration_stats(self, request):
+        """协作统计：按操作员汇总完成任务数量、完成时间、不良品率等"""
+        from django.contrib.auth.models import User
+        from django.db.models import Count, Sum, Avg, Q, F
+        from datetime import datetime, timedelta
+        
+        # 获取查询参数
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        department_id = request.query_params.get('department_id')
+        
+        # 构建时间过滤条件
+        time_filter = Q()
+        if start_date:
+            try:
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+                time_filter &= Q(logs__created_at__gte=start_date_obj)
+            except ValueError:
+                pass
+        if end_date:
+            try:
+                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+                time_filter &= Q(logs__created_at__lt=end_date_obj)
+            except ValueError:
+                pass
+        
+        # 构建部门过滤条件
+        dept_filter = Q()
+        if department_id:
+            dept_filter = Q(assigned_department_id=department_id)
+        
+        # 获取所有有任务的操作员
+        operators = User.objects.filter(
+            assigned_tasks__isnull=False,
+            is_active=True
+        ).exclude(
+            is_superuser=True
+        ).distinct()
+        
+        if department_id:
+            operators = operators.filter(profile__departments__id=department_id).distinct()
+        
+        stats_list = []
+        for operator in operators:
+            # 获取该操作员的任务
+            task_filter = Q(assigned_operator=operator) & dept_filter
+            tasks = WorkOrderTask.objects.filter(task_filter)
+            
+            # 统计总数
+            total_tasks = tasks.count()
+            completed_tasks = tasks.filter(status='completed').count()
+            in_progress_tasks = tasks.filter(status='in_progress').count()
+            pending_tasks = tasks.filter(status='pending').count()
+            
+            # 统计完成数量和不良品数量（只统计已完成的任务）
+            completed_task_data = tasks.filter(
+                Q(status='completed') & time_filter
+            ).aggregate(
+                total_completed_quantity=Sum('quantity_completed', default=0),
+                total_defective_quantity=Sum('quantity_defective', default=0),
+                total_production_quantity=Sum('production_quantity', default=0)
+            )
+            
+            total_completed_quantity = completed_task_data['total_completed_quantity'] or 0
+            total_defective_quantity = completed_task_data['total_defective_quantity'] or 0
+            total_production_quantity = completed_task_data['total_production_quantity'] or 0
+            
+            # 计算不良品率
+            defective_rate = 0
+            if total_completed_quantity > 0:
+                defective_rate = round((total_defective_quantity / total_completed_quantity) * 100, 2)
+            
+            # 统计平均完成时间（从任务创建到完成的时间）
+            avg_completion_hours = None
+            completed_tasks_with_times = tasks.filter(
+                status='completed',
+                created_at__isnull=False
+            ).filter(time_filter)
+            
+            if completed_tasks_with_times.exists():
+                # 计算平均完成时间（小时）
+                completion_times = []
+                for task in completed_tasks_with_times:
+                    completion_log = task.logs.filter(log_type='complete').first()
+                    if completion_log and task.created_at:
+                        duration = completion_log.created_at - task.created_at
+                        completion_times.append(duration.total_seconds() / 3600)  # 转换为小时
+                
+                if completion_times:
+                    avg_completion_hours = round(sum(completion_times) / len(completion_times), 2)
+            
+            # 获取操作员所属部门
+            departments = operator.profile.departments.all() if hasattr(operator, 'profile') else []
+            dept_names = [dept.name for dept in departments]
+            
+            stats_list.append({
+                'operator_id': operator.id,
+                'operator_username': operator.username,
+                'operator_name': operator.get_full_name() or operator.username,
+                'departments': dept_names,
+                'total_tasks': total_tasks,
+                'completed_tasks': completed_tasks,
+                'in_progress_tasks': in_progress_tasks,
+                'pending_tasks': pending_tasks,
+                'total_completed_quantity': total_completed_quantity,
+                'total_defective_quantity': total_defective_quantity,
+                'total_production_quantity': total_production_quantity,
+                'defective_rate': defective_rate,
+                'avg_completion_hours': avg_completion_hours,
+                'completion_rate': round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 2)
+            })
+        
+        # 按完成数量排序（降序）
+        stats_list.sort(key=lambda x: x['total_completed_quantity'], reverse=True)
+        
+        return Response({
+            'results': stats_list,
+            'summary': {
+                'total_operators': len(stats_list),
+                'total_tasks': sum(s['total_tasks'] for s in stats_list),
+                'total_completed_tasks': sum(s['completed_tasks'] for s in stats_list),
+                'total_completed_quantity': sum(s['total_completed_quantity'] for s in stats_list),
+                'total_defective_quantity': sum(s['total_defective_quantity'] for s in stats_list),
+                'overall_defective_rate': round(
+                    (sum(s['total_defective_quantity'] for s in stats_list) / 
+                     sum(s['total_completed_quantity'] for s in stats_list) * 100)
+                    if sum(s['total_completed_quantity'] for s in stats_list) > 0 else 0, 
+                    2
+                )
+            }
+        })
+
+

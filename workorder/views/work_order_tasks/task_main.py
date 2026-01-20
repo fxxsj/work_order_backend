@@ -1,0 +1,86 @@
+"""
+施工单任务主视图集
+
+包含基础的 ViewSet 配置和核心方法。
+"""
+
+from rest_framework import viewsets, filters
+from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Q
+
+from workorder.models.core import WorkOrderTask
+from workorder.serializers.core import WorkOrderTaskSerializer
+from workorder.permissions import WorkOrderTaskPermission
+
+
+class BaseWorkOrderTaskViewSet(viewsets.ModelViewSet):
+    """
+    施工单任务基础视图集
+
+    提供基础的 CRUD 操作和权限控制。
+    """
+
+    permission_classes = [WorkOrderTaskPermission]
+    serializer_class = WorkOrderTaskSerializer
+    queryset = WorkOrderTask.objects.all()
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['work_content', 'production_requirements']
+    ordering_fields = ['created_at', 'updated_at', 'assigned_department', 'assigned_operator']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        """
+        根据用户权限过滤查询集
+
+        权限规则：
+        - 管理员可以查看所有任务
+        - 操作员只能查看自己分派的任务
+        - 生产主管可以查看本部门的所有任务
+        """
+        queryset = super().get_queryset()
+        user = self.request.user
+
+        # 管理员可以查看所有任务
+        if user.is_superuser:
+            return queryset
+
+        # 操作员只能查看自己分派的任务
+        if not user.has_perm('workorder.change_workorder'):
+            queryset = queryset.filter(assigned_operator=user)
+        # 生产主管可以查看本部门的所有任务
+        else:
+            user_departments = user.profile.departments.all() if hasattr(user, 'profile') else []
+            if user_departments:
+                # 可以查看本部门的任务或自己创建的施工单的任务
+                queryset = queryset.filter(
+                    Q(assigned_department__in=user_departments) |
+                    Q(work_order_process__work_order__created_by=user)
+                )
+            else:
+                # 如果没有部门信息，只能查看自己创建的施工单的任务
+                queryset = queryset.filter(work_order_process__work_order__created_by=user)
+
+        return queryset
+
+    def perform_update(self, serializer):
+        """
+        更新任务时，检查工序是否完成
+
+        验证规则：
+        - 完成数量不能超过生产数量
+        - 任务完成时，检查并更新工序状态
+        """
+        task = serializer.save()
+
+        # 验证完成数量不能超过生产数量
+        if task.quantity_completed is not None and task.production_quantity:
+            if task.quantity_completed > task.production_quantity:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError(
+                    f'完成数量（{task.quantity_completed}）'
+                    f'不能超过生产数量（{task.production_quantity}）'
+                )
+
+        # 如果任务完成，检查工序是否完成
+        if task.status == 'completed':
+            task.work_order_process.check_and_update_status()
