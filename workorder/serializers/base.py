@@ -111,25 +111,91 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
 
 class ProcessSerializer(serializers.ModelSerializer):
-    """工序序列化器"""
+    """工序序列化器
+
+    提供完整的字段验证和业务规则检查。
+    """
     class Meta:
         model = Process
         fields = '__all__'
 
-    def validate(self, data):
-        """验证内置工序的code字段不可修改"""
-        if self.instance and self.instance.is_builtin:
-            # 如果是内置工序，检查是否尝试修改code字段
-            if 'code' in data and data['code'] != self.instance.code:
-                raise serializers.ValidationError({
-                    'code': '内置工序的编码不可修改'
-                })
-        return data
-
     def validate_code(self, value):
-        """验证code字段"""
-        # 如果是更新操作且是内置工序，code字段应该保持不变
+        """验证工序编码格式
+
+        确保编码只包含合法字符（字母、数字、连字符、下划线）。
+        """
+        import re
+
+        if not value:
+            raise serializers.ValidationError("工序编码不能为空")
+
+        if not re.match(r'^[A-Za-z0-9_-]+$', value):
+            raise serializers.ValidationError(
+                "工序编码只能包含字母、数字、连字符和下划线"
+            )
+
+        if len(value) < 2 or len(value) > 50:
+            raise serializers.ValidationError("工序编码长度必须在2-50个字符之间")
+
+        # 保护内置工序的 code
         if self.instance and self.instance.is_builtin:
             if value != self.instance.code:
                 raise serializers.ValidationError('内置工序的编码不可修改')
+
         return value
+
+    def validate_standard_duration(self, value):
+        """验证标准工时"""
+        if value < 0:
+            raise serializers.ValidationError("标准工时不能为负数")
+        if value > 9999:
+            raise serializers.ValidationError("标准工时超出合理范围（最大9999小时）")
+        return value
+
+    def validate_sort_order(self, value):
+        """验证排序字段"""
+        if value < 0:
+            raise serializers.ValidationError("排序值不能为负数")
+        if value > 99999:
+            raise serializers.ValidationError("排序值超出合理范围")
+        return value
+
+    def validate(self, attrs):
+        """对象级业务规则验证
+
+        检查字段之间的业务关系。
+        """
+        # 验证版要求与版必选的一致性
+        if attrs.get('requires_artwork') and not attrs.get('artwork_required'):
+            raise serializers.ValidationError({
+                'artwork_required': '工序需要图稿时，图稿必选必须开启'
+            })
+
+        if attrs.get('requires_die') and not attrs.get('die_required'):
+            raise serializers.ValidationError({
+                'die_required': '工序需要刀模时，刀模必选必须开启'
+            })
+
+        if attrs.get('requires_foiling_plate') and not attrs.get('foiling_plate_required'):
+            raise serializers.ValidationError({
+                'foiling_plate_required': '工序需要烫金版时，烫金版必选必须开启'
+            })
+
+        if attrs.get('requires_embossing_plate') and not attrs.get('embossing_plate_required'):
+            raise serializers.ValidationError({
+                'embossing_plate_required': '工序需要压凸版时，压凸版必选必须开启'
+            })
+
+        # 验证任务生成规则与版要求的一致性
+        task_rule = attrs.get('task_generation_rule')
+        if task_rule == 'artwork' and not attrs.get('requires_artwork'):
+            raise serializers.ValidationError({
+                'task_generation_rule': '按图稿生成任务时，必须启用需要图稿'
+            })
+
+        if task_rule == 'die' and not attrs.get('requires_die'):
+            raise serializers.ValidationError({
+                'task_generation_rule': '按刀模生成任务时，必须启用需要刀模'
+            })
+
+        return attrs

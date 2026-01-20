@@ -120,5 +120,34 @@ class Process(models.Model):
         verbose_name_plural = '工序管理'
         ordering = ['sort_order', 'code']
 
+        # 性能优化：为高频查询字段添加索引
+        indexes = [
+            models.Index(fields=['name'], name='process_name_idx'),
+            models.Index(fields=['code'], name='process_code_idx'),
+            models.Index(fields=['is_active'], name='process_is_active_idx'),
+            models.Index(fields=['sort_order'], name='process_sort_order_idx'),
+            models.Index(
+                fields=['is_active', 'sort_order'],
+                name='process_active_sort_idx'
+            ),
+        ]
+
     def __str__(self):
         return f"{self.code} - {self.name}"
+
+    def get_required_plates(self):
+        """获取工序需要的版列表
+
+        Returns:
+            list: 需要的版类型列表（如 ['artwork', 'die']）
+        """
+        required = []
+        if self.requires_artwork:
+            required.append('artwork')
+        if self.requires_die:
+            required.append('die')
+        if self.requires_foiling_plate:
+            required.append('foiling_plate')
+        if self.requires_embossing_plate:
+            required.append('embossing_plate')
+        return required

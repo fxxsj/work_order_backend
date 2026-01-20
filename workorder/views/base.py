@@ -70,23 +70,69 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
 
 class ProcessViewSet(viewsets.ModelViewSet):
-    """工序视图集"""
-    permission_classes = [SuperuserFriendlyModelPermissions]  # 使用Django模型权限，与客户管理权限逻辑一致
+    """工序视图集
+
+    提供工序的 CRUD 操作、搜索、过滤和排序功能。
+    """
+    permission_classes = [SuperuserFriendlyModelPermissions]
     queryset = Process.objects.all()
     serializer_class = ProcessSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['is_active', 'is_builtin']
-    search_fields = ['name', 'code']
+    filterset_fields = ['is_active', 'is_builtin', 'task_generation_rule']
+    search_fields = ['name', 'code', 'description']
     ordering_fields = ['sort_order', 'code', 'created_at']
     ordering = ['sort_order', 'code']
-    
+
     def destroy(self, request, *args, **kwargs):
-        """删除工序，内置工序不可删除"""
+        """删除工序，内置工序和使用中的工序不可删除"""
         instance = self.get_object()
+
         if instance.is_builtin:
             return Response(
                 {'error': '内置工序不可删除'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # 检查是否有施工单在使用此工序
+        from ..models.core import WorkOrderProcess
+        if WorkOrderProcess.objects.filter(process=instance).exists():
+            return Response(
+                {'error': '该工序已被施工单使用，不可删除'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         return super().destroy(request, *args, **kwargs)
+
+    @action(detail=False, methods=['post'])
+    def batch_update_active(self, request):
+        """批量更新工序启用状态"""
+        ids = request.data.get('ids', [])
+        is_active = request.data.get('is_active', True)
+
+        if not ids:
+            return Response(
+                {'error': '请提供要更新的工序ID列表'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 保护内置工序
+        if is_active is False:
+            builtin_count = Process.objects.filter(
+                id__in=ids,
+                is_builtin=True
+            ).count()
+
+            if builtin_count > 0:
+                return Response(
+                    {'error': f'不能禁用 {builtin_count} 个内置工序'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # 批量更新
+        updated = Process.objects.filter(id__in=ids).update(is_active=is_active)
+
+        return Response({
+            'success': True,
+            'updated_count': updated
+        })
 
