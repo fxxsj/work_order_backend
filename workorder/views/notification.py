@@ -29,21 +29,21 @@ class NotificationPagination(PageNumberPagination):
 
 class NotificationSerializer:
     """通知序列化器"""
-    
+
     @staticmethod
     def serialize_notification(notification):
         """序列化通知对象"""
         return {
             'id': notification.id,
-            'event_type': notification.event_type,
+            'notification_type': notification.notification_type,
             'priority': notification.priority,
             'title': notification.title,
-            'message': notification.message,
-            'data': notification.data,
+            'content': notification.content,
             'is_read': notification.is_read,
-            'is_sent': notification.is_sent,
+            'read_at': notification.read_at.isoformat() if notification.read_at else None,
             'created_at': notification.created_at.isoformat(),
-            'updated_at': notification.updated_at.isoformat()
+            'work_order_id': notification.work_order_id,
+            'task_id': notification.task_id
         }
 
 
@@ -54,7 +54,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
     
     def get_queryset(self):
         """获取当前用户的通知查询集"""
-        return Notification.objects.filter(user=self.request.user).order_by('-created_at')
+        return Notification.objects.filter(recipient=self.request.user).order_by('-created_at')
     
     def list(self, request):
         """获取通知列表"""
