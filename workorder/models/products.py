@@ -9,7 +9,7 @@
 - ProductStockLog: 产品库存变更日志
 """
 
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth.models import User
 
 
@@ -37,6 +37,11 @@ class Product(models.Model):
         verbose_name = '产品'
         verbose_name_plural = '产品管理'
         ordering = ['code']
+        indexes = [
+            models.Index(fields=['name'], name='product_name_idx'),
+            models.Index(fields=['is_active'], name='product_is_active_idx'),
+            models.Index(fields=['stock_quantity'], name='product_stock_idx'),
+        ]
 
     def __str__(self):
         return f"{self.code} - {self.name}"
@@ -45,8 +50,9 @@ class Product(models.Model):
         """检查库存是否不足"""
         return self.stock_quantity < self.min_stock_quantity
 
+    @transaction.atomic
     def add_stock(self, quantity, user=None, reason=''):
-        """增加库存数量"""
+        """增加库存数量（带事务保护）"""
         if quantity <= 0:
             return False
 
@@ -71,8 +77,9 @@ class Product(models.Model):
 
         return True
 
+    @transaction.atomic
     def reduce_stock(self, quantity, user=None, reason=''):
-        """减少库存数量"""
+        """减少库存数量（带事务保护）"""
         if quantity <= 0:
             return False
 
