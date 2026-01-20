@@ -180,10 +180,12 @@ _csrf_origins = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
 if _csrf_origins:
     CSRF_TRUSTED_ORIGINS = _csrf_origins.split(',')
 else:
-    # 开发环境默认值（注意：不能包含端口号）
+    # 开发环境默认值（Django 4.0+ 必须包含端口号）
     CSRF_TRUSTED_ORIGINS = [
-        "http://localhost",
-        "http://127.0.0.1",
+        "http://localhost:8080",
+        "http://localhost:8081",
+        "http://127.0.0.1:8080",
+        "http://127.0.0.1:8081",
     ]
 
 # 生产环境安全设置
