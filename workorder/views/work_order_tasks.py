@@ -1516,6 +1516,48 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
         })
     
     @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """获取任务统计数据（按状态分组）
+
+        支持的筛选参数：
+        - department: 部门ID
+        - status: 任务状态
+        - task_type: 任务类型
+        - search: 搜索关键词
+
+        返回：
+        - total: 总任务数
+        - pending: 待开始任务数
+        - in_progress: 进行中任务数
+        - completed: 已完成任务数
+        """
+        # 获取过滤后的查询集
+        queryset = self.filter_queryset(self.get_queryset())
+
+        # 额外的筛选条件
+        department = request.query_params.get('department')
+        task_type = request.query_params.get('task_type')
+
+        if department:
+            queryset = queryset.filter(assigned_department_id=department)
+
+        if task_type:
+            queryset = queryset.filter(task_type=task_type)
+
+        # 统计各状态数量
+        total = queryset.count()
+        pending = queryset.filter(status='pending').count()
+        in_progress = queryset.filter(status='in_progress').count()
+        completed = queryset.filter(status='completed').count()
+
+        return Response({
+            'total': total,
+            'pending': pending,
+            'in_progress': in_progress,
+            'completed': completed
+        })
+
+    @action(detail=False, methods=['get'])
     def collaboration_stats(self, request):
         """协作统计：按操作员汇总完成任务数量、完成时间、不良品率等"""
         from django.contrib.auth.models import User
