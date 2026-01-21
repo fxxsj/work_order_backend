@@ -24,7 +24,10 @@ class ArtworkProductSerializer(serializers.ModelSerializer):
 
 
 class ArtworkSerializer(serializers.ModelSerializer):
-    """图稿序列化器"""
+    """图稿序列化器
+
+    提供完整的字段验证和业务规则检查。
+    """
     products = ArtworkProductSerializer(many=True, read_only=True)
     products_data = serializers.ListField(
         child=serializers.DictField(),
@@ -52,6 +55,32 @@ class ArtworkSerializer(serializers.ModelSerializer):
         model = Artwork
         fields = '__all__'
         # base_code 字段不在 read_only_fields 中，允许自定义输入
+
+    def validate_name(self, value):
+        """验证图稿名称"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("图稿名称不能为空")
+        if len(value) > 200:
+            raise serializers.ValidationError("图稿名称不能超过200个字符")
+        return value.strip()
+
+    def validate_cmyk_colors(self, value):
+        """验证CMYK颜色"""
+        valid_colors = {'C', 'M', 'Y', 'K'}
+        if value:
+            for color in value:
+                if color not in valid_colors:
+                    raise serializers.ValidationError(
+                        f"无效的CMYK颜色: {color}，允许的值: C, M, Y, K"
+                    )
+        return value
+
+    def validate_other_colors(self, value):
+        """验证其他颜色列表"""
+        if value:
+            # 过滤空值并去除空白
+            return [c.strip() for c in value if c and c.strip()]
+        return value
 
     def get_color_display(self, obj):
         """生成色数显示文本，格式：CMK+928C,金色（5色）"""

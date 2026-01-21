@@ -40,78 +40,104 @@ class ArtworkViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def create_version(self, request, pk=None):
-        """基于现有图稿创建新版本"""
+        """基于现有图稿创建新版本
+
+        复制原图稿的所有信息，包括：
+        - 基本信息（名称、颜色、尺寸、备注）
+        - 关联刀模
+        - 关联烫金版
+        - 关联压凸版
+        - 关联产品及拼版数量
+        """
+        from django.db import transaction
+
         original_artwork = self.get_object()
-        
-        # 获取下一个版本号
-        next_version = Artwork.get_next_version(original_artwork.base_code)
-        
-        # 创建新版本，复制原图稿的所有信息
-        new_artwork = Artwork.objects.create(
-            base_code=original_artwork.base_code,
-            version=next_version,
-            name=original_artwork.name,
-            cmyk_colors=original_artwork.cmyk_colors.copy() if original_artwork.cmyk_colors else [],
-            other_colors=original_artwork.other_colors.copy() if original_artwork.other_colors else [],
-            imposition_size=original_artwork.imposition_size,
-            notes=original_artwork.notes
-        )
-        
-        # 复制关联的刀模
-        new_artwork.dies.set(original_artwork.dies.all())
-        
-        # 复制关联的产品
-        for ap in original_artwork.products.all():
-            ArtworkProduct.objects.create(
-                artwork=new_artwork,
-                product=ap.product,
-                imposition_quantity=ap.imposition_quantity,
-                sort_order=ap.sort_order
+
+        with transaction.atomic():
+            # 获取下一个版本号
+            next_version = Artwork.get_next_version(original_artwork.base_code)
+
+            # 创建新版本，复制原图稿的所有信息
+            new_artwork = Artwork.objects.create(
+                base_code=original_artwork.base_code,
+                version=next_version,
+                name=original_artwork.name,
+                cmyk_colors=original_artwork.cmyk_colors.copy() if original_artwork.cmyk_colors else [],
+                other_colors=original_artwork.other_colors.copy() if original_artwork.other_colors else [],
+                imposition_size=original_artwork.imposition_size,
+                notes=original_artwork.notes
             )
-        
+
+            # 复制关联的刀模
+            new_artwork.dies.set(original_artwork.dies.all())
+
+            # 复制关联的烫金版
+            new_artwork.foiling_plates.set(original_artwork.foiling_plates.all())
+
+            # 复制关联的压凸版
+            new_artwork.embossing_plates.set(original_artwork.embossing_plates.all())
+
+            # 复制关联的产品
+            for ap in original_artwork.products.all():
+                ArtworkProduct.objects.create(
+                    artwork=new_artwork,
+                    product=ap.product,
+                    imposition_quantity=ap.imposition_quantity,
+                    sort_order=ap.sort_order
+                )
+
         serializer = self.get_serializer(new_artwork)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk=None):
         """设计部确认图稿"""
+        from django.db import transaction
+
         artwork = self.get_object()
-        
+
         if artwork.confirmed:
             return Response(
                 {'error': '该图稿已经确认过了'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        artwork.confirmed = True
-        artwork.confirmed_by = request.user
-        artwork.confirmed_at = timezone.now()
-        artwork.save()
-        
-        # 检查相关的制版工序任务是否全部完成
-        # 找到所有包含该图稿的任务（制版任务类型为plate_making）
-        tasks = WorkOrderTask.objects.filter(
-            artwork=artwork,
-            task_type='plate_making',
-            work_order_process__status='in_progress'
-        )
-        
-        for task in tasks:
-            # 如果图稿已确认，可以标记任务为完成
-            if task.artwork.confirmed:
-                task.status = 'completed'
-                task.quantity_completed = 1
-                task.save()
-                
-                # 检查工序是否完成
-                task.work_order_process.check_and_update_status()
-        
+
+        with transaction.atomic():
+            artwork.confirmed = True
+            artwork.confirmed_by = request.user
+            artwork.confirmed_at = timezone.now()
+            artwork.save()
+
+            # 检查相关的制版工序任务是否全部完成
+            # 找到所有包含该图稿的任务（制版任务类型为plate_making）
+            tasks = WorkOrderTask.objects.filter(
+                artwork=artwork,
+                task_type='plate_making',
+                work_order_process__status='in_progress'
+            )
+
+            for task in tasks:
+                # 如果图稿已确认，可以标记任务为完成
+                if task.artwork.confirmed:
+                    task.status = 'completed'
+                    task.quantity_completed = 1
+                    task.save()
+
+                    # 检查工序是否完成
+                    task.work_order_process.check_and_update_status()
+
         serializer = self.get_serializer(artwork)
         return Response(serializer.data)
-    
+
     def get_queryset(self):
+        """优化查询性能：预加载关联数据"""
         queryset = super().get_queryset()
-        return queryset.prefetch_related('products__product')
+        return queryset.prefetch_related(
+            'products__product',
+            'dies',
+            'foiling_plates',
+            'embossing_plates'
+        ).select_related('confirmed_by')
 
 
 

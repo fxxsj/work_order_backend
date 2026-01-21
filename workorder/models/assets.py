@@ -56,6 +56,13 @@ class Artwork(models.Model):
         ordering = ['-base_code', '-version']
         unique_together = [['base_code', 'version']]  # 主编码+版本号组合唯一
 
+        # 性能优化：为高频查询字段添加索引
+        indexes = [
+            models.Index(fields=['name'], name='artwork_name_idx'),
+            models.Index(fields=['confirmed'], name='artwork_confirmed_idx'),
+            models.Index(fields=['created_at'], name='artwork_created_idx'),
+        ]
+
     def __str__(self):
         return f"{self.get_full_code()} - {self.name}"
 
