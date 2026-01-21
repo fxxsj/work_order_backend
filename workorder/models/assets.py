@@ -250,6 +250,14 @@ class FoilingPlate(models.Model):
         verbose_name_plural = '烫金版管理'
         ordering = ['-created_at']
 
+        # 性能优化：为高频查询字段添加索引
+        indexes = [
+            models.Index(fields=['code'], name='foiling_plate_code_idx'),
+            models.Index(fields=['name'], name='foiling_plate_name_idx'),
+            models.Index(fields=['confirmed'], name='foiling_plate_confirmed_idx'),
+            models.Index(fields=['created_at'], name='foiling_plate_created_idx'),
+        ]
+
     def __str__(self):
         return f"{self.code} - {self.name}"
 
@@ -321,6 +329,14 @@ class EmbossingPlate(models.Model):
         verbose_name = '压凸版'
         verbose_name_plural = '压凸版管理'
         ordering = ['-created_at']
+
+        # 性能优化：为高频查询字段添加索引
+        indexes = [
+            models.Index(fields=['code'], name='embossing_plate_code_idx'),
+            models.Index(fields=['name'], name='embossing_plate_name_idx'),
+            models.Index(fields=['confirmed'], name='embossing_plate_conf_idx'),
+            models.Index(fields=['created_at'], name='embossing_plate_created_idx'),
+        ]
 
     def __str__(self):
         return f"{self.code} - {self.name}"

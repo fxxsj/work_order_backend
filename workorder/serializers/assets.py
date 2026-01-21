@@ -354,7 +354,10 @@ class FoilingPlateProductSerializer(serializers.ModelSerializer):
 
 
 class FoilingPlateSerializer(serializers.ModelSerializer):
-    """烫金版序列化器"""
+    """烫金版序列化器
+
+    提供完整的字段验证和业务规则检查。
+    """
     products = FoilingPlateProductSerializer(many=True, read_only=True)
     products_data = serializers.ListField(
         child=serializers.DictField(),
@@ -362,11 +365,70 @@ class FoilingPlateSerializer(serializers.ModelSerializer):
         required=False,
         help_text='产品列表数据，格式：[{"product": 1, "quantity": 2}]'
     )
+    # 确认人名称（只读）
+    confirmed_by_name = serializers.CharField(
+        source='confirmed_by.username', read_only=True, allow_null=True
+    )
 
     class Meta:
         model = FoilingPlate
         fields = '__all__'
         # code 字段不在 read_only_fields 中，允许自定义输入
+
+    def validate_name(self, value):
+        """验证烫金版名称"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("烫金版名称不能为空")
+        if len(value) > 200:
+            raise serializers.ValidationError("烫金版名称不能超过200个字符")
+        return value.strip()
+
+    def validate_code(self, value):
+        """验证烫金版编码"""
+        if value:
+            value = value.strip()
+            if len(value) > 50:
+                raise serializers.ValidationError("烫金版编码不能超过50个字符")
+            # 检查编码唯一性（排除当前实例）
+            queryset = FoilingPlate.objects.filter(code=value)
+            if self.instance:
+                queryset = queryset.exclude(pk=self.instance.pk)
+            if queryset.exists():
+                raise serializers.ValidationError("该烫金版编码已存在")
+        return value
+
+    def validate_size(self, value):
+        """验证尺寸字段长度"""
+        if value and len(value) > 100:
+            raise serializers.ValidationError("尺寸不能超过100个字符")
+        return value.strip() if value else value
+
+    def validate_material(self, value):
+        """验证材质字段长度"""
+        if value and len(value) > 100:
+            raise serializers.ValidationError("材质不能超过100个字符")
+        return value.strip() if value else value
+
+    def validate_thickness(self, value):
+        """验证厚度字段长度"""
+        if value and len(value) > 50:
+            raise serializers.ValidationError("厚度不能超过50个字符")
+        return value.strip() if value else value
+
+    def validate(self, attrs):
+        """对象级验证：已确认烫金版不允许修改关键字段"""
+        if self.instance and self.instance.confirmed:
+            # 已确认的烫金版，检查是否修改了关键字段
+            protected_fields = ['code', 'name', 'size', 'material', 'thickness']
+            for field in protected_fields:
+                if field in attrs:
+                    old_value = getattr(self.instance, field, None) or ''
+                    new_value = attrs.get(field, '') or ''
+                    if old_value != new_value:
+                        raise serializers.ValidationError({
+                            field: f"已确认的烫金版不允许修改{FoilingPlate._meta.get_field(field).verbose_name}"
+                        })
+        return attrs
 
     def create(self, validated_data):
         """创建烫金版，如果编码为空则自动生成，并创建关联产品"""
@@ -429,7 +491,10 @@ class EmbossingPlateProductSerializer(serializers.ModelSerializer):
 
 
 class EmbossingPlateSerializer(serializers.ModelSerializer):
-    """压凸版序列化器"""
+    """压凸版序列化器
+
+    提供完整的字段验证和业务规则检查。
+    """
     products = EmbossingPlateProductSerializer(many=True, read_only=True)
     products_data = serializers.ListField(
         child=serializers.DictField(),
@@ -437,11 +502,70 @@ class EmbossingPlateSerializer(serializers.ModelSerializer):
         required=False,
         help_text='产品列表数据，格式：[{"product": 1, "quantity": 2}]'
     )
+    # 确认人名称（只读）
+    confirmed_by_name = serializers.CharField(
+        source='confirmed_by.username', read_only=True, allow_null=True
+    )
 
     class Meta:
         model = EmbossingPlate
         fields = '__all__'
         # code 字段不在 read_only_fields 中，允许自定义输入
+
+    def validate_name(self, value):
+        """验证压凸版名称"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("压凸版名称不能为空")
+        if len(value) > 200:
+            raise serializers.ValidationError("压凸版名称不能超过200个字符")
+        return value.strip()
+
+    def validate_code(self, value):
+        """验证压凸版编码"""
+        if value:
+            value = value.strip()
+            if len(value) > 50:
+                raise serializers.ValidationError("压凸版编码不能超过50个字符")
+            # 检查编码唯一性（排除当前实例）
+            queryset = EmbossingPlate.objects.filter(code=value)
+            if self.instance:
+                queryset = queryset.exclude(pk=self.instance.pk)
+            if queryset.exists():
+                raise serializers.ValidationError("该压凸版编码已存在")
+        return value
+
+    def validate_size(self, value):
+        """验证尺寸字段长度"""
+        if value and len(value) > 100:
+            raise serializers.ValidationError("尺寸不能超过100个字符")
+        return value.strip() if value else value
+
+    def validate_material(self, value):
+        """验证材质字段长度"""
+        if value and len(value) > 100:
+            raise serializers.ValidationError("材质不能超过100个字符")
+        return value.strip() if value else value
+
+    def validate_thickness(self, value):
+        """验证厚度字段长度"""
+        if value and len(value) > 50:
+            raise serializers.ValidationError("厚度不能超过50个字符")
+        return value.strip() if value else value
+
+    def validate(self, attrs):
+        """对象级验证：已确认压凸版不允许修改关键字段"""
+        if self.instance and self.instance.confirmed:
+            # 已确认的压凸版，检查是否修改了关键字段
+            protected_fields = ['code', 'name', 'size', 'material', 'thickness']
+            for field in protected_fields:
+                if field in attrs:
+                    old_value = getattr(self.instance, field, None) or ''
+                    new_value = attrs.get(field, '') or ''
+                    if old_value != new_value:
+                        raise serializers.ValidationError({
+                            field: f"已确认的压凸版不允许修改{EmbossingPlate._meta.get_field(field).verbose_name}"
+                        })
+        return attrs
 
     def create(self, validated_data):
         """创建压凸版，如果编码为空则自动生成，并创建关联产品"""

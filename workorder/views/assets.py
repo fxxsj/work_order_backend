@@ -214,43 +214,48 @@ class FoilingPlateViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk=None):
         """设计部确认烫金版"""
-        foiling_plate = self.get_object()
-        
-        if foiling_plate.confirmed:
-            return Response(
-                {'error': '该烫金版已经确认过了'},
-                status=status.HTTP_400_BAD_REQUEST
+        from django.db import transaction
+
+        with transaction.atomic():
+            # 使用 select_for_update 防止并发修改
+            foiling_plate = FoilingPlate.objects.select_for_update().get(pk=pk)
+
+            if foiling_plate.confirmed:
+                return Response(
+                    {'error': '该烫金版已经确认过了'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            foiling_plate.confirmed = True
+            foiling_plate.confirmed_by = request.user
+            foiling_plate.confirmed_at = timezone.now()
+            foiling_plate.save()
+
+            # 检查相关的制版工序任务是否全部完成
+            # 找到所有包含该烫金版的制版任务（task_type='plate_making'）
+            tasks = WorkOrderTask.objects.filter(
+                foiling_plate=foiling_plate,
+                task_type='plate_making',
+                work_order_process__status='in_progress'
             )
-        
-        foiling_plate.confirmed = True
-        foiling_plate.confirmed_by = request.user
-        foiling_plate.confirmed_at = timezone.now()
-        foiling_plate.save()
-        
-        # 检查相关的制版工序任务是否全部完成
-        # 找到所有包含该烫金版的制版任务（task_type='plate_making'）
-        tasks = WorkOrderTask.objects.filter(
-            foiling_plate=foiling_plate,
-            task_type='plate_making',
-            work_order_process__status='in_progress'
-        )
-        
-        for task in tasks:
-            # 如果烫金版已确认，可以标记任务为完成
-            if task.foiling_plate and task.foiling_plate.confirmed:
-                task.status = 'completed'
-                task.quantity_completed = 1
-                task.save()
-                
-                # 检查工序是否完成
-                task.work_order_process.check_and_update_status()
-        
+
+            for task in tasks:
+                # 如果烫金版已确认，可以标记任务为完成
+                if task.foiling_plate and task.foiling_plate.confirmed:
+                    task.status = 'completed'
+                    task.quantity_completed = 1
+                    task.save()
+
+                    # 检查工序是否完成
+                    task.work_order_process.check_and_update_status()
+
         serializer = self.get_serializer(foiling_plate)
         return Response(serializer.data)
-    
+
     def get_queryset(self):
+        """优化查询性能：预加载关联数据"""
         queryset = super().get_queryset()
-        return queryset.prefetch_related('products__product')
+        return queryset.prefetch_related('products__product').select_related('confirmed_by')
 
 
 
@@ -268,43 +273,48 @@ class EmbossingPlateViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk=None):
         """设计部确认压凸版"""
-        embossing_plate = self.get_object()
-        
-        if embossing_plate.confirmed:
-            return Response(
-                {'error': '该压凸版已经确认过了'},
-                status=status.HTTP_400_BAD_REQUEST
+        from django.db import transaction
+
+        with transaction.atomic():
+            # 使用 select_for_update 防止并发修改
+            embossing_plate = EmbossingPlate.objects.select_for_update().get(pk=pk)
+
+            if embossing_plate.confirmed:
+                return Response(
+                    {'error': '该压凸版已经确认过了'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            embossing_plate.confirmed = True
+            embossing_plate.confirmed_by = request.user
+            embossing_plate.confirmed_at = timezone.now()
+            embossing_plate.save()
+
+            # 检查相关的制版工序任务是否全部完成
+            # 找到所有包含该压凸版的制版任务（task_type='plate_making'）
+            tasks = WorkOrderTask.objects.filter(
+                embossing_plate=embossing_plate,
+                task_type='plate_making',
+                work_order_process__status='in_progress'
             )
-        
-        embossing_plate.confirmed = True
-        embossing_plate.confirmed_by = request.user
-        embossing_plate.confirmed_at = timezone.now()
-        embossing_plate.save()
-        
-        # 检查相关的制版工序任务是否全部完成
-        # 找到所有包含该压凸版的制版任务（task_type='plate_making'）
-        tasks = WorkOrderTask.objects.filter(
-            embossing_plate=embossing_plate,
-            task_type='plate_making',
-            work_order_process__status='in_progress'
-        )
-        
-        for task in tasks:
-            # 如果压凸版已确认，可以标记任务为完成
-            if task.embossing_plate and task.embossing_plate.confirmed:
-                task.status = 'completed'
-                task.quantity_completed = 1
-                task.save()
-                
-                # 检查工序是否完成
-                task.work_order_process.check_and_update_status()
-        
+
+            for task in tasks:
+                # 如果压凸版已确认，可以标记任务为完成
+                if task.embossing_plate and task.embossing_plate.confirmed:
+                    task.status = 'completed'
+                    task.quantity_completed = 1
+                    task.save()
+
+                    # 检查工序是否完成
+                    task.work_order_process.check_and_update_status()
+
         serializer = self.get_serializer(embossing_plate)
         return Response(serializer.data)
-    
+
     def get_queryset(self):
+        """优化查询性能：预加载关联数据"""
         queryset = super().get_queryset()
-        return queryset.prefetch_related('products__product')
+        return queryset.prefetch_related('products__product').select_related('confirmed_by')
 
 
 
