@@ -30,6 +30,13 @@ class Customer(models.Model):
         verbose_name_plural = '客户管理'
         ordering = ['-created_at']
 
+        # 性能优化：为高频查询字段添加索引
+        indexes = [
+            models.Index(fields=['name'], name='customer_name_idx'),
+            models.Index(fields=['phone'], name='customer_phone_idx'),
+            models.Index(fields=['salesperson'], name='customer_salesperson_idx'),
+        ]
+
     def __str__(self):
         return self.name
 

@@ -23,7 +23,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'contact_person', 'phone']
     ordering_fields = ['created_at', 'name']
     ordering = ['-created_at']
-    
+
     def get_queryset(self):
         """
         根据用户权限过滤查询集：
@@ -47,6 +47,23 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
         # 否则返回空查询集
         return queryset.none()
+
+    def destroy(self, request, *args, **kwargs):
+        """删除客户
+
+        检查：客户是否有关联的施工单
+        """
+        instance = self.get_object()
+
+        # 检查是否有关联的施工单
+        from ..models.core import WorkOrder
+        if WorkOrder.objects.filter(customer=instance).exists():
+            return Response(
+                {'error': '该客户有关联的施工单，不可删除'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return super().destroy(request, *args, **kwargs)
 
 
 

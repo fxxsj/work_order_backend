@@ -71,12 +71,41 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class CustomerSerializer(serializers.ModelSerializer):
-    """客户序列化器"""
+    """客户序列化器
+
+    提供完整的字段验证和业务规则检查。
+
+    验证规则：
+        - name: 必填，长度2-200
+        - phone: 可选，格式验证（数字、连字符、加号、括号、空格）
+        - email: 可选，Django EmailField 基础验证
+    """
     salesperson_name = serializers.CharField(source='salesperson.username', read_only=True, allow_null=True)
 
     class Meta:
         model = Customer
         fields = '__all__'
+
+    def validate_name(self, value):
+        """验证客户名称"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("客户名称不能为空")
+        if len(value) < 2:
+            raise serializers.ValidationError("客户名称至少需要2个字符")
+        if len(value) > 200:
+            raise serializers.ValidationError("客户名称不能超过200个字符")
+        return value.strip()
+
+    def validate_phone(self, value):
+        """验证联系电话"""
+        import re
+        if value and not re.match(r'^[\d\-+() ]+$', value):
+            raise serializers.ValidationError("电话号码格式不正确")
+        return value
+
+    def validate_email(self, value):
+        """验证邮箱格式（Django EmailField 已有基础验证，这里可添加额外规则）"""
+        return value
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
