@@ -4,9 +4,13 @@
 包含物料、供应商、物料供应商、采购单等视图集。
 """
 
-from rest_framework import viewsets, filters, pagination
+from rest_framework import viewsets, filters, pagination, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count, Sum, Case, When, FloatField
+from django.db import transaction
+from django.db.models import Count, Sum, Case, When, FloatField, F
+from django.utils import timezone
 from ..permissions import SuperuserFriendlyModelPermissions
 
 from ..models.materials import Material, Supplier, MaterialSupplier, PurchaseOrder, PurchaseOrderItem
@@ -125,6 +129,138 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         )
 
         return queryset
+
+    # ========== 状态操作 Actions ==========
+
+    @action(detail=True, methods=['post'])
+    def submit(self, request, pk=None):
+        """提交采购单"""
+        order = self.get_object()
+        if order.status != 'draft':
+            return Response(
+                {'error': '只有草稿状态的采购单可以提交'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order.status = 'submitted'
+        order.submitted_by = request.user
+        order.submitted_at = timezone.now()
+        order.save()
+        return Response({'message': '提交成功'})
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """批准采购单"""
+        order = self.get_object()
+        if order.status != 'submitted':
+            return Response(
+                {'error': '只有已提交状态的采购单可以批准'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order.status = 'approved'
+        order.approved_by = request.user
+        order.approved_at = timezone.now()
+        order.save()
+        return Response({'message': '批准成功'})
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """拒绝采购单"""
+        order = self.get_object()
+        if order.status != 'submitted':
+            return Response(
+                {'error': '只有已提交状态的采购单可以拒绝'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order.status = 'draft'  # 退回草稿
+        order.rejection_reason = request.data.get('rejection_reason', '')
+        order.save()
+        return Response({'message': '已拒绝，采购单已退回草稿状态'})
+
+    @action(detail=True, methods=['post'])
+    def place_order(self, request, pk=None):
+        """下单"""
+        order = self.get_object()
+        if order.status != 'approved':
+            return Response(
+                {'error': '只有已批准状态的采购单可以下单'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order.status = 'ordered'
+        ordered_date = request.data.get('ordered_date')
+        if ordered_date:
+            order.ordered_date = ordered_date
+        else:
+            order.ordered_date = timezone.now().date()
+        order.save()
+        return Response({'message': '下单成功'})
+
+    @action(detail=True, methods=['post'])
+    def receive(self, request, pk=None):
+        """收货"""
+        order = self.get_object()
+        if order.status != 'ordered':
+            return Response(
+                {'error': '只有已下单状态的采购单可以收货'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        with transaction.atomic():
+            items_data = request.data.get('items', [])
+            for item_data in items_data:
+                item = order.items.filter(id=item_data.get('id')).first()
+                if item:
+                    received_qty = item_data.get('received_quantity', item.quantity)
+                    item.received_quantity = received_qty
+                    item.status = 'received' if received_qty >= item.quantity else 'partial'
+                    item.save()
+
+                    # 更新物料库存
+                    material = item.material
+                    if material and hasattr(material, 'stock_quantity'):
+                        material.stock_quantity = (material.stock_quantity or 0) + received_qty
+                        material.save()
+
+            # 检查是否全部收货
+            all_received = all(i.status == 'received' for i in order.items.all())
+            if all_received:
+                order.status = 'received'
+                order.actual_received_date = timezone.now().date()
+                order.save()
+
+        return Response({'message': '收货成功'})
+
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """取消采购单"""
+        order = self.get_object()
+        if order.status in ['received', 'cancelled']:
+            return Response(
+                {'error': '已收货或已取消的采购单无法取消'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order.status = 'cancelled'
+        order.save()
+        return Response({'message': '取消成功'})
+
+    @action(detail=False, methods=['get'])
+    def low_stock_materials(self, request):
+        """获取库存预警物料"""
+        # 查询库存低于最小库存的物料
+        materials = Material.objects.filter(
+            stock_quantity__lt=F('min_stock_quantity')
+        ).values(
+            'id', 'code', 'name', 'stock_quantity',
+            'min_stock_quantity', 'default_supplier__name'
+        ).annotate(
+            needed_quantity=F('min_stock_quantity') - F('stock_quantity')
+        )
+
+        return Response({'materials': list(materials)})
 
 
 class PurchaseOrderItemViewSet(viewsets.ModelViewSet):
