@@ -140,6 +140,7 @@ class PurchaseOrder(models.Model):
         ('cancelled', '已取消'),
     ]
 
+    @staticmethod
     def generate_order_number():
         """生成采购单号：PO + yyyymmdd + 4位序号"""
         today = timezone.now().strftime('%Y%m%d')

@@ -304,7 +304,63 @@ class PurchaseOrderDetailSerializer(serializers.ModelSerializer):
     work_order_number = serializers.CharField(source='work_order.order_number', read_only=True, allow_null=True)
     items = PurchaseOrderItemSerializer(many=True, read_only=True)
 
+    # 用于创建/更新时接收 items 数据
+    items_data = serializers.ListField(
+        child=serializers.DictField(),
+        write_only=True,
+        required=False
+    )
+
     class Meta:
         model = PurchaseOrder
         fields = '__all__'
         read_only_fields = ['order_number', 'total_amount', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        """创建采购单及其明细"""
+        items_data = validated_data.pop('items_data', [])
+
+        # 创建采购单
+        purchase_order = PurchaseOrder.objects.create(**validated_data)
+
+        # 创建明细
+        for item_data in items_data:
+            PurchaseOrderItem.objects.create(
+                purchase_order=purchase_order,
+                material_id=item_data.get('material'),
+                quantity=item_data.get('quantity', 0),
+                unit_price=item_data.get('unit_price', 0)
+            )
+
+        # 更新总金额
+        purchase_order.update_total_amount()
+
+        return purchase_order
+
+    def update(self, instance, validated_data):
+        """更新采购单及其明细"""
+        items_data = validated_data.pop('items_data', None)
+
+        # 更新采购单基本信息
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # 如果提供了 items_data，更新明细
+        if items_data is not None:
+            # 删除旧的明细
+            instance.items.all().delete()
+
+            # 创建新的明细
+            for item_data in items_data:
+                PurchaseOrderItem.objects.create(
+                    purchase_order=instance,
+                    material_id=item_data.get('material'),
+                    quantity=item_data.get('quantity', 0),
+                    unit_price=item_data.get('unit_price', 0)
+                )
+
+            # 更新总金额
+            instance.update_total_amount()
+
+        return instance
