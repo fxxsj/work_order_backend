@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from workorder.models import WorkOrderTask
 from workorder.throttling import ExportRateThrottle
 
 
@@ -19,8 +20,6 @@ class TaskStatsMixin:
     """
 
     @action(detail=False, methods=['get'], throttle_classes=[ExportRateThrottle])
-    def export(self, request):
-        """导出任务列表"""
     def export(self, request):
         """导出任务列表到 Excel（P1 优化：添加速率限制）"""
         # 权限检查：需要查看权限
@@ -39,7 +38,8 @@ class TaskStatsMixin:
         # 导出 Excel
         filename = request.query_params.get('filename')
         return export_tasks(queryset, filename)
-    
+
+    @action(detail=False, methods=['get'])
     def assignment_history(self, request):
         """分派历史查询：查询任务分派调整历史记录"""
         from workorder.models.core import TaskLog
@@ -123,7 +123,7 @@ class TaskStatsMixin:
             if log.operator:
                 log_data['operator_name'] = log.operator.username
             results.append(log_data)
-        
+
         return Response({
             'results': results,
             'total': total,
@@ -131,7 +131,8 @@ class TaskStatsMixin:
             'page_size': page_size,
             'total_pages': (total + page_size - 1) // page_size
         })
-    
+
+    @action(detail=False, methods=['get'])
     def collaboration_stats(self, request):
         """协作统计：按操作员汇总完成任务数量、完成时间、不良品率等"""
         from django.contrib.auth.models import User
