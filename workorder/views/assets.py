@@ -147,51 +147,56 @@ class DieViewSet(viewsets.ModelViewSet):
     queryset = Die.objects.all()
     serializer_class = DieSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = []
+    filterset_fields = ['confirmed']
     search_fields = ['code', 'name', 'size', 'material']
     ordering_fields = ['created_at', 'code', 'name']
     ordering = ['-created_at']
-    
+
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk=None):
         """设计部确认刀模"""
-        die = self.get_object()
-        
-        if die.confirmed:
-            return Response(
-                {'error': '该刀模已经确认过了'},
-                status=status.HTTP_400_BAD_REQUEST
+        from django.db import transaction
+
+        with transaction.atomic():
+            # 使用 select_for_update 防止并发修改
+            die = Die.objects.select_for_update().get(pk=pk)
+
+            if die.confirmed:
+                return Response(
+                    {'error': '该刀模已经确认过了'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            die.confirmed = True
+            die.confirmed_by = request.user
+            die.confirmed_at = timezone.now()
+            die.save()
+
+            # 检查相关的制版工序任务是否全部完成
+            # 找到所有包含该刀模的制版任务（task_type='plate_making'）
+            tasks = WorkOrderTask.objects.filter(
+                die=die,
+                task_type='plate_making',
+                work_order_process__status='in_progress'
             )
-        
-        die.confirmed = True
-        die.confirmed_by = request.user
-        die.confirmed_at = timezone.now()
-        die.save()
-        
-        # 检查相关的制版工序任务是否全部完成
-        # 找到所有包含该刀模的制版任务（task_type='plate_making'）
-        tasks = WorkOrderTask.objects.filter(
-            die=die,
-            task_type='plate_making',
-            work_order_process__status='in_progress'
-        )
-        
-        for task in tasks:
-            # 如果刀模已确认，可以标记任务为完成
-            if task.die and task.die.confirmed:
-                task.status = 'completed'
-                task.quantity_completed = 1
-                task.save()
-                
-                # 检查工序是否完成
-                task.work_order_process.check_and_update_status()
-        
+
+            for task in tasks:
+                # 如果刀模已确认，可以标记任务为完成
+                if task.die and task.die.confirmed:
+                    task.status = 'completed'
+                    task.quantity_completed = 1
+                    task.save()
+
+                    # 检查工序是否完成
+                    task.work_order_process.check_and_update_status()
+
         serializer = self.get_serializer(die)
         return Response(serializer.data)
-    
+
     def get_queryset(self):
+        """优化查询性能：预加载关联数据"""
         queryset = super().get_queryset()
-        return queryset.prefetch_related('products__product')
+        return queryset.prefetch_related('products__product').select_related('confirmed_by')
 
 
 

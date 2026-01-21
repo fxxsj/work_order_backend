@@ -133,24 +133,43 @@ class ArtworkProduct(models.Model):
 
 class Die(models.Model):
     """刀模信息"""
-    code = models.CharField('刀模编码', max_length=50, unique=True, blank=True)
-    name = models.CharField('刀模名称', max_length=200)
-    size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：420x594mm、889x1194mm等')
-    material = models.CharField('材质', max_length=100, blank=True, help_text='如：木板、胶板等')
-    thickness = models.CharField('厚度', max_length=50, blank=True, help_text='如：3mm、5mm等')
+    code = models.CharField('刀模编码', max_length=50, unique=True, blank=True,
+                           help_text='刀模唯一编码，留空则自动生成，格式：DIE + yyyymm + 3位序号')
+    name = models.CharField('刀模名称', max_length=200,
+                           help_text='刀模的描述性名称，必填，最大200字符')
+    size = models.CharField('尺寸', max_length=100, blank=True,
+                           help_text='刀模尺寸规格，如：420x594mm、889x1194mm等')
+    material = models.CharField('材质', max_length=100, blank=True,
+                               help_text='刀模材质，如：木板、胶板、钢板等')
+    thickness = models.CharField('厚度', max_length=50, blank=True,
+                                help_text='刀模厚度，如：3mm、5mm等')
     # 刀模确认相关字段
-    confirmed = models.BooleanField('已确认', default=False, help_text='设计部是否已确认该刀模')
+    confirmed = models.BooleanField('已确认', default=False,
+                                   help_text='设计部是否已确认该刀模，确认后关键字段不可修改')
     confirmed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
-                                     related_name='confirmed_dies', verbose_name='确认人')
-    confirmed_at = models.DateTimeField('确认时间', null=True, blank=True)
-    notes = models.TextField('备注', blank=True)
-    created_at = models.DateTimeField('创建时间', auto_now_add=True)
-    updated_at = models.DateTimeField('更新时间', auto_now=True)
+                                     related_name='confirmed_dies', verbose_name='确认人',
+                                     help_text='确认该刀模的用户')
+    confirmed_at = models.DateTimeField('确认时间', null=True, blank=True,
+                                        help_text='刀模被确认的时间')
+    notes = models.TextField('备注', blank=True,
+                            help_text='刀模的补充说明信息')
+    created_at = models.DateTimeField('创建时间', auto_now_add=True,
+                                      help_text='刀模记录创建时间')
+    updated_at = models.DateTimeField('更新时间', auto_now=True,
+                                      help_text='刀模记录最后更新时间')
 
     class Meta:
         verbose_name = '刀模'
         verbose_name_plural = '刀模管理'
         ordering = ['-created_at']
+
+        # 性能优化：为高频查询字段添加索引
+        indexes = [
+            models.Index(fields=['code'], name='die_code_idx'),
+            models.Index(fields=['name'], name='die_name_idx'),
+            models.Index(fields=['confirmed'], name='die_confirmed_idx'),
+            models.Index(fields=['created_at'], name='die_created_idx'),
+        ]
 
     def __str__(self):
         return f"{self.code} - {self.name}"
