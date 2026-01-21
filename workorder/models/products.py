@@ -188,6 +188,11 @@ class ProductGroup(models.Model):
         verbose_name = '产品组'
         verbose_name_plural = '产品组管理'
         ordering = ['code']
+        indexes = [
+            models.Index(fields=['name'], name='productgroup_name_idx'),
+            models.Index(fields=['is_active'], name='productgroup_active_idx'),
+            models.Index(fields=['code'], name='productgroup_code_idx'),
+        ]
 
     def __str__(self):
         return f"{self.code} - {self.name}"

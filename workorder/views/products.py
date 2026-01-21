@@ -72,6 +72,7 @@ class ProductGroupViewSet(viewsets.ModelViewSet):
 
 class ProductGroupItemViewSet(viewsets.ModelViewSet):
     """产品组子项视图集"""
+    permission_classes = [SuperuserFriendlyModelPermissions]
     queryset = ProductGroupItem.objects.select_related('product_group', 'product')
     serializer_class = ProductGroupItemSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]

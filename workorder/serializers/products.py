@@ -113,10 +113,76 @@ class ProductGroupItemSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class ProductGroupItemWriteSerializer(serializers.ModelSerializer):
+    """产品组子项写入序列化器（用于嵌套创建/更新）"""
+
+    class Meta:
+        model = ProductGroupItem
+        fields = ['id', 'product', 'item_name', 'sort_order']
+        extra_kwargs = {
+            'id': {'required': False}
+        }
+
+
 class ProductGroupSerializer(serializers.ModelSerializer):
     """产品组序列化器"""
     items = ProductGroupItemSerializer(many=True, read_only=True)
+    items_write = ProductGroupItemWriteSerializer(many=True, write_only=True, required=False, source='items')
 
     class Meta:
         model = ProductGroup
         fields = '__all__'
+
+    def validate_code(self, value):
+        """验证产品组编码"""
+        if not value:
+            raise serializers.ValidationError("产品组编码不能为空")
+        if not re.match(r'^[A-Za-z0-9-]+$', value):
+            raise serializers.ValidationError("产品组编码只能包含字母、数字和连字符")
+        return value
+
+    def validate_name(self, value):
+        """验证产品组名称"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("产品组名称不能为空")
+        return value.strip()
+
+    def create(self, validated_data):
+        """创建产品组（支持嵌套 items）"""
+        from django.db import transaction
+
+        items_data = validated_data.pop('items', [])
+
+        with transaction.atomic():
+            product_group = ProductGroup.objects.create(**validated_data)
+
+            for item_data in items_data:
+                # 移除可能存在的 id 字段
+                item_data.pop('id', None)
+                ProductGroupItem.objects.create(product_group=product_group, **item_data)
+
+        return product_group
+
+    def update(self, instance, validated_data):
+        """更新产品组（支持嵌套 items）"""
+        from django.db import transaction
+
+        items_data = validated_data.pop('items', None)
+
+        with transaction.atomic():
+            # 更新基本字段
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
+
+            # 更新 items（如果提供）
+            if items_data is not None:
+                # 删除所有现有的 items
+                instance.items.all().delete()
+                # 创建新的 items
+                for item_data in items_data:
+                    # 移除可能存在的 id 字段
+                    item_data.pop('id', None)
+                    ProductGroupItem.objects.create(product_group=instance, **item_data)
+
+        return instance
