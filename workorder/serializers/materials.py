@@ -113,8 +113,49 @@ class SupplierSerializer(serializers.ModelSerializer):
         # 使用预加载的注解字段，避免N+1查询
         if hasattr(obj, '_material_count'):
             return obj._material_count
-        # 回退方案
-        return obj.material_supplier_set.count()
+        # 回退方案：新创建的对象没有注解，使用直接查询
+        return obj.materialsupplier_set.count()
+
+    def validate_code(self, value):
+        """验证供应商编码格式"""
+        if not value:
+            raise serializers.ValidationError("供应商编码不能为空")
+
+        # 支持字母、数字、连字符和中文字符
+        if not re.match(r'^[\u4e00-\u9fa5A-Za-z0-9-]+$', value):
+            raise serializers.ValidationError("供应商编码只能包含中文、字母、数字和连字符")
+
+        if len(value) < 2 or len(value) > 50:
+            raise serializers.ValidationError("供应商编码长度必须在2-50个字符之间")
+
+        return value
+
+    def validate_name(self, value):
+        """验证供应商名称"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("供应商名称不能为空")
+
+        if len(value) > 200:
+            raise serializers.ValidationError("供应商名称不能超过200个字符")
+
+        return value.strip()
+
+    def validate_phone(self, value):
+        """验证手机号格式（可选字段）"""
+        if value:
+            # 支持手机号和座机号
+            phone_pattern = r'^(1[3-9]\d{9}|0\d{2,3}-?\d{7,8})$'
+            if not re.match(phone_pattern, value):
+                raise serializers.ValidationError("请输入正确的联系电话（手机号或座机号）")
+        return value
+
+    def validate_email(self, value):
+        """验证邮箱格式（可选字段）"""
+        if value:
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, value):
+                raise serializers.ValidationError("请输入正确的邮箱地址")
+        return value
 
 
 class MaterialSupplierSerializer(serializers.ModelSerializer):
