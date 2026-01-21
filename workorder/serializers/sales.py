@@ -61,6 +61,41 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         """获取关联的施工单号列表"""
         return [wo.order_number for wo in obj.work_orders.all()]
 
+    def validate_delivery_date(self, value):
+        """验证交货日期"""
+        from django.utils import timezone
+        if value and value < timezone.now().date():
+            raise serializers.ValidationError("交货日期不能早于今天")
+        return value
+
+    def validate_tax_rate(self, value):
+        """验证税率"""
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("税率必须在0-100之间")
+        return value
+
+    def validate_discount_amount(self, value):
+        """验证折扣金额"""
+        if value < 0:
+            raise serializers.ValidationError("折扣金额不能为负数")
+        return value
+
+    def validate(self, attrs):
+        """对象级验证"""
+        order_date = attrs.get('order_date')
+        delivery_date = attrs.get('delivery_date')
+
+        if self.instance:
+            order_date = order_date or self.instance.order_date
+            delivery_date = delivery_date or self.instance.delivery_date
+
+        if order_date and delivery_date and delivery_date < order_date:
+            raise serializers.ValidationError({
+                'delivery_date': '交货日期不能早于订单日期'
+            })
+
+        return attrs
+
     def create(self, validated_data):
         """创建销售订单及其明细"""
         items_data = validated_data.pop('items', [])

@@ -105,27 +105,45 @@ class SalesOrder(models.Model):
         return f"{self.order_number} - {self.customer.name}"
 
     def save(self, *args, **kwargs):
+        """保存销售订单，自动生成订单号和计算金额"""
         if not self.order_number:
             self.order_number = self.generate_order_number()
 
-        # 自动计算税额和总金额
-        self.tax_amount = self.subtotal * self.tax_rate
-        self.total_amount = self.subtotal + self.tax_amount - self.discount_amount
+        # 自动计算税额和总金额（仅在不是 update_fields 时计算）
+        update_fields = kwargs.get('update_fields')
+        if update_fields is None:
+            self.tax_amount = self.subtotal * (self.tax_rate / 100)
+            self.total_amount = self.subtotal + self.tax_amount - self.discount_amount
 
-        # 根据已付金额更新付款状态
-        if self.paid_amount >= self.total_amount:
-            self.payment_status = 'paid'
-        elif self.paid_amount > 0:
-            self.payment_status = 'partial'
-        else:
-            self.payment_status = 'unpaid'
+            # 根据已付金额更新付款状态
+            if self.total_amount > 0:
+                if self.paid_amount >= self.total_amount:
+                    self.payment_status = 'paid'
+                elif self.paid_amount > 0:
+                    self.payment_status = 'partial'
+                else:
+                    self.payment_status = 'unpaid'
 
         super().save(*args, **kwargs)
 
     def update_totals(self):
-        """从订单明细更新小计，并保存"""
-        self.subtotal = sum(item.subtotal for item in self.items.all())
-        self.save()
+        """更新订单总金额（从订单明细汇总）"""
+        from django.db.models import Sum
+
+        items_total = self.items.aggregate(
+            subtotal_sum=Sum('subtotal')
+        )['subtotal_sum'] or 0
+
+        discount_total = self.items.aggregate(
+            discount_sum=Sum('discount_amount')
+        )['discount_sum'] or 0
+
+        self.subtotal = items_total
+        self.discount_amount = discount_total
+        self.tax_amount = items_total * (self.tax_rate / 100)
+        self.total_amount = items_total + self.tax_amount - discount_total
+
+        self.save(update_fields=['subtotal', 'tax_amount', 'discount_amount', 'total_amount'])
 
     def validate_before_approval(self):
         """审核前验证销售订单数据完整性
@@ -153,36 +171,6 @@ class SalesOrder(models.Model):
                 errors.append(f'交货日期不能早于订单日期。交货日期：{self.delivery_date}，订单日期：{self.order_date}')
 
         return errors
-
-    def save(self, *args, **kwargs):
-        """保存销售订单，自动生成订单号"""
-        if not self.order_number:
-            self.order_number = self.generate_order_number()
-        super().save(*args, **kwargs)
-
-    def update_totals(self):
-        """更新订单总金额"""
-        from django.db.models import Sum, Q
-        
-        # 计算订单明细总额
-        items_total = self.items.aggregate(
-            subtotal_sum=Sum('subtotal')
-        )['subtotal_sum'] or 0
-        
-        # 计算税额
-        self.tax_amount = items_total * (self.tax_rate / 100)
-        
-        # 计算折扣总额
-        discount_total = self.items.aggregate(
-            discount_sum=Sum('discount_amount')
-        )['discount_sum'] or 0
-        
-        # 更新金额字段
-        self.subtotal = items_total
-        self.discount_amount = discount_total
-        self.total_amount = items_total + self.tax_amount - discount_total
-        
-        self.save(update_fields=['subtotal', 'tax_amount', 'discount_amount', 'total_amount'])
 
 
 class SalesOrderItem(models.Model):
