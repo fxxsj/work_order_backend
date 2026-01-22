@@ -19,7 +19,8 @@ from django.db import transaction
 
 from workorder.models import (
     ProductStock, StockIn, StockOut,
-    DeliveryOrder, DeliveryItem, QualityInspection
+    DeliveryOrder, DeliveryItem, QualityInspection,
+    SalesOrder
 )
 from workorder.serializers.inventory import (
     ProductStockSerializer,
@@ -409,7 +410,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def ship(self, request, pk=None):
-        """发货"""
+        """发货 - 包含库存扣减逻辑"""
         delivery_order = self.get_object()
 
         if delivery_order.status != 'pending':
@@ -417,27 +418,85 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
                 'error': '只有待发货状态的发货单可以发货'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # 更新发货信息
-        delivery_order.status = 'shipped'
-        delivery_order.delivery_date = timezone.now().date()
+        with transaction.atomic():
+            # 1. 校验并扣减库存
+            for item in delivery_order.items.all():
+                # 查找可用库存（FIFO - 先进先出）
+                stocks = ProductStock.objects.filter(
+                    product=item.product,
+                    status='in_stock'
+                ).order_by('created_at')
 
-        # 获取物流信息
-        logistics_company = request.data.get('logistics_company')
-        tracking_number = request.data.get('tracking_number')
-        if logistics_company:
-            delivery_order.logistics_company = logistics_company
-        if tracking_number:
-            delivery_order.tracking_number = tracking_number
+                remaining = item.quantity
+                for stock in stocks:
+                    if remaining <= 0:
+                        break
+                    available = stock.quantity - stock.reserved_quantity
+                    if available <= 0:
+                        continue
+                    deduct = min(available, remaining)
+                    stock.quantity -= deduct
+                    stock.save()
+                    remaining -= deduct
 
-        delivery_order.save()
+                if remaining > 0:
+                    return Response({
+                        'error': f'产品 {item.product.name} 库存不足，缺少 {remaining}'
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
-        # TODO: 创建出库单
+                # 2. 更新销售订单明细已发货数量
+                if item.sales_order_item:
+                    item.sales_order_item.delivered_quantity += item.quantity
+                    item.sales_order_item.save()
+
+            # 3. 创建出库单
+            stock_out = StockOut.objects.create(
+                out_type='delivery',
+                delivery_order=delivery_order,
+                stock_out_date=timezone.now().date(),
+                status='completed',
+                operator=request.user,
+                notes=f'发货单 {delivery_order.order_number} 自动出库'
+            )
+
+            # 4. 更新发货信息
+            delivery_order.status = 'shipped'
+            delivery_order.delivery_date = timezone.now().date()
+
+            # 获取物流信息
+            logistics_company = request.data.get('logistics_company')
+            tracking_number = request.data.get('tracking_number')
+            if logistics_company:
+                delivery_order.logistics_company = logistics_company
+            if tracking_number:
+                delivery_order.tracking_number = tracking_number
+
+            delivery_order.save()
+
+            # 5. 检查销售订单是否全部发货完成
+            self._update_sales_order_status(delivery_order.sales_order)
 
         serializer = self.get_serializer(delivery_order)
         return Response({
             'message': '发货成功',
+            'stock_out_number': stock_out.order_number,
             'data': serializer.data
         })
+
+    def _update_sales_order_status(self, sales_order):
+        """更新销售订单发货状态"""
+        if not sales_order:
+            return
+
+        # 检查所有明细是否都已发货完成
+        all_delivered = all(
+            item.is_fully_delivered for item in sales_order.items.all()
+        )
+
+        if all_delivered and sales_order.status == 'in_production':
+            sales_order.status = 'completed'
+            sales_order.actual_delivery_date = timezone.now().date()
+            sales_order.save(update_fields=['status', 'actual_delivery_date'])
 
     @action(detail=True, methods=['post'])
     def receive(self, request, pk=None):
@@ -468,6 +527,69 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(delivery_order)
         return Response({
             'message': '签收成功',
+            'data': serializer.data
+        })
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """拒收 - 库存回退"""
+        delivery_order = self.get_object()
+
+        if delivery_order.status not in ['shipped', 'in_transit']:
+            return Response({
+                'error': '只有已发货或运输中的发货单可以拒收'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        reject_reason = request.data.get('reject_reason', '')
+        if not reject_reason:
+            return Response({
+                'error': '请填写拒收原因'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            # 1. 回退库存
+            for item in delivery_order.items.all():
+                # 查找该产品最新的库存记录，或创建新的
+                stock = ProductStock.objects.filter(
+                    product=item.product,
+                    status='in_stock'
+                ).order_by('-created_at').first()
+
+                if stock:
+                    # 回加到现有库存
+                    stock.quantity += item.quantity
+                    stock.save()
+                else:
+                    # 创建新的库存记录
+                    ProductStock.objects.create(
+                        product=item.product,
+                        quantity=item.quantity,
+                        batch_no=f"REJECT-{delivery_order.order_number}-{item.id}",
+                        status='in_stock',
+                        notes=f'拒收回退: {delivery_order.order_number}'
+                    )
+
+                # 2. 回退销售订单明细的已发货数量
+                if item.sales_order_item:
+                    item.sales_order_item.delivered_quantity -= item.quantity
+                    if item.sales_order_item.delivered_quantity < 0:
+                        item.sales_order_item.delivered_quantity = 0
+                    item.sales_order_item.save()
+
+            # 3. 更新发货单状态
+            delivery_order.status = 'rejected'
+            delivery_order.received_notes = f'拒收原因: {reject_reason}'
+            delivery_order.save()
+
+            # 4. 更新销售订单状态（如果需要）
+            if delivery_order.sales_order and delivery_order.sales_order.status == 'completed':
+                delivery_order.sales_order.status = 'in_production'
+                delivery_order.sales_order.actual_delivery_date = None
+                delivery_order.sales_order.save(update_fields=['status', 'actual_delivery_date'])
+
+        serializer = self.get_serializer(delivery_order)
+        return Response({
+            'message': '拒收处理成功，库存已回退',
             'data': serializer.data
         })
 

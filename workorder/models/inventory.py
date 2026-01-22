@@ -296,6 +296,9 @@ class DeliveryItem(models.Model):
     delivery_order = models.ForeignKey(DeliveryOrder, on_delete=models.CASCADE,
                                      related_name='items', verbose_name='发货单')
     product = models.ForeignKey('workorder.Product', on_delete=models.PROTECT, verbose_name='产品')
+    sales_order_item = models.ForeignKey('workorder.SalesOrderItem', on_delete=models.SET_NULL,
+                                         null=True, blank=True, related_name='delivery_items',
+                                         verbose_name='销售订单明细')
     quantity = models.DecimalField('发货数量', max_digits=10, decimal_places=2)
     unit = models.CharField('单位', max_length=20, default='件')
     unit_price = models.DecimalField('单价', max_digits=10, decimal_places=2, default=0)

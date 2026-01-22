@@ -179,6 +179,8 @@ class SalesOrderItem(models.Model):
                                   related_name='items', verbose_name='销售订单')
     product = models.ForeignKey('workorder.Product', on_delete=models.PROTECT, verbose_name='产品')
     quantity = models.IntegerField('数量')
+    delivered_quantity = models.DecimalField('已发货数量', max_digits=10, decimal_places=2, default=0,
+                                              help_text='已通过发货单发出的数量')
     unit = models.CharField('单位', max_length=20, default='件')
     unit_price = models.DecimalField('单价', max_digits=10, decimal_places=2)
     tax_rate = models.DecimalField('税率', max_digits=5, decimal_places=2, default=0,
@@ -188,6 +190,16 @@ class SalesOrderItem(models.Model):
     notes = models.TextField('备注', blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    @property
+    def remaining_quantity(self):
+        """待发货数量"""
+        return self.quantity - self.delivered_quantity
+
+    @property
+    def is_fully_delivered(self):
+        """是否已全部发货"""
+        return self.delivered_quantity >= self.quantity
 
     class Meta:
         verbose_name = '销售订单明细'
