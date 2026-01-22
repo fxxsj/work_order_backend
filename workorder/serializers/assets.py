@@ -198,6 +198,9 @@ class DieProductSerializer(serializers.ModelSerializer):
     """刀模产品序列化器"""
     product_name = serializers.SerializerMethodField()
     product_code = serializers.SerializerMethodField()
+    relation_type_display = serializers.CharField(
+        source='get_relation_type_display', read_only=True
+    )
 
     class Meta:
         model = DieProduct
@@ -220,11 +223,15 @@ class DieSerializer(serializers.ModelSerializer):
         child=serializers.DictField(),
         write_only=True,
         required=False,
-        help_text='产品列表数据，格式：[{"product": 1, "quantity": 2}]'
+        help_text='产品列表数据，格式：[{"product": 1, "quantity": 2, "relation_type": "imposition"}]'
     )
     # 确认人名称（只读）
     confirmed_by_name = serializers.CharField(
         source='confirmed_by.username', read_only=True, allow_null=True
+    )
+    # 刀模类型显示名称
+    die_type_display = serializers.CharField(
+        source='get_die_type_display', read_only=True
     )
 
     class Meta:
@@ -306,6 +313,7 @@ class DieSerializer(serializers.ModelSerializer):
                     die=die,
                     product_id=product_data.get('product'),
                     quantity=product_data.get('quantity', 1),
+                    relation_type=product_data.get('relation_type', 'exclusive'),
                     sort_order=idx
                 )
 
@@ -331,6 +339,7 @@ class DieSerializer(serializers.ModelSerializer):
                         die=die,
                         product_id=product_data.get('product'),
                         quantity=product_data.get('quantity', 1),
+                        relation_type=product_data.get('relation_type', 'exclusive'),
                         sort_order=idx
                     )
 

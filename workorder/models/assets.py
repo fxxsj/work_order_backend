@@ -133,10 +133,19 @@ class ArtworkProduct(models.Model):
 
 class Die(models.Model):
     """刀模信息"""
+    DIE_TYPE_CHOICES = [
+        ('combined', '拼版刀模'),    # 多产品同时切割，一次模切产出多种产品
+        ('dedicated', '专用刀模'),   # 单产品专用，只能切割一种产品
+        ('universal', '通用刀模'),   # 多产品可共用，但每次只切一种产品
+    ]
+
     code = models.CharField('刀模编码', max_length=50, unique=True, blank=True,
                            help_text='刀模唯一编码，留空则自动生成，格式：DIE + yyyymm + 3位序号')
     name = models.CharField('刀模名称', max_length=200,
                            help_text='刀模的描述性名称，必填，最大200字符')
+    die_type = models.CharField('刀模类型', max_length=20, choices=DIE_TYPE_CHOICES,
+                               default='dedicated',
+                               help_text='拼版刀模：多产品同时切割；专用刀模：单产品专用；通用刀模：多产品可共用但每次只切一种')
     size = models.CharField('尺寸', max_length=100, blank=True,
                            help_text='刀模尺寸规格，如：420x594mm、889x1194mm等')
     material = models.CharField('材质', max_length=100, blank=True,
@@ -205,10 +214,18 @@ class Die(models.Model):
 
 class DieProduct(models.Model):
     """刀模产品关联"""
+    RELATION_TYPE_CHOICES = [
+        ('imposition', '拼版关系'),  # 与其他产品拼在一起，一次模切同时产出
+        ('exclusive', '独占关系'),   # 单独使用此刀模，一次模切只产出此产品
+    ]
+
     die = models.ForeignKey(Die, on_delete=models.CASCADE,
                            related_name='products', verbose_name='刀模')
     product = models.ForeignKey('workorder.Product', on_delete=models.PROTECT, verbose_name='产品')
-    quantity = models.IntegerField('数量', default=1, help_text='该产品在刀模中的数量')
+    quantity = models.IntegerField('数量', default=1, help_text='该产品在刀模中的数量（每次模切产出数量）')
+    relation_type = models.CharField('关联类型', max_length=20, choices=RELATION_TYPE_CHOICES,
+                                    default='exclusive',
+                                    help_text='拼版关系：与其他产品同时切割；独占关系：单独使用此刀模')
     sort_order = models.IntegerField('排序', default=0)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
 
