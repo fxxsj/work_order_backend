@@ -11,6 +11,7 @@ from .views import (
     WorkOrderTaskViewSet, ProductGroupViewSet, ProductGroupItemViewSet,
     TaskAssignmentRuleViewSet, ProductGroupViewSet, ProductGroupItemViewSet,
     SupplierViewSet, MaterialSupplierViewSet, PurchaseOrderViewSet, PurchaseOrderItemViewSet,
+    PurchaseReceiveRecordViewSet,
     SalesOrderViewSet, SalesOrderItemViewSet,
     # 财务视图集
     CostCenterViewSet, CostItemViewSet, ProductionCostViewSet,
@@ -52,6 +53,7 @@ router.register(r'suppliers', SupplierViewSet)
 router.register(r'material-suppliers', MaterialSupplierViewSet)
 router.register(r'purchase-orders', PurchaseOrderViewSet)
 router.register(r'purchase-order-items', PurchaseOrderItemViewSet)
+router.register(r'purchase-receive-records', PurchaseReceiveRecordViewSet)
 router.register(r'sales-orders', SalesOrderViewSet)
 router.register(r'sales-order-items', SalesOrderItemViewSet)
 router.register(r'workorders', WorkOrderViewSet)

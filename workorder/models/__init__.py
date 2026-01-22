@@ -34,6 +34,7 @@ from .materials import (
     MaterialSupplier,
     PurchaseOrder,
     PurchaseOrderItem,
+    PurchaseReceiveRecord,
 )
 
 from .assets import (
@@ -120,6 +121,7 @@ __all__ = [
     'MaterialSupplier',
     'PurchaseOrder',
     'PurchaseOrderItem',
+    'PurchaseReceiveRecord',
 
     # 资产模型
     'Artwork',

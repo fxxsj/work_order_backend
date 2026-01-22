@@ -6,7 +6,10 @@
 
 import re
 from rest_framework import serializers
-from ..models.materials import Material, Supplier, MaterialSupplier, PurchaseOrder, PurchaseOrderItem
+from ..models.materials import (
+    Material, Supplier, MaterialSupplier,
+    PurchaseOrder, PurchaseOrderItem, PurchaseReceiveRecord
+)
 
 
 class MaterialSerializer(serializers.ModelSerializer):
@@ -364,3 +367,160 @@ class PurchaseOrderDetailSerializer(serializers.ModelSerializer):
             instance.update_total_amount()
 
         return instance
+
+
+# ========== 收货记录序列化器 ==========
+
+class PurchaseReceiveRecordSerializer(serializers.ModelSerializer):
+    """采购收货记录序列化器"""
+    # 关联信息（只读）
+    material_name = serializers.CharField(source='material.name', read_only=True)
+    material_code = serializers.CharField(source='material.code', read_only=True)
+    material_unit = serializers.CharField(source='material.unit', read_only=True)
+    purchase_order_number = serializers.CharField(
+        source='purchase_order.order_number', read_only=True
+    )
+    inspection_status_display = serializers.CharField(
+        source='get_inspection_status_display', read_only=True
+    )
+
+    # 操作人信息（只读）
+    received_by_name = serializers.CharField(
+        source='received_by.username', read_only=True, allow_null=True
+    )
+    inspected_by_name = serializers.CharField(
+        source='inspected_by.username', read_only=True, allow_null=True
+    )
+    stocked_by_name = serializers.CharField(
+        source='stocked_by.username', read_only=True, allow_null=True
+    )
+    returned_by_name = serializers.CharField(
+        source='returned_by.username', read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = PurchaseReceiveRecord
+        fields = '__all__'
+        read_only_fields = [
+            'created_at', 'updated_at',
+            'inspected_at', 'stocked_at', 'returned_at',
+            'is_stocked', 'is_returned'
+        ]
+
+    def validate_received_quantity(self, value):
+        """验证收货数量"""
+        if value <= 0:
+            raise serializers.ValidationError("收货数量必须大于0")
+        return value
+
+    def validate(self, attrs):
+        """对象级验证"""
+        item = attrs.get('purchase_order_item')
+
+        if item:
+            # 验证采购单状态
+            if item.purchase_order.status != 'ordered':
+                raise serializers.ValidationError({
+                    'purchase_order_item': '只有已下单状态的采购单才能收货'
+                })
+
+            # 验证收货数量不能超过剩余数量
+            received_qty = attrs.get('received_quantity', 0)
+            # 计算已收货的数量（来自收货记录）
+            existing_received = sum(
+                r.received_quantity or 0
+                for r in item.receive_records.all()
+            )
+            remaining = item.quantity - existing_received
+
+            if received_qty > remaining:
+                raise serializers.ValidationError({
+                    'received_quantity': f'收货数量不能超过剩余数量 {remaining}'
+                })
+
+        return attrs
+
+
+class PurchaseReceiveRecordCreateSerializer(serializers.Serializer):
+    """批量创建收货记录的序列化器"""
+    items = serializers.ListField(
+        child=serializers.DictField(),
+        help_text='收货明细列表，每项包含 item_id, received_quantity, delivery_note_number, notes'
+    )
+    received_date = serializers.DateField(
+        required=False,
+        help_text='收货日期，默认为今天'
+    )
+
+    def validate_items(self, value):
+        """验证收货明细"""
+        if not value:
+            raise serializers.ValidationError("收货明细不能为空")
+
+        for item in value:
+            if 'item_id' not in item:
+                raise serializers.ValidationError("每个收货明细必须包含 item_id")
+            if 'received_quantity' not in item:
+                raise serializers.ValidationError("每个收货明细必须包含 received_quantity")
+            if item['received_quantity'] <= 0:
+                raise serializers.ValidationError("收货数量必须大于0")
+
+        return value
+
+
+class InspectionConfirmSerializer(serializers.Serializer):
+    """质检确认序列化器"""
+    qualified_quantity = serializers.DecimalField(
+        max_digits=10, decimal_places=2,
+        help_text='合格数量'
+    )
+    unqualified_quantity = serializers.DecimalField(
+        max_digits=10, decimal_places=2,
+        default=0,
+        help_text='不合格数量'
+    )
+    unqualified_reason = serializers.CharField(
+        required=False, allow_blank=True,
+        help_text='不合格原因'
+    )
+
+    def validate(self, attrs):
+        """验证合格数量和不合格数量"""
+        qualified = attrs.get('qualified_quantity', 0)
+        unqualified = attrs.get('unqualified_quantity', 0)
+
+        if qualified < 0:
+            raise serializers.ValidationError({
+                'qualified_quantity': '合格数量不能为负数'
+            })
+
+        if unqualified < 0:
+            raise serializers.ValidationError({
+                'unqualified_quantity': '不合格数量不能为负数'
+            })
+
+        # 如果有不合格数量，必须填写原因
+        if unqualified > 0 and not attrs.get('unqualified_reason'):
+            raise serializers.ValidationError({
+                'unqualified_reason': '存在不合格物料时必须填写不合格原因'
+            })
+
+        return attrs
+
+
+class ReturnProcessSerializer(serializers.Serializer):
+    """退货处理序列化器"""
+    return_quantity = serializers.DecimalField(
+        max_digits=10, decimal_places=2,
+        help_text='退货数量'
+    )
+    return_note = serializers.CharField(
+        required=False, allow_blank=True,
+        help_text='退货备注'
+    )
+
+    def validate_return_quantity(self, value):
+        """验证退货数量"""
+        if value <= 0:
+            raise serializers.ValidationError("退货数量必须大于0")
+        return value

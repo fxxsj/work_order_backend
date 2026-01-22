@@ -24,6 +24,7 @@ from .materials import (
     MaterialSupplierViewSet,
     PurchaseOrderViewSet,
     PurchaseOrderItemViewSet,
+    PurchaseReceiveRecordViewSet,
 )
 
 from .assets import (
@@ -132,6 +133,7 @@ __all__ = [
     'SalesOrderItemViewSet',
     'PurchaseOrderViewSet',
     'PurchaseOrderItemViewSet',
+    'PurchaseReceiveRecordViewSet',
 
     # 财务视图集
     'CostCenterViewSet',
