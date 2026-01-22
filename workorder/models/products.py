@@ -15,6 +15,14 @@ from django.contrib.auth.models import User
 
 class Product(models.Model):
     """产品信息"""
+
+    # 产品类型选项
+    PRODUCT_TYPE_CHOICES = [
+        ('single', '单品'),           # 独立产品，可单独销售
+        ('group_main', '套装主产品'),  # 套装产品本身（如：天地盒），用于销售下单
+        ('group_item', '套装子产品'),  # 套装中的组成部分（如：天盒、地盒），用于生产
+    ]
+
     name = models.CharField('产品名称', max_length=200)
     code = models.CharField('产品编码', max_length=50, unique=True)
     specification = models.CharField('规格', max_length=200, blank=True)
@@ -23,6 +31,15 @@ class Product(models.Model):
     stock_quantity = models.IntegerField('库存数量', default=0, help_text='产品的当前库存数量')
     min_stock_quantity = models.IntegerField('最小库存', default=0,
                                           help_text='库存低于此数量时触发预警')
+
+    # 产品类型
+    product_type = models.CharField('产品类型', max_length=20, choices=PRODUCT_TYPE_CHOICES,
+                                    default='single', help_text='单品可独立销售；套装主产品用于下单；套装子产品用于生产')
+
+    # 关联产品组（仅对套装主产品和套装子产品有效）
+    product_group = models.ForeignKey('ProductGroup', on_delete=models.SET_NULL, null=True, blank=True,
+                                      related_name='products', verbose_name='所属产品组',
+                                      help_text='套装主产品和套装子产品需要关联产品组')
 
     # 默认工序（多对多关系）
     default_processes = models.ManyToManyField('Process', blank=True, verbose_name='默认工序',
@@ -41,10 +58,90 @@ class Product(models.Model):
             models.Index(fields=['name'], name='product_name_idx'),
             models.Index(fields=['is_active'], name='product_is_active_idx'),
             models.Index(fields=['stock_quantity'], name='product_stock_idx'),
+            models.Index(fields=['product_type'], name='product_type_idx'),
         ]
 
     def __str__(self):
         return f"{self.code} - {self.name}"
+
+    # ===== 产品类型相关方法 =====
+
+    @property
+    def is_single(self):
+        """是否为单品"""
+        return self.product_type == 'single'
+
+    @property
+    def is_group_main(self):
+        """是否为套装主产品"""
+        return self.product_type == 'group_main'
+
+    @property
+    def is_group_item(self):
+        """是否为套装子产品"""
+        return self.product_type == 'group_item'
+
+    @property
+    def product_type_display(self):
+        """获取产品类型显示名称"""
+        return dict(self.PRODUCT_TYPE_CHOICES).get(self.product_type, '未知')
+
+    def get_group_items(self):
+        """获取套装的所有子产品（仅对套装主产品有效）"""
+        if not self.is_group_main or not self.product_group:
+            return Product.objects.none()
+        return Product.objects.filter(
+            product_group=self.product_group,
+            product_type='group_item',
+            is_active=True
+        ).order_by('code')
+
+    def get_group_main_product(self):
+        """获取所属套装的主产品（仅对套装子产品有效）"""
+        if not self.is_group_item or not self.product_group:
+            return None
+        return Product.objects.filter(
+            product_group=self.product_group,
+            product_type='group_main',
+            is_active=True
+        ).first()
+
+    def get_available_group_stock(self):
+        """获取套装可用库存数量（取子产品中的最小库存）
+
+        仅对套装主产品有效，返回所有子产品中库存最少的数量
+        """
+        if not self.is_group_main:
+            return self.stock_quantity
+
+        items = self.get_group_items()
+        if not items.exists():
+            return 0
+
+        return min(item.stock_quantity for item in items)
+
+    def validate_group_stock(self, quantity):
+        """验证套装库存是否满足需求
+
+        Args:
+            quantity: 需要的套装数量
+
+        Returns:
+            tuple: (是否满足, 错误信息列表)
+        """
+        if not self.is_group_main:
+            if self.stock_quantity >= quantity:
+                return True, []
+            return False, [f'{self.name} 库存不足：需要 {quantity}，当前 {self.stock_quantity}']
+
+        errors = []
+        items = self.get_group_items()
+
+        for item in items:
+            if item.stock_quantity < quantity:
+                errors.append(f'{item.name} 库存不足：需要 {quantity}，当前 {item.stock_quantity}')
+
+        return len(errors) == 0, errors
 
     def is_low_stock(self):
         """检查库存是否不足"""

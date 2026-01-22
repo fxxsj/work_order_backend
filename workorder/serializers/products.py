@@ -29,9 +29,42 @@ class ProductSerializer(serializers.ModelSerializer):
     """产品序列化器"""
     default_materials = ProductMaterialSerializer(many=True, read_only=True)
 
+    # 产品类型相关只读字段
+    product_type_display = serializers.CharField(read_only=True)
+    product_group_name = serializers.CharField(source='product_group.name', read_only=True)
+    product_group_code = serializers.CharField(source='product_group.code', read_only=True)
+
+    # 套装相关只读字段
+    is_group_main = serializers.BooleanField(read_only=True)
+    is_group_item = serializers.BooleanField(read_only=True)
+    is_single = serializers.BooleanField(read_only=True)
+    available_group_stock = serializers.SerializerMethodField()
+    group_items = serializers.SerializerMethodField()
+
     class Meta:
         model = Product
         fields = '__all__'
+
+    def get_available_group_stock(self, obj):
+        """获取套装可用库存（仅对套装主产品有效）"""
+        if obj.is_group_main:
+            return obj.get_available_group_stock()
+        return None
+
+    def get_group_items(self, obj):
+        """获取套装子产品列表（仅对套装主产品有效）"""
+        if not obj.is_group_main:
+            return None
+        items = obj.get_group_items()
+        return [
+            {
+                'id': item.id,
+                'code': item.code,
+                'name': item.name,
+                'stock_quantity': item.stock_quantity,
+            }
+            for item in items
+        ]
 
     def validate_code(self, value):
         """验证产品编码格式"""
@@ -96,6 +129,26 @@ class ProductSerializer(serializers.ModelSerializer):
         if self.instance and min_stock_quantity > stock_quantity:
             raise serializers.ValidationError({
                 'min_stock_quantity': '最小库存不能大于当前库存数量'
+            })
+
+        # 验证产品类型与产品组的关联
+        product_type = attrs.get('product_type', 'single')
+        product_group = attrs.get('product_group')
+
+        # 如果是套装主产品或套装子产品，必须关联产品组
+        if product_type in ('group_main', 'group_item') and not product_group:
+            # 更新时检查现有值
+            if self.instance and self.instance.product_group:
+                pass  # 使用现有的产品组
+            else:
+                raise serializers.ValidationError({
+                    'product_group': '套装主产品和套装子产品必须关联产品组'
+                })
+
+        # 如果是单品，不应该关联产品组
+        if product_type == 'single' and product_group:
+            raise serializers.ValidationError({
+                'product_group': '单品不能关联产品组，请选择正确的产品类型'
             })
 
         return attrs
