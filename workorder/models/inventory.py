@@ -20,6 +20,10 @@ class ProductStock(models.Model):
     """成品库存"""
     product = models.ForeignKey('workorder.Product', on_delete=models.CASCADE, verbose_name='产品')
     quantity = models.DecimalField('库存数量', max_digits=10, decimal_places=2, default=0)
+    reserved_quantity = models.DecimalField('预留数量', max_digits=10, decimal_places=2, default=0)
+    min_stock_level = models.DecimalField('最小库存', max_digits=10, decimal_places=2, default=0,
+                                          help_text='库存低于此数量时触发预警')
+    unit_cost = models.DecimalField('单位成本', max_digits=10, decimal_places=2, default=0)
     location = models.CharField('库位', max_length=50, blank=True, help_text='如: A01-01-01')
     batch_no = models.CharField('批次号', max_length=50, unique=True)
     work_order = models.ForeignKey('workorder.WorkOrder', on_delete=models.SET_NULL, null=True, blank=True,
@@ -41,6 +45,21 @@ class ProductStock(models.Model):
     notes = models.TextField('备注', blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    @property
+    def available_quantity(self):
+        """可用数量 = 库存数量 - 预留数量"""
+        return self.quantity - self.reserved_quantity
+
+    @property
+    def total_value(self):
+        """总价值 = 库存数量 * 单位成本"""
+        return self.quantity * self.unit_cost
+
+    @property
+    def is_low_stock(self):
+        """是否低库存"""
+        return self.available_quantity <= self.min_stock_level
 
     class Meta:
         verbose_name = '成品库存'

@@ -31,6 +31,11 @@ class ProductStockSerializer(serializers.ModelSerializer):
     is_expired = serializers.BooleanField(read_only=True)
     days_until_expiry = serializers.SerializerMethodField()
 
+    # 新增计算字段
+    available_quantity = serializers.SerializerMethodField()
+    total_value = serializers.SerializerMethodField()
+    is_low_stock = serializers.SerializerMethodField()
+
     class Meta:
         model = ProductStock
         fields = '__all__'
@@ -43,13 +48,86 @@ class ProductStockSerializer(serializers.ModelSerializer):
             return delta.days
         return None
 
+    def get_available_quantity(self, obj):
+        """可用数量 = 库存数量 - 预留数量"""
+        return float(obj.quantity - obj.reserved_quantity)
+
+    def get_total_value(self, obj):
+        """总价值 = 库存数量 * 单位成本"""
+        return float(obj.quantity * obj.unit_cost)
+
+    def get_is_low_stock(self, obj):
+        """是否低库存"""
+        available = obj.quantity - obj.reserved_quantity
+        return available <= obj.min_stock_level
+
+    def validate_quantity(self, value):
+        """验证库存数量"""
+        if value < 0:
+            raise serializers.ValidationError("库存数量不能为负数")
+        return value
+
+    def validate_reserved_quantity(self, value):
+        """验证预留数量"""
+        if value < 0:
+            raise serializers.ValidationError("预留数量不能为负数")
+        return value
+
+    def validate_min_stock_level(self, value):
+        """验证最小库存"""
+        if value < 0:
+            raise serializers.ValidationError("最小库存不能为负数")
+        return value
+
+    def validate_unit_cost(self, value):
+        """验证单位成本"""
+        if value < 0:
+            raise serializers.ValidationError("单位成本不能为负数")
+        return value
+
 
 class ProductStockUpdateSerializer(serializers.ModelSerializer):
     """成品库存更新序列化器"""
 
     class Meta:
         model = ProductStock
-        fields = ['quantity', 'location', 'status', 'notes']
+        fields = ['quantity', 'reserved_quantity', 'min_stock_level', 'unit_cost',
+                  'location', 'status', 'notes']
+
+    def validate_quantity(self, value):
+        """验证库存数量"""
+        if value < 0:
+            raise serializers.ValidationError("库存数量不能为负数")
+        return value
+
+    def validate_reserved_quantity(self, value):
+        """验证预留数量"""
+        if value < 0:
+            raise serializers.ValidationError("预留数量不能为负数")
+        return value
+
+
+class ProductStockAdjustSerializer(serializers.Serializer):
+    """库存调整序列化器"""
+    ADJUST_TYPE_CHOICES = [
+        ('add', '增加'),
+        ('subtract', '减少'),
+        ('set', '设置为'),
+    ]
+
+    adjust_type = serializers.ChoiceField(choices=ADJUST_TYPE_CHOICES, required=True)
+    quantity = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0)
+    reason = serializers.CharField(max_length=500, required=True)
+
+    def validate(self, data):
+        """验证调整数据"""
+        if data['adjust_type'] == 'subtract':
+            stock = self.context.get('stock')
+            if stock and data['quantity'] > stock.quantity:
+                raise serializers.ValidationError({
+                    'quantity': '减少数量不能大于当前库存数量'
+                })
+        return data
 
 
 # ==================== 入库出库序列化器 ====================
@@ -397,6 +475,7 @@ __all__ = [
     # 成品库存
     'ProductStockSerializer',
     'ProductStockUpdateSerializer',
+    'ProductStockAdjustSerializer',
 
     # 入库出库
     'StockInSerializer',

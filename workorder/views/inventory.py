@@ -24,6 +24,7 @@ from workorder.models import (
 from workorder.serializers.inventory import (
     ProductStockSerializer,
     ProductStockUpdateSerializer,
+    ProductStockAdjustSerializer,
     StockInSerializer,
     StockInCreateSerializer,
     StockOutSerializer,
@@ -36,6 +37,7 @@ from workorder.serializers.inventory import (
     QualityInspectionCreateSerializer,
     QualityInspectionUpdateSerializer,
 )
+from workorder.permissions import SuperuserFriendlyModelPermissions
 
 
 class ProductStockViewSet(viewsets.ModelViewSet):
@@ -44,11 +46,14 @@ class ProductStockViewSet(viewsets.ModelViewSet):
         'product', 'work_order'
     ).all()
     serializer_class = ProductStockSerializer
+    permission_classes = [SuperuserFriendlyModelPermissions]
 
     def get_serializer_class(self):
         """根据操作选择序列化器"""
         if self.action in ['update', 'partial_update']:
             return ProductStockUpdateSerializer
+        if self.action == 'adjust':
+            return ProductStockAdjustSerializer
         return ProductStockSerializer
 
     def get_queryset(self):
@@ -65,6 +70,11 @@ class ProductStockViewSet(viewsets.ModelViewSet):
         if stock_status:
             queryset = queryset.filter(status=stock_status)
 
+        # 按批次号过滤
+        batch_number = self.request.query_params.get('batch_number')
+        if batch_number:
+            queryset = queryset.filter(batch_no__icontains=batch_number)
+
         # 搜索
         search = self.request.query_params.get('search')
         if search:
@@ -79,14 +89,14 @@ class ProductStockViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def low_stock(self, request):
-        """库存预警"""
-        # 获取预警阈值
-        min_quantity = request.query_params.get('min_quantity', 10)
-
-        # 查询低库存产品
+        """库存预警 - 使用模型的 min_stock_level 字段"""
+        # 查询低库存产品（可用数量 <= 最小库存）
         low_stocks = self.get_queryset().filter(
-            quantity__lte=min_quantity,
             status='in_stock'
+        ).annotate(
+            available=F('quantity') - F('reserved_quantity')
+        ).filter(
+            available__lte=F('min_stock_level')
         ).select_related('product')
 
         serializer = self.get_serializer(low_stocks, many=True)
@@ -98,8 +108,6 @@ class ProductStockViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def expired(self, request):
         """已过期库存"""
-        from django.utils import timezone
-
         # 查询已过期的库存
         expired_stocks = self.get_queryset().filter(
             expiry_date__lt=timezone.now().date()
@@ -114,7 +122,6 @@ class ProductStockViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def expiring_soon(self, request):
         """即将过期库存"""
-        from django.utils import timezone
         from datetime import timedelta
 
         # 默认30天内过期
@@ -136,26 +143,75 @@ class ProductStockViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def summary(self, request):
-        """库存汇总"""
+        """库存汇总 - 匹配前端期望格式"""
         queryset = self.get_queryset()
 
         # 统计数据
-        summary = queryset.aggregate(
-            total_products=Count('product', distinct=True),
+        stats = queryset.aggregate(
             total_quantity=Sum('quantity'),
-            reserved_quantity=Sum('quantity', filter=Q(status='reserved')),
-            defective_quantity=Sum('quantity', filter=Q(status='defective')),
+            total_products=Count('product', distinct=True),
         )
 
-        # 按状态统计
-        status_stats = queryset.values('status').annotate(
-            count=Count('id'),
-            quantity=Sum('quantity')
-        ).order_by('status')
+        # 低库存统计（可用数量 <= 最小库存）
+        low_stock_count = queryset.filter(
+            status='in_stock'
+        ).annotate(
+            available=F('quantity') - F('reserved_quantity')
+        ).filter(
+            available__lte=F('min_stock_level')
+        ).count()
+
+        # 过期统计（只统计有过期日期的记录）
+        expired_count = queryset.filter(
+            expiry_date__isnull=False,
+            expiry_date__lt=timezone.now().date()
+        ).count()
 
         return Response({
-            'summary': summary,
-            'by_status': list(status_stats)
+            'total_quantity': stats['total_quantity'] or 0,
+            'total_products': stats['total_products'] or 0,
+            'low_stock_count': low_stock_count,
+            'expired_count': expired_count
+        })
+
+    @action(detail=True, methods=['post'])
+    def adjust(self, request, pk=None):
+        """库存调整"""
+        stock = self.get_object()
+        serializer = ProductStockAdjustSerializer(
+            data=request.data,
+            context={'stock': stock}
+        )
+        serializer.is_valid(raise_exception=True)
+
+        adjust_type = serializer.validated_data['adjust_type']
+        quantity = serializer.validated_data['quantity']
+        reason = serializer.validated_data['reason']
+
+        old_quantity = stock.quantity
+
+        # 执行调整
+        if adjust_type == 'add':
+            stock.quantity += quantity
+        elif adjust_type == 'subtract':
+            stock.quantity -= quantity
+        else:  # set
+            stock.quantity = quantity
+
+        # 添加调整备注
+        adjustment_note = f"库存调整: {old_quantity} -> {stock.quantity}, 原因: {reason}"
+        if stock.notes:
+            stock.notes = f"{stock.notes}\n{adjustment_note}"
+        else:
+            stock.notes = adjustment_note
+
+        stock.save()
+
+        return Response({
+            'message': '库存调整成功',
+            'old_quantity': float(old_quantity),
+            'new_quantity': float(stock.quantity),
+            'data': ProductStockSerializer(stock).data
         })
 
 
