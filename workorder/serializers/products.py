@@ -28,6 +28,10 @@ class ProductMaterialSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     """产品序列化器"""
     default_materials = ProductMaterialSerializer(many=True, read_only=True)
+    # 默认工序ID列表
+    default_processes = serializers.PrimaryKeyRelatedField(
+        many=True, read_only=True
+    )
 
     # 产品类型相关只读字段
     product_type_display = serializers.CharField(read_only=True)
