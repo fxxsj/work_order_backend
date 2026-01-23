@@ -9,7 +9,7 @@ from .views import (
     DieViewSet, DieProductViewSet, FoilingPlateViewSet, FoilingPlateProductViewSet,
     EmbossingPlateViewSet, EmbossingPlateProductViewSet,
     WorkOrderTaskViewSet, ProductGroupViewSet, ProductGroupItemViewSet,
-    TaskAssignmentRuleViewSet, ProductGroupViewSet, ProductGroupItemViewSet,
+    TaskAssignmentRuleViewSet,
     SupplierViewSet, MaterialSupplierViewSet, PurchaseOrderViewSet, PurchaseOrderItemViewSet,
     PurchaseReceiveRecordViewSet,
     SalesOrderViewSet, SalesOrderItemViewSet,

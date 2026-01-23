@@ -22,7 +22,27 @@ class BaseWorkOrderTaskViewSet(viewsets.ModelViewSet):
 
     permission_classes = [WorkOrderTaskPermission]
     serializer_class = WorkOrderTaskSerializer
-    queryset = WorkOrderTask.objects.all()
+    # 优化查询：使用 select_related 和 prefetch_related 避免 N+1 查询
+    queryset = WorkOrderTask.objects.select_related(
+        'assigned_department',
+        'assigned_operator',
+        'work_order_process',
+        'work_order_process__work_order',
+        'work_order_process__work_order__customer',
+        'work_order_process__process',
+        'work_order_process__department',
+        'work_order_process__operator',
+        'parent_task',
+        'artwork',
+        'die',
+        'product',
+        'material',
+        'foiling_plate',
+        'embossing_plate',
+    ).prefetch_related(
+        'logs',
+        'subtasks',
+    ).all()
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['work_content', 'production_requirements']
     ordering_fields = ['created_at', 'updated_at', 'assigned_department', 'assigned_operator']

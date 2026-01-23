@@ -17,8 +17,12 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Max, Sum
+from django.db.models import Max
 from datetime import datetime, date
+import logging
+
+# 配置日志记录器
+logger = logging.getLogger(__name__)
 
 # 导入 Process 和 Department 模型用于验证和分派
 try:
