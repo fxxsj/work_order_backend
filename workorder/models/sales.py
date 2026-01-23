@@ -17,6 +17,7 @@ class SalesOrder(models.Model):
         ('draft', '草稿'),
         ('submitted', '已提交'),
         ('approved', '已审核'),
+        ('rejected', '已拒绝'),
         ('in_production', '生产中'),
         ('completed', '已完成'),
         ('cancelled', '已取消'),
@@ -30,7 +31,10 @@ class SalesOrder(models.Model):
 
     @staticmethod
     def generate_order_number():
-        """生成销售订单号：SO + yyyymmdd + 4位序号"""
+        """生成销售订单号：SO + yyyymmdd + 4位序号
+
+        使用事务和行级锁确保并发安全
+        """
         today = timezone.now().strftime('%Y%m%d')
         prefix = f'SO{today}'
         with transaction.atomic():
@@ -53,7 +57,7 @@ class SalesOrder(models.Model):
     subtotal = models.DecimalField('小计', max_digits=12, decimal_places=2, default=0,
                                    help_text='订单明细总金额')
     tax_rate = models.DecimalField('税率', max_digits=5, decimal_places=2, default=0,
-                                    help_text='税率，如0.13表示13%')
+                                    help_text='税率百分比，如13表示13%')
     tax_amount = models.DecimalField('税额', max_digits=12, decimal_places=2, default=0)
     discount_amount = models.DecimalField('折扣金额', max_digits=12, decimal_places=2, default=0)
     total_amount = models.DecimalField('订单总金额', max_digits=12, decimal_places=2, default=0)

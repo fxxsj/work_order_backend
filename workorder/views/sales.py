@@ -137,8 +137,8 @@ class SalesOrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 更新订单状态
-        sales_order.status = 'cancelled'
+        # 更新订单状态为已拒绝
+        sales_order.status = 'rejected'
         sales_order.approved_by = request.user
         sales_order.approved_at = timezone.now()
         sales_order.approval_comment = request.data.get('approval_comment', '')
@@ -164,14 +164,35 @@ class SalesOrderViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(sales_order)
         return Response(serializer.data)
 
+    def _check_stock_availability(self, sales_order):
+        """检查库存是否充足
+
+        Returns:
+            tuple: (is_available, error_messages)
+        """
+        errors = []
+        items = sales_order.items.all()
+
+        for item in items:
+            try:
+                product = item.product
+                if hasattr(product, 'stock') and product.stock < item.quantity:
+                    errors.append(f'{product.name}库存不足（需要{item.quantity}，当前{product.stock}）')
+            except Exception:
+                pass
+
+        return len(errors) == 0, errors
+
     def _reduce_product_stock(self, sales_order):
         """销售订单审核通过后，减少产品库存数量
 
         规则：
         - 遍历订单明细，减少对应产品的库存数量
         - 减少数量 = 订单明细的 quantity
+        - 使用事务保证原子性
         """
-        # 获取订单明细
+        from django.db import transaction
+
         items = sales_order.items.all()
 
         # 按产品汇总数量
@@ -182,22 +203,69 @@ class SalesOrderViewSet(viewsets.ModelViewSet):
                 product_quantities[product_id] = 0
             product_quantities[product_id] += item.quantity
 
-        # 减少产品库存
-        for product_id, quantity in product_quantities.items():
-            try:
-                product = Product.objects.get(id=product_id)
+        # 在事务中减少产品库存
+        with transaction.atomic():
+            for product_id, quantity in product_quantities.items():
                 try:
-                    product.reduce_stock(
-                        quantity=quantity,
-                        user=None,  # 系统自动操作，不记录操作人
-                        reason=f'销售订单{sales_order.order_number}审核通过，出库{quantity}{product.unit}'
-                    )
+                    product = Product.objects.select_for_update().get(id=product_id)
+                    if hasattr(product, 'reduce_stock'):
+                        product.reduce_stock(
+                            quantity=quantity,
+                            user=None,
+                            reason=f'销售订单{sales_order.order_number}审核通过，出库{quantity}{product.unit}'
+                        )
+                    elif hasattr(product, 'stock'):
+                        product.stock = max(0, product.stock - quantity)
+                        product.save(update_fields=['stock'])
+                except Product.DoesNotExist:
+                    pass
                 except ValueError as e:
-                    # 库存不足，记录错误日志
-                    print(f"库存不足警告：{e}")
-            except Product.DoesNotExist:
-                # 产品已被删除，忽略
-                pass
+                    # 记录库存不足警告但不阻止流程
+                    import logging
+                    logging.warning(f"库存扣减警告：{e}")
+
+    def _restore_product_stock(self, sales_order):
+        """取消已审核订单时恢复产品库存
+
+        规则：
+        - 仅当订单已经扣减过库存时才恢复
+        - 使用事务保证原子性
+        """
+        from django.db import transaction
+
+        # 只有已审核、生产中状态的订单才需要恢复库存
+        if sales_order.status not in ['approved', 'in_production']:
+            return
+
+        items = sales_order.items.all()
+
+        # 按产品汇总数量
+        product_quantities = {}
+        for item in items:
+            product_id = item.product.id
+            if product_id not in product_quantities:
+                product_quantities[product_id] = 0
+            product_quantities[product_id] += item.quantity
+
+        # 在事务中恢复产品库存
+        with transaction.atomic():
+            for product_id, quantity in product_quantities.items():
+                try:
+                    product = Product.objects.select_for_update().get(id=product_id)
+                    if hasattr(product, 'add_stock'):
+                        product.add_stock(
+                            quantity=quantity,
+                            user=None,
+                            reason=f'销售订单{sales_order.order_number}取消，库存回滚{quantity}{product.unit}'
+                        )
+                    elif hasattr(product, 'stock'):
+                        product.stock = product.stock + quantity
+                        product.save(update_fields=['stock'])
+                except Product.DoesNotExist:
+                    pass
+                except Exception as e:
+                    import logging
+                    logging.warning(f"库存恢复警告：{e}")
 
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
@@ -220,11 +288,14 @@ class SalesOrderViewSet(viewsets.ModelViewSet):
     def cancel(self, request, pk=None):
         """取消订单"""
         sales_order = self.get_object()
-        if sales_order.status in ['completed', 'cancelled']:
+        if sales_order.status in ['completed', 'cancelled', 'rejected']:
             return Response(
-                {'error': '已完成或已取消的订单不能再次取消'},
+                {'error': '已完成、已取消或已拒绝的订单不能再次取消'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # 如果订单已审核或生产中，需要恢复库存
+        self._restore_product_stock(sales_order)
 
         reason = request.data.get('reason', '')
         sales_order.status = 'cancelled'

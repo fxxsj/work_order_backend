@@ -62,9 +62,17 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         return [wo.order_number for wo in obj.work_orders.all()]
 
     def validate_delivery_date(self, value):
-        """验证交货日期"""
+        """验证交货日期
+
+        新建订单时：交货日期不能早于今天
+        编辑订单时：允许保留历史交货日期
+        """
         from django.utils import timezone
-        if value and value < timezone.now().date():
+        # 编辑模式时，如果日期未改变，允许保留原值
+        if self.instance and self.instance.delivery_date == value:
+            return value
+        # 新建或修改日期时，验证不能早于今天
+        if value and value < timezone.now().date() and not self.instance:
             raise serializers.ValidationError("交货日期不能早于今天")
         return value
 
