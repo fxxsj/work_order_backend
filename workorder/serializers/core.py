@@ -987,7 +987,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             departments = Department.objects.filter(processes=process, is_active=True)
             department = departments.first() if departments.exists() else None
 
-            WorkOrderProcess.objects.get_or_create(
+            work_order_process, created = WorkOrderProcess.objects.get_or_create(
                 work_order=work_order,
                 process=process,
                 defaults={
@@ -995,6 +995,10 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                     'sequence': process.sort_order
                 }
             )
+
+            # 如果是新创建的工序，自动生成草稿任务
+            if created:
+                work_order_process.generate_draft_tasks()
 
     def _recreate_work_order_processes(self, work_order, process_ids=None):
         """重新创建施工单的工序（当产品列表变化时）"""
