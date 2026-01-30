@@ -416,15 +416,24 @@ class WorkOrderOptimizedManager(PerformanceOptimizedManager):
 
 class TaskOptimizedManager(PerformanceOptimizedManager):
     """任务优化管理器"""
-    
+
     def get_optimized_queryset(self, queryset, include_details=False):
         """获取优化的任务查询集"""
         return QueryOptimizer.optimize_task_queryset(queryset, include_details)
-    
+
+    def operational(self):
+        """
+        获取操作性任务（排除草稿任务）
+
+        Returns:
+            QuerySet: 排除了草稿状态的任务查询集
+        """
+        return self.get_queryset().exclude(status='draft')
+
     def get_user_task_stats(self, user_id: int) -> Dict[str, int]:
         """获取用户任务统计"""
         from ..models.core import WorkOrderTask
-        
+
         return WorkOrderTask.objects.filter(
             assigned_operator_id=user_id
         ).aggregate(
