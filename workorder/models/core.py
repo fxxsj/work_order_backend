@@ -234,7 +234,107 @@ class WorkOrder(models.Model):
 
         validator = WorkOrderValidator(self)
         return validator.validate_all()
-    
+
+    def convert_draft_tasks(self):
+        """Convert all draft tasks to formal tasks (pending status)
+
+        Called when work order is approved. Validates data integrity
+        before conversion to ensure all required fields are populated.
+
+        Returns:
+            int: Number of tasks converted
+
+        Raises:
+            ValidationError: If draft tasks have missing required data
+        """
+        from django.core.exceptions import ValidationError
+
+        with transaction.atomic():
+            # Query all draft tasks for this work order
+            draft_tasks = WorkOrderTask.objects.filter(
+                work_order_process__work_order=self,
+                status='draft'
+            )
+
+            # Data integrity validation before conversion
+            errors = []
+            for task in draft_tasks:
+                # Check name field (work_content)
+                if not task.work_content or not task.work_content.strip():
+                    errors.append(f"任务ID {task.id} 缺少施工内容")
+
+                # Verify work_order_process foreign key
+                if not task.work_order_process:
+                    errors.append(f"任务ID {task.id} 未关联工序")
+
+                # Verify process_code is set through work_order_process
+                if task.work_order_process and not task.work_order_process.process:
+                    errors.append(f"任务ID {task.id} 的工序未设置流程代码")
+
+                # Check for orphaned tasks (all must belong to a process)
+                if not task.work_order_process or not task.work_order_process.work_order:
+                    errors.append(f"任务ID {task.id} 为孤立任务，未正确关联")
+
+            if errors:
+                raise ValidationError({
+                    'detail': '草稿任务数据不完整，无法转换为正式任务',
+                    'errors': errors
+                })
+
+            # Count tasks for return
+            converted_count = draft_tasks.count()
+
+            if converted_count == 0:
+                return 0
+
+            # Update status from 'draft' to 'pending' using bulk_update
+            for task in draft_tasks:
+                task.status = 'pending'
+
+            # Bulk update for performance
+            WorkOrderTask.objects.bulk_update(
+                draft_tasks,
+                ['status'],
+                batch_size=100
+            )
+
+            logger.info(
+                f"施工单 {self.order_number} 转换了 {converted_count} 个草稿任务为正式任务"
+            )
+
+            return converted_count
+
+    def delete_draft_tasks(self):
+        """Delete all draft tasks for this work order
+
+        Called when work order is rejected. Draft tasks are not needed
+        and should be removed to keep database clean.
+
+        Returns:
+            int: Number of tasks deleted
+        """
+        with transaction.atomic():
+            # Query all draft tasks for this work order
+            draft_tasks = WorkOrderTask.objects.filter(
+                work_order_process__work_order=self,
+                status='draft'
+            )
+
+            # Count before deletion
+            deleted_count = draft_tasks.count()
+
+            if deleted_count == 0:
+                return 0
+
+            # Delete using queryset.delete() (cascades properly)
+            draft_tasks.delete()
+
+            logger.info(
+                f"施工单 {self.order_number} 删除了 {deleted_count} 个草稿任务"
+            )
+
+            return deleted_count
+
     @classmethod
     def generate_order_number(cls):
         """生成施工单号：格式 yyyymm + 3位自增序号
