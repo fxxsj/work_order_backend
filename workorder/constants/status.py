@@ -42,6 +42,7 @@ class WorkOrderApprovalStatus:
 class TaskStatus:
     """任务状态常量"""
 
+    DRAFT = 'draft'
     PENDING = 'pending'
     IN_PROGRESS = 'in_progress'
     PAUSED = 'paused'
@@ -49,6 +50,7 @@ class TaskStatus:
     CANCELLED = 'cancelled'
 
     CHOICES = [
+        (DRAFT, _('草稿')),
         (PENDING, _('待开始')),
         (IN_PROGRESS, _('进行中')),
         (PAUSED, _('已暂停')),
