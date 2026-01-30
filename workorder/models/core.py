@@ -239,41 +239,58 @@ class WorkOrder(models.Model):
     def generate_order_number(cls):
         """生成施工单号：格式 yyyymm + 3位自增序号
 
-        使用缓存优化减少数据库查询和锁竞争
+        使用数据库事务和行锁确保并发安全，避免生成重复单号
         """
         from django.core.cache import cache
+        from django.db import DatabaseError
 
         now = datetime.now()
         prefix = now.strftime('%Y%m')
         cache_key = f'order_number_{prefix}'
 
-        # 尝试从缓存获取最后一个序号
-        last_number = cache.get(cache_key)
+        # 使用数据库事务和行锁确保并发安全
+        # 每次都从数据库获取最新序号，确保在高并发情况下也不会生成重复单号
+        max_retries = 3  # 最大重试次数
+        retry_count = 0
 
-        if last_number is None:
-            # 缓存未命中，从数据库获取
-            with transaction.atomic():
-                last_order = cls.objects.filter(
-                    order_number__startswith=prefix
-                ).order_by('-order_number').select_for_update().first()
+        while retry_count < max_retries:
+            try:
+                with transaction.atomic():
+                    # 使用 select_for_update() 锁定查询结果，防止并发读取
+                    last_order = cls.objects.filter(
+                        order_number__startswith=prefix
+                    ).order_by('-order_number').select_for_update().first()
 
-                if last_order:
-                    # 提取序号部分
-                    last_number = int(last_order.order_number[6:])
-                else:
-                    # 当月第一单
-                    last_number = 0
+                    if last_order:
+                        # 提取序号部分
+                        last_number = int(last_order.order_number[6:])
+                    else:
+                        # 当月第一单
+                        last_number = 0
 
-        # 生成新序号
-        new_number = last_number + 1
-        order_number = f"{prefix}{new_number:03d}"
+                    # 生成新序号
+                    new_number = last_number + 1
+                    order_number = f"{prefix}{new_number:03d}"
 
-        # 缓存新序号30分钟，减少数据库查询
-        # 注意：这里使用缓存可能存在并发问题，但在施工单生成的场景下问题不大
-        # 因为每次生成新单号时都会自增，即使出现重复也会在数据库层面通过唯一约束检测到
-        cache.set(cache_key, new_number, 1800)
+                    # 更新缓存以减少数据库查询（缓存仅作为优化，不依赖它保证并发安全）
+                    cache.set(cache_key, new_number, 1800)
 
-        return order_number
+                    return order_number
+
+            except DatabaseError as e:
+                # 数据库错误（如死锁），进行重试
+                retry_count += 1
+                if retry_count >= max_retries:
+                    logger.error(f"生成施工单号失败，已重试{max_retries}次: {str(e)}")
+                    raise
+                logger.warning(f"生成施工单号时发生数据库错误，正在重试 ({retry_count}/{max_retries}): {str(e)}")
+                continue
+            except Exception as e:
+                logger.error(f"生成施工单号时发生未知错误: {str(e)}")
+                raise
+
+        # 理论上不会到达这里
+        raise Exception("生成施工单号失败：超过最大重试次数")
     
     def save(self, *args, **kwargs):
         """保存时自动生成施工单号"""
@@ -574,9 +591,10 @@ class WorkOrderProcess(models.Model):
 
     def _update_product_stock_on_packaging(self):
         """包装工序完成时，更新产品的库存数量
-        
+
         优化规则：
         - 使用事务确保库存更新的原子性
+        - 批量锁定产品记录，避免并发冲突
         - 避免重复计算已入库的数量
         - 记录详细的库存变更日志
         """
@@ -585,7 +603,7 @@ class WorkOrderProcess(models.Model):
         from .services.data_consistency import StockConsistencyService
 
         with transaction.atomic():
-            # 获取所有未计入库存的包装任务
+            # 获取所有未计入库存的包装任务，使用 select_related 优化查询
             packaging_tasks = self.tasks.filter(
                 task_type='packaging',
                 status='completed'
@@ -594,21 +612,21 @@ class WorkOrderProcess(models.Model):
             # 按产品分组汇总需要入库的数量
             product_quantities = {}
             task_updates = []
-            
+
             for task in packaging_tasks:
                 if not task.product:
                     continue
-                    
+
                 product_id = task.product.id
                 # 计算实际需要入库的数量
                 # 新增数量 = 当前总完成数量 - 上次已计入库存的数量
                 actual_quantity_to_stock = task.quantity_completed - (task.stock_accounted_quantity or 0)
-                
+
                 if actual_quantity_to_stock > 0:
                     if product_id not in product_quantities:
                         product_quantities[product_id] = 0
                     product_quantities[product_id] += actual_quantity_to_stock
-                    
+
                     # 准备任务更新
                     task.stock_accounted_quantity = task.quantity_completed
                     task_updates.append(task)
@@ -616,24 +634,32 @@ class WorkOrderProcess(models.Model):
             # 批量更新任务状态
             if task_updates:
                 WorkOrderTask.objects.bulk_update(
-                    task_updates, 
+                    task_updates,
                     ['stock_accounted_quantity']
                 )
 
-            # 批量更新产品库存
+            # 批量更新产品库存 - 优化：一次性锁定所有需要更新的产品
             stock_updates = []
-            for product_id, quantity in product_quantities.items():
-                try:
-                    # 使用select_for_update锁定产品记录
-                    product = Product.objects.select_for_update().get(id=product_id)
+            if product_quantities:
+                # 使用 select_for_update() 批量锁定所有相关产品，避免并发冲突
+                products = Product.objects.select_for_update().filter(
+                    id__in=product_quantities.keys()
+                )
+
+                # 创建产品ID到产品对象的映射
+                product_map = {p.id: p for p in products}
+
+                for product_id, quantity in product_quantities.items():
+                    if product_id not in product_map:
+                        # 产品已被删除，记录日志但继续处理
+                        logger.warning(f"产品ID {product_id} 不存在，跳过库存更新")
+                        continue
+
+                    product = product_map[product_id]
                     old_quantity = product.stock_quantity
                     new_quantity = old_quantity + quantity
                     product.stock_quantity = new_quantity
                     stock_updates.append((product, old_quantity, new_quantity, quantity))
-                except Product.DoesNotExist:
-                    # 产品已被删除，记录日志但继续处理
-                    logger.warning(f"产品ID {product_id} 不存在，跳过库存更新")
-                    continue
 
             # 批量保存产品库存
             if stock_updates:
@@ -653,7 +679,7 @@ class WorkOrderProcess(models.Model):
                         reason=f'施工单{self.work_order.order_number}包装工序完成，入库{quantity}{product.unit}',
                         created_by=None
                     ))
-                
+
                 ProductStockLog.objects.bulk_create(log_entries)
 
                 # 检查库存预警

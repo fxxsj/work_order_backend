@@ -106,11 +106,15 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             elif user.has_perm('workorder.change_workorder'):
                 user_departments = user.profile.departments.all() if hasattr(user, 'profile') else []
                 if user_departments:
-                    # 使用优化的子查询
+                    # 使用优化的子查询，添加 select_related 优化跨表查询性能
                     from ..models.core import WorkOrderTask
                     work_order_ids = WorkOrderTask.objects.filter(
                         assigned_department__in=user_departments
-                    ).values_list('work_order_process__work_order_id', flat=True).distinct()
+                    ).select_related(
+                        'work_order_process'  # 优化跨表查询，避免N+1问题
+                    ).values_list(
+                        'work_order_process__work_order_id', flat=True
+                    ).distinct()
                     return queryset.filter(id__in=work_order_ids)
                 else:
                     return queryset.filter(created_by=user)
