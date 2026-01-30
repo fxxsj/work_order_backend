@@ -8,7 +8,7 @@ from .views import (
     ArtworkViewSet, ArtworkProductViewSet,
     DieViewSet, DieProductViewSet, FoilingPlateViewSet, FoilingPlateProductViewSet,
     EmbossingPlateViewSet, EmbossingPlateProductViewSet,
-    WorkOrderTaskViewSet, ProductGroupViewSet, ProductGroupItemViewSet,
+    WorkOrderTaskViewSet, DraftTaskViewSet, ProductGroupViewSet, ProductGroupItemViewSet,
     TaskAssignmentRuleViewSet,
     SupplierViewSet, MaterialSupplierViewSet, PurchaseOrderViewSet, PurchaseOrderItemViewSet,
     PurchaseReceiveRecordViewSet,
@@ -61,6 +61,7 @@ router.register(r'workorder-processes', WorkOrderProcessViewSet)
 router.register(r'workorder-products', WorkOrderProductViewSet)
 router.register(r'workorder-materials', WorkOrderMaterialViewSet)
 router.register(r'workorder-tasks', WorkOrderTaskViewSet)
+router.register(r'draft-tasks', DraftTaskViewSet, basename='draft-task')
 router.register(r'product-groups', ProductGroupViewSet)
 router.register(r'product-group-items', ProductGroupItemViewSet)
 router.register(r'process-logs', ProcessLogViewSet)

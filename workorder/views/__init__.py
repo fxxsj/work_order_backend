@@ -39,7 +39,7 @@ from .assets import (
 )
 
 # 核心业务视图集（已拆分）
-from .work_orders import WorkOrderViewSet
+from .work_orders import WorkOrderViewSet, DraftTaskViewSet
 from .work_order_processes import WorkOrderProcessViewSet
 from .work_order_tasks import WorkOrderTaskViewSet
 from .work_order_products import WorkOrderProductViewSet
@@ -118,6 +118,7 @@ __all__ = [
 
     # 核心业务视图集
     'WorkOrderViewSet',
+    'DraftTaskViewSet',
     'WorkOrderProcessViewSet',
     'WorkOrderTaskViewSet',
     'WorkOrderProductViewSet',

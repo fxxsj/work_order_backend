@@ -236,6 +236,53 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
         return None
 
 
+class DraftTaskSerializer(WorkOrderTaskSerializer):
+    """草稿任务序列化器（允许编辑草稿状态的任务）"""
+
+    class Meta(WorkOrderTaskSerializer.Meta):
+        model = WorkOrderTask
+        fields = '__all__'
+        # 草稿任务允许编辑的字段
+        read_only_fields = [
+            'id', 'work_order_process', 'task_type',
+            'artwork', 'die', 'product', 'material', 'foiling_plate', 'embossing_plate',
+            'auto_calculate_quantity', 'created_at',
+            'assigned_department', 'assigned_operator',  # 草稿任务不分配
+            'actual_start_time', 'actual_end_time', 'duration_hours',  # 未开始
+            'quantity_completed', 'completion_percentage',  # 未完成
+        ]
+
+    def validate(self, attrs):
+        """验证草稿任务状态"""
+        instance = self.instance
+
+        # 如果是更新操作，检查任务是否仍为草稿状态
+        if instance and instance.status != 'draft':
+            raise serializers.ValidationError(
+                "只能编辑草稿状态的任务。当前任务状态为：{}".format(
+                    instance.get_status_display()
+                )
+            )
+
+        # 检查施工单是否已审核（已审核的施工单不允许编辑草稿任务）
+        if instance and instance.work_order_process:
+            work_order = instance.work_order_process.work_order
+            if work_order.approval_status == 'approved':
+                raise serializers.ValidationError(
+                    "已审核的施工单不允许编辑草稿任务"
+                )
+
+        return attrs
+
+    def update(self, instance, validated_data):
+        """更新草稿任务"""
+        # 确保状态保持为 'draft'
+        validated_data['status'] = 'draft'
+
+        # 调用父类的 update 方法
+        return super().update(instance, validated_data)
+
+
 class WorkOrderProcessSerializer(serializers.ModelSerializer):
     """施工单工序序列化器"""
     process_name = serializers.CharField(source='process.name', read_only=True)
