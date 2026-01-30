@@ -134,7 +134,54 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             created_by=self.request.user,
             manager=self.request.user
         )
-    
+
+    def destroy(self, request, *args, **kwargs):
+        """删除施工单时处理级联删除验证和日志记录
+
+        确保删除施工单时，所有关联的草稿任务也被正确删除，无孤立任务残留。
+        """
+        from ..models.core import WorkOrderTask
+
+        work_order = self.get_object()
+
+        # 在删除前统计草稿任务数量
+        draft_tasks_before = WorkOrderTask.objects.filter(
+            work_order_process__work_order=work_order,
+            status='draft'
+        ).count()
+
+        # 记录删除前的关联对象数量
+        processes_count = work_order.order_processes.count()
+        total_tasks = WorkOrderTask.objects.filter(
+            work_order_process__work_order=work_order
+        ).count()
+
+        logger.info(
+            f"准备删除施工单 {work_order.order_number}: "
+            f"{processes_count} 个工序, {total_tasks} 个任务 (其中 {draft_tasks_before} 个草稿任务)"
+        )
+
+        # 执行删除（会自动级联删除工序和任务）
+        response = super().destroy(request, *args, **kwargs)
+
+        # 验证级联删除是否成功（检查无孤立任务）
+        orphaned_tasks = WorkOrderTask.objects.filter(
+            work_order_process__work_order__isnull=True
+        ).count()
+
+        if orphaned_tasks > 0:
+            logger.warning(
+                f"删除施工单 {work_order.order_number} 后发现 {orphaned_tasks} 个孤立任务，"
+                f"这可能表示数据完整性问题"
+            )
+        else:
+            logger.info(
+                f"成功删除施工单 {work_order.order_number} 及其所有关联数据，"
+                f"无孤立任务残留"
+            )
+
+        return response
+
     @action(detail=True, methods=['post'])
     def add_process(self, request, pk=None):
         """为施工单添加工序"""
