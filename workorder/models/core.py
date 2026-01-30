@@ -1124,8 +1124,8 @@ class WorkOrderTask(models.Model):
                                     help_text='如果该任务是子任务，指向父任务')
     # 并发控制（乐观锁）
     version = models.IntegerField('版本号', default=1, help_text='用于乐观锁，防止并发更新冲突')
-    status = models.CharField('状态', max_length=20, 
-                             choices=[('pending', '待开始'), ('in_progress', '进行中'), 
+    status = models.CharField('状态', max_length=20,
+                             choices=[('draft', '草稿'), ('pending', '待开始'), ('in_progress', '进行中'),
                                      ('completed', '已完成'), ('cancelled', '已取消')],
                              default='pending')
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
