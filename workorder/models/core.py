@@ -1353,14 +1353,63 @@ class WorkOrderTask(models.Model):
         TaskLog.objects.create(
             task=self,
             log_type='update_quantity',
-            operator=user,
-            content=f'数量从 {old_quantity} 更新到 {self.quantity_completed}',
+            content=f'更新完成数量：{old_quantity} → {self.quantity_completed}（增量 {increment}）',
             quantity_before=old_quantity,
             quantity_after=self.quantity_completed,
-            quantity_increment=increment
+            quantity_increment=increment,
+            operator=user
         )
 
         return True
+
+    def clean(self):
+        """验证草稿任务状态变更
+
+        确保草稿任务只能通过审批工作流转换为正式任务，
+        不能直接编辑状态绕过审批流程。
+        """
+        from django.core.exceptions import ValidationError
+
+        # 检查是否正在从 draft 状态变更为其他状态
+        if self.pk:
+            try:
+                old_instance = WorkOrderTask.objects.get(pk=self.pk)
+                old_status = old_instance.status
+                new_status = self.status
+
+                # 如果从 draft 状态变更为其他状态
+                if old_status == 'draft' and new_status != 'draft':
+                    # 检查是否是通过审批工作流进行的转换
+                    work_order = self.work_order_process.work_order if self.work_order_process else None
+
+                    if not work_order:
+                        raise ValidationError({
+                            'status': '草稿任务必须关联到有效的施工单工序才能转换状态'
+                        })
+
+                    # 只有审批通过才能转换草稿任务
+                    if work_order.approval_status != 'approved':
+                        raise ValidationError({
+                            'status': '草稿任务只能在施工单审批通过后转换为正式任务，'
+                                     '当前施工单审批状态为：{}'.format(
+                                         work_order.get_approval_status_display()
+                                     )
+                        })
+
+                # 草稿任务不应该有分派的部门或操作员
+                if self.status == 'draft':
+                    if self.assigned_department:
+                        raise ValidationError({
+                            'assigned_department': '草稿任务不能分派给部门，请先审批通过后再分派'
+                        })
+                    if self.assigned_operator:
+                        raise ValidationError({
+                            'assigned_operator': '草稿任务不能分派给操作员，请先审批通过后再分派'
+                        })
+
+            except WorkOrderTask.DoesNotExist:
+                # 新创建的任务，不进行状态变更验证
+                pass
 
     def save(self, *args, **kwargs):
         """保存时实现乐观锁机制
