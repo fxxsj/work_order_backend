@@ -927,12 +927,45 @@ class WorkOrderProcess(models.Model):
                 auto_calculate_quantity=False
             )
             self._auto_assign_task(task)
-    
+
+    def generate_draft_tasks(self):
+        """生成草稿任务（用于施工单创建时）
+
+        与 generate_tasks 的区别：
+        - 草稿任务使用 status='draft' 而不是 'pending'
+        - 草稿任务不分配部门和操作员
+        - 草稿任务允许在施工单审核前编辑和删除
+        - 使用 bulk_create 优化性能
+
+        Returns:
+            list: 创建的 WorkOrderTask 对象列表
+        """
+        # 如果已经有草稿任务，不再生成
+        if self.tasks.filter(status='draft').exists():
+            return []
+
+        # 使用草稿任务生成服务
+        from ..services.task_generation import DraftTaskGenerationService
+
+        # 构建草稿任务对象
+        task_objects = DraftTaskGenerationService.build_task_objects(self)
+
+        # 批量创建任务
+        if task_objects:
+            created_tasks = WorkOrderTask.objects.bulk_create(
+                task_objects,
+                batch_size=100,
+                ignore_conflicts=False
+            )
+            return list(created_tasks)
+
+        return []
+
     def _parse_material_usage(self, usage_str):
         """解析物料用量字符串，提取数字部分"""
         if not usage_str:
             return 0
-        
+
         import re
         # 尝试提取数字（支持整数和小数）
         numbers = re.findall(r'\d+\.?\d*', usage_str)
