@@ -53,6 +53,7 @@ class TaskLogSerializer(serializers.ModelSerializer):
 class WorkOrderTaskSerializer(serializers.ModelSerializer):
     """施工单任务序列化器"""
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    is_draft = serializers.SerializerMethodField()
     task_type_display = serializers.CharField(source='get_task_type_display', read_only=True)
     artwork_code = serializers.SerializerMethodField()
     artwork_name = serializers.SerializerMethodField()
@@ -94,6 +95,10 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
         if obj.assigned_operator:
             return f"{obj.assigned_operator.first_name}{obj.assigned_operator.last_name}"
         return None
+
+    def get_is_draft(self, obj):
+        """判断是否为草稿状态"""
+        return obj.status == 'draft'
 
     def get_is_subtask(self, obj):
         """判断是否为子任务"""
