@@ -17,6 +17,9 @@ from django.db.models import Q, Count, Sum, Max, Avg, F
 from django.db import models
 from django.utils import timezone
 from decimal import Decimal
+import logging
+
+logger = logging.getLogger(__name__)
 
 from ..permissions import (
     WorkOrderProcessPermission,
@@ -316,25 +319,58 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         # 审核通过后，自动变更施工单状态
         if approval_status == 'approved' and work_order.status == 'pending':
             work_order.status = 'in_progress'
-        
+
         work_order.save()
-        
+
+        # 处理草稿任务：审核通过时转换，拒绝时删除
+        if approval_status == 'approved':
+            try:
+                converted_count = work_order.convert_draft_tasks()
+                logger.info(
+                    f"施工单 {work_order.order_number} 审核通过，"
+                    f"转换了 {converted_count} 个草稿任务为正式任务"
+                )
+            except Exception as e:
+                # 转换失败，记录错误但继续处理
+                logger.error(
+                    f"施工单 {work_order.order_number} 草稿任务转换失败: {str(e)}"
+                )
+                converted_count = 0
+        elif approval_status == 'rejected':
+            try:
+                deleted_count = work_order.delete_draft_tasks()
+                logger.info(
+                    f"施工单 {work_order.order_number} 审核拒绝，"
+                    f"删除了 {deleted_count} 个草稿任务"
+                )
+            except Exception as e:
+                # 删除失败，记录错误但继续处理
+                logger.error(
+                    f"施工单 {work_order.order_number} 草稿任务删除失败: {str(e)}"
+                )
+                deleted_count = 0
+        else:
+            converted_count = 0
+            deleted_count = 0
+
         # 创建通知
         if approval_status == 'approved':
+            task_info = f"，已转换 {converted_count} 个任务" if converted_count > 0 else ""
             Notification.create_notification(
                 recipient=work_order.created_by,
                 notification_type='approval_passed',
                 title=f'施工单 {work_order.order_number} 审核通过',
-                content=f'施工单 {work_order.order_number} 已通过审核，状态已变更为"进行中"。' + (f'审核意见：{approval_comment}' if approval_comment else ''),
+                content=f'施工单 {work_order.order_number} 已通过审核，状态已变更为"进行中"{task_info}。' + (f'审核意见：{approval_comment}' if approval_comment else ''),
                 priority='high',
                 work_order=work_order
             )
         else:
+            task_info = f"，已删除 {deleted_count} 个草稿任务" if deleted_count > 0 else ""
             Notification.create_notification(
                 recipient=work_order.created_by,
                 notification_type='approval_rejected',
                 title=f'施工单 {work_order.order_number} 审核拒绝',
-                content=f'施工单 {work_order.order_number} 审核被拒绝。拒绝原因：{rejection_reason}',
+                content=f'施工单 {work_order.order_number} 审核被拒绝{task_info}。拒绝原因：{rejection_reason}',
                 priority='high',
                 work_order=work_order
             )
