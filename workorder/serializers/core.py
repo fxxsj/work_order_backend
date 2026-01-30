@@ -333,6 +333,9 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
     product_name = serializers.SerializerMethodField()
     quantity = serializers.SerializerMethodField()
     unit = serializers.SerializerMethodField()
+    # 草稿任务统计
+    draft_task_count = serializers.SerializerMethodField()
+    total_task_count = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkOrder
@@ -343,6 +346,7 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
             'production_quantity', 'defective_quantity',
             'total_amount', 'manager', 'manager_name', 'progress_percentage',
             'approval_status', 'approval_status_display', 'approved_by_name', 'approved_at', 'approval_comment',
+            'draft_task_count', 'total_task_count',
             'created_at'
         ]
 
@@ -372,6 +376,21 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
         if products.exists():
             return products.first().unit
         return '件'
+
+    def get_draft_task_count(self, obj):
+        """获取草稿任务数量"""
+        from ..models import WorkOrderTask
+        return WorkOrderTask.objects.filter(
+            work_order_process__work_order=obj,
+            status='draft'
+        ).count()
+
+    def get_total_task_count(self, obj):
+        """获取总任务数量"""
+        from ..models import WorkOrderTask
+        return WorkOrderTask.objects.filter(
+            work_order_process__work_order=obj
+        ).count()
 
 
 class WorkOrderDetailSerializer(serializers.ModelSerializer):
@@ -419,6 +438,9 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     product_name = serializers.SerializerMethodField()
     quantity = serializers.SerializerMethodField()
     unit = serializers.SerializerMethodField()
+    # 草稿任务统计
+    draft_task_count = serializers.SerializerMethodField()
+    total_task_count = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkOrder
@@ -455,6 +477,21 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         if products.exists():
             return products.first().unit
         return '件'
+
+    def get_draft_task_count(self, obj):
+        """获取草稿任务数量"""
+        from ..models import WorkOrderTask
+        return WorkOrderTask.objects.filter(
+            work_order_process__work_order=obj,
+            status='draft'
+        ).count()
+
+    def get_total_task_count(self, obj):
+        """获取总任务数量"""
+        from ..models import WorkOrderTask
+        return WorkOrderTask.objects.filter(
+            work_order_process__work_order=obj
+        ).count()
 
     def get_artwork_names(self, obj):
         """获取所有图稿名称"""
