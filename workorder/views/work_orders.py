@@ -54,6 +54,7 @@ from ..serializers.core import (
     DraftTaskSerializer,
     WorkOrderTaskSerializer
 )
+from ..services.task_sync_service import TaskSyncService
 
 
 
@@ -744,16 +745,64 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
                 {'error': '您没有权限导出施工单数据'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         # 获取过滤后的查询集（使用 get_queryset 确保权限过滤）
         queryset = self.filter_queryset(self.get_queryset())
-        
+
         # 记录导出日志（可选）
         # 这里可以添加导出日志记录功能
-        
+
         # 导出 Excel
         filename = request.query_params.get('filename')
         return export_work_orders(queryset, filename)
+
+    @action(detail=True, methods=['post'])
+    def sync_tasks_preview(self, request, pk=None):
+        """预览任务同步变更（不执行同步）
+
+        接收新的工序ID列表，计算如果执行同步会发生什么变化。
+        返回预览信息供用户确认后再执行实际同步。
+
+        请求体格式：
+        {
+            "process_ids": [1, 2, 3, ...]
+        }
+
+        返回格式：
+        {
+            "preview": {
+                "tasks_to_remove": 5,
+                "tasks_to_add": 3,
+                "removed_process_ids": [4, 5],
+                "added_process_ids": [6, 7],
+                "affected": true
+            }
+        }
+        """
+        work_order = self.get_object()
+        new_process_ids = request.data.get('process_ids', [])
+
+        # 验证输入
+        if not isinstance(new_process_ids, list):
+            return Response(
+                {'error': 'process_ids 必须是列表'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 获取当前工序ID列表
+        old_process_ids = list(work_order.order_processes.values_list('id', flat=True))
+
+        # 验证施工单是否已审核
+        if work_order.approval_status == 'approved':
+            return Response(
+                {'error': '已审核的施工单不能修改工序'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 调用 TaskSyncService 计算预览
+        preview = TaskSyncService.preview_sync(work_order, old_process_ids, new_process_ids)
+
+        return Response({'preview': preview})
 
 
 class DraftTaskViewSet(viewsets.ModelViewSet):
