@@ -3,13 +3,19 @@
 
 提供任务分派预览和自动分派功能：
 - DispatchPreviewService: 提供分派规则预览
+- LoadBalancingService: 提供基于负载的部门选择
 - AutoDispatchService: 提供基于优先级规则的自动分派
 """
 from typing import Dict, List, Optional
 from django.db.models import Count, Q
 from django.core.cache import cache
+from collections import defaultdict
+import random
+import logging
 from ..models.system import TaskAssignmentRule
 from ..models.core import WorkOrderTask
+
+logger = logging.getLogger(__name__)
 
 
 class DispatchPreviewService:
@@ -141,6 +147,193 @@ class DispatchPreviewService:
             'selection_strategy': top_rule.operator_selection_strategy,
             'all_rules': all_rules
         }
+
+
+class LoadBalancingService:
+    """负载均衡服务
+
+    基于部门当前任务负载，在多个同等优先级的部门中选择负载最少的部门
+    """
+
+    @staticmethod
+    def calculate_department_load(department) -> int:
+        """计算部门当前负载
+
+        统计分配到该部门且状态为 pending 或 in_progress 的任务数量
+
+        Args:
+            department: Department 实例
+
+        Returns:
+            int: 待处理和进行中的任务数量
+        """
+        return WorkOrderTask.objects.filter(
+            assigned_department=department,
+            status__in=['pending', 'in_progress']
+        ).count()
+
+    @staticmethod
+    def select_department_by_load(process) -> Optional['Department']:
+        """基于负载选择部门
+
+        对于指定工序，获取所有活跃的分派规则，按优先级分组。
+        对于最高优先级组的多个部门，选择当前负载最少的部门。
+
+        Args:
+            process: Process 实例
+
+        Returns:
+            Department: 选中的部门对象，如果没有规则则返回 None
+        """
+        # 获取所有活跃规则，按优先级降序排列
+        rules = TaskAssignmentRule.objects.filter(
+            process=process,
+            is_active=True
+        ).select_related('department').order_by('-priority')
+
+        if not rules.exists():
+            return None
+
+        # 按优先级分组
+        priority_groups = defaultdict(list)
+        for rule in rules:
+            priority_groups[rule.priority].append(rule)
+
+        # 获取最高优先级
+        highest_priority = max(priority_groups.keys())
+        highest_group = priority_groups[highest_priority]
+
+        # 如果最高优先级只有一个部门，直接返回
+        if len(highest_group) == 1:
+            return highest_group[0].department
+
+        # 多个部门在相同优先级，按负载选择
+        dept_loads = []
+        for rule in highest_group:
+            load = LoadBalancingService.calculate_department_load(rule.department)
+            dept_loads.append({
+                'department': rule.department,
+                'load': load,
+                'rule': rule
+            })
+
+        # 按负载升序排序，选择负载最少的
+        dept_loads.sort(key=lambda x: x['load'])
+        selected = dept_loads[0]
+
+        logger.info(
+            f"负载均衡选择：工序 {process.name}，"
+            f"最高优先级 {highest_priority} 有 {len(highest_group)} 个部门，"
+            f"选择 {selected['department'].name}（负载：{selected['load']}）"
+        )
+
+        return selected['department']
+
+    @staticmethod
+    def select_department_by_strategy(process, strategy='least_tasks') -> Optional['Department']:
+        """根据指定策略选择部门
+
+        Args:
+            process: Process 实例
+            strategy: 选择策略
+                - 'least_tasks': 任务量最少（默认）
+                - 'random': 随机选择
+                - 'round_robin': 轮询分配
+                - 'first_available': 第一个可用
+
+        Returns:
+            Department: 选中的部门对象，如果没有规则则返回 None
+        """
+        # 获取所有活跃规则，按优先级降序排列
+        rules = TaskAssignmentRule.objects.filter(
+            process=process,
+            is_active=True
+        ).select_related('department').order_by('-priority')
+
+        if not rules.exists():
+            return None
+
+        # 按优先级分组
+        priority_groups = defaultdict(list)
+        for rule in rules:
+            priority_groups[rule.priority].append(rule)
+
+        # 获取最高优先级
+        highest_priority = max(priority_groups.keys())
+        highest_group = priority_groups[highest_priority]
+
+        # 如果最高优先级只有一个部门，直接返回
+        if len(highest_group) == 1:
+            return highest_group[0].department
+
+        # 多个部门在相同优先级，根据策略选择
+        if strategy == 'least_tasks':
+            return LoadBalancingService.select_department_by_load(process)
+        elif strategy == 'random':
+            selected_rule = random.choice(highest_group)
+            logger.info(
+                f"随机选择：工序 {process.name}，"
+                f"从 {len(highest_group)} 个同优先级部门中选择 "
+                f"{selected_rule.department.name}"
+            )
+            return selected_rule.department
+        elif strategy == 'round_robin':
+            # 轮询选择 - 使用缓存跟踪上一次的选择
+            cache_key = f'dispatch_rr_{process.id}'
+            last_index = cache.get(cache_key, 0)
+            selected_index = (last_index + 1) % len(highest_group)
+            cache.set(cache_key, selected_index, timeout=None)
+
+            selected = highest_group[selected_index]
+            logger.info(
+                f"轮询选择：工序 {process.name}，"
+                f"索引 {selected_index}/{len(highest_group)}，"
+                f"选择 {selected.department.name}"
+            )
+            return selected.department
+        elif strategy == 'first_available':
+            # 第一个可用（优先级排序的第一个）
+            return highest_group[0].department
+        else:
+            # 默认使用 least_tasks
+            return LoadBalancingService.select_department_by_load(process)
+
+    @staticmethod
+    def get_loads_for_process(process) -> Dict[int, int]:
+        """获取工序的所有配置部门的负载
+
+        Args:
+            process: Process 实例
+
+        Returns:
+            Dict[int, int]: 部门ID -> 负载计数的映射
+        """
+        # 获取该工序的所有规则
+        rules = TaskAssignmentRule.objects.filter(
+            process=process,
+            is_active=True
+        ).values_list('department_id', flat=True)
+
+        if not rules:
+            return {}
+
+        # 使用聚合查询统计每个部门的负载
+        dept_loads = WorkOrderTask.objects.filter(
+            assigned_department_id__in=list(rules),
+            status__in=['pending', 'in_progress']
+        ).values('assigned_department_id').annotate(
+            load=Count('id')
+        )
+
+        # 转换为字典
+        load_dict = {item['assigned_department_id']: item['load'] for item in dept_loads}
+
+        # 确保所有部门都有负载计数（至少为0）
+        for dept_id in rules:
+            if dept_id not in load_dict:
+                load_dict[dept_id] = 0
+
+        return load_dict
 
 
 class AutoDispatchService:
