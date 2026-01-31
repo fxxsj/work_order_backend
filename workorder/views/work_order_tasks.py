@@ -1682,12 +1682,90 @@ class WorkOrderTaskViewSet(viewsets.ModelViewSet):
                 'total_completed_quantity': sum(s['total_completed_quantity'] for s in stats_list),
                 'total_defective_quantity': sum(s['total_defective_quantity'] for s in stats_list),
                 'overall_defective_rate': round(
-                    (sum(s['total_defective_quantity'] for s in stats_list) / 
+                    (sum(s['total_defective_quantity'] for s in stats_list) /
                      sum(s['total_completed_quantity'] for s in stats_list) * 100)
-                    if sum(s['total_completed_quantity'] for s in stats_list) > 0 else 0, 
+                    if sum(s['total_completed_quantity'] for s in stats_list) > 0 else 0,
                     2
                 )
             }
+        })
+
+    @action(detail=False, methods=['post'])
+    def bulk_update(self, request):
+        """批量更新草稿任务"""
+        from ..serializers.core import DraftTaskBulkSerializer
+
+        serializer = DraftTaskBulkSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response({'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        validated_data = serializer.validated_data
+        task_ids = validated_data['task_ids']
+
+        # 获取要更新的任务
+        tasks = WorkOrderTask.objects.filter(id__in=task_ids, status='draft')
+
+        # 准备更新字段
+        update_fields = []
+        for task in tasks:
+            if 'production_quantity' in validated_data and validated_data['production_quantity'] is not None:
+                task.production_quantity = validated_data['production_quantity']
+                update_fields.append('production_quantity')
+            if 'priority' in validated_data and validated_data['priority'] is not None:
+                task.priority = validated_data['priority']
+                update_fields.append('priority')
+            if 'production_requirements' in validated_data and validated_data['production_requirements'] is not None:
+                task.production_requirements = validated_data['production_requirements']
+                update_fields.append('production_requirements')
+
+        # 批量更新
+        if update_fields and tasks:
+            # 去重更新字段
+            unique_fields = list(set(update_fields))
+            WorkOrderTask.objects.bulk_update(
+                tasks,
+                unique_fields,
+                batch_size=100
+            )
+
+            return Response({
+                'updated_count': len(tasks),
+                'message': f'成功更新 {len(tasks)} 个任务'
+            })
+
+        return Response({'updated_count': 0, 'message': '没有更新任何字段'})
+
+    @action(detail=False, methods=['post', 'delete'])
+    def bulk_delete(self, request):
+        """批量删除草稿任务"""
+        task_ids = request.data.get('task_ids', [])
+
+        # 验证
+        if not task_ids:
+            return Response({'error': '请提供要删除的任务ID'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if len(task_ids) > 1000:
+            return Response(
+                {'error': '批量删除最多支持1000个任务'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 只允许删除草稿任务
+        tasks = WorkOrderTask.objects.filter(id__in=task_ids, status='draft')
+
+        if tasks.count() != len(task_ids):
+            return Response(
+                {'error': '只能删除草稿状态的任务'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 删除
+        deleted_count = tasks.delete()[0]
+
+        return Response({
+            'deleted_count': deleted_count,
+            'message': f'成功删除 {deleted_count} 个任务'
         })
 
 
