@@ -17,11 +17,12 @@ from workorder.permissions import WorkOrderTaskPermission
 from workorder.services.task_assignment import TaskAssignmentService
 from workorder.exceptions import BusinessLogicError, PermissionDeniedError, TaskConflictError
 from .task_filters import WorkOrderTaskFilterSet
+from .task_export import TaskExportMixin
 
 logger = logging.getLogger(__name__)
 
 
-class BaseWorkOrderTaskViewSet(viewsets.ModelViewSet):
+class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
     """
     施工单任务基础视图集
 
@@ -320,3 +321,69 @@ class BaseWorkOrderTaskViewSet(viewsets.ModelViewSet):
                 'detail': '获取可认领任务列表失败',
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='operator_center')
+    def operator_center(self, request):
+        """Operator task center data: assigned tasks + claimable tasks
+
+        GET /workorder-tasks/operator_center/
+
+        Returns combined data for operator task center:
+        - my_tasks: Tasks assigned to current user
+        - claimable_tasks: Unassigned tasks in user's department
+        - summary: Task counts by status
+
+        Permission: Must be an operator (non-superuser)
+        """
+        from workorder.services.task_assignment import TaskAssignmentService
+
+        user = request.user
+
+        # Get user's departments
+        user_departments = user.profile.departments.all() if hasattr(user, 'profile') else []
+        if not user_departments:
+            return Response({
+                'detail': '您未分配到任何部门',
+                'my_tasks': [],
+                'claimable_tasks': [],
+                'summary': {}
+            }, status=status.HTTP_200_OK)
+
+        # Get my assigned tasks
+        my_tasks_qs = self.get_queryset().filter(assigned_operator=user)
+        my_tasks_qs = self.filter_queryset(my_tasks_qs)
+        my_tasks_qs = my_tasks_qs.select_related(
+            'assigned_department', 'work_order_process',
+            'work_order_process__work_order', 'work_order_process__process'
+        )[:100]  # Limit to 100 most recent
+
+        # Get claimable tasks (unassigned in user's departments)
+        claimable_ids = TaskAssignmentService.get_claimable_tasks_for_user(user)
+        claimable_tasks_qs = self.get_queryset().filter(
+            id__in=claimable_ids,
+            assigned_operator__isnull=True
+        )
+        claimable_tasks_qs = claimable_tasks_qs.select_related(
+            'assigned_department', 'work_order_process',
+            'work_order_process__work_order', 'work_order_process__process'
+        )[:50]  # Limit to 50 claimable tasks
+
+        # Serialize
+        my_serializer = self.get_serializer(my_tasks_qs, many=True)
+        claimable_serializer = self.get_serializer(claimable_tasks_qs, many=True)
+
+        # Calculate summary
+        my_tasks = list(my_tasks_qs)
+        summary = {
+            'my_total': len(my_tasks),
+            'my_pending': sum(1 for t in my_tasks if t.status == 'pending'),
+            'my_in_progress': sum(1 for t in my_tasks if t.status == 'in_progress'),
+            'my_completed': sum(1 for t in my_tasks if t.status == 'completed'),
+            'claimable_count': len(claimable_ids)
+        }
+
+        return Response({
+            'my_tasks': my_serializer.data,
+            'claimable_tasks': claimable_serializer.data,
+            'summary': summary
+        })
