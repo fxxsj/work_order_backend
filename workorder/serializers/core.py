@@ -761,7 +761,6 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
     # 使用自定义方法来过滤 null 值
     processes = serializers.ListField(
         child=serializers.IntegerField(allow_null=True),  # 允许 null，然后在 validate 中过滤
-        write_only=True,
         required=False,
         allow_empty=True,
         help_text='选中的工序ID列表，用于验证版的选择'

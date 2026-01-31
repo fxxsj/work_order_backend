@@ -8,7 +8,8 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from workorder.models.core import WorkOrderTask, TaskLog, Notification
+from workorder.models.core import WorkOrderTask, TaskLog
+from workorder.models.system import Notification
 
 
 class TaskBulkMixin:
