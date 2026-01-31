@@ -320,3 +320,154 @@ class TaskAssignmentService:
             status__in=['pending', 'in_progress'],
             work_order_process__work_order__created_by=user
         ).values_list('id', flat=True))
+
+    @staticmethod
+    @transaction.atomic
+    def claim_task(task_id: int, operator, notes: Optional[str] = None) -> Dict[str, Any]:
+        """操作员认领任务
+
+        允许操作员认领未分配的任务。使用 select_for_update 实现乐观锁，
+        防止两个操作员同时认领同一任务。
+
+        业务规则：
+        - 操作员必须属于任务分配的部门
+        - 任务必须已分配到部门（assigned_department 不为空）
+        - 任务当前未分配给其他操作员（assigned_operator 为空）
+        - 任务状态为 pending 或 in_progress
+        - 草稿状态的任务不能认领
+
+        Args:
+            task_id: 任务ID
+            operator: 认领任务的操作员
+            notes: 认领备注（可选）
+
+        Returns:
+            Dict: 包含更新后任务信息的字典
+
+        Raises:
+            BusinessLogicError: 业务规则不满足
+            WorkOrderTask.DoesNotExist: 任务不存在
+        """
+        from django.contrib.auth.models import User
+
+        # 使用 select_for_update 行锁，防止并发认领
+        try:
+            task = WorkOrderTask.objects.select_for_update().get(id=task_id)
+        except WorkOrderTask.DoesNotExist:
+            raise BusinessLogicError(f"任务ID {task_id} 不存在")
+
+        # 验证操作员属于任务部门
+        if not task.assigned_department:
+            raise BusinessLogicError(
+                "该任务尚未分配到部门，无法认领"
+            )
+
+        if not PermissionCache.is_user_in_department(operator, task.assigned_department.id):
+            raise BusinessLogicError(
+                f"您不属于部门 {task.assigned_department.name}，无法认领该任务"
+            )
+
+        # 验证操作员任务容量（复用分配服务的验证方法）
+        TaskAssignmentService.validate_operator_task_capacity(operator)
+
+        # 验证任务可认领性
+        if task.status == 'draft':
+            raise BusinessLogicError(
+                "草稿状态的任务不能认领，请先等待施工单审核通过"
+            )
+
+        if task.status == 'completed':
+            raise BusinessLogicError(
+                "已完成的任务不能认领"
+            )
+
+        if task.status == 'cancelled':
+            raise BusinessLogicError(
+                "已取消的任务不能认领"
+            )
+
+        # 检查任务是否已被其他操作员认领
+        if task.assigned_operator:
+            # 如果是被自己认领的，允许更新
+            if task.assigned_operator.id == operator.id:
+                return {
+                    'task_id': task.id,
+                    'assigned_operator': {
+                        'id': operator.id,
+                        'username': operator.username,
+                        'first_name': operator.first_name,
+                        'last_name': operator.last_name
+                    },
+                    'already_claimed': True,
+                    'message': '您已经认领了该任务'
+                }
+
+            # 被其他人认领
+            raise BusinessLogicError(
+                f"该任务已被 {task.assigned_operator.username} 认领，无法重复认领"
+            )
+
+        # 执行认领
+        task.assigned_operator = operator
+        task.save(update_fields=['assigned_operator', 'updated_at'])
+
+        # 创建任务认领通知
+        work_order = task.work_order_process.work_order if task.work_order_process else None
+        Notification.create_notification(
+            recipient=operator,
+            notification_type='task_assigned',
+            title=f'任务认领成功：{task.work_content}',
+            content=f'您已成功认领任务 "{task.work_content}"。'
+                    f'施工单：{work_order.order_number if work_order else "N/A"}'
+                    f'{f" 备注：{notes}" if notes else ""}',
+            priority='normal',
+            work_order=work_order,
+            work_order_process=task.work_order_process,
+            task=task
+        )
+
+        logger.info(
+            f"任务认领：用户 {operator.username} 认领了任务 {task_id}"
+        )
+
+        return {
+            'task_id': task.id,
+            'assigned_operator': {
+                'id': operator.id,
+                'username': operator.username,
+                'first_name': operator.first_name,
+                'last_name': operator.last_name
+            },
+            'already_claimed': False,
+            'message': '任务认领成功'
+        }
+
+    @staticmethod
+    def get_claimable_tasks_for_user(user) -> list:
+        """获取用户可认领的任务列表
+
+        返回用户所属部门中、未分配操作员、状态为 pending 的任务
+
+        Args:
+            user: 当前用户
+
+        Returns:
+            list: 可认领的任务ID列表
+        """
+        if not user.is_authenticated:
+            return []
+
+        # 获取用户所属部门
+        user_departments = PermissionCache.get_user_departments(user)
+
+        if not user_departments:
+            return []
+
+        # 查询可认领的任务
+        claimable_tasks = WorkOrderTask.objects.filter(
+            assigned_department_id__in=user_departments,
+            assigned_operator__isnull=True,
+            status='pending'
+        ).values_list('id', flat=True)
+
+        return list(claimable_tasks)
