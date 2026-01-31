@@ -335,6 +335,19 @@ class DraftTaskBulkSerializer(serializers.Serializer):
         return attrs
 
 
+class TaskAssignmentSerializer(serializers.Serializer):
+    """任务分配序列化器"""
+    operator_id = serializers.IntegerField(help_text='操作员用户ID')
+    notes = serializers.CharField(required=False, allow_blank=True, help_text='分配备注')
+
+    def validate_operator_id(self, value):
+        """验证操作员ID"""
+        from django.contrib.auth.models import User
+        if not User.objects.filter(id=value, is_active=True).exists():
+            raise serializers.ValidationError("指定的操作员不存在或未激活")
+        return value
+
+
 class WorkOrderProcessSerializer(serializers.ModelSerializer):
     """施工单工序序列化器"""
     process_name = serializers.CharField(source='process.name', read_only=True)

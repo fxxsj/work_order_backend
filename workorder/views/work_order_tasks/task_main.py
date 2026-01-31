@@ -4,13 +4,20 @@
 包含基础的 ViewSet 配置和核心方法。
 """
 
-from rest_framework import viewsets, filters
+from rest_framework import viewsets, filters, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
+import logging
 
 from workorder.models.core import WorkOrderTask
-from workorder.serializers.core import WorkOrderTaskSerializer
+from workorder.serializers.core import WorkOrderTaskSerializer, TaskAssignmentSerializer
 from workorder.permissions import WorkOrderTaskPermission
+from workorder.services.task_assignment import TaskAssignmentService
+from workorder.exceptions import BusinessLogicError, PermissionDeniedError
+
+logger = logging.getLogger(__name__)
 
 
 class BaseWorkOrderTaskViewSet(viewsets.ModelViewSet):
@@ -104,3 +111,81 @@ class BaseWorkOrderTaskViewSet(viewsets.ModelViewSet):
         # 如果任务完成，检查工序是否完成
         if task.status == 'completed':
             task.work_order_process.check_and_update_status()
+
+    @action(detail=True, methods=['post'], url_path='assign')
+    def assign(self, request, pk=None):
+        """分配任务给指定操作员
+
+        POST /workorder-tasks/{id}/assign/
+        Body: {
+            "operator_id": 123,
+            "notes": "优先处理此任务"  # 可选
+        }
+
+        权限：
+        - 任务所属部门的主管
+        - 施工单创建人
+        - 超级管理员
+        """
+        task = self.get_object()
+        serializer = TaskAssignmentSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            result = TaskAssignmentService.assign_to_operator(
+                task_id=task.id,
+                operator_id=serializer.validated_data['operator_id'],
+                assigned_by=request.user,
+                notes=serializer.validated_data.get('notes', '')
+            )
+
+            # 重新获取更新后的任务数据
+            task.refresh_from_db()
+            response_serializer = self.get_serializer(task)
+
+            return Response({
+                'detail': '任务分配成功',
+                'data': result,
+                'task': response_serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except (PermissionDeniedError, BusinessLogicError) as e:
+            return Response({
+                'detail': str(e),
+                'code': e.default_code
+            }, status=status.HTTP_403_FORBIDDEN if isinstance(e, PermissionDeniedError) else status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"任务分配失败: {str(e)}")
+            return Response({
+                'detail': '任务分配失败，请稍后重试',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='department-operators')
+    def department_operators(self, request):
+        """获取部门操作员列表
+
+        GET /workorder-tasks/department-operators/?department_id=123
+
+        用于任务分配时选择操作员
+        """
+        from workorder.models.base import Department
+
+        department_id = request.query_params.get('department_id')
+        if not department_id:
+            return Response({
+                'detail': '请提供 department_id 参数'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            operators = TaskAssignmentService.get_department_operators(department_id)
+            return Response({
+                'department_id': int(department_id),
+                'operators': operators
+            })
+        except Department.DoesNotExist:
+            return Response({
+                'detail': f'部门ID {department_id} 不存在'
+            }, status=status.HTTP_404_NOT_FOUND)
