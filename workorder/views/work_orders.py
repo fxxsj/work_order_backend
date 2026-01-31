@@ -867,6 +867,47 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=True, methods=['get'])
+    def check_sync_needed(self, request, pk=None):
+        """检查是否需要任务同步
+
+        检测施工单工序是否发生变化，判断是否需要同步任务。
+        前端可以在工序更新前后调用此接口，提示用户进行同步。
+
+        查询参数：
+        - process_ids: 工序ID列表（逗号分隔），如 "1,2,3"
+
+        返回格式：
+        {
+            "sync_needed": true,
+            "current_process_ids": [1, 2, 3],
+            "can_sync": true
+        }
+        """
+        work_order = self.get_object()
+
+        # 获取当前工序ID列表
+        current_process_ids = list(work_order.order_processes.values_list('id', flat=True))
+
+        # 从查询参数获取前端存储的工序ID列表
+        process_ids_str = request.query_params.get('process_ids', '')
+        if process_ids_str:
+            stored_process_ids = [int(pid) for pid in process_ids_str.split(',') if pid.strip()]
+        else:
+            stored_process_ids = []
+
+        # 检查是否有变化
+        has_changes = set(current_process_ids) != set(stored_process_ids)
+
+        # 检查是否可以同步（未审核的施工单才能同步）
+        can_sync = work_order.approval_status != 'approved'
+
+        return Response({
+            'sync_needed': has_changes and can_sync,
+            'current_process_ids': current_process_ids,
+            'can_sync': can_sync
+        })
+
 
 class DraftTaskViewSet(viewsets.ModelViewSet):
     """草稿任务视图集（允许编辑和删除草稿状态的任务）"""
