@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from workorder.models.core import WorkOrderTask
+from workorder.models.core import WorkOrderTask, TaskLog, Notification
 
 
 class TaskBulkMixin:
@@ -575,4 +575,92 @@ class TaskBulkMixin:
             'assigned_task_ids': assigned_tasks,
             'failed_tasks': failed_tasks
         })
-    
+
+    @action(detail=False, methods=['post'], url_path='batch-delete')
+    def batch_delete(self, request):
+        """批量删除任务（仅草稿状态）
+
+        请求参数：
+        - task_ids: 任务ID列表（必填）
+        - reason: 删除原因（可选）
+
+        权限：
+        - 施工单创建人可以删除草稿任务
+        - 超级管理员可以删除草稿任务
+        """
+        from workorder.models.core import TaskLog
+
+        task_ids = request.data.get('task_ids', [])
+        reason = request.data.get('reason', '批量删除')
+
+        if not task_ids:
+            return Response(
+                {'error': '请提供任务ID列表'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 获取任务
+        tasks = WorkOrderTask.objects.filter(id__in=task_ids)
+        if tasks.count() != len(task_ids):
+            return Response(
+                {'error': '部分任务不存在'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user = request.user
+        deleted_tasks = []
+        failed_tasks = []
+
+        for task in tasks:
+            try:
+                # 只允许删除草稿状态的任务
+                if task.status != 'draft':
+                    failed_tasks.append({
+                        'task_id': task.id,
+                        'error': '只能删除草稿状态的任务'
+                    })
+                    continue
+
+                # 权限检查：施工单创建人或超级管理员
+                can_delete = False
+                if user.is_superuser:
+                    can_delete = True
+                elif task.work_order_process.work_order.created_by == user:
+                    can_delete = True
+
+                if not can_delete:
+                    failed_tasks.append({
+                        'task_id': task.id,
+                        'error': '您没有权限删除此任务'
+                    })
+                    continue
+
+                # 记录删除前的信息
+                task_id = task.id
+                work_content = task.work_content
+
+                # 删除任务
+                task.delete()
+
+                # 记录删除日志（使用 TaskLog 如果有外键关联问题则跳过）
+                # 由于任务已删除，无法创建关联日志，改为在响应中记录
+
+                deleted_tasks.append({
+                    'task_id': task_id,
+                    'work_content': work_content
+                })
+
+            except Exception as e:
+                failed_tasks.append({
+                    'task_id': task.id,
+                    'error': str(e)
+                })
+
+        return Response({
+            'message': f'成功删除 {len(deleted_tasks)} 个任务，失败 {len(failed_tasks)} 个',
+            'deleted_count': len(deleted_tasks),
+            'failed_count': len(failed_tasks),
+            'deleted_tasks': deleted_tasks,
+            'failed_tasks': failed_tasks
+        })
+
