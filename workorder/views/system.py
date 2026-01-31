@@ -81,3 +81,18 @@ class TaskAssignmentRuleViewSet(viewsets.ModelViewSet):
     ordering_fields = ['priority', 'created_at', 'updated_at']
     ordering = ['process', '-priority', 'department']
 
+    @action(detail=False, methods=['get'])
+    def preview(self, request):
+        """生成分派预览
+
+        返回所有活跃工序的分派预览，显示每个工序将分派到哪个部门
+        """
+        from ..services.dispatch_service import DispatchPreviewService
+
+        preview_data = DispatchPreviewService.generate_preview()
+
+        return Response({
+            'preview': preview_data,
+            'generated_at': timezone.now().isoformat()
+        })
+
