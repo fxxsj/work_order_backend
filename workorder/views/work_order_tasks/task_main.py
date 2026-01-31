@@ -189,3 +189,87 @@ class BaseWorkOrderTaskViewSet(viewsets.ModelViewSet):
             return Response({
                 'detail': f'部门ID {department_id} 不存在'
             }, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['post'], url_path='claim')
+    def claim(self, request, pk=None):
+        """操作员认领任务
+
+        POST /workorder-tasks/{id}/claim/
+        Body: {
+            "notes": "我会尽快完成"  # 可选
+        }
+
+        权限：
+        - 任务所属部门的操作员
+
+        并发控制：
+        使用 select_for_update 防止两个操作员同时认领同一任务
+        """
+        task = self.get_object()
+
+        # 获取可选的备注
+        notes = request.data.get('notes', '') if request.data else ''
+
+        try:
+            result = TaskAssignmentService.claim_task(
+                task_id=task.id,
+                operator=request.user,
+                notes=notes
+            )
+
+            # 重新获取更新后的任务数据
+            task.refresh_from_db()
+            response_serializer = self.get_serializer(task)
+
+            return Response({
+                'detail': result.get('message', '任务认领成功'),
+                'data': result,
+                'task': response_serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except BusinessLogicError as e:
+            return Response({
+                'detail': str(e),
+                'code': e.default_code
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"任务认领失败: {str(e)}")
+            return Response({
+                'detail': '任务认领失败，请稍后重试',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='claimable')
+    def claimable(self, request):
+        """获取当前用户可认领的任务列表
+
+        GET /workorder-tasks/claimable/
+
+        返回用户所属部门中未分配操作员的任务
+        """
+        try:
+            claimable_ids = TaskAssignmentService.get_claimable_tasks_for_user(request.user)
+
+            # 获取完整的任务数据
+            queryset = self.get_queryset().filter(id__in=claimable_ids)
+            page = self.paginate_queryset(queryset)
+
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response({
+                    'claimable_count': len(claimable_ids),
+                    'results': serializer.data
+                })
+
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                'claimable_count': len(claimable_ids),
+                'results': serializer.data
+            })
+
+        except Exception as e:
+            logger.error(f"获取可认领任务列表失败: {str(e)}")
+            return Response({
+                'detail': '获取可认领任务列表失败',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
