@@ -15,7 +15,7 @@ from workorder.models.core import WorkOrderTask
 from workorder.serializers.core import WorkOrderTaskSerializer, TaskAssignmentSerializer
 from workorder.permissions import WorkOrderTaskPermission
 from workorder.services.task_assignment import TaskAssignmentService
-from workorder.exceptions import BusinessLogicError, PermissionDeniedError
+from workorder.exceptions import BusinessLogicError, PermissionDeniedError, TaskConflictError
 
 logger = logging.getLogger(__name__)
 
@@ -151,11 +151,33 @@ class BaseWorkOrderTaskViewSet(viewsets.ModelViewSet):
                 'task': response_serializer.data
             }, status=status.HTTP_200_OK)
 
-        except (PermissionDeniedError, BusinessLogicError) as e:
-            return Response({
+        except (PermissionDeniedError, BusinessLogicError, TaskConflictError) as e:
+            # 确定状态码
+            status_code = status.HTTP_403_FORBIDDEN
+            if isinstance(e, PermissionDeniedError):
+                status_code = status.HTTP_403_FORBIDDEN
+            elif isinstance(e, TaskConflictError):
+                status_code = status.HTTP_409_CONFLICT
+            elif isinstance(e, BusinessLogicError):
+                status_code = status.HTTP_400_BAD_REQUEST
+
+            # 构建错误响应
+            error_response = {
                 'detail': str(e),
-                'code': e.default_code
-            }, status=status.HTTP_403_FORBIDDEN if isinstance(e, PermissionDeniedError) else status.HTTP_400_BAD_REQUEST)
+                'code': e.default_code if hasattr(e, 'default_code') else 'error'
+            }
+
+            # 如果是冲突错误，添加额外信息
+            if hasattr(e, 'current_owner') and e.current_owner:
+                error_response['current_owner'] = e.current_owner
+            if hasattr(e, 'task_id') and e.task_id:
+                error_response['task_id'] = e.task_id
+
+            # 添加重试建议
+            retry_info = TaskAssignmentService.get_retry_suggestion(e)
+            error_response['retry'] = retry_info
+
+            return Response(error_response, status=status_code)
         except Exception as e:
             logger.error(f"任务分配失败: {str(e)}")
             return Response({
@@ -227,11 +249,31 @@ class BaseWorkOrderTaskViewSet(viewsets.ModelViewSet):
                 'task': response_serializer.data
             }, status=status.HTTP_200_OK)
 
-        except BusinessLogicError as e:
-            return Response({
+        except (BusinessLogicError, TaskConflictError) as e:
+            # 确定状态码
+            status_code = status.HTTP_400_BAD_REQUEST
+            if isinstance(e, TaskConflictError):
+                status_code = status.HTTP_409_CONFLICT
+            elif isinstance(e, BusinessLogicError):
+                status_code = status.HTTP_400_BAD_REQUEST
+
+            # 构建错误响应
+            error_response = {
                 'detail': str(e),
-                'code': e.default_code
-            }, status=status.HTTP_400_BAD_REQUEST)
+                'code': e.default_code if hasattr(e, 'default_code') else 'business_logic_error'
+            }
+
+            # 如果是冲突错误，添加额外信息
+            if hasattr(e, 'current_owner') and e.current_owner:
+                error_response['current_owner'] = e.current_owner
+            if hasattr(e, 'task_id') and e.task_id:
+                error_response['task_id'] = e.task_id
+
+            # 添加重试建议
+            retry_info = TaskAssignmentService.get_retry_suggestion(e)
+            error_response['retry'] = retry_info
+
+            return Response(error_response, status=status_code)
         except Exception as e:
             logger.error(f"任务认领失败: {str(e)}")
             return Response({
