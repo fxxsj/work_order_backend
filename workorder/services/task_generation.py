@@ -6,7 +6,7 @@
 """
 from django.db import transaction
 from ..models import WorkOrderTask, WorkOrderProcess
-from ...process_codes import ProcessCodes
+from ..process_codes import ProcessCodes
 
 
 class DraftTaskGenerationService:
