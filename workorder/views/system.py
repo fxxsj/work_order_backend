@@ -87,12 +87,34 @@ class TaskAssignmentRuleViewSet(viewsets.ModelViewSet):
 
         返回所有活跃工序的分派预览，显示每个工序将分派到哪个部门
         """
-        from ..services.dispatch_service import DispatchPreviewService
+        from ..services.dispatch_service import DispatchPreviewService, AutoDispatchService
 
         preview_data = DispatchPreviewService.generate_preview()
 
         return Response({
             'preview': preview_data,
+            'global_enabled': AutoDispatchService.is_global_dispatch_enabled(),
             'generated_at': timezone.now().isoformat()
         })
+
+    @action(detail=False, methods=['get'])
+    def global_state(self, request):
+        """获取全局自动分派启用状态"""
+        from ..services.dispatch_service import AutoDispatchService
+
+        enabled = AutoDispatchService.is_global_dispatch_enabled()
+        return Response({'enabled': enabled})
+
+    @action(detail=False, methods=['post'])
+    def set_global_state(self, request):
+        """设置全局自动分派启用状态
+
+        Body:
+            enabled (bool): True 启用，False 禁用
+        """
+        from ..services.dispatch_service import AutoDispatchService
+
+        enabled = request.data.get('enabled', False)
+        new_state = AutoDispatchService.set_global_dispatch_enabled(enabled)
+        return Response({'enabled': new_state})
 
