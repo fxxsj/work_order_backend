@@ -609,49 +609,32 @@ class WorkOrderProcess(models.Model):
     
     def _auto_assign_task(self, task):
         """自动分派任务到部门和操作员
-        
+
         分派规则：
         1. 优先使用工序级别的分派（self.department, self.operator）
-        2. 如果工序未指定部门，根据工序与部门的关联关系自动分派：
-           - 优先选择专业车间（排除外协车间）
-           - 如果部门编码与工序编码匹配（如 die_cutting 对应 DIE），优先选择
-           - 如果只有外协车间，则选择外协车间
-           - 如果都没有，选择父部门（生产部）
-        3. 如果工序未指定操作员，从分派部门中选择第一个操作员（可选）
+        2. 如果工序未指定部门，使用 AutoDispatchService 根据优先级规则自动分派
+        3. 如果 AutoDispatchService 返回 None（未启用或无规则匹配），使用兜底逻辑选择第一个可用部门
+        4. 如果工序未指定操作员，从分派部门中选择操作员
         """
         # 优先使用工序级别的分派
         if self.department:
             task.assigned_department = self.department
         else:
-            # 使用配置的分派规则
-            from .system import TaskAssignmentRule
-            assignment_rules = TaskAssignmentRule.objects.filter(
-                process=self.process,
-                is_active=True
-            ).select_related('department').order_by('-priority', 'department')
-            
-            # 获取可用部门列表（工序关联的部门）
-            available_departments = Department.objects.filter(
-                processes=self.process,
-                is_active=True
-            )
-            
-            if assignment_rules.exists():
-                # 使用配置的规则，按优先级选择
-                # 检查规则中的部门是否在可用部门列表中
-                for rule in assignment_rules:
-                    if rule.department in available_departments:
-                        task.assigned_department = rule.department
-                        break
-                
-                # 如果配置的规则都没有匹配到，选择第一个可用部门作为兜底
-                if not task.assigned_department and available_departments.exists():
-                    task.assigned_department = available_departments.order_by('sort_order').first()
+            # 使用 AutoDispatchService 进行自动分派
+            from ..services.dispatch_service import AutoDispatchService
+            assigned_dept = AutoDispatchService.dispatch_task(task, self.process)
+
+            if assigned_dept:
+                task.assigned_department = assigned_dept
             else:
-                # 如果没有配置规则，选择第一个可用部门作为兜底
+                # 兜底逻辑：选择第一个可用部门
+                available_departments = Department.objects.filter(
+                    processes=self.process,
+                    is_active=True
+                )
                 if available_departments.exists():
                     task.assigned_department = available_departments.order_by('sort_order').first()
-        
+
         # 如果工序已指定操作员，使用工序的操作员
         if self.operator:
             task.assigned_operator = self.operator
@@ -664,17 +647,17 @@ class WorkOrderProcess(models.Model):
                 department=task.assigned_department,
                 is_active=True
             ).order_by('-priority').first()
-            
+
             strategy = 'least_tasks'  # 默认策略
             if assignment_rule:
                 strategy = assignment_rule.operator_selection_strategy
-            
+
             task.assigned_operator = self._select_operator_by_strategy(
                 task.assigned_department, strategy
             )
-        
+
         task.save()
-        
+
         # 创建任务分派通知
         if task.assigned_operator:
             from .system import Notification
