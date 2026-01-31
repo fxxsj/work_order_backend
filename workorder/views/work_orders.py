@@ -804,6 +804,69 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
 
         return Response({'preview': preview})
 
+    @action(detail=True, methods=['post'])
+    def sync_tasks_execute(self, request, pk=None):
+        """执行任务同步（需要用户确认）
+
+        在用户确认预览后，执行实际的同步操作。
+        必须提供 confirmed=true 标志，防止误操作。
+
+        请求体格式：
+        {
+            "process_ids": [1, 2, 3, ...],
+            "confirmed": true
+        }
+
+        返回格式：
+        {
+            "result": {
+                "deleted_count": 5,
+                "added_count": 3,
+                "message": "同步完成：已删除 5 个草稿任务，新增 3 个草稿任务"
+            }
+        }
+        """
+        work_order = self.get_object()
+        new_process_ids = request.data.get('process_ids', [])
+
+        # 验证输入
+        if not isinstance(new_process_ids, list):
+            return Response(
+                {'error': 'process_ids 必须是列表'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 获取当前工序ID列表
+        old_process_ids = list(work_order.order_processes.values_list('id', flat=True))
+
+        # 验证施工单是否已审核
+        if work_order.approval_status == 'approved':
+            return Response(
+                {'error': '已审核的施工单不能同步任务'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 要求确认标志（防止误操作）
+        if not request.data.get('confirmed'):
+            return Response(
+                {'error': '需要确认后才能执行同步，请设置 confirmed=true'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 执行同步
+        try:
+            result = TaskSyncService.execute_sync(work_order, old_process_ids, new_process_ids)
+            return Response({
+                'result': result,
+                'message': result.get('message', '任务同步完成')
+            })
+        except Exception as e:
+            logger.error(f"执行任务同步失败: {str(e)}", exc_info=True)
+            return Response(
+                {'error': f'同步失败: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 class DraftTaskViewSet(viewsets.ModelViewSet):
     """草稿任务视图集（允许编辑和删除草稿状态的任务）"""
