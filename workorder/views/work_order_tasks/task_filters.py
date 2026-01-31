@@ -44,12 +44,16 @@ class WorkOrderTaskFilterSet(FilterSet):
     # 自定义筛选：草稿任务
     is_draft = CharFilter(method='filter_is_draft')
 
+    # 关联筛选：按施工单优先级筛选
+    priority = CharFilter(field_name='work_order_process__work_order__priority')
+
     class Meta:
         model = WorkOrderTask
         fields = [
             'status', 'task_type', 'assigned_department',
             'assigned_operator', 'work_order_process',
-            'work_order_number', 'work_content', 'department_name'
+            'work_order_number', 'work_content', 'department_name',
+            'priority'
         ]
 
     def filter_work_order_number(self, queryset, name, value):
