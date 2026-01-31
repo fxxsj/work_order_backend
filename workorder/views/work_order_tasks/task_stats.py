@@ -257,12 +257,141 @@ class TaskStatsMixin:
                 'total_completed_quantity': sum(s['total_completed_quantity'] for s in stats_list),
                 'total_defective_quantity': sum(s['total_defective_quantity'] for s in stats_list),
                 'overall_defective_rate': round(
-                    (sum(s['total_defective_quantity'] for s in stats_list) / 
+                    (sum(s['total_defective_quantity'] for s in stats_list) /
                      sum(s['total_completed_quantity'] for s in stats_list) * 100)
-                    if sum(s['total_completed_quantity'] for s in stats_list) > 0 else 0, 
+                    if sum(s['total_completed_quantity'] for s in stats_list) > 0 else 0,
                     2
                 )
             }
         })
+
+    @action(detail=False, methods=['get'])
+    def department_workload(self, request):
+        """Department workload statistics for supervisor dashboard
+
+        GET /workorder-tasks/department_workload/?department_id=123
+
+        Returns:
+        - Department summary (total tasks, completion rate)
+        - Operator workloads (task count per operator by status)
+        - Task distribution by priority
+        - Recent task activity
+        """
+        from django.contrib.auth.models import User
+        from django.db.models import Count, Q, F, Case, When, IntegerField
+
+        # 权限检查：只有主管（有 change_workorder 权限的用户）可以访问
+        if not request.user.has_perm('workorder.change_workorder'):
+            return Response(
+                {'error': '您没有权限查看部门工作负载统计'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 获取部门ID参数
+        department_id = request.query_params.get('department_id')
+
+        # 如果没有指定部门，使用用户所属的第一个部门
+        if not department_id:
+            user_departments = request.user.profile.departments.all() if hasattr(request.user, 'profile') else []
+            if user_departments.exists():
+                department_id = user_departments.first().id
+            else:
+                return Response(
+                    {'error': '未指定部门且用户不属于任何部门'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        try:
+            department_id = int(department_id)
+        except (ValueError, TypeError):
+            return Response(
+                {'error': '部门ID格式无效'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 获取部门信息
+        try:
+            from workorder.models.base import Department
+            department = Department.objects.get(id=department_id)
+        except Department.DoesNotExist:
+            return Response(
+                {'error': '部门不存在'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 获取部门的所有任务（使用 select_related 优化查询）
+        tasks = WorkOrderTask.objects.filter(
+            assigned_department_id=department_id
+        ).select_related(
+            'assigned_operator', 'assigned_department', 'work_order_process'
+        ).prefetch_related(
+            'logs'
+        )
+
+        # 统计部门任务总数和各状态数量
+        total_tasks = tasks.count()
+        pending_tasks = tasks.filter(status='pending').count()
+        in_progress_tasks = tasks.filter(status='in_progress').count()
+        completed_tasks = tasks.filter(status='completed').count()
+        cancelled_tasks = tasks.filter(status='cancelled').count()
+
+        # 计算完成率
+        completion_rate = round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 2)
+
+        # 按操作员分组统计
+        operators_data = User.objects.filter(
+            assigned_tasks__assigned_department_id=department_id,
+            is_active=True
+        ).exclude(
+            is_superuser=True
+        ).annotate(
+            operator_id=F('id'),
+            operator_name=F('username'),
+            pending_count=Count('assigned_tasks', filter=Q(assigned_tasks__status='pending')),
+            in_progress_count=Count('assigned_tasks', filter=Q(assigned_tasks__status='in_progress')),
+            completed_count=Count('assigned_tasks', filter=Q(assigned_tasks__status='completed')),
+            cancelled_count=Count('assigned_tasks', filter=Q(assigned_tasks__status='cancelled')),
+            total_count=Count('assigned_tasks')
+        ).values(
+            'operator_id', 'operator_name',
+            'pending_count', 'in_progress_count', 'completed_count', 'cancelled_count', 'total_count'
+        )
+
+        # 为每个操作员计算完成率
+        operators_list = []
+        for op_data in operators_data:
+            total = op_data['total_count']
+            completed = op_data['completed_count']
+            op_data['completion_rate'] = round((completed / total * 100) if total > 0 else 0, 2)
+            operators_list.append(op_data)
+
+        # 按总任务数降序排序
+        operators_list.sort(key=lambda x: x['total_count'], reverse=True)
+
+        # 统计优先级分布
+        priority_distribution = {
+            'urgent': tasks.filter(priority='urgent').count(),
+            'high': tasks.filter(priority='high').count(),
+            'normal': tasks.filter(priority='normal').count(),
+            'low': tasks.filter(priority='low').count()
+        }
+
+        # 构建响应
+        response_data = {
+            'department_id': department.id,
+            'department_name': department.name,
+            'summary': {
+                'total_tasks': total_tasks,
+                'pending_tasks': pending_tasks,
+                'in_progress_tasks': in_progress_tasks,
+                'completed_tasks': completed_tasks,
+                'cancelled_tasks': cancelled_tasks,
+                'completion_rate': completion_rate
+            },
+            'operators': operators_list,
+            'priority_distribution': priority_distribution
+        }
+
+        return Response(response_data)
 
 
