@@ -365,19 +365,20 @@ class AutoDispatchService:
         return enabled
 
     @staticmethod
-    def dispatch_task(task, process=None) -> Optional['Department']:
+    def dispatch_task(task, process=None, strategy='least_tasks') -> Optional['Department']:
         """根据优先级规则自动分派任务到部门
 
         分派逻辑：
         1. 检查全局分派开关，如果禁用则返回 None
         2. 如果未提供 process，从 task.work_order_process 获取
         3. 查询该工序的活跃分派规则（按优先级降序）
-        4. 验证规则的部门是否在该工序的可用部门列表中
-        5. 返回第一个匹配的部门，如果都不匹配则返回 None
+        4. 如果多个部门在最高优先级，使用负载均衡选择
+        5. 验证选中的部门是否在该工序的可用部门列表中
 
         Args:
             task: WorkOrderTask 实例
             process: Process 实例（可选，默认从 task 获取）
+            strategy: 部门选择策略，默认 'least_tasks'
 
         Returns:
             Department: 分派的部门对象，如果未分派则返回 None
@@ -417,22 +418,43 @@ class AutoDispatchService:
             # 工序没有可用部门
             return None
 
-        # 按优先级检查每个规则
+        # 按优先级分组规则
+        priority_groups = defaultdict(list)
         for rule in rules:
             if rule.department in available_departments:
-                # 找到第一个匹配的部门
-                return rule.department
+                priority_groups[rule.priority].append(rule)
             else:
-                # 规则的部门不在可用列表中，记录日志并跳过
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.warning(
                     f"分派规则跳过：工序 {process.name} 的规则部门 "
                     f"{rule.department.name} 不在该工序的可用部门列表中"
                 )
 
-        # 所有规则的部门都不在可用列表中，返回 None
-        return None
+        if not priority_groups:
+            # 所有规则的部门都不在可用列表中
+            return None
+
+        # 获取最高优先级
+        highest_priority = max(priority_groups.keys())
+        highest_group = priority_groups[highest_priority]
+
+        # 如果最高优先级只有一个部门，直接返回
+        if len(highest_group) == 1:
+            selected_department = highest_group[0].department
+            logger.info(
+                f"自动分派：工序 {process.name}，"
+                f"单部门 {selected_department.name}，优先级 {highest_priority}"
+            )
+            return selected_department
+
+        # 多个部门在相同优先级，使用负载均衡策略
+        logger.info(
+            f"自动分派：工序 {process.name}，"
+            f"最高优先级 {highest_priority} 有 {len(highest_group)} 个部门，"
+            f"使用策略 {strategy}"
+        )
+
+        # 使用 LoadBalancingService 根据策略选择部门
+        return LoadBalancingService.select_department_by_strategy(process, strategy)
 
     @staticmethod
     def get_highest_priority_department(process) -> Optional['Department']:
