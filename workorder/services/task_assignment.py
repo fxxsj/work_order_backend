@@ -13,7 +13,7 @@ import logging
 from ..models.core import WorkOrderTask
 from ..models.base import Department
 from ..models.system import Notification
-from ..exceptions import BusinessLogicError, PermissionDeniedError
+from ..exceptions import BusinessLogicError, PermissionDeniedError, TaskConflictError
 from ..permission_utils import PermissionCache
 
 logger = logging.getLogger(__name__)
@@ -402,9 +402,11 @@ class TaskAssignmentService:
                     'message': '您已经认领了该任务'
                 }
 
-            # 被其他人认领
-            raise BusinessLogicError(
-                f"该任务已被 {task.assigned_operator.username} 认领，无法重复认领"
+            # 被其他人认领 - 使用特定的冲突错误
+            raise TaskConflictError(
+                detail=f"该任务已被 {task.assigned_operator.username} 认领，无法重复认领",
+                current_owner=task.assigned_operator.username,
+                task_id=task.id
             )
 
         # 执行认领
@@ -471,3 +473,41 @@ class TaskAssignmentService:
         ).values_list('id', flat=True)
 
         return list(claimable_tasks)
+
+    @staticmethod
+    def get_retry_suggestion(error: Exception) -> Dict[str, Any]:
+        """根据错误类型提供重试建议
+
+        Args:
+            error: 捕获的异常
+
+        Returns:
+            Dict: 包含重试建议的字典
+        """
+        if isinstance(error, TaskConflictError):
+            return {
+                'can_retry': True,
+                'suggestion': '刷新页面后重试',
+                'current_owner': getattr(error, 'current_owner', None),
+                'action_text': '刷新页面'
+            }
+
+        if isinstance(error, PermissionDeniedError):
+            return {
+                'can_retry': False,
+                'suggestion': '您没有权限执行此操作',
+                'action_text': '联系管理员'
+            }
+
+        if isinstance(error, BusinessLogicError):
+            return {
+                'can_retry': False,
+                'suggestion': str(error),
+                'action_text': '确定'
+            }
+
+        return {
+            'can_retry': False,
+            'suggestion': '操作失败，请稍后重试',
+            'action_text': '重试'
+        }

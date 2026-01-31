@@ -68,6 +68,37 @@ class ConflictError(APIException):
     default_code = 'conflict_error'
 
 
+class TaskConflictError(ConflictError):
+    """
+    任务冲突错误
+
+    用于任务分配/认领时的并发冲突检测。
+    当两个用户同时尝试分配或认领同一任务时抛出。
+    """
+
+    status_code = 409
+    default_detail = _('该任务正在被其他用户操作，请刷新后重试')
+    default_code = 'task_conflict'
+
+    def __init__(self, detail=None, current_owner=None, task_id=None):
+        """
+        Args:
+            detail: 错误详情
+            current_owner: 当前任务拥有者信息
+            task_id: 任务ID
+        """
+        if detail is None:
+            detail = self.default_detail
+        super().__init__(detail)
+        self.current_owner = current_owner
+        self.task_id = task_id
+
+    def __str__(self):
+        if self.current_owner:
+            return f"任务冲突：该任务已被 {self.current_owner} 分配"
+        return str(self.default_detail)
+
+
 class RateLimitError(APIException):
     """
     速率限制错误
