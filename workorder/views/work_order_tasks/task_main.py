@@ -16,6 +16,7 @@ from workorder.serializers.core import WorkOrderTaskSerializer, TaskAssignmentSe
 from workorder.permissions import WorkOrderTaskPermission
 from workorder.services.task_assignment import TaskAssignmentService
 from workorder.exceptions import BusinessLogicError, PermissionDeniedError, TaskConflictError
+from .task_filters import WorkOrderTaskFilterSet
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,12 @@ class BaseWorkOrderTaskViewSet(viewsets.ModelViewSet):
         'subtasks',
     ).all()
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['work_content', 'production_requirements']
-    ordering_fields = ['created_at', 'updated_at', 'assigned_department', 'assigned_operator']
+    filterset_class = WorkOrderTaskFilterSet
+    search_fields = ['work_content', 'production_requirements', 'work_order_process__work_order__order_number']
+    ordering_fields = [
+        'created_at', 'updated_at', 'assigned_department', 'assigned_operator',
+        'status', 'task_type', 'production_quantity', 'quantity_completed'
+    ]
     ordering = ['-created_at']
 
     def get_queryset(self):
