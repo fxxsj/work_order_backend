@@ -39,6 +39,8 @@ class DispatchPreviewService:
             - current_load: 当前部门负载（pending + in_progress任务数）
             - priority: 优先级
             - is_active: 是否启用
+            - operator_selection_strategy: 操作员选择策略
+            - all_departments: 该工序所有配置部门的列表（含负载信息）
         """
         from ..models.base import Process
 
@@ -47,30 +49,57 @@ class DispatchPreviewService:
         preview_data = []
 
         for process in processes:
-            # 获取该工序下优先级最高的活跃规则
-            rule = TaskAssignmentRule.objects.filter(
+            # 获取该工序的所有活跃规则（按优先级降序）
+            rules = TaskAssignmentRule.objects.filter(
                 process=process,
                 is_active=True
-            ).select_related('department').order_by('-priority').first()
+            ).select_related('department').order_by('-priority')
 
-            if rule:
-                # 计算目标部门的当前负载（待处理 + 进行中的任务）
-                dept_load = WorkOrderTask.objects.filter(
-                    assigned_department=rule.department,
-                    status__in=['pending', 'in_progress']
-                ).count()
+            if not rules.exists():
+                continue
 
-                preview_data.append({
-                    'process_id': process.id,
-                    'process_name': process.name,
-                    'process_code': process.code,
-                    'target_department_id': rule.department.id,
-                    'target_department_name': rule.department.name,
-                    'current_load': dept_load,
+            # 获取优先级最高的规则
+            top_rule = rules.first()
+
+            # 使用聚合查询批量计算所有部门的负载
+            dept_ids = [r.department_id for r in rules]
+            dept_loads = WorkOrderTask.objects.filter(
+                assigned_department_id__in=dept_ids,
+                status__in=['pending', 'in_progress']
+            ).values('assigned_department_id').annotate(
+                load=Count('id')
+            )
+
+            # 转换为字典：department_id -> load
+            load_dict = {item['assigned_department_id']: item['load'] for item in dept_loads}
+
+            # 获取目标部门的负载
+            target_load = load_dict.get(top_rule.department_id, 0)
+
+            # 构建所有部门列表
+            all_departments = []
+            for rule in rules:
+                all_departments.append({
+                    'department_id': rule.department.id,
+                    'department_name': rule.department.name,
                     'priority': rule.priority,
+                    'load': load_dict.get(rule.department_id, 0),
                     'is_active': rule.is_active,
                     'operator_selection_strategy': rule.operator_selection_strategy
                 })
+
+            preview_data.append({
+                'process_id': process.id,
+                'process_name': process.name,
+                'process_code': process.code,
+                'target_department_id': top_rule.department.id,
+                'target_department_name': top_rule.department.name,
+                'current_load': target_load,
+                'priority': top_rule.priority,
+                'is_active': top_rule.is_active,
+                'operator_selection_strategy': top_rule.operator_selection_strategy,
+                'all_departments': all_departments
+            })
 
         return preview_data
 
