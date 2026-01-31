@@ -283,6 +283,58 @@ class DraftTaskSerializer(WorkOrderTaskSerializer):
         return super().update(instance, validated_data)
 
 
+class DraftTaskBulkSerializer(serializers.Serializer):
+    """草稿任务批量更新序列化器"""
+    task_ids = serializers.ListField(child=serializers.IntegerField())
+    production_quantity = serializers.IntegerField(required=False, allow_null=True)
+    priority = serializers.CharField(required=False, allow_null=True)
+    production_requirements = serializers.CharField(required=False, allow_null=True)
+
+    def validate_task_ids(self, value):
+        """验证任务ID列表"""
+        if len(value) > 1000:
+            raise serializers.ValidationError("批量操作最多支持1000个任务")
+        if len(value) == 0:
+            raise serializers.ValidationError("请至少选择一个任务")
+        return value
+
+    def validate(self, attrs):
+        """验证批量更新的数据"""
+        from rest_framework.exceptions import ValidationError
+
+        task_ids = attrs.get('task_ids', [])
+
+        # 验证所有任务存在且为草稿状态
+        tasks = WorkOrderTask.objects.filter(id__in=task_ids, status='draft')
+
+        if tasks.count() != len(task_ids):
+            # 检查有多少任务不存在或不是草稿状态
+            existing_tasks = WorkOrderTask.objects.filter(id__in=task_ids)
+            non_draft_count = existing_tasks.exclude(status='draft').count()
+            missing_count = len(task_ids) - existing_tasks.count()
+
+            error_msgs = []
+            if non_draft_count > 0:
+                error_msgs.append(f"有{non_draft_count}个任务不是草稿状态")
+            if missing_count > 0:
+                error_msgs.append(f"有{missing_count}个任务不存在")
+
+            raise ValidationError("、".join(error_msgs))
+
+        # 验证优先级值（如果提供）
+        if attrs.get('priority'):
+            valid_priorities = ['low', 'normal', 'high', 'urgent']
+            if attrs['priority'] not in valid_priorities:
+                raise ValidationError(f"无效的优先级值，可选值：{', '.join(valid_priorities)}")
+
+        # 验证生产数量（如果提供）
+        if attrs.get('production_quantity') is not None:
+            if attrs['production_quantity'] < 0:
+                raise ValidationError("生产数量不能小于0")
+
+        return attrs
+
+
 class WorkOrderProcessSerializer(serializers.ModelSerializer):
     """施工单工序序列化器"""
     process_name = serializers.CharField(source='process.name', read_only=True)
