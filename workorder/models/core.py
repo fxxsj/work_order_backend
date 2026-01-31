@@ -240,6 +240,8 @@ class WorkOrder(models.Model):
 
         Called when work order is approved. Validates data integrity
         before conversion to ensure all required fields are populated.
+        After conversion, automatically dispatches tasks to departments
+        based on configured priority rules.
 
         Returns:
             int: Number of tasks converted
@@ -287,14 +289,22 @@ class WorkOrder(models.Model):
             if converted_count == 0:
                 return 0
 
-            # Update status from 'draft' to 'pending' using bulk_update
+            # Convert status from 'draft' to 'pending'
             for task in draft_tasks:
                 task.status = 'pending'
 
-            # Bulk update for performance
+            # Auto-dispatch tasks to departments based on priority rules
+            for task in draft_tasks:
+                work_order_process = task.work_order_process
+                if work_order_process:
+                    work_order_process._auto_assign_task(task)
+
+            # Bulk update for performance (status, assigned_department, assigned_operator)
+            # Note: _auto_assign_task already calls task.save(), so bulk_update is redundant
+            # We keep it to ensure all fields are persisted even if save() failed
             WorkOrderTask.objects.bulk_update(
                 draft_tasks,
-                ['status'],
+                ['status', 'assigned_department', 'assigned_operator'],
                 batch_size=100
             )
 
