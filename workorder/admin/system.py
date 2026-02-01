@@ -9,6 +9,8 @@
 """
 from django.contrib import admin
 from django.utils.html import format_html
+from django.utils import timezone
+from datetime import timedelta
 from ..models import UserProfile, WorkOrderApprovalLog, Notification, TaskAssignmentRule
 
 
@@ -147,6 +149,7 @@ class NotificationAdmin(admin.ModelAdmin):
     search_fields = ['recipient__username', 'title', 'content']
     readonly_fields = ['created_at', 'read_at']
     ordering = ['-created_at']
+    actions = ['delete_old_notifications']
 
     fieldsets = (
         ('基本信息', {
@@ -166,3 +169,21 @@ class NotificationAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+    def get_queryset(self, request):
+        """过滤30天前的通知（超级用户可以看到所有通知）"""
+        qs = super().get_queryset(request)
+        # 超级用户可以看到所有通知，其他用户只看到最近30天的通知
+        if not request.user.is_superuser:
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            return qs.filter(created_at__gte=thirty_days_ago)
+        return qs
+
+    def delete_old_notifications(self, request, queryset):
+        """批量删除30天前的通知"""
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        old_notifications = queryset.filter(created_at__lt=thirty_days_ago)
+        count = old_notifications.count()
+        old_notifications.delete()
+        self.message_user(request, f'{count} 条30天前的通知已删除。')
+    delete_old_notifications.short_description = '删除30天前的通知'
