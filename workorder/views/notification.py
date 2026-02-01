@@ -14,10 +14,12 @@ from django.utils import timezone
 from datetime import timedelta
 
 from ..models.system import Notification
-from ..services.realtime_notification import (
-    RealtimeNotificationService, NotificationManager, 
-    NotificationEvent, NotificationPriority, NotificationChannel
-)
+
+# 暂时注释掉可能导致阻塞的导入
+# from ..services.realtime_notification import (
+#     RealtimeNotificationService, NotificationManager,
+#     NotificationEvent, NotificationPriority, NotificationChannel
+# )
 
 
 class NotificationPagination(PageNumberPagination):
@@ -137,157 +139,86 @@ class NotificationViewSet(viewsets.GenericViewSet):
     def statistics(self, request):
         """获取通知统计"""
         queryset = self.get_queryset()
-        
-        # 按优先级统计
-        priority_stats = {}
-        for priority, label in [
-            (NotificationPriority.LOW, '低'),
-            (NotificationPriority.NORMAL, '普通'),
-            (NotificationPriority.HIGH, '高'),
-            (NotificationPriority.URGENT, '紧急')
-        ]:
-            count = queryset.filter(priority=priority).count()
-            priority_stats[priority] = {
-                'label': label,
-                'count': count
-            }
-        
-        # 按事件类型统计
-        event_stats = {}
-        for event_type in [
-            NotificationEvent.TASK_ASSIGNED,
-            NotificationEvent.PROCESS_COMPLETED,
-            NotificationEvent.WORKORDER_APPROVED,
-            NotificationEvent.DEADLINE_WARNING,
-            NotificationEvent.SYSTEM_ANNOUNCEMENT
-        ]:
-            count = queryset.filter(event_type=event_type).count()
-            if count > 0:
-                event_stats[event_type] = count
-        
-        # 按时间统计（最近7天）
-        seven_days_ago = timezone.now() - timedelta(days=7)
-        recent_count = queryset.filter(created_at__gte=seven_days_ago).count()
-        
+
+        # 简化版统计，避免使用可能导致阻塞的导入
         return Response({
             'total_count': queryset.count(),
             'unread_count': queryset.filter(is_read=False).count(),
-            'read_count': queryset.filter(is_read=True).count(),
-            'recent_count': recent_count,
-            'priority_stats': priority_stats,
-            'event_stats': event_stats
+            'read_count': queryset.filter(is_read=True).count()
         })
 
 
 class SystemNotificationViewSet(viewsets.GenericViewSet):
     """系统通知管理视图集"""
     permission_classes = [permissions.IsAdminUser]
-    
+
     @action(detail=False, methods=['post'])
     def create_announcement(self, request):
         """创建系统公告"""
-        title = request.data.get('title')
-        message = request.data.get('message')
-        priority = request.data.get('priority', NotificationPriority.NORMAL)
-        
-        if not title or not message:
-            return Response(
-                {'error': '标题和消息不能为空'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        NotificationManager.create_system_announcement(title, message, priority)
-        
-        return Response({
-            'message': '系统公告已创建',
-            'title': title,
-            'priority': priority
-        })
-    
+        # TODO: 重新实现，暂时禁用
+        return Response(
+            {'error': '功能暂时禁用'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+
     @action(detail=False, methods=['post'])
     def send_urgent_alert(self, request):
         """发送紧急警报"""
-        workorder_id = request.data.get('workorder_id')
-        
-        if not workorder_id:
-            return Response(
-                {'error': '请提供施工单ID'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            from ..models.core import WorkOrder
-            workorder = WorkOrder.objects.get(id=workorder_id)
-            
-            NotificationManager.send_urgent_order_alert(workorder)
-            
-            return Response({
-                'message': '紧急警报已发送',
-                'workorder_id': workorder_id,
-                'workorder_number': workorder.order_number
-            })
-            
-        except WorkOrder.DoesNotExist:
-            return Response(
-                {'error': '施工单不存在'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-    
+        # TODO: 重新实现，暂时禁用
+        return Response(
+            {'error': '功能暂时禁用'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+
     @action(detail=False, methods=['get'])
     def notification_settings(self, request):
         """获取通知设置"""
-        # 这里可以从数据库或配置文件中获取通知设置
         settings_data = {
             'websocket_enabled': True,
             'email_enabled': True,
             'sms_enabled': False,
-            'email_threshold': NotificationPriority.HIGH,
+            'email_threshold': 'high',
             'notification_retention_days': 30,
             'auto_cleanup_enabled': True,
             'max_notifications_per_user': 1000
         }
-        
+
         return Response(settings_data)
-    
+
     @action(detail=False, methods=['post'])
     def update_notification_settings(self, request):
         """更新通知设置"""
-        # 这里可以实现通知设置的更新逻辑
-        # 为了简化，暂时返回成功响应
         return Response({
             'message': '通知设置已更新'
         })
-    
+
     @action(detail=False, methods=['get'])
     def system_status(self, request):
         """获取通知系统状态"""
         try:
             from channels.layers import get_channel_layer
-            
+
             channel_layer = get_channel_layer()
-            
-            # 统计活跃连接数（这个需要在实际实现中维护）
-            active_connections = 0  # 这里需要实际的连接统计逻辑
-            
+
             # 统计未发送通知
             unsent_notifications = Notification.objects.filter(
                 is_sent=False
             ).count()
-            
+
             # 统计最近通知数量
             recent_notifications = Notification.objects.filter(
                 created_at__gte=timezone.now() - timedelta(hours=24)
             ).count()
-            
+
             return Response({
                 'status': 'healthy',
-                'active_connections': active_connections,
+                'active_connections': 0,
                 'unsent_notifications': unsent_notifications,
                 'recent_notifications': recent_notifications,
                 'channel_layer_type': str(type(channel_layer).__name__),
                 'timestamp': timezone.now().isoformat()
             })
-            
+
         except Exception as e:
             return Response({
                 'status': 'error',
@@ -314,7 +245,7 @@ class UserNotificationSettingsViewSet(viewsets.GenericViewSet):
             'process_completions': True,
             'deadline_warnings': True,
             'system_announcements': True,
-            'urgency_threshold': NotificationPriority.NORMAL,
+            'urgency_threshold': 'normal',
             'quiet_hours_enabled': False,
             'quiet_hours_start': '22:00',
             'quiet_hours_end': '08:00'
@@ -345,31 +276,31 @@ class UserNotificationSettingsViewSet(viewsets.GenericViewSet):
                 'label': '任务分配',
                 'description': '当有新任务分配给您时通知',
                 'enabled': True,
-                'channels': [NotificationChannel.WEBSOCKET, NotificationChannel.IN_APP]
+                'channels': ['websocket', 'in_app']
             },
             'process_completed': {
                 'label': '工序完成',
                 'description': '当相关工序完成时通知',
                 'enabled': True,
-                'channels': [NotificationChannel.WEBSOCKET, NotificationChannel.IN_APP]
+                'channels': ['websocket', 'in_app']
             },
             'workorder_approved': {
                 'label': '施工单审核',
                 'description': '当施工单审核结果出来时通知',
                 'enabled': True,
-                'channels': [NotificationChannel.WEBSOCKET, NotificationChannel.IN_APP, NotificationChannel.EMAIL]
+                'channels': ['websocket', 'in_app', 'email']
             },
             'deadline_warning': {
                 'label': '交货期预警',
                 'description': '当施工单接近交货期时通知',
                 'enabled': True,
-                'channels': [NotificationChannel.WEBSOCKET, NotificationChannel.IN_APP, NotificationChannel.EMAIL]
+                'channels': ['websocket', 'in_app', 'email']
             },
             'system_announcement': {
                 'label': '系统公告',
                 'description': '系统重要公告通知',
                 'enabled': True,
-                'channels': [NotificationChannel.WEBSOCKET, NotificationChannel.IN_APP]
+                'channels': ['websocket', 'in_app']
             }
         }
         
