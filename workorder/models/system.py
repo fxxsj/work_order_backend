@@ -104,11 +104,13 @@ class Notification(models.Model):
     # 通知状态
     is_read = models.BooleanField('已读', default=False)
     read_at = models.DateTimeField('阅读时间', null=True, blank=True)
-    
+    is_sent = models.BooleanField('已发送', default=False)
+
     # 元数据
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     expires_at = models.DateTimeField('过期时间', null=True, blank=True,
                                      help_text='通知过期时间，过期后不再显示')
+    data = models.JSONField('扩展数据', null=True, blank=True)
     
     class Meta:
         verbose_name = '系统通知'
@@ -117,6 +119,7 @@ class Notification(models.Model):
         indexes = [
             models.Index(fields=['recipient', 'is_read', '-created_at']),
             models.Index(fields=['notification_type', '-created_at']),
+            models.Index(fields=['created_at']),
         ]
     
     def __str__(self):
