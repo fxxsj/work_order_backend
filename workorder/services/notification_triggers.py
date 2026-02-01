@@ -41,11 +41,12 @@ def workorder_created_handler(sender, instance, created, **kwargs):
 @receiver(post_save, sender=WorkOrderTask)
 def task_assigned_handler(sender, instance, created, **kwargs):
     """任务分配时触发通知"""
-    if created and instance.assigned_to:
-        notification_service.notify_task_assignment(
+    # Check if operator was assigned (not just department)
+    if instance.assigned_operator:
+        notification_service.notify_task_assigned(
             task=instance,
-            assigned_user=instance.assigned_to,
-            assigned_by=instance.created_by
+            assigned_operator=instance.assigned_operator,
+            assigned_by=instance.updated_by if hasattr(instance, 'updated_by') else None
         )
 
 
@@ -63,34 +64,24 @@ def task_status_change_handler(sender, instance, **kwargs):
                     # 任务开始
                     notification_service.send_notification(
                         event_type=NotificationEvent.TASK_STARTED,
-                        recipients=[instance.assigned_to, instance.workorder.created_by],
+                        recipients=[instance.assigned_operator, instance.work_order_process.work_order.created_by] if instance.assigned_operator else [instance.work_order_process.work_order.created_by],
                         data={
                             'title': '任务开始执行',
-                            'message': f'任务 {instance.task_name} 已开始执行',
+                            'message': f'任务 {instance.work_content} 已开始执行',
                             'task_id': instance.id,
-                            'task_name': instance.task_name,
-                            'workorder_id': instance.workorder.id,
-                            'workorder_number': instance.workorder.order_number,
-                            'assigned_to': instance.assigned_to.username if instance.assigned_to else ''
+                            'task_name': instance.work_content,
+                            'workorder_id': instance.work_order_process.work_order.id,
+                            'workorder_number': instance.work_order_process.work_order.order_number,
+                            'assigned_to': instance.assigned_operator.username if instance.assigned_operator else ''
                         },
                         priority=NotificationPriority.NORMAL
                     )
                 
                 elif new_status == 'completed':
-                    # 任务完成
-                    notification_service.send_notification(
-                        event_type=NotificationEvent.TASK_COMPLETED,
-                        recipients=[instance.workorder.created_by],
-                        data={
-                            'title': '任务完成',
-                            'message': f'任务 {instance.task_name} 已完成',
-                            'task_id': instance.id,
-                            'task_name': instance.task_name,
-                            'workorder_id': instance.workorder.id,
-                            'workorder_number': instance.workorder.order_number,
-                            'completed_at': instance.completed_at.isoformat() if instance.completed_at else None
-                        },
-                        priority=NotificationPriority.HIGH
+                    # 任务完成 - 通知主管和创建者
+                    notification_service.notify_task_completed(
+                        task=instance,
+                        completed_by=instance.assigned_operator if instance.assigned_operator else instance.updated_by
                     )
                     
         except WorkOrderTask.DoesNotExist:
@@ -155,18 +146,21 @@ def task_log_handler(sender, instance, created, **kwargs):
     if created:
         if instance.action_type == 'error':
             # 任务出错
+            recipients = [instance.task.work_order_process.work_order.created_by]
+            recipients.extend(_get_supervisors())
+
             notification_service.send_notification(
                 event_type=NotificationEvent.TASK_ERROR,
-                recipients=[instance.task.workorder.created_by] + _get_supervisors(),
+                recipients=recipients,
                 data={
                     'title': '任务执行出错',
-                    'message': f'任务 {instance.task.task_name} 执行过程中出现错误',
+                    'message': f'任务 {instance.task.work_content} 执行过程中出现错误',
                     'task_id': instance.task.id,
-                    'task_name': instance.task.task_name,
-                    'workorder_id': instance.task.workorder.id,
-                    'workorder_number': instance.task.workorder.order_number,
-                    'error_message': instance.comments,
-                    'created_by': instance.created_by.username if instance.created_by else ''
+                    'task_name': instance.task.work_content,
+                    'workorder_id': instance.task.work_order_process.work_order.id,
+                    'workorder_number': instance.task.work_order_process.work_order.order_number,
+                    'error_message': instance.content,
+                    'created_by': instance.operator.username if instance.operator else ''
                 },
                 priority=NotificationPriority.HIGH
             )
@@ -214,18 +208,22 @@ class DeadlineWarningService:
         )
         
         for task in overdue_tasks:
+            recipients = [task.work_order_process.work_order.created_by]
+            if task.assigned_operator:
+                recipients.append(task.assigned_operator)
+
             notification_service.send_notification(
                 event_type=NotificationEvent.TASK_OVERDUE,
-                recipients=[task.assigned_to, task.workorder.created_by],
+                recipients=recipients,
                 data={
                     'title': '任务逾期警告',
-                    'message': f'任务 {task.task_name} 已逾期',
+                    'message': f'任务 {task.work_content} 已逾期',
                     'task_id': task.id,
-                    'task_name': task.task_name,
-                    'workorder_id': task.workorder.id,
-                    'workorder_number': task.workorder.order_number,
-                    'deadline': task.deadline.isoformat() if task.deadline else None,
-                    'assigned_to': task.assigned_to.username if task.assigned_to else ''
+                    'task_name': task.work_content,
+                    'workorder_id': task.work_order_process.work_order.id,
+                    'workorder_number': task.work_order_process.work_order.order_number,
+                    'deadline': task.deadline.isoformat() if hasattr(task, 'deadline') and task.deadline else None,
+                    'assigned_to': task.assigned_operator.username if task.assigned_operator else ''
                 },
                 priority=NotificationPriority.URGENT
             )
