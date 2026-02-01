@@ -32,6 +32,8 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
     permission_classes = [WorkOrderTaskPermission]
     serializer_class = WorkOrderTaskSerializer
     # 优化查询：使用 select_related 和 prefetch_related 避免 N+1 查询
+    # Query optimization: select_related reduces N+1 queries for ForeignKey lookups
+    # Expected: 1 query for tasks list instead of 1+N queries
     queryset = WorkOrderTask.objects.select_related(
         'assigned_department',
         'assigned_operator',
