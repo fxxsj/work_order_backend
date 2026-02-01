@@ -11,4 +11,6 @@ class WorkorderConfig(AppConfig):
         import config.custom_user_admin
         # 导入信号处理器（实现自动计算数量功能）
         import workorder.signals
+        # 导入缓存失效信号处理器
+        import workorder.performance.cache_invalidation  # noqa
 
