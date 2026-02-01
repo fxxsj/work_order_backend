@@ -176,21 +176,136 @@ class RealtimeNotificationService:
         except Exception as e:
             logger.error(f"发送邮件通知失败: {e}")
     
-    def notify_task_assignment(self, task, assigned_user, assigned_by=None):
-        """通知任务分配"""
+    def notify_task_assigned(self, task, assigned_operator, assigned_by=None):
+        """通知任务分配 - 发送给操作员和部门成员"""
+        recipients = [assigned_operator]
+
+        # 通知分配者所在部门的其他成员（根据上下文：部门成员可见）
+        if task.assigned_department:
+            dept_members = self._get_department_members(task.assigned_department)
+            recipients.extend(dept_members)
+
+        # 去重
+        recipients = list(set(recipients))
+
+        # 获取工序名称
+        process_name = task.work_order_process.process.name if task.work_order_process else task.process_code
+
         self.send_notification(
             event_type=NotificationEvent.TASK_ASSIGNED,
-            recipients=[assigned_user],
+            recipients=recipients,
             data={
                 'title': '新任务分配',
-                'message': f'您有新的任务: {task.task_name}',
+                'message': f'您有新的任务: {task.work_content}',
                 'task_id': task.id,
-                'workorder_id': task.workorder.id,
-                'workorder_number': task.workorder.order_number,
-                'assigned_by': assigned_by.username if assigned_by else '系统'
+                'workorder_id': task.work_order_process.work_order.id if task.work_order_process else None,
+                'workorder_number': task.work_order_process.work_order.order_number if task.work_order_process else '',
+                'process_code': task.process_code,
+                'process_name': process_name,
+                'assigned_by': assigned_by.username if assigned_by else '系统',
+                'quantity': task.production_quantity,
+                'priority': task.work_order_process.work_order.priority if task.work_order_process else 'normal',
+                'deadline': task.deadline.isoformat() if hasattr(task, 'deadline') and task.deadline else None,
             },
-            priority=NotificationPriority.HIGH
+            priority=self._map_priority(task.work_order_process.work_order.priority if task.work_order_process else 'normal'),
+            channels=[NotificationChannel.WEBSOCKET, NotificationChannel.IN_APP]
         )
+
+        # WebSocket broadcast to connected users
+        self._send_websocket_notification(recipients, {
+            'type': 'task_assigned',
+            'title': '新任务分配',
+            'message': f'您有新的任务: {task.work_content}',
+            'task_id': task.id,
+            'workorder_number': task.work_order_process.work_order.order_number if task.work_order_process else '',
+            'priority': task.work_order_process.work_order.priority if task.work_order_process else 'normal',
+        })
+
+    def notify_task_completed(self, task, completed_by):
+        """通知任务完成 - 发送给主管和施工单创建者"""
+        recipients = []
+
+        # 通知主管
+        supervisors = self._get_supervisors()
+        recipients.extend(supervisors)
+
+        # 通知施工单创建者
+        work_order = task.work_order_process.work_order if task.work_order_process else None
+        if work_order and work_order.created_by:
+            recipients.append(work_order.created_by)
+
+        recipients = list(set(recipients))
+
+        # 获取工序名称
+        process_name = task.work_order_process.process.name if task.work_order_process else task.process_code
+
+        self.send_notification(
+            event_type=NotificationEvent.TASK_COMPLETED,
+            recipients=recipients,
+            data={
+                'title': '任务完成',
+                'message': f'任务 "{task.work_content}" 已完成',
+                'task_id': task.id,
+                'workorder_id': work_order.id if work_order else None,
+                'workorder_number': work_order.order_number if work_order else '',
+                'completed_by': completed_by.username if completed_by else '系统',
+                'completed_at': timezone.now().isoformat(),
+                'process_code': task.process_code,
+                'process_name': process_name,
+            },
+            priority=NotificationPriority.NORMAL,
+            channels=[NotificationChannel.WEBSOCKET, NotificationChannel.IN_APP]
+        )
+
+        # WebSocket broadcast
+        self._send_websocket_notification(recipients, {
+            'type': 'task_completed',
+            'title': '任务完成',
+            'message': f'任务 "{task.work_content}" 已完成',
+            'task_id': task.id,
+            'workorder_number': work_order.order_number if work_order else '',
+            'completed_by': completed_by.username if completed_by else '系统',
+        })
+
+    def _get_department_members(self, department):
+        """获取部门成员"""
+        try:
+            from ..models.system import UserProfile
+            return User.objects.filter(
+                profile__departments=department,
+                is_active=True
+            ).distinct()
+        except Exception:
+            return []
+
+    def _get_supervisors(self):
+        """获取主管用户（具有主管权限的用户）"""
+        # 根据实际权限系统实现
+        try:
+            from ..models.system import UserProfile
+            return User.objects.filter(
+                profile__role__in=['supervisor', 'manager'],
+                is_active=True
+            ).distinct()
+        except Exception:
+            # Fallback to group-based check
+            try:
+                return User.objects.filter(
+                    groups__name__in=['supervisor', 'manager'],
+                    is_active=True
+                ).distinct()
+            except Exception:
+                return []
+
+    def _map_priority(self, workorder_priority):
+        """映射施工单优先级到通知优先级"""
+        priority_map = {
+            'urgent': NotificationPriority.URGENT,
+            'high': NotificationPriority.HIGH,
+            'normal': NotificationPriority.NORMAL,
+            'low': NotificationPriority.LOW,
+        }
+        return priority_map.get(workorder_priority, NotificationPriority.NORMAL)
     
     def notify_workorder_approval(self, workorder, status, approved_by=None):
         """通知施工单审核结果"""
@@ -343,29 +458,37 @@ class RealtimeNotificationService:
 
 
 class NotificationConsumer(AsyncWebsocketConsumer):
-    """WebSocket通知消费者"""
-    
+    """WebSocket通知消费者 - 处理实时通知推送"""
+
     async def connect(self):
         """建立WebSocket连接"""
-        user = self.scope["user"]
-        
-        if user.is_authenticated:
-            self.user_id = user.id
-            self.group_name = f"user_{self.user_id}_notifications"
-            
-            # 加入用户通知组
-            await self.channel_layer.group_add(
-                self.group_name,
-                self.channel_name
-            )
-            
-            await self.accept()
-            
-            # 发送未读通知
-            await self.send_unread_notifications()
-        else:
-            await self.close()
-    
+        user = self.scope.get("user")
+
+        # 拒绝未认证用户
+        if user is None or not user.is_authenticated:
+            await self.close(code=4001)
+            return
+
+        self.user_id = user.id
+        self.group_name = f"user_{self.user_id}_notifications"
+
+        # 加入用户通知组
+        await self.channel_layer.group_add(
+            self.group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+
+        # 发送连接成功确认
+        await self.send(json.dumps({
+            'type': 'connection_established',
+            'user_id': self.user_id,
+            'timestamp': timezone.now().isoformat()
+        }))
+
+        logger.info(f"WebSocket连接建立: user_id={self.user_id}")
+
     async def disconnect(self, close_code):
         """断开WebSocket连接"""
         if hasattr(self, 'group_name'):
@@ -373,46 +496,21 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 self.group_name,
                 self.channel_name
             )
-    
+            logger.info(f"WebSocket连接断开: user_id={self.user_id}, code={close_code}")
+
     async def notification_message(self, event):
-        """处理通知消息"""
+        """处理通知消息 - 从channel layer接收并转发给客户端"""
         await self.send(text_data=json.dumps({
             'type': 'notification',
-            'data': event['notification']
+            'data': event.get('notification', {})
         }))
-    
-    async def send_unread_notifications(self):
-        """发送未读通知"""
-        try:
-            from ..models.system import Notification
-            
-            notifications = await sync_to_async(list)(
-                Notification.objects.filter(
-                    user_id=self.user_id,
-                    is_read=False
-                ).order_by('-created_at')[:20]
-            )
-            
-            for notification in notifications:
-                await self.send(text_data=json.dumps({
-                    'type': 'notification',
-                    'data': {
-                        'event_type': notification.event_type,
-                        'priority': notification.priority,
-                        'title': notification.title,
-                        'message': notification.message,
-                        'data': notification.data,
-                        'timestamp': notification.created_at.isoformat(),
-                        'id': notification.id
-                    }
-                }))
-                
-                # 标记为已发送
-                notification.is_sent = True
-                await sync_to_async(notification.save)()
-                
-        except Exception as e:
-            logger.error(f"发送未读通知失败: {e}")
+
+    async def heartbeat_message(self, event):
+        """处理心跳消息"""
+        await self.send(text_data=json.dumps({
+            'type': 'heartbeat',
+            'timestamp': timezone.now().isoformat()
+        }))
 
 
 class NotificationManager:
