@@ -415,12 +415,20 @@ class TaskStatsMixin:
             'logs'
         )
 
-        # 统计部门任务总数和各状态数量
-        total_tasks = tasks.count()
-        pending_tasks = tasks.filter(status='pending').count()
-        in_progress_tasks = tasks.filter(status='in_progress').count()
-        completed_tasks = tasks.filter(status='completed').count()
-        cancelled_tasks = tasks.filter(status='cancelled').count()
+        # Query optimization: Use aggregate for status counts instead of multiple filter().count()
+        status_counts = tasks.aggregate(
+            total_tasks=Count('id'),
+            pending_tasks=Count('id', filter=Q(status='pending')),
+            in_progress_tasks=Count('id', filter=Q(status='in_progress')),
+            completed_tasks=Count('id', filter=Q(status='completed')),
+            cancelled_tasks=Count('id', filter=Q(status='cancelled'))
+        )
+
+        total_tasks = status_counts['total_tasks'] or 0
+        pending_tasks = status_counts['pending_tasks'] or 0
+        in_progress_tasks = status_counts['in_progress_tasks'] or 0
+        completed_tasks = status_counts['completed_tasks'] or 0
+        cancelled_tasks = status_counts['cancelled_tasks'] or 0
 
         # 计算完成率
         completion_rate = round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 2)
@@ -455,12 +463,18 @@ class TaskStatsMixin:
         # 按总任务数降序排序
         operators_list.sort(key=lambda x: x['total_count'], reverse=True)
 
-        # 统计优先级分布
+        # Query optimization: Use aggregate for priority distribution instead of multiple filter().count()
+        priority_data = tasks.aggregate(
+            urgent=Count('id', filter=Q(priority='urgent')),
+            high=Count('id', filter=Q(priority='high')),
+            normal=Count('id', filter=Q(priority='normal')),
+            low=Count('id', filter=Q(priority='low'))
+        )
         priority_distribution = {
-            'urgent': tasks.filter(priority='urgent').count(),
-            'high': tasks.filter(priority='high').count(),
-            'normal': tasks.filter(priority='normal').count(),
-            'low': tasks.filter(priority='low').count()
+            'urgent': priority_data['urgent'] or 0,
+            'high': priority_data['high'] or 0,
+            'normal': priority_data['normal'] or 0,
+            'low': priority_data['low'] or 0
         }
 
         # 构建响应
