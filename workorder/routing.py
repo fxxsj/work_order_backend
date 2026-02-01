@@ -5,7 +5,7 @@ WebSocket路由配置
 """
 
 from django.urls import re_path
-from .views.notification import NotificationConsumer
+from .services.realtime_notification import NotificationConsumer
 
 websocket_urlpatterns = [
     re_path(r'ws/notifications/$', NotificationConsumer.as_asgi()),
