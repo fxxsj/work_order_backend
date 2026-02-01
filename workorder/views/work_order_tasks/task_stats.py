@@ -4,12 +4,16 @@
 包含统计查询和导出方法。
 """
 
+import logging
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.core.cache import cache
 
 from workorder.models import WorkOrderTask
 from workorder.throttling import ExportRateThrottle
+
+logger = logging.getLogger(__name__)
 
 
 class TaskStatsMixin:
@@ -18,6 +22,20 @@ class TaskStatsMixin:
 
     提供统计查询和导出方法。
     """
+
+    # Cache configuration
+    DEPT_WORKLOAD_CACHE_PREFIX = 'dept_workload'
+    COLLAB_STATS_CACHE_PREFIX = 'collab_stats'
+    CACHE_TIMEOUT = 300  # 5 minutes
+
+    def _get_collaboration_stats_cache_key(self, start_date, end_date, department_id):
+        """Generate cache key for collaboration stats"""
+        import hashlib
+
+        # Create a hash of parameters for cache key
+        params = f"{start_date or ''}:{end_date or ''}:{department_id or ''}"
+        params_hash = hashlib.md5(params.encode()).hexdigest()[:8]
+        return f'{self.COLLAB_STATS_CACHE_PREFIX}:{params_hash}'
 
     @action(detail=False, methods=['get'], throttle_classes=[ExportRateThrottle])
     def export(self, request):
@@ -319,6 +337,16 @@ class TaskStatsMixin:
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        # Check cache first
+        cache_key = f'{self.DEPT_WORKLOAD_CACHE_PREFIX}:{department_id}'
+        cached_data = cache.get(cache_key)
+
+        if cached_data is not None:
+            logger.info(f"Cache HIT for department {department_id} workload")
+            return Response(cached_data)
+
+        logger.info(f"Cache MISS for department {department_id} workload")
+
         # 获取部门的所有任务（使用 select_related 优化查询）
         tasks = WorkOrderTask.objects.filter(
             assigned_department_id=department_id
@@ -391,6 +419,10 @@ class TaskStatsMixin:
             'operators': operators_list,
             'priority_distribution': priority_distribution
         }
+
+        # Cache the result
+        cache.set(cache_key, response_data, self.CACHE_TIMEOUT)
+        logger.info(f"Cached department workload data for department {department_id}")
 
         return Response(response_data)
 
