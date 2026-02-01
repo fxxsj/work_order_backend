@@ -1271,6 +1271,11 @@ class WorkOrderTask(models.Model):
             models.Index(fields=['task_type']),
             models.Index(fields=['created_at']),
             models.Index(fields=['updated_at']),
+            # Performance optimization indexes (Phase 9)
+            models.Index(fields=['assigned_department', 'status', 'task_type'], name='task_dept_status_type_idx'),
+            models.Index(fields=['assigned_operator', 'status'], name='task_operator_status_idx'),
+            models.Index(fields=['status', 'created_at'], name='task_status_created_idx'),
+            models.Index(fields=['work_order_process', 'status', 'task_type'], name='task_process_status_type_idx'),
         ]
 
     def __str__(self):
