@@ -156,11 +156,21 @@ class TaskStatsMixin:
         from django.contrib.auth.models import User
         from django.db.models import Count, Sum, Avg, Q, F
         from datetime import datetime, timedelta
-        
+
         # 获取查询参数
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
         department_id = request.query_params.get('department_id')
+
+        # Check cache first
+        cache_key = self._get_collaboration_stats_cache_key(start_date, end_date, department_id)
+        cached_data = cache.get(cache_key)
+
+        if cached_data is not None:
+            logger.info(f"Cache HIT for collaboration stats (key: {cache_key})")
+            return Response(cached_data)
+
+        logger.info(f"Cache MISS for collaboration stats (key: {cache_key})")
         
         # 构建时间过滤条件
         time_filter = Q()
@@ -265,8 +275,8 @@ class TaskStatsMixin:
         
         # 按完成数量排序（降序）
         stats_list.sort(key=lambda x: x['total_completed_quantity'], reverse=True)
-        
-        return Response({
+
+        response_data = {
             'results': stats_list,
             'summary': {
                 'total_operators': len(stats_list),
@@ -281,7 +291,13 @@ class TaskStatsMixin:
                     2
                 )
             }
-        })
+        }
+
+        # Cache the result
+        cache.set(cache_key, response_data, self.CACHE_TIMEOUT)
+        logger.info(f"Cached collaboration stats (key: {cache_key})")
+
+        return Response(response_data)
 
     @action(detail=False, methods=['get'])
     def department_workload(self, request):
