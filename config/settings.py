@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',  # 添加 Token 认证支持
     'corsheaders',
     'django_filters',
+    'channels',  # WebSocket support
     # Local apps
     'workorder',
 ]
@@ -87,6 +88,32 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+
+# ASGI configuration for WebSocket support
+ASGI_APPLICATION = 'config.asgi.application'
+
+# Channels configuration for WebSocket support
+# Use Redis for production, in-memory backend for development
+REDIS_URL = os.environ.get('REDIS_URL')
+
+if REDIS_URL:
+    # Production: Use Redis channel layer
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [REDIS_URL],
+                "symmetric_encryption_keys": [SECRET_KEY],
+            },
+        },
+    }
+else:
+    # Development: Use in-memory channel layer
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
 
 
 # Database
