@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from workorder.models.core import WorkOrder, WorkOrderTask, TaskLog
 from workorder.models.assets import Artwork, Die
+from workorder.services.realtime_notification import notification_service
 
 
 class TaskActionsMixin:
@@ -405,7 +406,7 @@ class TaskActionsMixin:
             log_content += f'，完成理由：{completion_reason}'
         if notes:
             log_content += f'，备注：{notes}'
-        
+
         TaskLog.objects.create(
             task=task,
             log_type='complete',
@@ -419,14 +420,20 @@ class TaskActionsMixin:
             completion_reason=completion_reason,
             operator=request.user
         )
-        
+
+        # 发送任务完成通知
+        notification_service.notify_task_completed(
+            task=task,
+            completed_by=request.user
+        )
+
         # 如果是子任务，更新父任务
         if task.is_subtask() and task.parent_task:
             task.parent_task.update_from_subtasks()
-        
+
         # 检查工序是否完成
         task.work_order_process.check_and_update_status()
-        
+
         serializer = self.get_serializer(task)
         return Response(serializer.data)
     
@@ -599,21 +606,29 @@ class TaskActionsMixin:
         # 如果有变更，保存并记录日志
         if changes:
             task.save()
-            
+
+            # 如果分配了操作员，发送通知
+            if task.assigned_operator and old_operator != task.assigned_operator:
+                notification_service.notify_task_assigned(
+                    task=task,
+                    assigned_operator=task.assigned_operator,
+                    assigned_by=request.user
+                )
+
             # 记录调整日志
             log_content = f'调整任务分派：{", ".join(changes)}'
             if reason:
                 log_content += f'，原因：{reason}'
             if notes:
                 log_content += f'，备注：{notes}'
-            
+
             TaskLog.objects.create(
                 task=task,
                 log_type='status_change',
                 content=log_content,
                 operator=request.user
             )
-        
+
         serializer = self.get_serializer(task)
         return Response(serializer.data)
     
