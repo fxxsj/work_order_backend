@@ -11,6 +11,16 @@
 - WorkOrderTask: 施工单任务
 - ProcessLog: 工序日志
 - TaskLog: 任务日志
+
+Performance Indexes (Phase 9 - 2026-02-01):
+WorkOrderTask model includes composite indexes to optimize multi-column filter queries:
+- task_dept_status_type_idx: (assigned_department, status, task_type)
+- task_operator_status_idx: (assigned_operator, status)
+- task_status_created_idx: (status, created_at)
+- task_process_status_type_idx: (work_order_process, status, task_type)
+
+Verified with EXPLAIN: Index scans confirmed for filtered queries.
+Migration 0036_add_performance_indexes applied successfully.
 """
 
 from django.db import models
