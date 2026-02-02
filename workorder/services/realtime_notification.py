@@ -8,6 +8,7 @@ import json
 import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
+from urllib.parse import parse_qs
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync, sync_to_async
@@ -462,13 +463,38 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
     async def connect(self):
         """建立WebSocket连接"""
-        user = self.scope.get("user")
+        # 从查询参数获取 token
+        query_string = self.scope.get("query_string", b"").decode("utf-8")
 
-        # 拒绝未认证用户
-        if user is None or not user.is_authenticated:
-            await self.close(code=4001)
+        from urllib.parse import parse_qs
+        query_params = parse_qs(query_string)
+
+        # parse_qs 返回字符串键，不是字节键
+        token = query_params.get("token", [None])[0]
+
+        if not token:
+            logger.warning("WebSocket 连接缺少 token")
+            await self.close(code=4001, reason="Missing token")
             return
 
+        # 验证 token 并获取用户（使用 sync_to_async 包装同步 ORM 调用）
+        from rest_framework.authtoken.models import Token
+        from asgiref.sync import sync_to_async
+
+        try:
+            token_obj = await sync_to_async(Token.objects.select_related('user').get)(key=token)
+            user = token_obj.user
+        except Token.DoesNotExist:
+            logger.warning(f"WebSocket token 无效: {token[:10]}...")
+            await self.close(code=4001, reason="Invalid token")
+            return
+
+        if not user.is_authenticated:
+            await self.close(code=4001, reason="User not authenticated")
+            return
+
+        # 设置用户信息到 scope（供后续使用）
+        self.scope["user"] = user
         self.user_id = user.id
         self.group_name = f"user_{self.user_id}_notifications"
 

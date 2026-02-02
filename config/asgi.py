@@ -22,8 +22,7 @@ from workorder.routing import websocket_urlpatterns
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),
     "websocket": AllowedHostsOriginValidator(
-        AuthMiddlewareStack(
-            URLRouter(websocket_urlpatterns)
-        )
+        URLRouter(websocket_urlpatterns)
+        # 注意：认证在 NotificationConsumer 内部手动处理（从查询参数提取 token）
     ),
 })

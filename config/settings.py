@@ -47,11 +47,13 @@ INSTALLED_APPS = [
     'django_filters',
     'drf_spectacular',  # API documentation
     'channels',  # WebSocket support
+    'django_prometheus',  # Prometheus monitoring
     # Local apps
     'workorder',
 ]
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -60,6 +62,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 # P2 优化: 性能监控中间件（可选）
