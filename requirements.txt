@@ -13,11 +13,14 @@ psycopg2-binary==2.9.9
 # 测试工具
 coverage==7.4.1
 flake8==7.0.0
+pytest-django==4.8.0
+factory_boy==3.3.0
+pytest-factoryboy==2.7.0
+pytest-xdist==3.5.0
 
 # 开发工具（可选）
 # black==24.1.1
 # pylint==3.0.3
-# pytest-django==4.7.0
 channels>=4.0.0
 daphne>=4.0.0
 redis>=5.0.0
