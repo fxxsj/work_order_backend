@@ -11,6 +11,9 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 import logging
 
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
+from drf_spectacular.types import OpenApiTypes
+
 from workorder.models.core import WorkOrderTask
 from workorder.serializers.core import WorkOrderTaskSerializer, TaskAssignmentSerializer
 from workorder.permissions import WorkOrderTaskPermission
@@ -22,6 +25,53 @@ from .task_export import TaskExportMixin
 logger = logging.getLogger(__name__)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['任务'],
+        summary='获取任务列表',
+        description='返回分页的任务列表，支持按部门、状态、操作员等条件筛选。',
+        parameters=[
+            OpenApiParameter(
+                name='assigned_department',
+                type=OpenApiTypes.INT,
+                description='按部门ID筛选',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='status',
+                type=OpenApiTypes.STR,
+                description='按任务状态筛选',
+                enum=['draft', 'pending', 'in_progress', 'completed', 'cancelled'],
+                required=False,
+            ),
+            OpenApiParameter(
+                name='assigned_operator',
+                type=OpenApiTypes.INT,
+                description='按操作员ID筛选',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='search',
+                type=OpenApiTypes.STR,
+                description='搜索任务编号、施工单号或工作内容',
+                required=False,
+            ),
+        ],
+        responses={200: WorkOrderTaskSerializer},
+    ),
+    retrieve=extend_schema(
+        tags=['任务'],
+        summary='获取任务详情',
+        description='获取指定任务的完整信息，包括关联的施工单、工序、部门和操作员。',
+        responses={200: WorkOrderTaskSerializer, 404: OpenApiResponse(description='任务不存在')},
+    ),
+    destroy=extend_schema(
+        tags=['任务'],
+        summary='删除任务',
+        description='删除指定的任务。只有草稿状态的任务可以被删除。',
+        responses={204: OpenApiResponse(description='删除成功'), 400: OpenApiResponse(description='无法删除非草稿任务')},
+    ),
+)
 class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
     """
     施工单任务基础视图集

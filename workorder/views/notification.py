@@ -13,6 +13,8 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from datetime import timedelta
 
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
+
 from ..models.system import Notification
 
 # 暂时注释掉可能导致阻塞的导入
@@ -49,6 +51,18 @@ class NotificationSerializer:
         }
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['通知'],
+        summary='获取通知列表',
+        description='返回当前用户的通知列表，仅显示最近30天的通知。',
+    ),
+    partial_update=extend_schema(
+        tags=['通知'],
+        summary='标记通知为已读',
+        description='将指定通知标记为已读状态。',
+    ),
+)
 class NotificationViewSet(viewsets.GenericViewSet):
     """通知管理视图集"""
     permission_classes = [permissions.IsAuthenticated]

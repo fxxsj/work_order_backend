@@ -10,6 +10,10 @@ from rest_framework.response import Response
 from django.db.models import Q
 from django.utils import timezone
 
+from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_serializer
+from rest_framework import serializers
+from drf_spectacular.types import OpenApiTypes
+
 from workorder.models.core import WorkOrder, WorkOrderTask, TaskLog
 from workorder.models.assets import Artwork, Die
 from workorder.services.realtime_notification import notification_service
@@ -22,6 +26,37 @@ class TaskActionsMixin:
     提供单个任务的操作方法，包括更新数量、完成任务、拆分任务等。
     """
 
+    @extend_schema(
+        tags=['任务'],
+        summary='更新任务完成数量',
+        description='''
+        操作员更新任务的完成数量（增量更新）。
+
+        **业务规则**:
+        - 操作员只能更新自己分派的任务
+        - 更新数量为增量（本次完成数量）
+        - 完成数量不能超过生产数量
+        - 根据完成数量自动更新任务状态
+        - 使用版本号进行并发控制
+
+        **并发控制**: 乐观锁，检测版本号冲突
+        ''',
+        request=inline_serializer(
+            name='TaskUpdateQuantityRequest',
+            fields={
+                'quantity_increment': serializers.IntegerField(help_text='本次完成数量'),
+                'quantity_defective': serializers.IntegerField(required=False, default=0, help_text='次品数量'),
+                'notes': serializers.CharField(required=False, allow_blank=True, help_text='备注信息'),
+                'version': serializers.IntegerField(required=False, help_text='版本号（并发控制）'),
+            }
+        ),
+        responses={
+            200: WorkOrderTaskSerializer,
+            400: OpenApiResponse(description='请求无效或业务规则验证失败'),
+            403: OpenApiResponse(description='权限不足'),
+            409: OpenApiResponse(description='并发冲突'),
+        },
+    )
     @action(detail=True, methods=['post'])
     def update_quantity(self, request, pk=None):
         """更新任务数量（包含业务条件验证，根据数量自动判断状态，记录操作人）"""
@@ -241,6 +276,37 @@ class TaskActionsMixin:
         
         serializer = self.get_serializer(task)
         return Response(serializer.data)
+    @extend_schema(
+        tags=['任务'],
+        summary='强制完成任务',
+        description='''
+        操作员标记任务为完成状态（即使完成数量小于生产数量）。
+
+        **业务规则**:
+        - 操作员只能完成自己分派的任务
+        - 可记录次品数量
+        - 可填写完成原因和备注
+        - 任务状态变更为 completed
+        - 发送任务完成通知
+
+        **并发控制**: 乐观锁，检测版本号冲突
+        ''',
+        request=inline_serializer(
+            name='TaskCompleteRequest',
+            fields={
+                'completion_reason': serializers.CharField(required=False, allow_blank=True, help_text='完成原因'),
+                'quantity_defective': serializers.IntegerField(required=False, default=0, help_text='次品数量'),
+                'notes': serializers.CharField(required=False, allow_blank=True, help_text='备注信息'),
+                'version': serializers.IntegerField(required=False, help_text='版本号（并发控制）'),
+            }
+        ),
+        responses={
+            200: WorkOrderTaskSerializer,
+            400: OpenApiResponse(description='请求无效或业务规则验证失败'),
+            403: OpenApiResponse(description='权限不足'),
+            409: OpenApiResponse(description='并发冲突'),
+        },
+    )
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
         """强制完成任务（用于完成数量小于生产数量但需要强制标志为已完成的情况）"""

@@ -19,6 +19,9 @@ from django.utils import timezone
 from decimal import Decimal
 import logging
 
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, inline_serializer
+from drf_spectacular.types import OpenApiTypes
+
 logger = logging.getLogger(__name__)
 
 from ..permissions import (
@@ -58,6 +61,23 @@ from ..services.task_sync_service import TaskSyncService
 
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['施工单'],
+        summary='获取施工单列表',
+        description='返回分页的施工单列表，支持按客户、状态、优先级等条件筛选。',
+    ),
+    create=extend_schema(
+        tags=['施工单'],
+        summary='创建施工单',
+        description='创建新的施工单，自动生成所有工序的草稿任务。',
+    ),
+    retrieve=extend_schema(
+        tags=['施工单'],
+        summary='获取施工单详情',
+        description='获取施工单的完整信息，包括关联的任务、产品和工序。',
+    ),
+)
 class WorkOrderViewSet(viewsets.ModelViewSet):
     """施工单视图集"""
     queryset = WorkOrder.objects.all()
