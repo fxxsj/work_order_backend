@@ -17,6 +17,7 @@ from drf_spectacular.types import OpenApiTypes
 from workorder.models.core import WorkOrder, WorkOrderTask, TaskLog
 from workorder.models.assets import Artwork, Die
 from workorder.services.realtime_notification import notification_service
+from workorder.serializers.core import WorkOrderTaskSerializer
 
 
 class TaskActionsMixin:
