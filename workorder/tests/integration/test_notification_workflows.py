@@ -23,11 +23,9 @@ class TestNotificationWorkflows:
         supervisor = UserFactory(username='supervisor', departments=[dept])
         operator = UserFactory(username='operator', departments=[dept])
 
-        task = WorkOrderTaskFactory(
-            status='pending',
-            assigned_department=dept,
-            assign_department=True
-        )
+        task = WorkOrderTaskFactory(status='pending')
+        task.assigned_department = dept
+        task.save()
 
         initial_notification_count = Notification.objects.filter(recipient=operator).count()
 
@@ -53,13 +51,10 @@ class TestNotificationWorkflows:
         supervisor = UserFactory(username='supervisor', departments=[dept])
         operator = UserFactory(username='operator', departments=[dept])
 
-        task = WorkOrderTaskFactory(
-            status='in_progress',
-            assigned_operator=operator,
-            assigned_department=dept,
-            assign_department=True,
-            assign_operator=True
-        )
+        task = WorkOrderTaskFactory(status='in_progress')
+        task.assigned_department = dept
+        task.assigned_operator = operator
+        task.save()
 
         api_client.force_authenticate(user=operator)
         response = api_client.post(f'/api/workorder-tasks/{task.id}/complete/', {
@@ -91,7 +86,7 @@ class TestNotificationWorkflows:
                 recipient=user1,
                 notification_type='task_assigned',
                 title=f'Test notification {i}',
-                message='Test message'
+                content='Test message'
             )
 
         # Create notifications for user2
@@ -100,7 +95,7 @@ class TestNotificationWorkflows:
                 recipient=user2,
                 notification_type='task_assigned',
                 title=f'Test notification {i}',
-                message='Test message'
+                content='Test message'
             )
 
         # User1 requests notifications
@@ -122,7 +117,7 @@ class TestNotificationWorkflows:
             recipient=user,
             notification_type='task_assigned',
             title='Test',
-            message='Test message',
+            content='Test message',
             is_read=False
         )
 
@@ -150,7 +145,7 @@ class TestNotificationWorkflows:
                 recipient=user,
                 notification_type='task_assigned',
                 title=f'Unread {i}',
-                message='Test',
+                content='Test',
                 is_read=False
             )
 
@@ -159,7 +154,7 @@ class TestNotificationWorkflows:
                 recipient=user,
                 notification_type='task_assigned',
                 title=f'Read {i}',
-                message='Test',
+                content='Test',
                 is_read=True
             )
 

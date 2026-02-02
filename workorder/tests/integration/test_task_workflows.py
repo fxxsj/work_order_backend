@@ -61,11 +61,9 @@ class TestWorkOrderTaskWorkflow:
         supervisor = UserFactory(username='supervisor', departments=[dept])
         operator = UserFactory(username='operator', departments=[dept])
 
-        task = WorkOrderTaskFactory(
-            status='pending',
-            assigned_department=dept,
-            assign_department=True  # Already assigned to dept
-        )
+        task = WorkOrderTaskFactory(status='pending')
+        task.assigned_department = dept
+        task.save()
 
         api_client.force_authenticate(user=supervisor)
         response = api_client.post(f'/api/workorder-tasks/{task.id}/assign/', {
@@ -86,11 +84,9 @@ class TestWorkOrderTaskWorkflow:
         operator1 = UserFactory(username='op1', departments=[dept])
         operator2 = UserFactory(username='op2', departments=[dept])
 
-        task = WorkOrderTaskFactory(
-            status='pending',
-            assigned_department=dept,
-            assign_department=True
-        )
+        task = WorkOrderTaskFactory(status='pending')
+        task.assigned_department = dept
+        task.save()
 
         results = {'success': 0, 'failed': 0, 'errors': []}
 
@@ -133,13 +129,10 @@ class TestWorkOrderTaskWorkflow:
         dept = DepartmentFactory()
         operator = UserFactory(username='operator', departments=[dept])
 
-        task = WorkOrderTaskFactory(
-            status='in_progress',
-            assigned_operator=operator,
-            assigned_department=dept,
-            assign_department=True,
-            assign_operator=True
-        )
+        task = WorkOrderTaskFactory(status='in_progress')
+        task.assigned_department = dept
+        task.assigned_operator = operator
+        task.save()
 
         api_client.force_authenticate(user=operator)
         response = api_client.post(f'/api/workorder-tasks/{task.id}/complete/', {
@@ -163,20 +156,15 @@ class TestWorkOrderTaskWorkflow:
 
         # Assign operator to several tasks
         for i in range(10):
-            WorkOrderTaskFactory(
-                status='in_progress',
-                assigned_operator=operator,
-                assigned_department=dept,
-                assign_department=True,
-                assign_operator=True
-            )
+            task = WorkOrderTaskFactory(status='in_progress')
+            task.assigned_department = dept
+            task.assigned_operator = operator
+            task.save()
 
         # Try to assign one more
-        new_task = WorkOrderTaskFactory(
-            status='pending',
-            assigned_department=dept,
-            assign_department=True
-        )
+        new_task = WorkOrderTaskFactory(status='pending')
+        new_task.assigned_department = dept
+        new_task.save()
 
         api_client.force_authenticate(user=supervisor)
         response = api_client.post(f'/api/workorder-tasks/{new_task.id}/assign/', {
@@ -197,11 +185,9 @@ class TestWorkOrderTaskWorkflow:
         operator = UserFactory(username='operator', departments=[dept])
         other_operator = UserFactory(username='other_op', departments=[dept])
 
-        task = WorkOrderTaskFactory(
-            status='pending',
-            assigned_department=dept,
-            assign_department=True
-        )
+        task = WorkOrderTaskFactory(status='pending')
+        task.assigned_department = dept
+        task.save()
 
         # Operator tries to assign (should fail)
         api_client.force_authenticate(user=operator)

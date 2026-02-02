@@ -94,13 +94,10 @@ class TestAutoDispatchWorkflow:
         # Add existing tasks to dept1 to increase load
         operator = UserFactory(username='op', departments=[dept1])
         for _ in range(5):
-            WorkOrderTaskFactory(
-                status='in_progress',
-                assigned_department=dept1,
-                assigned_operator=operator,
-                assign_department=True,
-                assign_operator=True
-            )
+            task = WorkOrderTaskFactory(status='in_progress')
+            task.assigned_department = dept1
+            task.assigned_operator = operator
+            task.save()
 
         # Create and approve workorder
         supervisor = UserFactory(username='supervisor', departments=[dept1])
