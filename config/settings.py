@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',  # 添加 Token 认证支持
     'corsheaders',
     'django_filters',
+    'drf_spectacular',  # API documentation
     'channels',  # WebSocket support
     # Local apps
     'workorder',
@@ -232,6 +233,7 @@ if not DEBUG:
 
 # REST Framework settings
 REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_PAGINATION_CLASS': 'workorder.pagination.CustomPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_FILTER_BACKENDS': [
@@ -415,3 +417,42 @@ CACHE_TIMEOUTS = {
 # 会话配置（使用Redis存储）
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
 SESSION_CACHE_ALIAS = 'default'
+
+# drf-spectacular API documentation settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': '印刷施工单跟踪系统 API',
+    'DESCRIPTION': '''
+    施工单任务即时分派和跟踪管理系统 API 文档。
+
+    ## 主要功能
+    - **施工单管理**: 创建、编辑、审核施工单
+    - **任务管理**: 任务分派、认领、进度跟踪
+    - **部门管理**: 部门工序配置、优先级设置
+    - **实时通知**: WebSocket 任务事件通知
+    - **统计分析**: 任务统计、部门负载、协作分析
+
+    ## 认证方式
+    API 使用 Token 认证。在请求头中包含:
+    ```
+    Authorization: Token your_token_here
+    ```
+    ''',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'COMPONENT_NO_READ_ONLY_REQUIRED': True,
+    'TAGS': [
+        {'name': '施工单', 'description': '施工单的创建、编辑、审核和查询'},
+        {'name': '任务', 'description': '任务的分派、认领、更新和完成'},
+        {'name': '部门', 'description': '部门信息和工序配置'},
+        {'name': '工序', 'description': '工序类型和属性管理'},
+        {'name': '用户', 'description': '用户信息和权限管理'},
+        {'name': '通知', 'description': '实时通知和历史记录'},
+        {'name': '统计', 'description': '任务统计和数据分析'},
+        {'name': '产品', 'description': '产品信息和库存管理'},
+        {'name': '物料', 'description': '物料信息和采购管理'},
+        {'name': '客户', 'description': '客户信息和联系记录'},
+    ],
+    'SCHEMA_PATH_PREFIX': '/api',
+    'SCHEMA_PATH_PREFIX_TRIM': True,
+}
