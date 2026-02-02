@@ -225,3 +225,54 @@ class APITestCaseMixin:
         self.assertEqual(response.status_code, status_code)
         if message:
             self.assertIn(message, str(response.data))
+
+
+# Pytest fixtures for integration tests
+import pytest
+from django.contrib.auth import get_user_model
+from rest_framework.test import APIClient
+
+User = get_user_model()
+
+
+@pytest.fixture
+def test_password():
+    """Fixture providing a default test password"""
+    return 'test_pass_123'
+
+
+@pytest.fixture
+def auto_login_user(db, client):
+    """Fixture that creates a user and logs them in"""
+    def make_user(**kwargs):
+        user = User.objects.create_user(
+            username=kwargs.get('username', 'testuser'),
+            password=kwargs.get('password', 'test_pass_123'),
+            email=kwargs.get('email', 'test@example.com'),
+            is_staff=kwargs.get('is_staff', True),
+        )
+        client.force_login(user)
+        return client, user
+    return make_user
+
+
+@pytest.fixture
+def api_client():
+    """APIClient fixture for DRF API testing"""
+    return APIClient()
+
+
+@pytest.fixture
+def api_client_with_user(db):
+    """Fixture providing authenticated API client with user"""
+    def _create_client(**kwargs):
+        user = User.objects.create_user(
+            username=kwargs.get('username', 'testuser'),
+            password=kwargs.get('password', 'test_pass_123'),
+            email=kwargs.get('email', 'test@example.com'),
+            is_staff=kwargs.get('is_staff', True),
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+        return client, user
+    return _create_client
