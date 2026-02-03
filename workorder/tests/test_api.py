@@ -140,15 +140,11 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         # 验证数据库中的状态
         pending_count = WorkOrder.objects.filter(status='pending').count()
         in_progress_count = WorkOrder.objects.filter(status='in_progress').count()
-        print(f"数据库中: pending={pending_count}, in_progress={in_progress_count}")
 
         # 过滤待开始的施工单
         response = self.api_get('/api/workorders/?status=pending', user=self.user)
 
-        # 调试：打印结果
-        print(f"API过滤后的施工单数量: {len(response.data['results'])}")
-        for i, wo in enumerate(response.data['results']):
-            print(f"  {i+1}. ID={wo['id']}, order_number={wo['order_number']}, status={wo['status']}")
+        # 调试输出已清理
 
         # 应该只返回待开始的
         self.assertEqual(response.status_code, 200)

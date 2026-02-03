@@ -129,6 +129,19 @@ class TestDataFactory:
         )
 
     @staticmethod
+    def create_department(name='测试部门', code='DEPT', **kwargs):
+        """创建测试部门"""
+        from workorder.models.base import Department
+        parent = kwargs.get('parent', None)
+        return Department.objects.create(
+            name=name,
+            code=code or kwargs.get('code', f'DEPT_{name[:4].upper()}'),
+            parent=parent,
+            is_active=kwargs.get('is_active', True),
+            sort_order=kwargs.get('sort_order', 0),
+        )
+
+    @staticmethod
     def create_workorder_process(work_order=None, process=None, sequence=10, **kwargs):
         """创建测试施工单工序"""
         from workorder.models.core import WorkOrderProcess
@@ -147,7 +160,7 @@ class TestDataFactory:
         )
 
     @staticmethod
-    def create_workorder(customer=None, creator=None, **kwargs):
+    def create_workorder(customer=None, creator=None, username=None, **kwargs):
         """创建测试施工单"""
         from workorder.models.core import WorkOrder
         from django.utils import timezone
@@ -157,7 +170,7 @@ class TestDataFactory:
             customer = TestDataFactory.create_customer()
 
         if not creator:
-            creator = TestDataFactory.create_user()
+            creator = TestDataFactory.create_user(username=username or 'testuser')
 
         tomorrow = timezone.now().date() + timedelta(days=1)
 

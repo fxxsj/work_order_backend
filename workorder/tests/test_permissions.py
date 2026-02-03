@@ -282,11 +282,6 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
             'approval_status': 'approved'
         }, user=self.salesperson1)
 
-        # 如果失败，打印错误信息以便调试
-        if response.status_code != 200:
-            print(f"Response status: {response.status_code}")
-            print(f"Response data: {response.data}")
-
         # 应该成功
         self.assertEqual(response.status_code, 200)
 
