@@ -9,8 +9,8 @@
 - ProductStockLog: 产品库存变更日志
 """
 
-from django.db import models, transaction
 from django.contrib.auth.models import User
+from django.db import models, transaction
 
 
 class Product(models.Model):
@@ -18,47 +18,65 @@ class Product(models.Model):
 
     # 产品类型选项
     PRODUCT_TYPE_CHOICES = [
-        ('single', '单品'),           # 独立产品，可单独销售
-        ('group_main', '套装主产品'),  # 套装产品本身（如：天地盒），用于销售下单
-        ('group_item', '套装子产品'),  # 套装中的组成部分（如：天盒、地盒），用于生产
+        ("single", "单品"),  # 独立产品，可单独销售
+        ("group_main", "套装主产品"),  # 套装产品本身（如：天地盒），用于销售下单
+        ("group_item", "套装子产品"),  # 套装中的组成部分（如：天盒、地盒），用于生产
     ]
 
-    name = models.CharField('产品名称', max_length=200)
-    code = models.CharField('产品编码', max_length=50, unique=True)
-    specification = models.CharField('规格', max_length=200, blank=True)
-    unit = models.CharField('单位', max_length=20, default='件')
-    unit_price = models.DecimalField('单价', max_digits=10, decimal_places=2, default=0)
-    stock_quantity = models.IntegerField('库存数量', default=0, help_text='产品的当前库存数量')
-    min_stock_quantity = models.IntegerField('最小库存', default=0,
-                                          help_text='库存低于此数量时触发预警')
+    name = models.CharField("产品名称", max_length=200)
+    code = models.CharField("产品编码", max_length=50, unique=True)
+    specification = models.CharField("规格", max_length=200, blank=True)
+    unit = models.CharField("单位", max_length=20, default="件")
+    unit_price = models.DecimalField("单价", max_digits=10, decimal_places=2, default=0)
+    stock_quantity = models.IntegerField(
+        "库存数量", default=0, help_text="产品的当前库存数量"
+    )
+    min_stock_quantity = models.IntegerField(
+        "最小库存", default=0, help_text="库存低于此数量时触发预警"
+    )
 
     # 产品类型
-    product_type = models.CharField('产品类型', max_length=20, choices=PRODUCT_TYPE_CHOICES,
-                                    default='single', help_text='单品可独立销售；套装主产品用于下单；套装子产品用于生产')
+    product_type = models.CharField(
+        "产品类型",
+        max_length=20,
+        choices=PRODUCT_TYPE_CHOICES,
+        default="single",
+        help_text="单品可独立销售；套装主产品用于下单；套装子产品用于生产",
+    )
 
     # 关联产品组（仅对套装主产品和套装子产品有效）
-    product_group = models.ForeignKey('ProductGroup', on_delete=models.SET_NULL, null=True, blank=True,
-                                      related_name='products', verbose_name='所属产品组',
-                                      help_text='套装主产品和套装子产品需要关联产品组')
+    product_group = models.ForeignKey(
+        "ProductGroup",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="products",
+        verbose_name="所属产品组",
+        help_text="套装主产品和套装子产品需要关联产品组",
+    )
 
     # 默认工序（多对多关系）
-    default_processes = models.ManyToManyField('Process', blank=True, verbose_name='默认工序',
-                                               help_text='创建施工单时将自动添加这些工序')
+    default_processes = models.ManyToManyField(
+        "Process",
+        blank=True,
+        verbose_name="默认工序",
+        help_text="创建施工单时将自动添加这些工序",
+    )
 
-    description = models.TextField('产品描述', blank=True)
-    is_active = models.BooleanField('是否启用', default=True)
-    created_at = models.DateTimeField('创建时间', auto_now_add=True)
-    updated_at = models.DateTimeField('更新时间', auto_now=True)
+    description = models.TextField("产品描述", blank=True)
+    is_active = models.BooleanField("是否启用", default=True)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
-        verbose_name = '产品'
-        verbose_name_plural = '产品管理'
-        ordering = ['code']
+        verbose_name = "产品"
+        verbose_name_plural = "产品管理"
+        ordering = ["code"]
         indexes = [
-            models.Index(fields=['name'], name='product_name_idx'),
-            models.Index(fields=['is_active'], name='product_is_active_idx'),
-            models.Index(fields=['stock_quantity'], name='product_stock_idx'),
-            models.Index(fields=['product_type'], name='product_type_idx'),
+            models.Index(fields=["name"], name="product_name_idx"),
+            models.Index(fields=["is_active"], name="product_is_active_idx"),
+            models.Index(fields=["stock_quantity"], name="product_stock_idx"),
+            models.Index(fields=["product_type"], name="product_type_idx"),
         ]
 
     def __str__(self):
@@ -69,41 +87,37 @@ class Product(models.Model):
     @property
     def is_single(self):
         """是否为单品"""
-        return self.product_type == 'single'
+        return self.product_type == "single"
 
     @property
     def is_group_main(self):
         """是否为套装主产品"""
-        return self.product_type == 'group_main'
+        return self.product_type == "group_main"
 
     @property
     def is_group_item(self):
         """是否为套装子产品"""
-        return self.product_type == 'group_item'
+        return self.product_type == "group_item"
 
     @property
     def product_type_display(self):
         """获取产品类型显示名称"""
-        return dict(self.PRODUCT_TYPE_CHOICES).get(self.product_type, '未知')
+        return dict(self.PRODUCT_TYPE_CHOICES).get(self.product_type, "未知")
 
     def get_group_items(self):
         """获取套装的所有子产品（仅对套装主产品有效）"""
         if not self.is_group_main or not self.product_group:
             return Product.objects.none()
         return Product.objects.filter(
-            product_group=self.product_group,
-            product_type='group_item',
-            is_active=True
-        ).order_by('code')
+            product_group=self.product_group, product_type="group_item", is_active=True
+        ).order_by("code")
 
     def get_group_main_product(self):
         """获取所属套装的主产品（仅对套装子产品有效）"""
         if not self.is_group_item or not self.product_group:
             return None
         return Product.objects.filter(
-            product_group=self.product_group,
-            product_type='group_main',
-            is_active=True
+            product_group=self.product_group, product_type="group_main", is_active=True
         ).first()
 
     def get_available_group_stock(self):
@@ -132,14 +146,18 @@ class Product(models.Model):
         if not self.is_group_main:
             if self.stock_quantity >= quantity:
                 return True, []
-            return False, [f'{self.name} 库存不足：需要 {quantity}，当前 {self.stock_quantity}']
+            return False, [
+                f"{self.name} 库存不足：需要 {quantity}，当前 {self.stock_quantity}"
+            ]
 
         errors = []
         items = self.get_group_items()
 
         for item in items:
             if item.stock_quantity < quantity:
-                errors.append(f'{item.name} 库存不足：需要 {quantity}，当前 {item.stock_quantity}')
+                errors.append(
+                    f"{item.name} 库存不足：需要 {quantity}，当前 {item.stock_quantity}"
+                )
 
         return len(errors) == 0, errors
 
@@ -148,24 +166,24 @@ class Product(models.Model):
         return self.stock_quantity < self.min_stock_quantity
 
     @transaction.atomic
-    def add_stock(self, quantity, user=None, reason=''):
+    def add_stock(self, quantity, user=None, reason=""):
         """增加库存数量（带事务保护）"""
         if quantity <= 0:
             return False
 
         old_quantity = self.stock_quantity
         self.stock_quantity += quantity
-        self.save(update_fields=['stock_quantity'])
+        self.save(update_fields=["stock_quantity"])
 
         # 创建库存变更日志
         ProductStockLog.objects.create(
             product=self,
-            change_type='add',
+            change_type="add",
             quantity=quantity,
             old_quantity=old_quantity,
             new_quantity=self.stock_quantity,
             reason=reason,
-            created_by=user
+            created_by=user,
         )
 
         # 检查是否需要预警
@@ -175,7 +193,7 @@ class Product(models.Model):
         return True
 
     @transaction.atomic
-    def reduce_stock(self, quantity, user=None, reason=''):
+    def reduce_stock(self, quantity, user=None, reason=""):
         """减少库存数量（带事务保护）"""
         if quantity <= 0:
             return False
@@ -186,17 +204,17 @@ class Product(models.Model):
 
         old_quantity = self.stock_quantity
         self.stock_quantity -= quantity
-        self.save(update_fields=['stock_quantity'])
+        self.save(update_fields=["stock_quantity"])
 
         # 创建库存变更日志
         ProductStockLog.objects.create(
             product=self,
-            change_type='reduce',
+            change_type="reduce",
             quantity=-quantity,
             old_quantity=old_quantity,
             new_quantity=self.stock_quantity,
             reason=reason,
-            created_by=user
+            created_by=user,
         )
 
         # 检查是否需要预警
@@ -207,66 +225,95 @@ class Product(models.Model):
 
     def _send_low_stock_warning(self):
         """发送库存预警通知"""
-        from .system import Notification
         # 向所有具有库存预警权限的用户发送通知
         # 这里简化为向系统管理员发送
         from django.contrib.auth.models import User
+
+        from .system import Notification
+
         admins = User.objects.filter(is_superuser=True)
         for admin in admins:
             Notification.objects.create(
                 recipient=admin,
-                notification_type='low_stock_warning',
-                title=f'产品库存预警：{self.name}',
-                content=f'产品【{self.code} - {self.name}】的库存已低于预警值。当前库存：{self.stock_quantity}，最小库存：{self.min_stock_quantity}。请及时补货。',
-                priority='high'
+                notification_type="low_stock_warning",
+                title=f"产品库存预警：{self.name}",
+                content=f"产品【{self.code} - {self.name}】的库存已低于预警值。当前库存：{self.stock_quantity}，最小库存：{self.min_stock_quantity}。请及时补货。",
+                priority="high",
             )
 
 
 class ProductStockLog(models.Model):
     """产品库存变更日志"""
+
     CHANGE_TYPE_CHOICES = [
-        ('add', '入库'),
-        ('reduce', '出库'),
+        ("add", "入库"),
+        ("reduce", "出库"),
     ]
 
-    product = models.ForeignKey(Product, on_delete=models.CASCADE,
-                              related_name='stock_logs', verbose_name='产品')
-    change_type = models.CharField('变更类型', max_length=20, choices=CHANGE_TYPE_CHOICES)
-    quantity = models.IntegerField('变更数量', help_text='正数表示入库，负数表示出库')
-    old_quantity = models.IntegerField('变更前库存')
-    new_quantity = models.IntegerField('变更后库存')
-    reason = models.TextField('变更原因', blank=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
-                                     related_name='product_stock_logs', verbose_name='操作人')
-    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="stock_logs",
+        verbose_name="产品",
+    )
+    change_type = models.CharField(
+        "变更类型", max_length=20, choices=CHANGE_TYPE_CHOICES
+    )
+    quantity = models.IntegerField("变更数量", help_text="正数表示入库，负数表示出库")
+    old_quantity = models.IntegerField("变更前库存")
+    new_quantity = models.IntegerField("变更后库存")
+    reason = models.TextField("变更原因", blank=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="product_stock_logs",
+        verbose_name="操作人",
+    )
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
 
     class Meta:
-        verbose_name = '产品库存日志'
-        verbose_name_plural = '产品库存日志管理'
-        ordering = ['-created_at']
+        verbose_name = "产品库存日志"
+        verbose_name_plural = "产品库存日志管理"
+        ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.product.name} - {self.get_change_type_display()}: {self.quantity}"
+        return (
+            f"{self.product.name} - {self.get_change_type_display()}: {self.quantity}"
+        )
 
 
 class ProductMaterial(models.Model):
     """产品默认物料配置"""
-    product = models.ForeignKey(Product, on_delete=models.CASCADE,
-                               related_name='default_materials', verbose_name='产品')
-    material = models.ForeignKey('workorder.Material', on_delete=models.PROTECT, verbose_name='物料')
-    material_size = models.CharField('尺寸', max_length=100, blank=True, help_text='如：A4、210x297mm等')
-    material_usage = models.CharField('用量', max_length=100, blank=True, help_text='如：1000张、50平方米等')
-    need_cutting = models.BooleanField('需要开料', default=False,
-                                      help_text='该物料是否需要开料工序处理')
-    notes = models.TextField('备注', blank=True)
-    sort_order = models.IntegerField('排序', default=0)
-    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="default_materials",
+        verbose_name="产品",
+    )
+    material = models.ForeignKey(
+        "workorder.Material", on_delete=models.PROTECT, verbose_name="物料"
+    )
+    material_size = models.CharField(
+        "尺寸", max_length=100, blank=True, help_text="如：A4、210x297mm等"
+    )
+    material_usage = models.CharField(
+        "用量", max_length=100, blank=True, help_text="如：1000张、50平方米等"
+    )
+    need_cutting = models.BooleanField(
+        "需要开料", default=False, help_text="该物料是否需要开料工序处理"
+    )
+    notes = models.TextField("备注", blank=True)
+    sort_order = models.IntegerField("排序", default=0)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
 
     class Meta:
-        verbose_name = '产品默认物料'
-        verbose_name_plural = '产品默认物料管理'
-        ordering = ['product', 'sort_order']
-        unique_together = ['product', 'material']
+        verbose_name = "产品默认物料"
+        verbose_name_plural = "产品默认物料管理"
+        ordering = ["product", "sort_order"]
+        unique_together = ["product", "material"]
 
     def __str__(self):
         return f"{self.product.name} - {self.material.name}"
@@ -274,21 +321,22 @@ class ProductMaterial(models.Model):
 
 class ProductGroup(models.Model):
     """产品组（如：天地盒、套装等，一个产品组可能需要多个施工单完成）"""
-    name = models.CharField('产品组名称', max_length=200)
-    code = models.CharField('产品组编码', max_length=50, unique=True)
-    description = models.TextField('描述', blank=True)
-    is_active = models.BooleanField('是否启用', default=True)
-    created_at = models.DateTimeField('创建时间', auto_now_add=True)
-    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    name = models.CharField("产品组名称", max_length=200)
+    code = models.CharField("产品组编码", max_length=50, unique=True)
+    description = models.TextField("描述", blank=True)
+    is_active = models.BooleanField("是否启用", default=True)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
-        verbose_name = '产品组'
-        verbose_name_plural = '产品组管理'
-        ordering = ['code']
+        verbose_name = "产品组"
+        verbose_name_plural = "产品组管理"
+        ordering = ["code"]
         indexes = [
-            models.Index(fields=['name'], name='productgroup_name_idx'),
-            models.Index(fields=['is_active'], name='productgroup_active_idx'),
-            models.Index(fields=['code'], name='productgroup_code_idx'),
+            models.Index(fields=["name"], name="productgroup_name_idx"),
+            models.Index(fields=["is_active"], name="productgroup_active_idx"),
+            models.Index(fields=["code"], name="productgroup_code_idx"),
         ]
 
     def __str__(self):
@@ -297,18 +345,25 @@ class ProductGroup(models.Model):
 
 class ProductGroupItem(models.Model):
     """产品组中的子产品（如：天地盒中的天盒、地盒）"""
-    product_group = models.ForeignKey(ProductGroup, on_delete=models.CASCADE,
-                                     related_name='items', verbose_name='产品组')
-    product = models.ForeignKey(Product, on_delete=models.PROTECT, verbose_name='产品')
-    item_name = models.CharField('子产品名称', max_length=200, help_text='如：天盒、地盒')
-    sort_order = models.IntegerField('排序', default=0)
-    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    product_group = models.ForeignKey(
+        ProductGroup,
+        on_delete=models.CASCADE,
+        related_name="items",
+        verbose_name="产品组",
+    )
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, verbose_name="产品")
+    item_name = models.CharField(
+        "子产品名称", max_length=200, help_text="如：天盒、地盒"
+    )
+    sort_order = models.IntegerField("排序", default=0)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
 
     class Meta:
-        verbose_name = '产品组子项'
-        verbose_name_plural = '产品组子项管理'
-        ordering = ['product_group', 'sort_order']
-        unique_together = ['product_group', 'product']
+        verbose_name = "产品组子项"
+        verbose_name_plural = "产品组子项管理"
+        ordering = ["product_group", "sort_order"]
+        unique_together = ["product_group", "product"]
 
     def __str__(self):
         return f"{self.product_group.name} - {self.item_name} ({self.product.name})"

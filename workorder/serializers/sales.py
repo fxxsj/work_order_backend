@@ -5,34 +5,43 @@
 """
 
 from rest_framework import serializers
+
 from ..models.sales import SalesOrder, SalesOrderItem
 
 
 class SalesOrderItemSerializer(serializers.ModelSerializer):
     """销售订单明细序列化器"""
-    product_name = serializers.CharField(source='product.name', read_only=True)
-    product_code = serializers.CharField(source='product.code', read_only=True)
+
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_code = serializers.CharField(source="product.code", read_only=True)
     subtotal = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
 
     class Meta:
         model = SalesOrderItem
-        fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at', 'subtotal', 'sales_order']
+        fields = "__all__"
+        read_only_fields = ["created_at", "updated_at", "subtotal", "sales_order"]
 
 
 class SalesOrderListSerializer(serializers.ModelSerializer):
     """销售订单列表序列化器"""
-    customer_name = serializers.CharField(source='customer.name', read_only=True)
-    customer_code = serializers.CharField(source='customer.code', read_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
-    payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
-    submitted_by_name = serializers.CharField(source='submitted_by.username', read_only=True, allow_null=True)
-    approved_by_name = serializers.CharField(source='approved_by.username', read_only=True, allow_null=True)
+
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    customer_code = serializers.CharField(source="customer.code", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    payment_status_display = serializers.CharField(
+        source="get_payment_status_display", read_only=True
+    )
+    submitted_by_name = serializers.CharField(
+        source="submitted_by.username", read_only=True, allow_null=True
+    )
+    approved_by_name = serializers.CharField(
+        source="approved_by.username", read_only=True, allow_null=True
+    )
     items_count = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesOrder
-        fields = '__all__'
+        fields = "__all__"
 
     def get_items_count(self, obj):
         """获取订单明细数量"""
@@ -41,21 +50,37 @@ class SalesOrderListSerializer(serializers.ModelSerializer):
 
 class SalesOrderDetailSerializer(serializers.ModelSerializer):
     """销售订单详情序列化器"""
-    customer_name = serializers.CharField(source='customer.name', read_only=True)
-    customer_contact = serializers.CharField(source='customer.contact_person', read_only=True)
-    customer_phone = serializers.CharField(source='customer.phone', read_only=True)
-    customer_address = serializers.CharField(source='customer.address', read_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
-    payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
-    submitted_by_name = serializers.CharField(source='submitted_by.username', read_only=True, allow_null=True)
-    approved_by_name = serializers.CharField(source='approved_by.username', read_only=True, allow_null=True)
+
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    customer_contact = serializers.CharField(
+        source="customer.contact_person", read_only=True
+    )
+    customer_phone = serializers.CharField(source="customer.phone", read_only=True)
+    customer_address = serializers.CharField(source="customer.address", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    payment_status_display = serializers.CharField(
+        source="get_payment_status_display", read_only=True
+    )
+    submitted_by_name = serializers.CharField(
+        source="submitted_by.username", read_only=True, allow_null=True
+    )
+    approved_by_name = serializers.CharField(
+        source="approved_by.username", read_only=True, allow_null=True
+    )
     items = SalesOrderItemSerializer(many=True, required=False)
     work_order_numbers = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesOrder
-        fields = '__all__'
-        read_only_fields = ['order_number', 'subtotal', 'tax_amount', 'total_amount', 'created_at', 'updated_at']
+        fields = "__all__"
+        read_only_fields = [
+            "order_number",
+            "subtotal",
+            "tax_amount",
+            "total_amount",
+            "created_at",
+            "updated_at",
+        ]
 
     def get_work_order_numbers(self, obj):
         """获取关联的施工单号列表"""
@@ -68,6 +93,7 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         编辑订单时：允许保留历史交货日期
         """
         from django.utils import timezone
+
         # 编辑模式时，如果日期未改变，允许保留原值
         if self.instance and self.instance.delivery_date == value:
             return value
@@ -90,48 +116,50 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         """对象级验证"""
-        order_date = attrs.get('order_date')
-        delivery_date = attrs.get('delivery_date')
+        order_date = attrs.get("order_date")
+        delivery_date = attrs.get("delivery_date")
 
         if self.instance:
             order_date = order_date or self.instance.order_date
             delivery_date = delivery_date or self.instance.delivery_date
 
         if order_date and delivery_date and delivery_date < order_date:
-            raise serializers.ValidationError({
-                'delivery_date': '交货日期不能早于订单日期'
-            })
+            raise serializers.ValidationError(
+                {"delivery_date": "交货日期不能早于订单日期"}
+            )
 
         return attrs
 
     def create(self, validated_data):
         """创建销售订单及其明细"""
-        items_data = validated_data.pop('items', [])
-        
+        items_data = validated_data.pop("items", [])
+
         try:
             sales_order = SalesOrder.objects.create(**validated_data)
         except Exception as e:
-            raise serializers.ValidationError(f'创建销售订单失败: {str(e)}')
-        
+            raise serializers.ValidationError(f"创建销售订单失败: {str(e)}")
+
         # 创建订单明细
         for i, item_data in enumerate(items_data):
             try:
                 SalesOrderItem.objects.create(sales_order=sales_order, **item_data)
             except Exception as e:
-                raise serializers.ValidationError(f'创建订单明细失败 (第{i+1}项): {str(e)}')
-        
+                raise serializers.ValidationError(
+                    f"创建订单明细失败 (第{i+1}项): {str(e)}"
+                )
+
         # 更新订单总金额
         try:
             sales_order.update_totals()
         except Exception as e:
             # 不阻止流程，记录错误即可
             pass
-        
+
         return sales_order
 
     def update(self, instance, validated_data):
         """更新销售订单及其明细"""
-        items_data = validated_data.pop('items', None)
+        items_data = validated_data.pop("items", None)
 
         # 更新销售订单基本信息
         for attr, value in validated_data.items():

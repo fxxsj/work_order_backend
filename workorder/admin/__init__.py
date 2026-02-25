@@ -16,142 +16,108 @@ Django Admin 管理界面按业务领域拆分。
 - inventory: 库存管理 (ProductStock, StockIn, StockOut, DeliveryOrder)
 """
 
-# Django admin 补丁（必须在最前）
-from .mixins import (
-    FixedInlineModelAdminMixin,
-    _patched_check_inlines,
-)
-
 # 应用 Django admin 检查器补丁
 from django.contrib.admin.options import ModelAdmin
+
+# Django admin 补丁（必须在最前）
+from .mixins import FixedInlineModelAdminMixin, _patched_check_inlines
+
 ModelAdmin.checks_class._check_inlines = _patched_check_inlines
 
+from .assets import ArtworkAdmin, DieAdmin, EmbossingPlateAdmin, FoilingPlateAdmin
+
 # 导入各模块的 Admin 类
-from .base import (
-    CustomerAdmin,
-    DepartmentAdmin,
-    ProcessAdmin,
-)
-
-from .products import (
-    ProductAdmin,
-    ProductGroupAdmin,
-    ProductGroupItemAdmin,
-)
-
-from .materials import (
-    MaterialAdmin,
-    SupplierAdmin,
-    MaterialSupplierAdmin,
-    PurchaseOrderAdmin,
-    PurchaseOrderItemAdmin,
-)
-
-from .assets import (
-    ArtworkAdmin,
-    DieAdmin,
-    FoilingPlateAdmin,
-    EmbossingPlateAdmin,
-)
-
+from .base import CustomerAdmin, DepartmentAdmin, ProcessAdmin
 from .core import (
-    WorkOrderAdmin,
-    WorkOrderProcessAdmin,
-    WorkOrderMaterialAdmin,
     ProcessLogAdmin,
+    WorkOrderAdmin,
+    WorkOrderMaterialAdmin,
+    WorkOrderProcessAdmin,
     WorkOrderTaskAdmin,
 )
-
-from .system import (
-    UserProfileAdmin,
-    WorkOrderApprovalLogAdmin,
-    TaskAssignmentRuleAdmin,
-    NotificationAdmin,
-)
-
-from .sales import (
-    SalesOrderAdmin,
-    SalesOrderItemAdmin,
-)
-
 from .finance import (
     CostCenterAdmin,
     CostItemAdmin,
-    ProductionCostAdmin,
     InvoiceAdmin,
     PaymentAdmin,
     PaymentPlanAdmin,
+    ProductionCostAdmin,
     StatementAdmin,
 )
-
 from .inventory import (
+    DeliveryItemAdmin,
+    DeliveryOrderAdmin,
     ProductStockAdmin,
+    QualityInspectionAdmin,
     StockInAdmin,
     StockOutAdmin,
-    DeliveryOrderAdmin,
-    DeliveryItemAdmin,
-    QualityInspectionAdmin,
+)
+from .materials import (
+    MaterialAdmin,
+    MaterialSupplierAdmin,
+    PurchaseOrderAdmin,
+    PurchaseOrderItemAdmin,
+    SupplierAdmin,
+)
+from .products import ProductAdmin, ProductGroupAdmin, ProductGroupItemAdmin
+from .sales import SalesOrderAdmin, SalesOrderItemAdmin
+from .system import (
+    NotificationAdmin,
+    TaskAssignmentRuleAdmin,
+    UserProfileAdmin,
+    WorkOrderApprovalLogAdmin,
 )
 
 __all__ = [
     # Mixins
-    'FixedInlineModelAdminMixin',
-    '_patched_check_inlines',
-
+    "FixedInlineModelAdminMixin",
+    "_patched_check_inlines",
     # Base Admins
-    'CustomerAdmin',
-    'DepartmentAdmin',
-    'ProcessAdmin',
-
+    "CustomerAdmin",
+    "DepartmentAdmin",
+    "ProcessAdmin",
     # Product Admins
-    'ProductAdmin',
-    'ProductGroupAdmin',
-    'ProductGroupItemAdmin',
-
+    "ProductAdmin",
+    "ProductGroupAdmin",
+    "ProductGroupItemAdmin",
     # Material Admins
-    'MaterialAdmin',
-    'SupplierAdmin',
-    'MaterialSupplierAdmin',
-    'PurchaseOrderAdmin',
-    'PurchaseOrderItemAdmin',
-
+    "MaterialAdmin",
+    "SupplierAdmin",
+    "MaterialSupplierAdmin",
+    "PurchaseOrderAdmin",
+    "PurchaseOrderItemAdmin",
     # Asset Admins
-    'ArtworkAdmin',
-    'DieAdmin',
-    'FoilingPlateAdmin',
-    'EmbossingPlateAdmin',
-
+    "ArtworkAdmin",
+    "DieAdmin",
+    "FoilingPlateAdmin",
+    "EmbossingPlateAdmin",
     # Core Admins
-    'WorkOrderAdmin',
-    'WorkOrderProcessAdmin',
-    'WorkOrderMaterialAdmin',
-    'ProcessLogAdmin',
-    'WorkOrderTaskAdmin',
-
+    "WorkOrderAdmin",
+    "WorkOrderProcessAdmin",
+    "WorkOrderMaterialAdmin",
+    "ProcessLogAdmin",
+    "WorkOrderTaskAdmin",
     # System Admins
-    'UserProfileAdmin',
-    'WorkOrderApprovalLogAdmin',
-    'TaskAssignmentRuleAdmin',
-    'NotificationAdmin',
-
+    "UserProfileAdmin",
+    "WorkOrderApprovalLogAdmin",
+    "TaskAssignmentRuleAdmin",
+    "NotificationAdmin",
     # Sales Admins
-    'SalesOrderAdmin',
-    'SalesOrderItemAdmin',
-
+    "SalesOrderAdmin",
+    "SalesOrderItemAdmin",
     # Finance Admins
-    'CostCenterAdmin',
-    'CostItemAdmin',
-    'ProductionCostAdmin',
-    'InvoiceAdmin',
-    'PaymentAdmin',
-    'PaymentPlanAdmin',
-    'StatementAdmin',
-
+    "CostCenterAdmin",
+    "CostItemAdmin",
+    "ProductionCostAdmin",
+    "InvoiceAdmin",
+    "PaymentAdmin",
+    "PaymentPlanAdmin",
+    "StatementAdmin",
     # Inventory Admins
-    'ProductStockAdmin',
-    'StockInAdmin',
-    'StockOutAdmin',
-    'DeliveryOrderAdmin',
-    'DeliveryItemAdmin',
-    'QualityInspectionAdmin',
+    "ProductStockAdmin",
+    "StockInAdmin",
+    "StockOutAdmin",
+    "DeliveryOrderAdmin",
+    "DeliveryItemAdmin",
+    "QualityInspectionAdmin",
 ]

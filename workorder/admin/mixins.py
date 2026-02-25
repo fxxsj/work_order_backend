@@ -5,8 +5,8 @@ Admin 通用混入类和补丁
 - FixedInlineModelAdminMixin: 修复Django admin在使用字符串外键时的检查问题
 - Django admin检查器补丁: 跳过字符串外键的inline检查
 """
-from django.contrib.admin.options import ModelAdmin
 
+from django.contrib.admin.options import ModelAdmin
 
 # 修补Django的admin检查器，跳过字符串外键的inline检查
 # 这对于模块化结构是必要的，因为字符串外键在检查时还未被解析

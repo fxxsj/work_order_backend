@@ -8,35 +8,35 @@ class ProcessCodes:
     """工序编码常量类"""
 
     # 基础工序
-    CTP = 'CTP'      # 制版
-    DIE = 'DIE'      # 模切
-    CUT = 'CUT'      # 开料
-    PRT = 'PRT'      # 印刷
+    CTP = "CTP"  # 制版
+    DIE = "DIE"  # 模切
+    CUT = "CUT"  # 开料
+    PRT = "PRT"  # 印刷
 
     # 表面处理工序
-    FOIL_G = 'FOIL_G'  # 烫金
-    FOIL_S = 'FOIL_S'  # 烫银
-    EMB = 'EMB'        # 压凸
-    BEM = 'BEM'        # 压纹
+    FOIL_G = "FOIL_G"  # 烫金
+    FOIL_S = "FOIL_S"  # 烫银
+    EMB = "EMB"  # 压凸
+    BEM = "BEM"  # 压纹
 
     # 覆膜工序
-    CFM = 'CFM'      # 覆光膜
-    CFMM = 'CFMM'    # 覆哑膜
+    CFM = "CFM"  # 覆光膜
+    CFMM = "CFMM"  # 覆哑膜
 
     # UV 工序
-    UV = 'UV'        # UV
+    UV = "UV"  # UV
 
     # 后道工序
-    GLUING = 'GLUING'      # 粘胶
-    WINDOW = 'WINDOW'      # 粘窗口
-    PASTE = 'PASTE'        # 裱坑
-    MOUNT = 'MOUNT'        # 对裱
-    PACK = 'PACK'          # 包装
-    NAILING = 'NAILING'    # 打钉
+    GLUING = "GLUING"  # 粘胶
+    WINDOW = "WINDOW"  # 粘窗口
+    PASTE = "PASTE"  # 裱坑
+    MOUNT = "MOUNT"  # 对裱
+    PACK = "PACK"  # 包装
+    NAILING = "NAILING"  # 打钉
 
     # 其他工序
-    OIL = 'OIL'      # 过油
-    VAMP = 'VAMP'    # 压线
+    OIL = "OIL"  # 过油
+    VAMP = "VAMP"  # 压线
 
     @staticmethod
     def is_parallel(process_code):
@@ -85,10 +85,10 @@ class ProcessCodes:
         """
         # 印刷相关的工序需要物料已开料
         requires_cut = [
-            ProcessCodes.PRT,      # 印刷
-            ProcessCodes.OIL,      # 过油
-            ProcessCodes.CFM,      # 覆光膜
-            ProcessCodes.CFMM,     # 覆哑膜
-            ProcessCodes.UV,       # UV
+            ProcessCodes.PRT,  # 印刷
+            ProcessCodes.OIL,  # 过油
+            ProcessCodes.CFM,  # 覆光膜
+            ProcessCodes.CFMM,  # 覆哑膜
+            ProcessCodes.UV,  # UV
         ]
         return process_code in requires_cut

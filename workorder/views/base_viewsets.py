@@ -5,8 +5,8 @@
 所有视图集都应继承这些基类以获得一致的功能。
 """
 
-from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, viewsets
 
 from ..permissions import SuperuserFriendlyModelPermissions
 
@@ -30,7 +30,11 @@ class BaseViewSet(viewsets.ModelViewSet):
     """
 
     # 标准的过滤器后端
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
 
     # 标准的权限类
     permission_classes = [SuperuserFriendlyModelPermissions]
@@ -64,7 +68,11 @@ class ReadOnlyBaseViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     # 标准的过滤器后端
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
 
     # 标准的权限类
     permission_classes = [SuperuserFriendlyModelPermissions]

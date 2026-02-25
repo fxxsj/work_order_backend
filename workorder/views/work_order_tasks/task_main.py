@@ -4,72 +4,88 @@
 包含基础的 ViewSet 配置和核心方法。
 """
 
-from rest_framework import viewsets, filters, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Q
 import logging
 
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
+from django.db.models import Q
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
+from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
+from workorder.exceptions import (
+    BusinessLogicError,
+    PermissionDeniedError,
+    TaskConflictError,
+)
 from workorder.models.core import WorkOrderTask
-from workorder.serializers.core import WorkOrderTaskSerializer, TaskAssignmentSerializer
 from workorder.permissions import WorkOrderTaskPermission
+from workorder.serializers.core import TaskAssignmentSerializer, WorkOrderTaskSerializer
 from workorder.services.task_assignment import TaskAssignmentService
-from workorder.exceptions import BusinessLogicError, PermissionDeniedError, TaskConflictError
-from .task_filters import WorkOrderTaskFilterSet
+
 from .task_export import TaskExportMixin
+from .task_filters import WorkOrderTaskFilterSet
 
 logger = logging.getLogger(__name__)
 
 
 @extend_schema_view(
     list=extend_schema(
-        tags=['任务'],
-        summary='获取任务列表',
-        description='返回分页的任务列表，支持按部门、状态、操作员等条件筛选。',
+        tags=["任务"],
+        summary="获取任务列表",
+        description="返回分页的任务列表，支持按部门、状态、操作员等条件筛选。",
         parameters=[
             OpenApiParameter(
-                name='assigned_department',
+                name="assigned_department",
                 type=OpenApiTypes.INT,
-                description='按部门ID筛选',
+                description="按部门ID筛选",
                 required=False,
             ),
             OpenApiParameter(
-                name='status',
+                name="status",
                 type=OpenApiTypes.STR,
-                description='按任务状态筛选',
-                enum=['draft', 'pending', 'in_progress', 'completed', 'cancelled'],
+                description="按任务状态筛选",
+                enum=["draft", "pending", "in_progress", "completed", "cancelled"],
                 required=False,
             ),
             OpenApiParameter(
-                name='assigned_operator',
+                name="assigned_operator",
                 type=OpenApiTypes.INT,
-                description='按操作员ID筛选',
+                description="按操作员ID筛选",
                 required=False,
             ),
             OpenApiParameter(
-                name='search',
+                name="search",
                 type=OpenApiTypes.STR,
-                description='搜索任务编号、施工单号或工作内容',
+                description="搜索任务编号、施工单号或工作内容",
                 required=False,
             ),
         ],
         responses={200: WorkOrderTaskSerializer},
     ),
     retrieve=extend_schema(
-        tags=['任务'],
-        summary='获取任务详情',
-        description='获取指定任务的完整信息，包括关联的施工单、工序、部门和操作员。',
-        responses={200: WorkOrderTaskSerializer, 404: OpenApiResponse(description='任务不存在')},
+        tags=["任务"],
+        summary="获取任务详情",
+        description="获取指定任务的完整信息，包括关联的施工单、工序、部门和操作员。",
+        responses={
+            200: WorkOrderTaskSerializer,
+            404: OpenApiResponse(description="任务不存在"),
+        },
     ),
     destroy=extend_schema(
-        tags=['任务'],
-        summary='删除任务',
-        description='删除指定的任务。只有草稿状态的任务可以被删除。',
-        responses={204: OpenApiResponse(description='删除成功'), 400: OpenApiResponse(description='无法删除非草稿任务')},
+        tags=["任务"],
+        summary="删除任务",
+        description="删除指定的任务。只有草稿状态的任务可以被删除。",
+        responses={
+            204: OpenApiResponse(description="删除成功"),
+            400: OpenApiResponse(description="无法删除非草稿任务"),
+        },
     ),
 )
 class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
@@ -84,34 +100,52 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
     # 优化查询：使用 select_related 和 prefetch_related 避免 N+1 查询
     # Query optimization: select_related reduces N+1 queries for ForeignKey lookups
     # Expected: 1 query for tasks list instead of 1+N queries
-    queryset = WorkOrderTask.objects.select_related(
-        'assigned_department',
-        'assigned_operator',
-        'work_order_process',
-        'work_order_process__work_order',
-        'work_order_process__work_order__customer',
-        'work_order_process__process',
-        'work_order_process__department',
-        'work_order_process__operator',
-        'parent_task',
-        'artwork',
-        'die',
-        'product',
-        'material',
-        'foiling_plate',
-        'embossing_plate',
-    ).prefetch_related(
-        'logs',
-        'subtasks',
-    ).all()
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_class = WorkOrderTaskFilterSet
-    search_fields = ['work_content', 'production_requirements', 'work_order_process__work_order__order_number']
-    ordering_fields = [
-        'created_at', 'updated_at', 'assigned_department', 'assigned_operator',
-        'status', 'task_type', 'production_quantity', 'quantity_completed'
+    queryset = (
+        WorkOrderTask.objects.select_related(
+            "assigned_department",
+            "assigned_operator",
+            "work_order_process",
+            "work_order_process__work_order",
+            "work_order_process__work_order__customer",
+            "work_order_process__process",
+            "work_order_process__department",
+            "work_order_process__operator",
+            "parent_task",
+            "artwork",
+            "die",
+            "product",
+            "material",
+            "foiling_plate",
+            "embossing_plate",
+        )
+        .prefetch_related(
+            "logs",
+            "subtasks",
+        )
+        .all()
+    )
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
     ]
-    ordering = ['-created_at']
+    filterset_class = WorkOrderTaskFilterSet
+    search_fields = [
+        "work_content",
+        "production_requirements",
+        "work_order_process__work_order__order_number",
+    ]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "assigned_department",
+        "assigned_operator",
+        "status",
+        "task_type",
+        "production_quantity",
+        "quantity_completed",
+    ]
+    ordering = ["-created_at"]
 
     def get_queryset(self):
         """
@@ -130,20 +164,24 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             return queryset
 
         # 操作员只能查看自己分派的任务
-        if not user.has_perm('workorder.change_workorder'):
+        if not user.has_perm("workorder.change_workorder"):
             queryset = queryset.filter(assigned_operator=user)
         # 生产主管可以查看本部门的所有任务
         else:
-            user_departments = user.profile.departments.all() if hasattr(user, 'profile') else []
+            user_departments = (
+                user.profile.departments.all() if hasattr(user, "profile") else []
+            )
             if user_departments:
                 # 可以查看本部门的任务或自己创建的施工单的任务
                 queryset = queryset.filter(
-                    Q(assigned_department__in=user_departments) |
-                    Q(work_order_process__work_order__created_by=user)
+                    Q(assigned_department__in=user_departments)
+                    | Q(work_order_process__work_order__created_by=user)
                 )
             else:
                 # 如果没有部门信息，只能查看自己创建的施工单的任务
-                queryset = queryset.filter(work_order_process__work_order__created_by=user)
+                queryset = queryset.filter(
+                    work_order_process__work_order__created_by=user
+                )
 
         return queryset
 
@@ -161,16 +199,17 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         if task.quantity_completed is not None and task.production_quantity:
             if task.quantity_completed > task.production_quantity:
                 from rest_framework.exceptions import ValidationError
+
                 raise ValidationError(
-                    f'完成数量（{task.quantity_completed}）'
-                    f'不能超过生产数量（{task.production_quantity}）'
+                    f"完成数量（{task.quantity_completed}）"
+                    f"不能超过生产数量（{task.production_quantity}）"
                 )
 
         # 如果任务完成，检查工序是否完成
-        if task.status == 'completed':
+        if task.status == "completed":
             task.work_order_process.check_and_update_status()
 
-    @action(detail=True, methods=['post'], url_path='assign')
+    @action(detail=True, methods=["post"], url_path="assign")
     def assign(self, request, pk=None):
         """分配任务给指定操作员
 
@@ -194,20 +233,23 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         try:
             result = TaskAssignmentService.assign_to_operator(
                 task_id=task.id,
-                operator_id=serializer.validated_data['operator_id'],
+                operator_id=serializer.validated_data["operator_id"],
                 assigned_by=request.user,
-                notes=serializer.validated_data.get('notes', '')
+                notes=serializer.validated_data.get("notes", ""),
             )
 
             # 重新获取更新后的任务数据
             task.refresh_from_db()
             response_serializer = self.get_serializer(task)
 
-            return Response({
-                'detail': '任务分配成功',
-                'data': result,
-                'task': response_serializer.data
-            }, status=status.HTTP_200_OK)
+            return Response(
+                {
+                    "detail": "任务分配成功",
+                    "data": result,
+                    "task": response_serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
 
         except (PermissionDeniedError, BusinessLogicError, TaskConflictError) as e:
             # 确定状态码
@@ -221,29 +263,29 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
 
             # 构建错误响应
             error_response = {
-                'detail': str(e),
-                'code': e.default_code if hasattr(e, 'default_code') else 'error'
+                "detail": str(e),
+                "code": e.default_code if hasattr(e, "default_code") else "error",
             }
 
             # 如果是冲突错误，添加额外信息
-            if hasattr(e, 'current_owner') and e.current_owner:
-                error_response['current_owner'] = e.current_owner
-            if hasattr(e, 'task_id') and e.task_id:
-                error_response['task_id'] = e.task_id
+            if hasattr(e, "current_owner") and e.current_owner:
+                error_response["current_owner"] = e.current_owner
+            if hasattr(e, "task_id") and e.task_id:
+                error_response["task_id"] = e.task_id
 
             # 添加重试建议
             retry_info = TaskAssignmentService.get_retry_suggestion(e)
-            error_response['retry'] = retry_info
+            error_response["retry"] = retry_info
 
             return Response(error_response, status=status_code)
         except Exception as e:
             logger.error(f"任务分配失败: {str(e)}")
-            return Response({
-                'detail': '任务分配失败，请稍后重试',
-                'error': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"detail": "任务分配失败，请稍后重试", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
-    @action(detail=False, methods=['get'], url_path='department-operators')
+    @action(detail=False, methods=["get"], url_path="department-operators")
     def department_operators(self, request):
         """获取部门操作员列表
 
@@ -253,24 +295,25 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         """
         from workorder.models.base import Department
 
-        department_id = request.query_params.get('department_id')
+        department_id = request.query_params.get("department_id")
         if not department_id:
-            return Response({
-                'detail': '请提供 department_id 参数'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "请提供 department_id 参数"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             operators = TaskAssignmentService.get_department_operators(department_id)
-            return Response({
-                'department_id': int(department_id),
-                'operators': operators
-            })
+            return Response(
+                {"department_id": int(department_id), "operators": operators}
+            )
         except Department.DoesNotExist:
-            return Response({
-                'detail': f'部门ID {department_id} 不存在'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": f"部门ID {department_id} 不存在"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-    @action(detail=True, methods=['post'], url_path='claim')
+    @action(detail=True, methods=["post"], url_path="claim")
     def claim(self, request, pk=None):
         """操作员认领任务
 
@@ -288,24 +331,25 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         task = self.get_object()
 
         # 获取可选的备注
-        notes = request.data.get('notes', '') if request.data else ''
+        notes = request.data.get("notes", "") if request.data else ""
 
         try:
             result = TaskAssignmentService.claim_task(
-                task_id=task.id,
-                operator=request.user,
-                notes=notes
+                task_id=task.id, operator=request.user, notes=notes
             )
 
             # 重新获取更新后的任务数据
             task.refresh_from_db()
             response_serializer = self.get_serializer(task)
 
-            return Response({
-                'detail': result.get('message', '任务认领成功'),
-                'data': result,
-                'task': response_serializer.data
-            }, status=status.HTTP_200_OK)
+            return Response(
+                {
+                    "detail": result.get("message", "任务认领成功"),
+                    "data": result,
+                    "task": response_serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
 
         except (BusinessLogicError, TaskConflictError) as e:
             # 确定状态码
@@ -317,29 +361,33 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
 
             # 构建错误响应
             error_response = {
-                'detail': str(e),
-                'code': e.default_code if hasattr(e, 'default_code') else 'business_logic_error'
+                "detail": str(e),
+                "code": (
+                    e.default_code
+                    if hasattr(e, "default_code")
+                    else "business_logic_error"
+                ),
             }
 
             # 如果是冲突错误，添加额外信息
-            if hasattr(e, 'current_owner') and e.current_owner:
-                error_response['current_owner'] = e.current_owner
-            if hasattr(e, 'task_id') and e.task_id:
-                error_response['task_id'] = e.task_id
+            if hasattr(e, "current_owner") and e.current_owner:
+                error_response["current_owner"] = e.current_owner
+            if hasattr(e, "task_id") and e.task_id:
+                error_response["task_id"] = e.task_id
 
             # 添加重试建议
             retry_info = TaskAssignmentService.get_retry_suggestion(e)
-            error_response['retry'] = retry_info
+            error_response["retry"] = retry_info
 
             return Response(error_response, status=status_code)
         except Exception as e:
             logger.error(f"任务认领失败: {str(e)}")
-            return Response({
-                'detail': '任务认领失败，请稍后重试',
-                'error': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"detail": "任务认领失败，请稍后重试", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
-    @action(detail=False, methods=['get'], url_path='claimable')
+    @action(detail=False, methods=["get"], url_path="claimable")
     def claimable(self, request):
         """获取当前用户可认领的任务列表
 
@@ -348,7 +396,9 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         返回用户所属部门中未分配操作员的任务
         """
         try:
-            claimable_ids = TaskAssignmentService.get_claimable_tasks_for_user(request.user)
+            claimable_ids = TaskAssignmentService.get_claimable_tasks_for_user(
+                request.user
+            )
 
             # 获取完整的任务数据
             queryset = self.get_queryset().filter(id__in=claimable_ids)
@@ -356,25 +406,23 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
 
             if page is not None:
                 serializer = self.get_serializer(page, many=True)
-                return self.get_paginated_response({
-                    'claimable_count': len(claimable_ids),
-                    'results': serializer.data
-                })
+                return self.get_paginated_response(
+                    {"claimable_count": len(claimable_ids), "results": serializer.data}
+                )
 
             serializer = self.get_serializer(queryset, many=True)
-            return Response({
-                'claimable_count': len(claimable_ids),
-                'results': serializer.data
-            })
+            return Response(
+                {"claimable_count": len(claimable_ids), "results": serializer.data}
+            )
 
         except Exception as e:
             logger.error(f"获取可认领任务列表失败: {str(e)}")
-            return Response({
-                'detail': '获取可认领任务列表失败',
-                'error': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"detail": "获取可认领任务列表失败", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
-    @action(detail=False, methods=['get'], url_path='operator_center')
+    @action(detail=False, methods=["get"], url_path="operator_center")
     def operator_center(self, request):
         """Operator task center data: assigned tasks + claimable tasks
 
@@ -392,33 +440,45 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         user = request.user
 
         # Get user's departments
-        user_departments = user.profile.departments.all() if hasattr(user, 'profile') else []
+        user_departments = (
+            user.profile.departments.all() if hasattr(user, "profile") else []
+        )
         if not user_departments:
-            return Response({
-                'detail': '您未分配到任何部门',
-                'my_tasks': [],
-                'claimable_tasks': [],
-                'summary': {}
-            }, status=status.HTTP_200_OK)
+            return Response(
+                {
+                    "detail": "您未分配到任何部门",
+                    "my_tasks": [],
+                    "claimable_tasks": [],
+                    "summary": {},
+                },
+                status=status.HTTP_200_OK,
+            )
 
         # Get my assigned tasks
         my_tasks_qs = self.get_queryset().filter(assigned_operator=user)
         my_tasks_qs = self.filter_queryset(my_tasks_qs)
         my_tasks_qs = my_tasks_qs.select_related(
-            'assigned_department', 'work_order_process',
-            'work_order_process__work_order', 'work_order_process__process'
-        )[:100]  # Limit to 100 most recent
+            "assigned_department",
+            "work_order_process",
+            "work_order_process__work_order",
+            "work_order_process__process",
+        )[
+            :100
+        ]  # Limit to 100 most recent
 
         # Get claimable tasks (unassigned in user's departments)
         claimable_ids = TaskAssignmentService.get_claimable_tasks_for_user(user)
         claimable_tasks_qs = self.get_queryset().filter(
-            id__in=claimable_ids,
-            assigned_operator__isnull=True
+            id__in=claimable_ids, assigned_operator__isnull=True
         )
         claimable_tasks_qs = claimable_tasks_qs.select_related(
-            'assigned_department', 'work_order_process',
-            'work_order_process__work_order', 'work_order_process__process'
-        )[:50]  # Limit to 50 claimable tasks
+            "assigned_department",
+            "work_order_process",
+            "work_order_process__work_order",
+            "work_order_process__process",
+        )[
+            :50
+        ]  # Limit to 50 claimable tasks
 
         # Serialize
         my_serializer = self.get_serializer(my_tasks_qs, many=True)
@@ -427,15 +487,17 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         # Calculate summary
         my_tasks = list(my_tasks_qs)
         summary = {
-            'my_total': len(my_tasks),
-            'my_pending': sum(1 for t in my_tasks if t.status == 'pending'),
-            'my_in_progress': sum(1 for t in my_tasks if t.status == 'in_progress'),
-            'my_completed': sum(1 for t in my_tasks if t.status == 'completed'),
-            'claimable_count': len(claimable_ids)
+            "my_total": len(my_tasks),
+            "my_pending": sum(1 for t in my_tasks if t.status == "pending"),
+            "my_in_progress": sum(1 for t in my_tasks if t.status == "in_progress"),
+            "my_completed": sum(1 for t in my_tasks if t.status == "completed"),
+            "claimable_count": len(claimable_ids),
         }
 
-        return Response({
-            'my_tasks': my_serializer.data,
-            'claimable_tasks': claimable_serializer.data,
-            'summary': summary
-        })
+        return Response(
+            {
+                "my_tasks": my_serializer.data,
+                "claimable_tasks": claimable_serializer.data,
+                "summary": summary,
+            }
+        )

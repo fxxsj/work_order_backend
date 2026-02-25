@@ -5,34 +5,49 @@
 """
 
 from rest_framework import serializers
-from ..models.core import (
-    WorkOrder, WorkOrderProcess, WorkOrderProduct, WorkOrderMaterial,
-    WorkOrderTask, ProcessLog, TaskLog, APPROVED_ORDER_PROTECTED_FIELDS
-)
-from ..models.base import Process, Department
-from ..models.products import Product
+
 from ..models.assets import ArtworkProduct
+from ..models.base import Department, Process
+from ..models.core import (
+    APPROVED_ORDER_PROTECTED_FIELDS,
+    ProcessLog,
+    TaskLog,
+    WorkOrder,
+    WorkOrderMaterial,
+    WorkOrderProcess,
+    WorkOrderProduct,
+    WorkOrderTask,
+)
+from ..models.products import Product
 
 
 class ProcessLogSerializer(serializers.ModelSerializer):
     """工序日志序列化器"""
-    operator_name = serializers.CharField(source='operator.username', read_only=True)
-    log_type_display = serializers.CharField(source='get_log_type_display', read_only=True)
+
+    operator_name = serializers.CharField(source="operator.username", read_only=True)
+    log_type_display = serializers.CharField(
+        source="get_log_type_display", read_only=True
+    )
 
     class Meta:
         model = ProcessLog
-        fields = '__all__'
+        fields = "__all__"
 
 
 class TaskLogSerializer(serializers.ModelSerializer):
     """任务操作日志序列化器"""
-    log_type_display = serializers.CharField(source='get_log_type_display', read_only=True)
+
+    log_type_display = serializers.CharField(
+        source="get_log_type_display", read_only=True
+    )
     operator_name = serializers.SerializerMethodField()
-    quantity_increment = serializers.SerializerMethodField()  # 增量值（优先使用模型字段，如果没有则计算）
+    quantity_increment = (
+        serializers.SerializerMethodField()
+    )  # 增量值（优先使用模型字段，如果没有则计算）
 
     class Meta:
         model = TaskLog
-        fields = '__all__'
+        fields = "__all__"
 
     def get_operator_name(self, obj):
         """获取操作员名称"""
@@ -52,9 +67,12 @@ class TaskLogSerializer(serializers.ModelSerializer):
 
 class WorkOrderTaskSerializer(serializers.ModelSerializer):
     """施工单任务序列化器"""
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
     is_draft = serializers.SerializerMethodField()
-    task_type_display = serializers.CharField(source='get_task_type_display', read_only=True)
+    task_type_display = serializers.CharField(
+        source="get_task_type_display", read_only=True
+    )
     artwork_code = serializers.SerializerMethodField()
     artwork_name = serializers.SerializerMethodField()
     artwork_confirmed = serializers.SerializerMethodField()
@@ -75,30 +93,47 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
     # 任务操作历史
     logs = TaskLogSerializer(many=True, read_only=True)
     # 分派信息
-    assigned_department_name = serializers.CharField(source='assigned_department.name', read_only=True, allow_null=True)
+    assigned_department_name = serializers.CharField(
+        source="assigned_department.name", read_only=True, allow_null=True
+    )
     assigned_operator_name = serializers.SerializerMethodField()
     # 任务拆分信息
     is_subtask = serializers.SerializerMethodField()
     subtasks_count = serializers.SerializerMethodField()
-    parent_task_id = serializers.IntegerField(source='parent_task.id', read_only=True, allow_null=True)
+    parent_task_id = serializers.IntegerField(
+        source="parent_task.id", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = WorkOrderTask
-        fields = '__all__'
+        fields = "__all__"
         # 在更新时，某些字段应该是只读的
-        read_only_fields = ['work_order_process', 'task_type', 'work_content', 'production_quantity',
-                          'artwork', 'die', 'product', 'material', 'foiling_plate', 'embossing_plate',
-                          'auto_calculate_quantity', 'created_at']
+        read_only_fields = [
+            "work_order_process",
+            "task_type",
+            "work_content",
+            "production_quantity",
+            "artwork",
+            "die",
+            "product",
+            "material",
+            "foiling_plate",
+            "embossing_plate",
+            "auto_calculate_quantity",
+            "created_at",
+        ]
 
     def get_assigned_operator_name(self, obj):
         """获取分派操作员名称"""
         if obj.assigned_operator:
-            return f"{obj.assigned_operator.first_name}{obj.assigned_operator.last_name}"
+            return (
+                f"{obj.assigned_operator.first_name}{obj.assigned_operator.last_name}"
+            )
         return None
 
     def get_is_draft(self, obj):
         """判断是否为草稿状态"""
-        return obj.status == 'draft'
+        return obj.status == "draft"
 
     def get_is_subtask(self, obj):
         """判断是否为子任务"""
@@ -193,8 +228,7 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
         if obj.material and obj.work_order_process:
             try:
                 material_record = WorkOrderMaterial.objects.get(
-                    work_order=obj.work_order_process.work_order,
-                    material=obj.material
+                    work_order=obj.work_order_process.work_order, material=obj.material
                 )
                 return material_record.purchase_status
             except WorkOrderMaterial.DoesNotExist:
@@ -211,27 +245,31 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
             if process:
                 # 使用反向关系 department_set 来访问关联的部门
                 departments = [
-                    {
-                        'id': dept.id,
-                        'name': dept.name,
-                        'code': dept.code
-                    }
-                    for dept in process.department_set.filter(is_active=True).order_by('sort_order')
+                    {"id": dept.id, "name": dept.name, "code": dept.code}
+                    for dept in process.department_set.filter(is_active=True).order_by(
+                        "sort_order"
+                    )
                 ]
             return {
-                'process': {
-                    'id': process.id if process else None,
-                    'name': process.name if process else None,
-                    'code': process.code if process else None,
-                    'departments': departments  # 添加关联的部门列表
+                "process": {
+                    "id": process.id if process else None,
+                    "name": process.name if process else None,
+                    "code": process.code if process else None,
+                    "departments": departments,  # 添加关联的部门列表
                 },
-                'work_order': {
-                    'id': work_order.id if work_order else None,
-                    'order_number': work_order.order_number if work_order else None,
-                    'priority': work_order.priority if work_order else None,
-                    'priority_display': work_order.get_priority_display() if work_order else None,
-                    'delivery_date': work_order.delivery_date.strftime('%Y-%m-%d') if work_order and work_order.delivery_date else None
-                }
+                "work_order": {
+                    "id": work_order.id if work_order else None,
+                    "order_number": work_order.order_number if work_order else None,
+                    "priority": work_order.priority if work_order else None,
+                    "priority_display": (
+                        work_order.get_priority_display() if work_order else None
+                    ),
+                    "delivery_date": (
+                        work_order.delivery_date.strftime("%Y-%m-%d")
+                        if work_order and work_order.delivery_date
+                        else None
+                    ),
+                },
             }
         return None
 
@@ -241,15 +279,27 @@ class DraftTaskSerializer(WorkOrderTaskSerializer):
 
     class Meta(WorkOrderTaskSerializer.Meta):
         model = WorkOrderTask
-        fields = '__all__'
+        fields = "__all__"
         # 草稿任务允许编辑的字段
         read_only_fields = [
-            'id', 'work_order_process', 'task_type',
-            'artwork', 'die', 'product', 'material', 'foiling_plate', 'embossing_plate',
-            'auto_calculate_quantity', 'created_at',
-            'assigned_department', 'assigned_operator',  # 草稿任务不分配
-            'actual_start_time', 'actual_end_time', 'duration_hours',  # 未开始
-            'quantity_completed', 'completion_percentage',  # 未完成
+            "id",
+            "work_order_process",
+            "task_type",
+            "artwork",
+            "die",
+            "product",
+            "material",
+            "foiling_plate",
+            "embossing_plate",
+            "auto_calculate_quantity",
+            "created_at",
+            "assigned_department",
+            "assigned_operator",  # 草稿任务不分配
+            "actual_start_time",
+            "actual_end_time",
+            "duration_hours",  # 未开始
+            "quantity_completed",
+            "completion_percentage",  # 未完成
         ]
 
     def validate(self, attrs):
@@ -257,7 +307,7 @@ class DraftTaskSerializer(WorkOrderTaskSerializer):
         instance = self.instance
 
         # 如果是更新操作，检查任务是否仍为草稿状态
-        if instance and instance.status != 'draft':
+        if instance and instance.status != "draft":
             raise serializers.ValidationError(
                 "只能编辑草稿状态的任务。当前任务状态为：{}".format(
                     instance.get_status_display()
@@ -267,17 +317,15 @@ class DraftTaskSerializer(WorkOrderTaskSerializer):
         # 检查施工单是否已审核（已审核的施工单不允许编辑草稿任务）
         if instance and instance.work_order_process:
             work_order = instance.work_order_process.work_order
-            if work_order.approval_status == 'approved':
-                raise serializers.ValidationError(
-                    "已审核的施工单不允许编辑草稿任务"
-                )
+            if work_order.approval_status == "approved":
+                raise serializers.ValidationError("已审核的施工单不允许编辑草稿任务")
 
         return attrs
 
     def update(self, instance, validated_data):
         """更新草稿任务"""
         # 确保状态保持为 'draft'
-        validated_data['status'] = 'draft'
+        validated_data["status"] = "draft"
 
         # 调用父类的 update 方法
         return super().update(instance, validated_data)
@@ -285,6 +333,7 @@ class DraftTaskSerializer(WorkOrderTaskSerializer):
 
 class DraftTaskBulkSerializer(serializers.Serializer):
     """草稿任务批量更新序列化器"""
+
     task_ids = serializers.ListField(child=serializers.IntegerField())
     production_quantity = serializers.IntegerField(required=False, allow_null=True)
     priority = serializers.CharField(required=False, allow_null=True)
@@ -302,15 +351,15 @@ class DraftTaskBulkSerializer(serializers.Serializer):
         """验证批量更新的数据"""
         from rest_framework.exceptions import ValidationError
 
-        task_ids = attrs.get('task_ids', [])
+        task_ids = attrs.get("task_ids", [])
 
         # 验证所有任务存在且为草稿状态
-        tasks = WorkOrderTask.objects.filter(id__in=task_ids, status='draft')
+        tasks = WorkOrderTask.objects.filter(id__in=task_ids, status="draft")
 
         if tasks.count() != len(task_ids):
             # 检查有多少任务不存在或不是草稿状态
             existing_tasks = WorkOrderTask.objects.filter(id__in=task_ids)
-            non_draft_count = existing_tasks.exclude(status='draft').count()
+            non_draft_count = existing_tasks.exclude(status="draft").count()
             missing_count = len(task_ids) - existing_tasks.count()
 
             error_msgs = []
@@ -322,14 +371,16 @@ class DraftTaskBulkSerializer(serializers.Serializer):
             raise ValidationError("、".join(error_msgs))
 
         # 验证优先级值（如果提供）
-        if attrs.get('priority'):
-            valid_priorities = ['low', 'normal', 'high', 'urgent']
-            if attrs['priority'] not in valid_priorities:
-                raise ValidationError(f"无效的优先级值，可选值：{', '.join(valid_priorities)}")
+        if attrs.get("priority"):
+            valid_priorities = ["low", "normal", "high", "urgent"]
+            if attrs["priority"] not in valid_priorities:
+                raise ValidationError(
+                    f"无效的优先级值，可选值：{', '.join(valid_priorities)}"
+                )
 
         # 验证生产数量（如果提供）
-        if attrs.get('production_quantity') is not None:
-            if attrs['production_quantity'] < 0:
+        if attrs.get("production_quantity") is not None:
+            if attrs["production_quantity"] < 0:
                 raise ValidationError("生产数量不能小于0")
 
         return attrs
@@ -337,12 +388,16 @@ class DraftTaskBulkSerializer(serializers.Serializer):
 
 class TaskAssignmentSerializer(serializers.Serializer):
     """任务分配序列化器"""
-    operator_id = serializers.IntegerField(help_text='操作员用户ID')
-    notes = serializers.CharField(required=False, allow_blank=True, help_text='分配备注')
+
+    operator_id = serializers.IntegerField(help_text="操作员用户ID")
+    notes = serializers.CharField(
+        required=False, allow_blank=True, help_text="分配备注"
+    )
 
     def validate_operator_id(self, value):
         """验证操作员ID"""
         from django.contrib.auth.models import User
+
         if not User.objects.filter(id=value, is_active=True).exists():
             raise serializers.ValidationError("指定的操作员不存在或未激活")
         return value
@@ -350,19 +405,24 @@ class TaskAssignmentSerializer(serializers.Serializer):
 
 class WorkOrderProcessSerializer(serializers.ModelSerializer):
     """施工单工序序列化器"""
-    process_name = serializers.CharField(source='process.name', read_only=True)
-    process_code = serializers.CharField(source='process.code', read_only=True)
-    operator_name = serializers.CharField(source='operator.username', read_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
-    department_name = serializers.CharField(source='department.name', read_only=True, allow_null=True)
-    department_code = serializers.CharField(source='department.code', read_only=True, allow_null=True)
+
+    process_name = serializers.CharField(source="process.name", read_only=True)
+    process_code = serializers.CharField(source="process.code", read_only=True)
+    operator_name = serializers.CharField(source="operator.username", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    department_name = serializers.CharField(
+        source="department.name", read_only=True, allow_null=True
+    )
+    department_code = serializers.CharField(
+        source="department.code", read_only=True, allow_null=True
+    )
     can_start = serializers.SerializerMethodField()
     logs = ProcessLogSerializer(many=True, read_only=True)
     tasks = WorkOrderTaskSerializer(many=True, read_only=True)
 
     class Meta:
         model = WorkOrderProcess
-        fields = '__all__'
+        fields = "__all__"
 
     def get_can_start(self, obj):
         """判断工序是否可以开始"""
@@ -371,18 +431,20 @@ class WorkOrderProcessSerializer(serializers.ModelSerializer):
 
 class WorkOrderProductSerializer(serializers.ModelSerializer):
     """施工单产品序列化器"""
-    product_name = serializers.CharField(source='product.name', read_only=True)
-    product_code = serializers.CharField(source='product.code', read_only=True)
+
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_code = serializers.CharField(source="product.code", read_only=True)
     product_detail = serializers.SerializerMethodField()
     imposition_quantity = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkOrderProduct
-        fields = '__all__'
+        fields = "__all__"
 
     def get_product_detail(self, obj):
         """获取产品详细信息"""
         from .products import ProductSerializer
+
         return ProductSerializer(obj.product).data if obj.product else None
 
     def get_imposition_quantity(self, obj):
@@ -401,8 +463,7 @@ class WorkOrderProductSerializer(serializers.ModelSerializer):
         for artwork in artworks:
             try:
                 artwork_product = ArtworkProduct.objects.filter(
-                    artwork=artwork,
-                    product=obj.product
+                    artwork=artwork, product=obj.product
                 ).first()
                 if artwork_product:
                     return artwork_product.imposition_quantity
@@ -415,31 +476,56 @@ class WorkOrderProductSerializer(serializers.ModelSerializer):
 
 class WorkOrderMaterialSerializer(serializers.ModelSerializer):
     """施工单物料序列化器"""
-    material_name = serializers.CharField(source='material.name', read_only=True)
-    material_code = serializers.CharField(source='material.code', read_only=True)
-    material_unit = serializers.CharField(source='material.unit', read_only=True)
-    purchase_status_display = serializers.CharField(source='get_purchase_status_display', read_only=True)
+
+    material_name = serializers.CharField(source="material.name", read_only=True)
+    material_code = serializers.CharField(source="material.code", read_only=True)
+    material_unit = serializers.CharField(source="material.unit", read_only=True)
+    purchase_status_display = serializers.CharField(
+        source="get_purchase_status_display", read_only=True
+    )
 
     class Meta:
         model = WorkOrderMaterial
         fields = [
-            'id', 'work_order', 'material', 'material_name', 'material_code', 'material_unit',
-            'material_size', 'material_usage', 'need_cutting', 'notes',
-            'purchase_status', 'purchase_status_display',
-            'purchase_date', 'received_date', 'cut_date',
-            'created_at'
+            "id",
+            "work_order",
+            "material",
+            "material_name",
+            "material_code",
+            "material_unit",
+            "material_size",
+            "material_usage",
+            "need_cutting",
+            "notes",
+            "purchase_status",
+            "purchase_status_display",
+            "purchase_date",
+            "received_date",
+            "cut_date",
+            "created_at",
         ]
 
 
 class WorkOrderListSerializer(serializers.ModelSerializer):
     """施工单列表序列化器（精简版）"""
-    customer_name = serializers.CharField(source='customer.name', read_only=True)
-    salesperson_name = serializers.CharField(source='customer.salesperson.username', read_only=True, allow_null=True)
-    manager_name = serializers.CharField(source='manager.username', read_only=True, allow_null=True)
-    approved_by_name = serializers.CharField(source='approved_by.username', read_only=True, allow_null=True)
-    approval_status_display = serializers.CharField(source='get_approval_status_display', read_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
-    priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    salesperson_name = serializers.CharField(
+        source="customer.salesperson.username", read_only=True, allow_null=True
+    )
+    manager_name = serializers.CharField(
+        source="manager.username", read_only=True, allow_null=True
+    )
+    approved_by_name = serializers.CharField(
+        source="approved_by.username", read_only=True, allow_null=True
+    )
+    approval_status_display = serializers.CharField(
+        source="get_approval_status_display", read_only=True
+    )
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    priority_display = serializers.CharField(
+        source="get_priority_display", read_only=True
+    )
     progress_percentage = serializers.SerializerMethodField()
     # 多产品合并显示字段
     product_name = serializers.SerializerMethodField()
@@ -452,14 +538,34 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkOrder
         fields = [
-            'id', 'order_number', 'customer', 'customer_name', 'salesperson_name',
-            'product_name', 'quantity', 'unit', 'status', 'status_display',
-            'priority', 'priority_display', 'order_date', 'delivery_date',
-            'production_quantity', 'defective_quantity',
-            'total_amount', 'manager', 'manager_name', 'progress_percentage',
-            'approval_status', 'approval_status_display', 'approved_by_name', 'approved_at', 'approval_comment',
-            'draft_task_count', 'total_task_count',
-            'created_at'
+            "id",
+            "order_number",
+            "customer",
+            "customer_name",
+            "salesperson_name",
+            "product_name",
+            "quantity",
+            "unit",
+            "status",
+            "status_display",
+            "priority",
+            "priority_display",
+            "order_date",
+            "delivery_date",
+            "production_quantity",
+            "defective_quantity",
+            "total_amount",
+            "manager",
+            "manager_name",
+            "progress_percentage",
+            "approval_status",
+            "approval_status_display",
+            "approved_by_name",
+            "approved_at",
+            "approval_comment",
+            "draft_task_count",
+            "total_task_count",
+            "created_at",
         ]
 
     def get_progress_percentage(self, obj):
@@ -469,7 +575,7 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
         """如果有多个产品，显示为 'xx款拼版'，否则显示单个产品名称"""
         products = obj.products.all()
         if products.count() > 1:
-            return f'{products.count()}款拼版'
+            return f"{products.count()}款拼版"
         elif products.count() == 1:
             first_product = products.first()
             return first_product.product.name if first_product.product else None
@@ -487,34 +593,44 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
         products = obj.products.all()
         if products.exists():
             return products.first().unit
-        return '件'
+        return "件"
 
     def get_draft_task_count(self, obj):
         """获取草稿任务数量"""
         from ..models import WorkOrderTask
+
         return WorkOrderTask.objects.filter(
-            work_order_process__work_order=obj,
-            status='draft'
+            work_order_process__work_order=obj, status="draft"
         ).count()
 
     def get_total_task_count(self, obj):
         """获取总任务数量"""
         from ..models import WorkOrderTask
-        return WorkOrderTask.objects.filter(
-            work_order_process__work_order=obj
-        ).count()
+
+        return WorkOrderTask.objects.filter(work_order_process__work_order=obj).count()
 
 
 class WorkOrderDetailSerializer(serializers.ModelSerializer):
     """施工单详情序列化器（完整版）"""
-    customer_name = serializers.CharField(source='customer.name', read_only=True)
+
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
     customer_detail = serializers.SerializerMethodField()
-    manager_name = serializers.CharField(source='manager.username', read_only=True, allow_null=True)
-    created_by_name = serializers.CharField(source='created_by.username', read_only=True, allow_null=True)
-    approved_by_name = serializers.CharField(source='approved_by.username', read_only=True, allow_null=True)
-    approval_status_display = serializers.CharField(source='get_approval_status_display', read_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
-    printing_type_display = serializers.CharField(source='get_printing_type_display', read_only=True)
+    manager_name = serializers.CharField(
+        source="manager.username", read_only=True, allow_null=True
+    )
+    created_by_name = serializers.CharField(
+        source="created_by.username", read_only=True, allow_null=True
+    )
+    approved_by_name = serializers.CharField(
+        source="approved_by.username", read_only=True, allow_null=True
+    )
+    approval_status_display = serializers.CharField(
+        source="get_approval_status_display", read_only=True
+    )
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    printing_type_display = serializers.CharField(
+        source="get_printing_type_display", read_only=True
+    )
     printing_cmyk_colors = serializers.JSONField(read_only=True)
     printing_other_colors = serializers.JSONField(read_only=True)
     printing_colors_display = serializers.SerializerMethodField()
@@ -537,10 +653,14 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     embossing_plates = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     embossing_plate_names = serializers.SerializerMethodField()
     embossing_plate_codes = serializers.SerializerMethodField()
-    priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    priority_display = serializers.CharField(
+        source="get_priority_display", read_only=True
+    )
 
     order_processes = WorkOrderProcessSerializer(many=True, read_only=True)
-    products = WorkOrderProductSerializer(many=True, read_only=True)  # 一个施工单包含的多个产品
+    products = WorkOrderProductSerializer(
+        many=True, read_only=True
+    )  # 一个施工单包含的多个产品
     materials = WorkOrderMaterialSerializer(many=True, read_only=True)
     # 审核历史记录
     approval_logs = serializers.SerializerMethodField()
@@ -556,7 +676,7 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WorkOrder
-        fields = '__all__'
+        fields = "__all__"
 
     def get_progress_percentage(self, obj):
         return obj.get_progress_percentage()
@@ -564,13 +684,14 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     def get_customer_detail(self, obj):
         """获取客户详细信息"""
         from .base import CustomerSerializer
+
         return CustomerSerializer(obj.customer).data if obj.customer else None
 
     def get_product_name(self, obj):
         """如果有多个产品，显示为 'xx款拼版'，否则显示单个产品名称"""
         products = obj.products.all()
         if products.count() > 1:
-            return f'{products.count()}款拼版'
+            return f"{products.count()}款拼版"
         elif products.count() == 1:
             first_product = products.first()
             return first_product.product.name if first_product.product else None
@@ -588,22 +709,21 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         products = obj.products.all()
         if products.exists():
             return products.first().unit
-        return '件'
+        return "件"
 
     def get_draft_task_count(self, obj):
         """获取草稿任务数量"""
         from ..models import WorkOrderTask
+
         return WorkOrderTask.objects.filter(
-            work_order_process__work_order=obj,
-            status='draft'
+            work_order_process__work_order=obj, status="draft"
         ).count()
 
     def get_total_task_count(self, obj):
         """获取总任务数量"""
         from ..models import WorkOrderTask
-        return WorkOrderTask.objects.filter(
-            work_order_process__work_order=obj
-        ).count()
+
+        return WorkOrderTask.objects.filter(work_order_process__work_order=obj).count()
 
     def get_artwork_names(self, obj):
         """获取所有图稿名称"""
@@ -618,12 +738,14 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         artworks = obj.artworks.all()
         return [
             {
-                'id': artwork.id,
-                'code': artwork.get_full_code(),
-                'name': artwork.name,
-                'confirmed': artwork.confirmed,
-                'confirmed_by_name': artwork.confirmed_by.username if artwork.confirmed_by else None,
-                'confirmed_at': artwork.confirmed_at
+                "id": artwork.id,
+                "code": artwork.get_full_code(),
+                "name": artwork.name,
+                "confirmed": artwork.confirmed,
+                "confirmed_by_name": (
+                    artwork.confirmed_by.username if artwork.confirmed_by else None
+                ),
+                "confirmed_at": artwork.confirmed_at,
             }
             for artwork in artworks
         ]
@@ -643,24 +765,26 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
 
             # CMYK颜色：按照固定顺序C、M、Y、K排列
             if artwork.cmyk_colors:
-                cmyk_order = ['C', 'M', 'Y', 'K']
+                cmyk_order = ["C", "M", "Y", "K"]
                 cmyk_sorted = [c for c in cmyk_order if c in artwork.cmyk_colors]
                 if cmyk_sorted:
-                    cmyk_str = ''.join(cmyk_sorted)
+                    cmyk_str = "".join(cmyk_sorted)
                     parts.append(cmyk_str)
                     total_count += len(artwork.cmyk_colors)
 
             # 其他颜色：用逗号分隔
             if artwork.other_colors:
-                other_colors_list = [c.strip() for c in artwork.other_colors if c and c.strip()]
+                other_colors_list = [
+                    c.strip() for c in artwork.other_colors if c and c.strip()
+                ]
                 if other_colors_list:
-                    other_colors_str = ','.join(other_colors_list)
+                    other_colors_str = ",".join(other_colors_list)
                     parts.append(other_colors_str)
                     total_count += len(other_colors_list)
 
             # 组合显示
             if len(parts) > 1:
-                result = '+'.join(parts)
+                result = "+".join(parts)
             elif len(parts) == 1:
                 result = parts[0]
             else:
@@ -668,11 +792,11 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
 
             # 添加色数统计
             if total_count > 0:
-                result += f'（{total_count}色）'
+                result += f"（{total_count}色）"
 
             color_displays.append(result)
 
-        return ', '.join(color_displays) if color_displays else None
+        return ", ".join(color_displays) if color_displays else None
 
     def get_printing_colors_display(self, obj):
         """生成印刷色数显示格式"""
@@ -681,24 +805,26 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
 
         # CMYK颜色：按照固定顺序C、M、Y、K排列
         if obj.printing_cmyk_colors:
-            cmyk_order = ['C', 'M', 'Y', 'K']
+            cmyk_order = ["C", "M", "Y", "K"]
             cmyk_sorted = [c for c in cmyk_order if c in obj.printing_cmyk_colors]
             if cmyk_sorted:
-                cmyk_str = ''.join(cmyk_sorted)
+                cmyk_str = "".join(cmyk_sorted)
                 parts.append(cmyk_str)
                 total_count += len(obj.printing_cmyk_colors)
 
         # 其他颜色：用逗号分隔
         if obj.printing_other_colors:
-            other_colors_list = [c.strip() for c in obj.printing_other_colors if c and c.strip()]
+            other_colors_list = [
+                c.strip() for c in obj.printing_other_colors if c and c.strip()
+            ]
             if other_colors_list:
-                other_colors_str = ','.join(other_colors_list)
+                other_colors_str = ",".join(other_colors_list)
                 parts.append(other_colors_str)
                 total_count += len(other_colors_list)
 
         # 组合显示
         if len(parts) > 1:
-            result = '+'.join(parts)
+            result = "+".join(parts)
         elif len(parts) == 1:
             result = parts[0]
         else:
@@ -706,7 +832,7 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
 
         # 添加色数统计
         if total_count > 0:
-            result += f'（{total_count}色）'
+            result += f"（{total_count}色）"
 
         return result
 
@@ -737,33 +863,37 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     def get_approval_logs(self, obj):
         """获取审核历史记录"""
         from .system import WorkOrderApprovalLogSerializer
+
         logs = obj.approval_logs.all()
         return WorkOrderApprovalLogSerializer(logs, many=True).data
 
 
 class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
     """施工单创建/更新序列化器"""
+
     # 支持多个产品（一个施工单包含多个产品）
     products_data = serializers.ListField(
         child=serializers.DictField(),
         write_only=True,
         required=False,
-        help_text='产品列表数据，格式：[{"product": id, "quantity": 1, "unit": "件", "specification": "", "sort_order": 0}]'
+        help_text='产品列表数据，格式：[{"product": id, "quantity": 1, "unit": "件", "specification": "", "sort_order": 0}]',
     )
     # 支持物料列表（与施工单一起创建）
     materials_data = serializers.ListField(
         child=serializers.DictField(),
         write_only=True,
         required=False,
-        help_text='物料列表数据，格式：[{"material": id, "material_size": "", "material_usage": "", "need_cutting": false, "notes": ""}]'
+        help_text='物料列表数据，格式：[{"material": id, "material_size": "", "material_usage": "", "need_cutting": false, "notes": ""}]',
     )
     # 工序ID列表（用于验证版的选择）
     # 使用自定义方法来过滤 null 值
     processes = serializers.ListField(
-        child=serializers.IntegerField(allow_null=True),  # 允许 null，然后在 validate 中过滤
+        child=serializers.IntegerField(
+            allow_null=True
+        ),  # 允许 null，然后在 validate 中过滤
         required=False,
         allow_empty=True,
-        help_text='选中的工序ID列表，用于验证版的选择'
+        help_text="选中的工序ID列表，用于验证版的选择",
     )
 
     def validate_processes(self, value):
@@ -776,26 +906,43 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkOrder
         fields = [
-            'id', 'order_number', 'customer',
-            'status', 'priority',
-            'order_date', 'delivery_date', 'actual_delivery_date',
-            'production_quantity', 'defective_quantity',
-            'total_amount', 'design_file', 'notes',
-            'artworks', 'dies', 'foiling_plates', 'embossing_plates',
-            'printing_type', 'printing_cmyk_colors', 'printing_other_colors',
-            'products_data', 'materials_data', 'processes'
+            "id",
+            "order_number",
+            "customer",
+            "status",
+            "priority",
+            "order_date",
+            "delivery_date",
+            "actual_delivery_date",
+            "production_quantity",
+            "defective_quantity",
+            "total_amount",
+            "design_file",
+            "notes",
+            "artworks",
+            "dies",
+            "foiling_plates",
+            "embossing_plates",
+            "printing_type",
+            "printing_cmyk_colors",
+            "printing_other_colors",
+            "products_data",
+            "materials_data",
+            "processes",
         ]
-        read_only_fields = ['order_number']
+        read_only_fields = ["order_number"]
 
     def validate(self, data):
         """验证数据，根据工序验证版的选择"""
-        products_data = data.get('products_data', [])
-        artworks = data.get('artworks')  # 不设置默认值，以便区分是否发送
-        dies = data.get('dies')  # 不设置默认值，以便区分是否发送
-        foiling_plates = data.get('foiling_plates')  # 不设置默认值，以便区分是否发送
-        embossing_plates = data.get('embossing_plates')  # 不设置默认值，以便区分是否发送
-        printing_type = data.get('printing_type')
-        process_ids = data.get('processes', [])
+        products_data = data.get("products_data", [])
+        artworks = data.get("artworks")  # 不设置默认值，以便区分是否发送
+        dies = data.get("dies")  # 不设置默认值，以便区分是否发送
+        foiling_plates = data.get("foiling_plates")  # 不设置默认值，以便区分是否发送
+        embossing_plates = data.get(
+            "embossing_plates"
+        )  # 不设置默认值，以便区分是否发送
+        printing_type = data.get("printing_type")
+        process_ids = data.get("processes", [])
 
         # process_ids 已经在 validate_processes 方法中过滤了 null 值
         # 根据选中的工序验证版的选择（只验证发送的字段）
@@ -803,95 +950,170 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             processes = Process.objects.filter(id__in=process_ids, is_active=True)
 
             # 如果是更新操作，需要检查数据库中已有的版选择
-            instance = getattr(self, 'instance', None)
+            instance = getattr(self, "instance", None)
 
             # 检查是否有工序需要图稿
             processes_requiring_artwork = processes.filter(requires_artwork=True)
             if processes_requiring_artwork.exists():
-                processes_requiring_artwork_mandatory = processes_requiring_artwork.filter(artwork_required=True)
+                processes_requiring_artwork_mandatory = (
+                    processes_requiring_artwork.filter(artwork_required=True)
+                )
                 if processes_requiring_artwork_mandatory.exists():
                     # 如果artworks字段被发送，使用发送的值；否则使用数据库中的值
-                    artworks_to_check = artworks if artworks is not None else (list(instance.artworks.values_list('id', flat=True)) if instance else [])
+                    artworks_to_check = (
+                        artworks
+                        if artworks is not None
+                        else (
+                            list(instance.artworks.values_list("id", flat=True))
+                            if instance
+                            else []
+                        )
+                    )
                     if not artworks_to_check or len(artworks_to_check) == 0:
-                        process_names = ', '.join([p.name for p in processes_requiring_artwork_mandatory])
-                        raise serializers.ValidationError({
-                            'artworks': f'选择了需要图稿的工序（{process_names}），请至少选择一个图稿'
-                        })
+                        process_names = ", ".join(
+                            [p.name for p in processes_requiring_artwork_mandatory]
+                        )
+                        raise serializers.ValidationError(
+                            {
+                                "artworks": f"选择了需要图稿的工序（{process_names}），请至少选择一个图稿"
+                            }
+                        )
 
             # 检查是否有工序需要刀模
             processes_requiring_die = processes.filter(requires_die=True)
             if processes_requiring_die.exists():
-                processes_requiring_die_mandatory = processes_requiring_die.filter(die_required=True)
+                processes_requiring_die_mandatory = processes_requiring_die.filter(
+                    die_required=True
+                )
                 if processes_requiring_die_mandatory.exists():
                     # 如果dies字段被发送，使用发送的值；否则使用数据库中的值
-                    dies_to_check = dies if dies is not None else (list(instance.dies.values_list('id', flat=True)) if instance else [])
+                    dies_to_check = (
+                        dies
+                        if dies is not None
+                        else (
+                            list(instance.dies.values_list("id", flat=True))
+                            if instance
+                            else []
+                        )
+                    )
                     if not dies_to_check or len(dies_to_check) == 0:
-                        process_names = ', '.join([p.name for p in processes_requiring_die_mandatory])
-                        raise serializers.ValidationError({
-                            'dies': f'选择了需要刀模的工序（{process_names}），请至少选择一个刀模'
-                        })
+                        process_names = ", ".join(
+                            [p.name for p in processes_requiring_die_mandatory]
+                        )
+                        raise serializers.ValidationError(
+                            {
+                                "dies": f"选择了需要刀模的工序（{process_names}），请至少选择一个刀模"
+                            }
+                        )
 
             # 检查是否有工序需要烫金版
-            processes_requiring_foiling_plate = processes.filter(requires_foiling_plate=True)
+            processes_requiring_foiling_plate = processes.filter(
+                requires_foiling_plate=True
+            )
             if processes_requiring_foiling_plate.exists():
-                processes_requiring_foiling_plate_mandatory = processes_requiring_foiling_plate.filter(foiling_plate_required=True)
+                processes_requiring_foiling_plate_mandatory = (
+                    processes_requiring_foiling_plate.filter(
+                        foiling_plate_required=True
+                    )
+                )
                 if processes_requiring_foiling_plate_mandatory.exists():
                     # 如果foiling_plates字段被发送，使用发送的值；否则使用数据库中的值
-                    foiling_plates_to_check = foiling_plates if foiling_plates is not None else (list(instance.foiling_plates.values_list('id', flat=True)) if instance else [])
+                    foiling_plates_to_check = (
+                        foiling_plates
+                        if foiling_plates is not None
+                        else (
+                            list(instance.foiling_plates.values_list("id", flat=True))
+                            if instance
+                            else []
+                        )
+                    )
                     if not foiling_plates_to_check or len(foiling_plates_to_check) == 0:
-                        process_names = ', '.join([p.name for p in processes_requiring_foiling_plate_mandatory])
-                        raise serializers.ValidationError({
-                            'foiling_plates': f'选择了需要烫金版的工序（{process_names}），请至少选择一个烫金版'
-                        })
+                        process_names = ", ".join(
+                            [
+                                p.name
+                                for p in processes_requiring_foiling_plate_mandatory
+                            ]
+                        )
+                        raise serializers.ValidationError(
+                            {
+                                "foiling_plates": f"选择了需要烫金版的工序（{process_names}），请至少选择一个烫金版"
+                            }
+                        )
 
             # 检查是否有工序需要压凸版
-            processes_requiring_embossing_plate = processes.filter(requires_embossing_plate=True)
+            processes_requiring_embossing_plate = processes.filter(
+                requires_embossing_plate=True
+            )
             if processes_requiring_embossing_plate.exists():
-                processes_requiring_embossing_plate_mandatory = processes_requiring_embossing_plate.filter(embossing_plate_required=True)
+                processes_requiring_embossing_plate_mandatory = (
+                    processes_requiring_embossing_plate.filter(
+                        embossing_plate_required=True
+                    )
+                )
                 if processes_requiring_embossing_plate_mandatory.exists():
                     # 如果embossing_plates字段被发送，使用发送的值；否则使用数据库中的值
-                    embossing_plates_to_check = embossing_plates if embossing_plates is not None else (list(instance.embossing_plates.values_list('id', flat=True)) if instance else [])
-                    if not embossing_plates_to_check or len(embossing_plates_to_check) == 0:
-                        process_names = ', '.join([p.name for p in processes_requiring_embossing_plate_mandatory])
-                        raise serializers.ValidationError({
-                            'embossing_plates': f'选择了需要压凸版的工序（{process_names}），请至少选择一个压凸版'
-                        })
+                    embossing_plates_to_check = (
+                        embossing_plates
+                        if embossing_plates is not None
+                        else (
+                            list(instance.embossing_plates.values_list("id", flat=True))
+                            if instance
+                            else []
+                        )
+                    )
+                    if (
+                        not embossing_plates_to_check
+                        or len(embossing_plates_to_check) == 0
+                    ):
+                        process_names = ", ".join(
+                            [
+                                p.name
+                                for p in processes_requiring_embossing_plate_mandatory
+                            ]
+                        )
+                        raise serializers.ValidationError(
+                            {
+                                "embossing_plates": f"选择了需要压凸版的工序（{process_names}），请至少选择一个压凸版"
+                            }
+                        )
 
         # 只有在 artworks 字段被发送时才处理 printing_type
-        if 'artworks' in data:
+        if "artworks" in data:
             artworks_value = artworks if artworks is not None else []
             if not artworks_value or len(artworks_value) == 0:
-                data['printing_type'] = 'none'
-            elif printing_type == 'none':
+                data["printing_type"] = "none"
+            elif printing_type == "none":
                 # 如果选择了图稿但印刷形式是"不需要印刷"，默认改为"正面印刷"
-                data['printing_type'] = 'front'
+                data["printing_type"] = "front"
 
         # 如果提供了 products_data，计算总金额
         if products_data:
             total = 0
             for item in products_data:
-                product_id = item.get('product')
+                product_id = item.get("product")
                 if product_id:
                     try:
                         product_obj = Product.objects.get(id=product_id)
-                        quantity = item.get('quantity', 1)
+                        quantity = item.get("quantity", 1)
                         total += product_obj.unit_price * quantity
                     except Product.DoesNotExist:
                         pass
             if total > 0:
-                data['total_amount'] = total
+                data["total_amount"] = total
 
         return data
 
     def create(self, validated_data):
         """创建施工单并处理多个产品和图稿"""
-        products_data = validated_data.pop('products_data', [])
-        materials_data = validated_data.pop('materials_data', [])
-        artworks = validated_data.pop('artworks', [])
-        dies = validated_data.pop('dies', [])
-        foiling_plates = validated_data.pop('foiling_plates', [])
-        embossing_plates = validated_data.pop('embossing_plates', [])
-        process_ids = validated_data.pop('processes', [])  # 工序ID列表，用于后续创建工序
+        products_data = validated_data.pop("products_data", [])
+        materials_data = validated_data.pop("materials_data", [])
+        artworks = validated_data.pop("artworks", [])
+        dies = validated_data.pop("dies", [])
+        foiling_plates = validated_data.pop("foiling_plates", [])
+        embossing_plates = validated_data.pop("embossing_plates", [])
+        process_ids = validated_data.pop(
+            "processes", []
+        )  # 工序ID列表，用于后续创建工序
 
         work_order = WorkOrder.objects.create(**validated_data)
 
@@ -916,11 +1138,11 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             for item in products_data:
                 WorkOrderProduct.objects.create(
                     work_order=work_order,
-                    product_id=item.get('product'),
-                    quantity=item.get('quantity', 1),
-                    unit=item.get('unit', '件'),
-                    specification=item.get('specification', ''),
-                    sort_order=item.get('sort_order', 0)
+                    product_id=item.get("product"),
+                    quantity=item.get("quantity", 1),
+                    unit=item.get("unit", "件"),
+                    specification=item.get("specification", ""),
+                    sort_order=item.get("sort_order", 0),
                 )
 
         # 创建关联的物料记录
@@ -928,12 +1150,12 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             for item in materials_data:
                 WorkOrderMaterial.objects.create(
                     work_order=work_order,
-                    material_id=item.get('material'),
-                    material_size=item.get('material_size', ''),
-                    material_usage=item.get('material_usage', ''),
-                    need_cutting=item.get('need_cutting', False),
-                    notes=item.get('notes', ''),
-                    purchase_status=item.get('purchase_status', 'pending')
+                    material_id=item.get("material"),
+                    material_size=item.get("material_size", ""),
+                    material_usage=item.get("material_usage", ""),
+                    need_cutting=item.get("need_cutting", False),
+                    notes=item.get("notes", ""),
+                    purchase_status=item.get("purchase_status", "pending"),
                 )
 
         # 自动创建工序（使用用户选择的工序ID列表）
@@ -946,20 +1168,22 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         from rest_framework.exceptions import ValidationError
 
         # 先 pop 出需要特殊处理的字段
-        products_data = validated_data.pop('products_data', None)
-        materials_data = validated_data.pop('materials_data', None)
-        artworks = validated_data.pop('artworks', None)
-        dies = validated_data.pop('dies', None)
-        foiling_plates = validated_data.pop('foiling_plates', None)
-        embossing_plates = validated_data.pop('embossing_plates', None)
-        process_ids = validated_data.pop('processes', None)
+        products_data = validated_data.pop("products_data", None)
+        materials_data = validated_data.pop("materials_data", None)
+        artworks = validated_data.pop("artworks", None)
+        dies = validated_data.pop("dies", None)
+        foiling_plates = validated_data.pop("foiling_plates", None)
+        embossing_plates = validated_data.pop("embossing_plates", None)
+        process_ids = validated_data.pop("processes", None)
 
         # 如果审核状态为 approved，检查是否尝试修改核心字段
-        if instance.approval_status == 'approved':
-            request = self.context.get('request')
+        if instance.approval_status == "approved":
+            request = self.context.get("request")
             if request:
                 # 检查用户是否有编辑已审核订单的权限
-                can_edit_approved = request.user.has_perm('workorder.change_approved_workorder')
+                can_edit_approved = request.user.has_perm(
+                    "workorder.change_approved_workorder"
+                )
 
                 if not can_edit_approved:
                     # 检查是否尝试修改核心字段
@@ -967,39 +1191,61 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
                     # 检查 ManyToMany 字段（版选择）
                     many_to_many_fields = {
-                        'artworks': artworks,
-                        'dies': dies,
-                        'foiling_plates': foiling_plates,
-                        'embossing_plates': embossing_plates,
+                        "artworks": artworks,
+                        "dies": dies,
+                        "foiling_plates": foiling_plates,
+                        "embossing_plates": embossing_plates,
                     }
 
                     for field_name, field_value in many_to_many_fields.items():
                         if field_value is not None:
-                            old_ids = set(getattr(instance, field_name).values_list('id', flat=True))
+                            old_ids = set(
+                                getattr(instance, field_name).values_list(
+                                    "id", flat=True
+                                )
+                            )
                             new_ids = set(field_value or [])
                             if old_ids != new_ids:
                                 modified_protected_fields.append(field_name)
 
                     # 检查产品列表
                     if products_data is not None:
-                        old_products = set(instance.products.values_list('id', flat=True))
-                        new_products = set([item.get('product') for item in products_data if item.get('product')])
+                        old_products = set(
+                            instance.products.values_list("id", flat=True)
+                        )
+                        new_products = set(
+                            [
+                                item.get("product")
+                                for item in products_data
+                                if item.get("product")
+                            ]
+                        )
                         if old_products != new_products:
-                            modified_protected_fields.append('products')
+                            modified_protected_fields.append("products")
 
                     # 检查工序列表
                     if process_ids is not None:
-                        old_processes = set(instance.order_processes.values_list('process_id', flat=True))
+                        old_processes = set(
+                            instance.order_processes.values_list(
+                                "process_id", flat=True
+                            )
+                        )
                         new_processes = set(process_ids or [])
                         if old_processes != new_processes:
-                            modified_protected_fields.append('processes')
+                            modified_protected_fields.append("processes")
 
                     # 检查其他核心字段
                     for field in APPROVED_ORDER_PROTECTED_FIELDS:
                         if field in validated_data:
                             # 跳过已检查的字段
-                            if field in ['artworks', 'dies', 'foiling_plates', 'embossing_plates',
-                                        'products_data', 'processes']:
+                            if field in [
+                                "artworks",
+                                "dies",
+                                "foiling_plates",
+                                "embossing_plates",
+                                "products_data",
+                                "processes",
+                            ]:
                                 continue
 
                             old_value = getattr(instance, field, None)
@@ -1009,34 +1255,36 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                                 modified_protected_fields.append(field)
 
                     if modified_protected_fields:
-                        raise ValidationError({
-                            'error': '审核通过后，核心字段（产品、工序、版选择等）不能修改。如需修改，请联系管理员或重新提交审核。',
-                            'modified_fields': modified_protected_fields
-                        })
+                        raise ValidationError(
+                            {
+                                "error": "审核通过后，核心字段（产品、工序、版选择等）不能修改。如需修改，请联系管理员或重新提交审核。",
+                                "modified_fields": modified_protected_fields,
+                            }
+                        )
                 else:
                     # 有权限的用户可以修改核心字段，但需要重新审核
-                    instance.approval_status = 'pending'
-                    instance.approval_comment = ''
+                    instance.approval_status = "pending"
+                    instance.approval_comment = ""
 
         # 更新图稿（ManyToMany 字段）
         if artworks is not None:
             instance.artworks.set(artworks)
             # 如果没有选择图稿，自动设置印刷形式为"不需要印刷"
             if not artworks or len(artworks) == 0:
-                validated_data['printing_type'] = 'none'
-            elif validated_data.get('printing_type') == 'none':
+                validated_data["printing_type"] = "none"
+            elif validated_data.get("printing_type") == "none":
                 # 如果选择了图稿但印刷形式是"不需要印刷"，默认改为"正面印刷"
-                validated_data['printing_type'] = 'front'
+                validated_data["printing_type"] = "front"
 
         # 更新施工单基本信息
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
         # 如果审核状态是 rejected，修改后自动重置为 pending（允许重新提交审核）
-        if instance.approval_status == 'rejected':
-            instance.approval_status = 'pending'
+        if instance.approval_status == "rejected":
+            instance.approval_status = "pending"
             # 清空之前的审核信息，允许重新审核
-            instance.approval_comment = ''
+            instance.approval_comment = ""
 
         instance.save()
 
@@ -1061,27 +1309,30 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             for item in products_data:
                 WorkOrderProduct.objects.create(
                     work_order=instance,
-                    product_id=item.get('product'),
-                    quantity=item.get('quantity', 1),
-                    unit=item.get('unit', '件'),
-                    specification=item.get('specification', ''),
-                    sort_order=item.get('sort_order', 0)
+                    product_id=item.get("product"),
+                    quantity=item.get("quantity", 1),
+                    unit=item.get("unit", "件"),
+                    specification=item.get("specification", ""),
+                    sort_order=item.get("sort_order", 0),
                 )
 
             # 如果产品列表发生变化，重新创建工序（使用用户选择的工序ID列表）
             # 如果process_ids为空列表，则使用产品的默认工序
-            self._recreate_work_order_processes(instance, process_ids=process_ids if process_ids else None)
+            self._recreate_work_order_processes(
+                instance, process_ids=process_ids if process_ids else None
+            )
         elif process_ids is not None:
             # 如果只更新了工序选择，更新工序
             # 如果process_ids为空列表，则使用产品的默认工序
             # 删除现有的未开始工序
             WorkOrderProcess.objects.filter(
-                work_order=instance,
-                status='pending'
+                work_order=instance, status="pending"
             ).delete()
 
             # 重新创建工序（如果process_ids为空，则使用产品的默认工序）
-            self._create_work_order_processes(instance, process_ids=process_ids if process_ids else None)
+            self._create_work_order_processes(
+                instance, process_ids=process_ids if process_ids else None
+            )
 
         # 如果提供了 materials_data，更新物料列表
         if materials_data is not None:
@@ -1092,12 +1343,12 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             for item in materials_data:
                 WorkOrderMaterial.objects.create(
                     work_order=instance,
-                    material_id=item.get('material'),
-                    material_size=item.get('material_size', ''),
-                    material_usage=item.get('material_usage', ''),
-                    need_cutting=item.get('need_cutting', False),
-                    notes=item.get('notes', ''),
-                    purchase_status=item.get('purchase_status', 'pending')
+                    material_id=item.get("material"),
+                    material_size=item.get("material_size", ""),
+                    material_usage=item.get("material_usage", ""),
+                    need_cutting=item.get("need_cutting", False),
+                    notes=item.get("notes", ""),
+                    purchase_status=item.get("purchase_status", "pending"),
                 )
 
         return instance
@@ -1123,10 +1374,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
         if has_artwork or has_die or has_foiling_plate or has_embossing_plate:
             # 查找制版工序（使用 code 字段精确匹配）
-            plate_making_processes = Process.objects.filter(
-                code='CTP',
-                is_active=True
-            )
+            plate_making_processes = Process.objects.filter(code="CTP", is_active=True)
             processes.update(plate_making_processes)
 
         # 为每个工序创建 WorkOrderProcess
@@ -1138,10 +1386,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             work_order_process, created = WorkOrderProcess.objects.get_or_create(
                 work_order=work_order,
                 process=process,
-                defaults={
-                    'department': department,
-                    'sequence': process.sort_order
-                }
+                defaults={"department": department, "sequence": process.sort_order},
             )
 
             # 如果是新创建的工序，自动生成草稿任务
@@ -1152,8 +1397,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         """重新创建施工单的工序（当产品列表变化时）"""
         # 删除现有的工序（如果还没有开始）
         WorkOrderProcess.objects.filter(
-            work_order=work_order,
-            status='pending'
+            work_order=work_order, status="pending"
         ).delete()
 
         # 重新创建工序（使用用户选择的工序ID列表）
@@ -1166,6 +1410,12 @@ class WorkOrderProcessUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkOrderProcess
         fields = [
-            'id', 'status', 'operator', 'actual_start_time',
-            'actual_end_time', 'quantity_completed', 'quantity_defective', 'notes'
+            "id",
+            "status",
+            "operator",
+            "actual_start_time",
+            "actual_end_time",
+            "quantity_completed",
+            "quantity_defective",
+            "notes",
         ]

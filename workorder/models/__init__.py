@@ -13,13 +13,63 @@ Models 模块
 - sales: 销售管理模型 (SalesOrder, SalesOrderItem)
 """
 
-# 导入所有模型，保持向后兼容
-from .base import (
-    Customer,
-    Department,
-    Process,
+from .assets import (
+    Artwork,
+    ArtworkProduct,
+    Die,
+    DieProduct,
+    EmbossingPlate,
+    EmbossingPlateProduct,
+    FoilingPlate,
+    FoilingPlateProduct,
 )
 
+# 导入所有模型，保持向后兼容
+from .base import Customer, Department, Process
+from .core import (
+    APPROVED_ORDER_EDITABLE_FIELDS,
+    APPROVED_ORDER_PROTECTED_FIELDS,
+    ProcessLog,
+    TaskLog,
+    WorkOrder,
+    WorkOrderMaterial,
+    WorkOrderProcess,
+    WorkOrderProduct,
+    WorkOrderTask,
+)
+from .finance import (
+    CostCenter,
+    CostItem,
+    Invoice,
+    Payment,
+    PaymentPlan,
+    ProductionCost,
+    Statement,
+)
+from .inventory import (
+    DeliveryItem,
+    DeliveryOrder,
+    ProductStock,
+    QualityInspection,
+    StockIn,
+    StockOut,
+)
+from .materials import (
+    Material,
+    MaterialSupplier,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    PurchaseReceiveRecord,
+    Supplier,
+)
+from .multi_level_approval import (
+    ApprovalEscalation,
+    ApprovalRule,
+    ApprovalStep,
+    ApprovalWorkflow,
+    MultiLevelApprovalService,
+    UrgentOrderService,
+)
 from .products import (
     Product,
     ProductGroup,
@@ -27,153 +77,74 @@ from .products import (
     ProductMaterial,
     ProductStockLog,
 )
-
-from .materials import (
-    Material,
-    Supplier,
-    MaterialSupplier,
-    PurchaseOrder,
-    PurchaseOrderItem,
-    PurchaseReceiveRecord,
-)
-
-from .assets import (
-    Artwork,
-    ArtworkProduct,
-    Die,
-    DieProduct,
-    FoilingPlate,
-    FoilingPlateProduct,
-    EmbossingPlate,
-    EmbossingPlateProduct,
-)
-
-from .core import (
-    APPROVED_ORDER_PROTECTED_FIELDS,
-    APPROVED_ORDER_EDITABLE_FIELDS,
-    WorkOrder,
-    WorkOrderProcess,
-    WorkOrderProduct,
-    WorkOrderMaterial,
-    WorkOrderTask,
-    ProcessLog,
-    TaskLog,
-)
-
-from .system import (
-    UserProfile,
-    WorkOrderApprovalLog,
-    Notification,
-    TaskAssignmentRule,
-)
-
-from .sales import (
-    SalesOrder,
-    SalesOrderItem,
-)
-
-from .finance import (
-    CostCenter,
-    CostItem,
-    ProductionCost,
-    Invoice,
-    Payment,
-    PaymentPlan,
-    Statement,
-)
-
-from .inventory import (
-    ProductStock,
-    StockIn,
-    StockOut,
-    DeliveryOrder,
-    DeliveryItem,
-    QualityInspection,
-)
-
-from .multi_level_approval import (
-    ApprovalWorkflow,
-    ApprovalStep,
-    ApprovalRule,
-    ApprovalEscalation,
-    MultiLevelApprovalService,
-    UrgentOrderService,
-)
+from .sales import SalesOrder, SalesOrderItem
+from .system import Notification, TaskAssignmentRule, UserProfile, WorkOrderApprovalLog
 
 __all__ = [
     # 基础模型
-    'Customer',
-    'Department',
-    'Process',
-    'APPROVED_ORDER_PROTECTED_FIELDS',
-    'APPROVED_ORDER_EDITABLE_FIELDS',
-
+    "Customer",
+    "Department",
+    "Process",
+    "APPROVED_ORDER_PROTECTED_FIELDS",
+    "APPROVED_ORDER_EDITABLE_FIELDS",
     # 产品模型
-    'Product',
-    'ProductGroup',
-    'ProductGroupItem',
-    'ProductMaterial',
-    'ProductStockLog',
-
+    "Product",
+    "ProductGroup",
+    "ProductGroupItem",
+    "ProductMaterial",
+    "ProductStockLog",
     # 物料模型
-    'Material',
-    'Supplier',
-    'MaterialSupplier',
-    'PurchaseOrder',
-    'PurchaseOrderItem',
-    'PurchaseReceiveRecord',
-
+    "Material",
+    "Supplier",
+    "MaterialSupplier",
+    "PurchaseOrder",
+    "PurchaseOrderItem",
+    "PurchaseReceiveRecord",
     # 资产模型
-    'Artwork',
-    'ArtworkProduct',
-    'Die',
-    'DieProduct',
-    'FoilingPlate',
-    'FoilingPlateProduct',
-    'EmbossingPlate',
-    'EmbossingPlateProduct',
-
+    "Artwork",
+    "ArtworkProduct",
+    "Die",
+    "DieProduct",
+    "FoilingPlate",
+    "FoilingPlateProduct",
+    "EmbossingPlate",
+    "EmbossingPlateProduct",
     # 核心业务模型
-    'WorkOrder',
-    'WorkOrderProcess',
-    'WorkOrderProduct',
-    'WorkOrderMaterial',
-    'WorkOrderTask',
-    'ProcessLog',
-    'TaskLog',
-
+    "WorkOrder",
+    "WorkOrderProcess",
+    "WorkOrderProduct",
+    "WorkOrderMaterial",
+    "WorkOrderTask",
+    "ProcessLog",
+    "TaskLog",
     # 系统模型
-    'UserProfile',
-    'WorkOrderApprovalLog',
-    'Notification',
-    'TaskAssignmentRule',
-
+    "UserProfile",
+    "WorkOrderApprovalLog",
+    "Notification",
+    "TaskAssignmentRule",
     # 销售模型
-    'SalesOrder',
-    'SalesOrderItem',
-
+    "SalesOrder",
+    "SalesOrderItem",
     # 多级审核模型
-    'ApprovalWorkflow',
-    'ApprovalStep',
-    'ApprovalRule',
-    'ApprovalEscalation',
-    'MultiLevelApprovalService',
-    'UrgentOrderService',
-
+    "ApprovalWorkflow",
+    "ApprovalStep",
+    "ApprovalRule",
+    "ApprovalEscalation",
+    "MultiLevelApprovalService",
+    "UrgentOrderService",
     # 财务模型
-    'CostCenter',
-    'CostItem',
-    'ProductionCost',
-    'Invoice',
-    'Payment',
-    'PaymentPlan',
-    'Statement',
-
+    "CostCenter",
+    "CostItem",
+    "ProductionCost",
+    "Invoice",
+    "Payment",
+    "PaymentPlan",
+    "Statement",
     # 库存模型
-    'ProductStock',
-    'StockIn',
-    'StockOut',
-    'DeliveryOrder',
-    'DeliveryItem',
-    'QualityInspection',
+    "ProductStock",
+    "StockIn",
+    "StockOut",
+    "DeliveryOrder",
+    "DeliveryItem",
+    "QualityInspection",
 ]
