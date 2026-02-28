@@ -30,3 +30,5 @@ class ProcessFactory(factory.django.DjangoModelFactory):
     is_parallel = False
     sort_order = 0
     task_generation_rule = 'general'
+    artwork_required = False
+    die_required = False
