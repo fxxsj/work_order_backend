@@ -573,10 +573,14 @@ class TaskStatsMixin:
 
         # Query optimization: Use aggregate for priority distribution instead of multiple filter().count()
         priority_data = tasks.aggregate(
-            urgent=Count("id", filter=Q(priority="urgent")),
-            high=Count("id", filter=Q(priority="high")),
-            normal=Count("id", filter=Q(priority="normal")),
-            low=Count("id", filter=Q(priority="low")),
+            urgent=Count(
+                "id", filter=Q(work_order_process__work_order__priority="urgent")
+            ),
+            high=Count("id", filter=Q(work_order_process__work_order__priority="high")),
+            normal=Count(
+                "id", filter=Q(work_order_process__work_order__priority="normal")
+            ),
+            low=Count("id", filter=Q(work_order_process__work_order__priority="low")),
         )
         priority_distribution = {
             "urgent": priority_data["urgent"] or 0,

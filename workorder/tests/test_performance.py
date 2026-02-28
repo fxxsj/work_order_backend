@@ -10,6 +10,7 @@ from django.test import TestCase, override_settings
 from django.db import connection, reset_queries
 from django.contrib.auth.models import User, Permission
 from django.contrib.contenttypes.models import ContentType
+from django.core.cache import cache
 from django.utils import timezone
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
@@ -239,6 +240,7 @@ class PerformanceTestCase(TestCase):
         factory = APIRequestFactory()
         request = Request(factory.get('/api/workorder-tasks/collaboration_stats/'))
         request.user = self.user
+        cache.clear()
 
         reset_queries()
 
