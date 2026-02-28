@@ -192,23 +192,24 @@ class OperatorUser(CommonBehaviorMixin, HttpUser):
         task_id = self._get_random_task_id()
         if task_id:
             self.client.post(f'/api/workorder-tasks/{task_id}/update_quantity/', json={
-                'quantity_completed': random.randint(1, 100),
+                'quantity_increment': random.randint(1, 5),
                 'quantity_defective': 0
             }, name='[Operator] Update Progress')
 
     @task(1)
     def claim_task(self):
         """Claim an unassigned task"""
-        response = self.client.get('/api/workorder-tasks/', params={
-            'status': 'pending',
+        response = self.client.get('/api/workorder-tasks/claimable/', params={
             'page_size': 1
         }, name='[Operator] Get Claimable')
 
         if response.status_code == 200:
-            tasks = response.json().get('results', [])
-            if tasks:
-                task_id = tasks[0]['id']
-                self.client.post(f'/api/workorder-tasks/{task_id}/claim/', name='[Operator] Claim Task')
+            payload = response.json()
+            tasks = payload.get('results') if isinstance(payload, dict) else []
+            if tasks and isinstance(tasks, list):
+                task_id = tasks[0].get('id')
+                if task_id:
+                    self.client.post(f'/api/workorder-tasks/{task_id}/claim/', name='[Operator] Claim Task')
 
 class MakerUser(CommonBehaviorMixin, HttpUser):
     """
@@ -222,9 +223,7 @@ class MakerUser(CommonBehaviorMixin, HttpUser):
     @task(4)
     def view_my_workorders(self):
         """View work orders I created"""
-        self.client.get('/api/workorders/', params={
-            'page': random.randint(1, 5)
-        }, name='[Maker] My WorkOrders')
+        self.client.get('/api/workorders/', name='[Maker] My WorkOrders')
 
     @task(1)
     def create_workorder(self):
