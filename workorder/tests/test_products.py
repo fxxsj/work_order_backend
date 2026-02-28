@@ -11,19 +11,11 @@ from rest_framework import status
 from django.urls import reverse
 
 from workorder.models.products import Product, ProductMaterial, ProductGroup, ProductGroupItem
-from workorder.models import Material, Process
+from workorder.models import Material
 
 
 class ProductSerializerTest(TestCase):
     """产品序列化器测试"""
-
-    def setUp(self):
-        """测试前准备"""
-        self.process = Process.objects.create(
-            name='印刷',
-            code='print',
-            department_id=1
-        )
 
     def test_validate_code_valid(self):
         """测试有效的产品编码"""

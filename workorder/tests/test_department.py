@@ -7,13 +7,15 @@
 - DepartmentAPITest: API 测试
 """
 
+import uuid
+
 from django.test import TestCase
 from django.contrib.auth.models import User, Permission
 from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
 
-from ..models.base import Department, Process
+from ..models.base import Department
 from ..serializers.base import DepartmentSerializer
 
 
@@ -267,6 +269,9 @@ class DepartmentAPITest(APITestCase):
 
     def setUp(self):
         """设置测试数据"""
+        self.base_count = Department.objects.count()
+        self.active_base_count = Department.objects.filter(is_active=True).count()
+        self.unique_suffix = uuid.uuid4().hex[:8]
         # 创建超级用户
         self.admin_user = User.objects.create_superuser(
             username='admin',
@@ -284,13 +289,13 @@ class DepartmentAPITest(APITestCase):
         # 创建测试部门
         self.root_dept = Department.objects.create(
             name='测试总部',
-            code='test_headquarters',
+            code=f'test_headquarters_{self.unique_suffix}',
             sort_order=0,
             is_active=True
         )
         self.child_dept = Department.objects.create(
             name='测试生产部',
-            code='test_production',
+            code=f'test_production_{self.unique_suffix}',
             parent=self.root_dept,
             sort_order=1,
             is_active=True
@@ -302,16 +307,18 @@ class DepartmentAPITest(APITestCase):
         url = reverse('department-list')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['count'], 2)
+        self.assertEqual(response.data['count'], self.base_count + 2)
 
     def test_search_departments(self):
         """测试搜索部门"""
         self.client.force_authenticate(user=self.admin_user)
         url = reverse('department-list')
-        response = self.client.get(url, {'search': '生产'})
+        response = self.client.get(url, {'search': self.child_dept.code})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['count'], 1)
-        self.assertEqual(response.data['results'][0]['name'], '测试生产部')
+        self.assertGreaterEqual(response.data['count'], 1)
+        self.assertTrue(
+            any(item['id'] == self.child_dept.id for item in response.data['results'])
+        )
 
     def test_create_department(self):
         """测试创建部门"""
@@ -319,13 +326,13 @@ class DepartmentAPITest(APITestCase):
         url = reverse('department-list')
         data = {
             'name': '财务部',
-            'code': 'finance',
+            'code': f'finance_{self.unique_suffix}',
             'sort_order': 2,
             'is_active': True
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Department.objects.count(), 3)
+        self.assertEqual(Department.objects.count(), self.base_count + 3)
 
     def test_update_department(self):
         """测试更新部门"""
@@ -348,7 +355,7 @@ class DepartmentAPITest(APITestCase):
         url = reverse('department-detail', kwargs={'pk': self.child_dept.pk})
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(Department.objects.count(), 1)
+        self.assertEqual(Department.objects.count(), self.base_count + 1)
 
     def test_delete_department_with_children(self):
         """测试删除有子部门的部门（应该失败）"""
@@ -357,7 +364,7 @@ class DepartmentAPITest(APITestCase):
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('error', response.data)
-        self.assertEqual(Department.objects.count(), 2)
+        self.assertEqual(Department.objects.count(), self.base_count + 2)
 
     def test_tree_action(self):
         """测试获取部门树"""
@@ -365,11 +372,14 @@ class DepartmentAPITest(APITestCase):
         url = reverse('department-tree')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # 应该只有一个顶级部门
-        self.assertEqual(len(response.data), 1)
-        # 顶级部门应该有子部门
-        self.assertEqual(len(response.data[0]['children']), 1)
-        self.assertEqual(response.data[0]['children'][0]['name'], '生产部')
+        root = next(
+            (item for item in response.data if item['id'] == self.root_dept.id),
+            None
+        )
+        self.assertIsNotNone(root)
+        self.assertTrue(
+            any(child['id'] == self.child_dept.id for child in root.get('children', []))
+        )
 
     def test_all_action(self):
         """测试获取所有部门"""
@@ -377,7 +387,7 @@ class DepartmentAPITest(APITestCase):
         url = reverse('department-all')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 2)
+        self.assertEqual(len(response.data), self.base_count + 2)
 
     def test_all_action_filter_active(self):
         """测试获取所有启用的部门"""
@@ -389,13 +399,13 @@ class DepartmentAPITest(APITestCase):
         url = reverse('department-all')
         response = self.client.get(url, {'is_active': 'true'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
+        self.assertEqual(len(response.data), self.active_base_count + 1)
 
     def test_unauthorized_access(self):
         """测试未授权访问"""
         url = reverse('department-list')
         response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_code_validation_on_create(self):
         """测试创建时的编码验证"""

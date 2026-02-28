@@ -34,7 +34,8 @@ class WorkOrderModelTest(TestCase):
         # 验证施工单号格式：yyyymm + 3位序号
         self.assertIsNotNone(work_order.order_number)
         self.assertRegex(work_order.order_number, r'^\d{9}$')
-        self.assertTrue(work_order.order_number.startswith('202601'))
+        expected_prefix = timezone.localtime().strftime('%Y%m')
+        self.assertTrue(work_order.order_number.startswith(expected_prefix))
 
     def test_order_number_unique(self):
         """测试施工单号唯一性"""
