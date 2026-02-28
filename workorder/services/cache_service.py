@@ -189,7 +189,7 @@ def _generate_cache_key(func: Callable, args: tuple, kwargs: dict, prefix: str) 
     """
     # 生成参数的哈希值
     args_str = str(args) + str(sorted(kwargs.items()))
-    args_hash = hashlib.md5(args_str.encode('utf-8')).hexdigest()[:8]
+    args_hash = hashlib.sha256(args_str.encode('utf-8')).hexdigest()[:8]
     
     # 组合缓存键
     function_name = func.__name__
