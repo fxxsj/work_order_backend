@@ -4,10 +4,13 @@ Performance tests to verify query optimization
 Tests ensure ORM queries are optimized to prevent N+1 problems
 and use efficient annotated queries instead of loop-based counting.
 """
+from datetime import timedelta
+
 from django.test import TestCase, override_settings
 from django.db import connection, reset_queries
 from django.contrib.auth.models import User, Permission
 from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
 
 from workorder.models.core import WorkOrderTask, WorkOrder, WorkOrderProcess
 from workorder.models.base import Department, Process
@@ -48,7 +51,8 @@ class PerformanceTestCase(TestCase):
         self.work_order = WorkOrder.objects.create(
             order_number='TEST001',
             customer=self.customer,
-            created_by=self.user
+            created_by=self.user,
+            delivery_date=timezone.localdate() + timedelta(days=7)
         )
 
         # Create process
