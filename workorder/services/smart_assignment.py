@@ -169,7 +169,7 @@ class SmartAssignmentService:
             total_score += skill_level_weight
         
         # 技能不匹配的惩罚
-        penalty = (total_count - match_count) * 0.2)
+        penalty = (total_count - match_count) * 0.2
         
         return min(base_score + total_score - penalty, 1.0)
     

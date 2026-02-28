@@ -13,6 +13,7 @@ from collections import defaultdict
 import random
 import logging
 from ..models.system import TaskAssignmentRule
+from ..models.base import Department
 from ..models.core import WorkOrderTask
 
 logger = logging.getLogger(__name__)
@@ -202,7 +203,7 @@ class LoadBalancingService:
         ).count()
 
     @staticmethod
-    def select_department_by_load(process) -> Optional['Department']:
+    def select_department_by_load(process) -> Optional[Department]:
         """基于负载选择部门
 
         对于指定工序，获取所有活跃的分派规则，按优先级分组。
@@ -259,7 +260,7 @@ class LoadBalancingService:
         return selected['department']
 
     @staticmethod
-    def select_department_by_strategy(process, strategy='least_tasks') -> Optional['Department']:
+    def select_department_by_strategy(process, strategy='least_tasks') -> Optional[Department]:
         """根据指定策略选择部门
 
         Args:
@@ -394,7 +395,7 @@ class AutoDispatchService:
         return enabled
 
     @staticmethod
-    def dispatch_task(task, process=None, strategy='least_tasks') -> Optional['Department']:
+    def dispatch_task(task, process=None, strategy='least_tasks') -> Optional[Department]:
         """根据优先级规则自动分派任务到部门
 
         分派逻辑：
@@ -486,7 +487,7 @@ class AutoDispatchService:
         return LoadBalancingService.select_department_by_strategy(process, strategy)
 
     @staticmethod
-    def get_highest_priority_department(process) -> Optional['Department']:
+    def get_highest_priority_department(process) -> Optional[Department]:
         """获取工序的优先级最高的活跃规则对应的部门
 
         Args:

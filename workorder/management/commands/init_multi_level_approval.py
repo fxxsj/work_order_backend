@@ -84,7 +84,7 @@ class Command(BaseCommand):
 
     def _create_default_rules(self):
         """创建默认审核规则"""
-        from ..models.multi_level_approval import ApprovalRule
+        from ..models.multi_level_approval import ApprovalRule, ApprovalWorkflow
         
         self.stdout.write("📋 创建默认审核规则...")
         

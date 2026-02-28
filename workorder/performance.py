@@ -7,6 +7,10 @@
 # 2. 查询优化配置
 # 在 settings.py 中添加:
 
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',

@@ -43,10 +43,11 @@ def cache_result(timeout: int = None, key_prefix: str = '') -> Callable:
             try:
                 result = func(*args, **kwargs)
                 # 设置缓存
-                if timeout is None:
-                    timeout = settings.CACHE_TIMEOUTS['MEDIUM']
-                cache.set(cache_key, result, timeout)
-                logger.debug(f"Cache set for key: {cache_key}, timeout: {timeout}")
+                cache_timeout = timeout
+                if cache_timeout is None:
+                    cache_timeout = settings.CACHE_TIMEOUTS['MEDIUM']
+                cache.set(cache_key, result, cache_timeout)
+                logger.debug(f"Cache set for key: {cache_key}, timeout: {cache_timeout}")
                 return result
             except Exception as e:
                 logger.error(f"Error in cached function {func.__name__}: {e}")
@@ -91,9 +92,10 @@ def cache_queryset(timeout: int = None, key_prefix: str = '') -> Callable:
                 ids = list(queryset.values_list('id', flat=True))
                 
                 # 设置缓存
-                if timeout is None:
-                    timeout = settings.CACHE_TIMEOUTS['MEDIUM']
-                cache.set(cache_key, ids, timeout)
+                cache_timeout = timeout
+                if cache_timeout is None:
+                    cache_timeout = settings.CACHE_TIMEOUTS['MEDIUM']
+                cache.set(cache_key, ids, cache_timeout)
                 logger.debug(f"QuerySet cache set for key: {cache_key}, count: {len(ids)}")
                 return queryset
             except Exception as e:

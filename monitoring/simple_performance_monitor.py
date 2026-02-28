@@ -5,8 +5,9 @@
 import json
 import logging
 import time
+from datetime import datetime, timedelta
 import psutil
-from datetime import datetime
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,6 @@ def get_business_metrics():
     try:
         # 施工单统计
         from django.db import connection
-            
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT 
@@ -73,12 +73,13 @@ def get_business_metrics():
             
             # 最近7天统计
             seven_days_ago = datetime.now() - timedelta(days=7)
-            cursor.execute("""
-                SELECT COUNT(*) as recent_workorders
-                FROM workorder_workorder 
-                WHERE created_at >= %s
-                """, [seven_days_ago.isoformat()])
-            recent_workorders = cursor.fetchone()[0]
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT COUNT(*) as recent_workorders
+                    FROM workorder_workorder 
+                    WHERE created_at >= %s
+                    """, [seven_days_ago.isoformat()])
+                recent_workorders = cursor.fetchone()[0]
             
             return {
                 'total_workorders': total_workorders,
@@ -89,9 +90,9 @@ def get_business_metrics():
                 'recent_workorders': recent_workorders,
                 'timestamp': datetime.now().isoformat()
             }
-        except Exception as e:
-            logger.error(f"Error getting workorder metrics: {e}")
-            return None
+    except Exception as e:
+        logger.error(f"Error getting workorder metrics: {e}")
+        return None
 
 
 def get_cache_metrics():

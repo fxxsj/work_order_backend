@@ -493,11 +493,12 @@ class MultiLevelApprovalService:
         
         # 通知创建人
         if work_order.created_by:
+            result_text = "通过" if decision == "approve" else "被拒绝"
             Notification.objects.create(
                 recipient=work_order.created_by,
                 notification_type='approval_result',
                 title=f'审核结果：{work_order.order_number}',
-                content=f'您的施工单审核{decision == "approve" ? "通过" : "被拒绝"}',
+                content=f'您的施工单审核{result_text}',
                 priority='high',
                 work_order=work_order
             )
@@ -508,12 +509,13 @@ class MultiLevelApprovalService:
             approval_steps__status='completed'
         ).distinct()
         
+        result_text = "通过" if decision == "approve" else "拒绝"
         for participant in participants:
             Notification.objects.create(
                 recipient=participant,
                 notification_type='approval_completed',
                 title=f'审核完成：{work_order.order_number}',
-                content=f'施工单 {work_order.order_number} 审核流程已结束，结果：{decision == "approve" ? "通过" : "拒绝"}',
+                content=f'施工单 {work_order.order_number} 审核流程已结束，结果：{result_text}',
                 priority='high',
                 work_order=work_order
             )

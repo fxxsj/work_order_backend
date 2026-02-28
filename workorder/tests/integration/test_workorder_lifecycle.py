@@ -6,7 +6,7 @@ from workorder.tests.factories import (
     WorkOrderFactory, UserFactory, DepartmentFactory, ProcessFactory,
     WorkOrderProcessFactory, CustomerFactory, ProductFactory
 )
-from workorder.models import WorkOrder
+from workorder.models import WorkOrder, WorkOrderTask
 
 
 @pytest.mark.django_db

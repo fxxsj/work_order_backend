@@ -516,8 +516,7 @@ class BusinessMetricsCollector:
             cached_metrics = cache.get('workorder_business_metrics')
             if cached_metrics:
                 return {
-                    'user_metrics': cached_metrics,
-                    **cached_workorder_metrics
+                    **cached_metrics
                 }
             
             # 某本统计
