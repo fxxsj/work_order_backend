@@ -1557,6 +1557,16 @@ class WorkOrderTask(models.Model):
     def __str__(self):
         return f"{self.work_order_process} - {self.work_content[:50]}"
 
+    @property
+    def process_code(self):
+        """兼容引用任务工序编码的调用方。"""
+        if not self.work_order_process_id:
+            return None
+        process = getattr(self.work_order_process, "process", None)
+        if not process:
+            return None
+        return process.code
+
     def is_subtask(self):
         """判断是否为子任务"""
         return self.parent_task is not None
