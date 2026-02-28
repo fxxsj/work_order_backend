@@ -58,6 +58,7 @@ class TestWorkOrderLifecycle:
         wop = WorkOrderProcessFactory(
             work_order=workorder,
             process=process,
+            department=dept,
             tasks=1
         )
 
