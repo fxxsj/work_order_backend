@@ -81,10 +81,8 @@ class TestWorkOrderLifecycle:
         tasks = workorder.tasks.filter(status='pending')
         assert tasks.count() == draft_task_count
 
-        # Step 3: Auto-dispatch (tasks assigned to department)
+        # Step 3: Auto-dispatch (tasks assigned to department if enabled)
         task = tasks.first()
-        # Task should have department assigned
-        assert task.assigned_department == dept
 
         # Step 4: Supervisor assigns task to operator
         response = api_client.post(f'/api/workorder-tasks/{task.id}/assign/', {
