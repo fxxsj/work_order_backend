@@ -332,7 +332,7 @@ class DepartmentAPITest(APITestCase):
         self.client.force_authenticate(user=self.admin_user)
         url = reverse('department-list')
         data = {
-            'name': '财务部',
+            'name': f'财务部{self.unique_suffix}',
             'code': f'finance_{self.unique_suffix}',
             'sort_order': 2,
             'is_active': True

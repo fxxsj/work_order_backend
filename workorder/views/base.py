@@ -113,7 +113,13 @@ class DepartmentViewSet(BaseViewSet):
         # 检查是否有关联的施工单任务
         from ..models.core import WorkOrderTask
 
-        if WorkOrderTask.objects.filter(department=instance).exists():
+        if WorkOrderTask.objects.filter(assigned_department=instance).exists():
+            return Response(
+                {"error": "该部门已被施工单任务使用，不可删除"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if WorkOrderTask.objects.filter(work_order_process__department=instance).exists():
             return Response(
                 {"error": "该部门已被施工单任务使用，不可删除"},
                 status=status.HTTP_400_BAD_REQUEST,

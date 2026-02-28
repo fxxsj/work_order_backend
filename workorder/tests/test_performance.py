@@ -33,7 +33,7 @@ class PerformanceTestCase(TestCase):
 
         # Add change_workorder permission
         ct = ContentType.objects.get_for_model(WorkOrderTask)
-        permission = Permission.objects.get(codename='change_workorder', content_type=ct)
+        permission = Permission.objects.get(codename='change_workordertask', content_type=ct)
         self.user.user_permissions.add(permission)
 
         # Create customer
