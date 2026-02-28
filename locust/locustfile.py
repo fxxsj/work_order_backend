@@ -38,10 +38,22 @@ class CommonBehaviorMixin:
                 self.client.headers.update({
                     'Authorization': f'Bearer {self.token}'
                 })
+            self._load_user_ids()
+
+    def _load_user_ids(self):
+        """Load user IDs for known test users."""
+        if hasattr(self, "user_ids"):
+            return
+        response = self.client.get('/api/auth/users/', name='[Auth] User List')
+        if response.status_code != 200:
+            self.user_ids = {}
+            return
+        users = response.json() if isinstance(response.json(), list) else []
+        self.user_ids = {user.get('username'): user.get('id') for user in users}
 
     def _get_random_task_id(self):
         """Get a random task ID from the list"""
-        response = self.client.get('/api/tasks/?page_size=1', name='[Tasks] Get random ID')
+        response = self.client.get('/api/workorder-tasks/?page_size=1', name='[Tasks] Get random ID')
         if response.status_code == 200:
             results = response.json().get('results', [])
             if results:
@@ -72,7 +84,7 @@ class WorkOrderUser(CommonBehaviorMixin, HttpUser):
         filters = {}
         if random.random() < 0.3:
             filters['status'] = random.choice(['pending', 'in_progress', 'completed'])
-        self.client.get('/api/tasks/', params=filters, name='[Tasks] List')
+        self.client.get('/api/workorder-tasks/', params=filters, name='[Tasks] List')
 
     @task(3)
     def view_workorder_list(self):
@@ -87,7 +99,7 @@ class WorkOrderUser(CommonBehaviorMixin, HttpUser):
         """View task detail"""
         task_id = self._get_random_task_id()
         if task_id:
-            self.client.get(f'/api/tasks/{task_id}/', name='[Tasks] Detail')
+            self.client.get(f'/api/workorder-tasks/{task_id}/', name='[Tasks] Detail')
 
     @task(1)
     def view_notifications(self):
@@ -97,7 +109,7 @@ class WorkOrderUser(CommonBehaviorMixin, HttpUser):
     @task(1)
     def view_statistics(self):
         """View dashboard statistics"""
-        self.client.get('/api/statistics/task_summary/', name='[Stats] Task Summary')
+        self.client.get('/api/workorders/statistics/', name='[Stats] WorkOrder Summary')
 
 class SupervisorUser(CommonBehaviorMixin, HttpUser):
     """
@@ -114,7 +126,7 @@ class SupervisorUser(CommonBehaviorMixin, HttpUser):
         """View department tasks"""
         departments = [1, 2, 3, 4, 5]
         dept_id = random.choice(departments)
-        self.client.get('/api/tasks/', params={
+        self.client.get('/api/workorder-tasks/', params={
             'assigned_department': dept_id,
             'status': 'pending'
         }, name='[Supervisor] Department Tasks')
@@ -122,13 +134,13 @@ class SupervisorUser(CommonBehaviorMixin, HttpUser):
     @task(3)
     def view_department_workload(self):
         """View department workload statistics"""
-        self.client.get('/api/statistics/department_workload/', name='[Supervisor] Workload')
+        self.client.get('/api/workorder-tasks/department_workload/', name='[Supervisor] Workload')
 
     @task(2)
     def assign_task(self):
         """Assign a task to operator (lower weight - write operation)"""
         # Get a pending task
-        response = self.client.get('/api/tasks/', params={
+        response = self.client.get('/api/workorder-tasks/', params={
             'status': 'pending',
             'page_size': 1
         }, name='[Supervisor] Get Pending Task')
@@ -138,15 +150,18 @@ class SupervisorUser(CommonBehaviorMixin, HttpUser):
             if tasks:
                 task_id = tasks[0]['id']
                 # Assign to random operator
-                operator_id = random.randint(1, 50)
-                self.client.post(f'/api/tasks/{task_id}/assign/', json={
-                    'operator_id': operator_id
-                }, name='[Supervisor] Assign Task')
+                operator_id = None
+                if hasattr(self, "user_ids"):
+                    operator_id = self.user_ids.get('test_operator')
+                if operator_id:
+                    self.client.post(f'/api/workorder-tasks/{task_id}/assign/', json={
+                        'operator_id': operator_id
+                    }, name='[Supervisor] Assign Task')
 
     @task(1)
     def view_dashboard(self):
         """View supervisor dashboard"""
-        self.client.get('/api/statistics/collaboration/', name='[Supervisor] Dashboard')
+        self.client.get('/api/workorder-tasks/collaboration_stats/', name='[Supervisor] Dashboard')
 
 class OperatorUser(CommonBehaviorMixin, HttpUser):
     """
@@ -160,14 +175,14 @@ class OperatorUser(CommonBehaviorMixin, HttpUser):
     @task(5)
     def view_my_tasks(self):
         """View my assigned tasks"""
-        self.client.get('/api/tasks/', params={
+        self.client.get('/api/workorder-tasks/', params={
             'status': 'in_progress'
         }, name='[Operator] My Tasks')
 
     @task(3)
     def view_claimable_tasks(self):
         """View tasks I can claim"""
-        self.client.get('/api/tasks/', params={
+        self.client.get('/api/workorder-tasks/', params={
             'status': 'pending'
         }, name='[Operator] Claimable Tasks')
 
@@ -176,14 +191,15 @@ class OperatorUser(CommonBehaviorMixin, HttpUser):
         """Update task progress (write operation)"""
         task_id = self._get_random_task_id()
         if task_id:
-            self.client.post(f'/api/tasks/{task_id}/update_progress/', json={
-                'quantity': random.randint(1, 100)
+            self.client.post(f'/api/workorder-tasks/{task_id}/update_quantity/', json={
+                'quantity_completed': random.randint(1, 100),
+                'quantity_defective': 0
             }, name='[Operator] Update Progress')
 
     @task(1)
     def claim_task(self):
         """Claim an unassigned task"""
-        response = self.client.get('/api/tasks/', params={
+        response = self.client.get('/api/workorder-tasks/', params={
             'status': 'pending',
             'page_size': 1
         }, name='[Operator] Get Claimable')
@@ -192,7 +208,7 @@ class OperatorUser(CommonBehaviorMixin, HttpUser):
             tasks = response.json().get('results', [])
             if tasks:
                 task_id = tasks[0]['id']
-                self.client.post(f'/api/tasks/{task_id}/claim/', name='[Operator] Claim Task')
+                self.client.post(f'/api/workorder-tasks/{task_id}/claim/', name='[Operator] Claim Task')
 
 class MakerUser(CommonBehaviorMixin, HttpUser):
     """
