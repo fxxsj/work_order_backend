@@ -62,8 +62,8 @@ class TestWorkOrderLifecycle:
         )
 
         # Verify draft tasks were created
-        draft_tasks = workorder.tasks.filter(status='draft')
-        assert draft_tasks.count() > 0
+        draft_task_count = workorder.tasks.filter(status='draft').count()
+        assert draft_task_count > 0
 
         # Step 2: Approve workorder
         api_client.force_authenticate(user=supervisor)
@@ -79,7 +79,7 @@ class TestWorkOrderLifecycle:
 
         # Verify tasks converted to pending
         tasks = workorder.tasks.filter(status='pending')
-        assert tasks.count() == draft_tasks.count()
+        assert tasks.count() == draft_task_count
 
         # Step 3: Auto-dispatch (tasks assigned to department)
         task = tasks.first()
