@@ -12,6 +12,8 @@
 from django.db import models
 from django.db.models import Count, Q, Avg, Max, Min
 from django.utils import timezone
+from django.conf import settings
+from django.contrib.auth import get_user_model
 from typing import List, Dict, Optional, Tuple, Any
 import logging
 import numpy as np
@@ -20,12 +22,13 @@ from collections import defaultdict
 import json
 
 logger = logging.getLogger(__name__)
+User = get_user_model()
 
 
 class SkillProfile(models.Model):
     """操作员技能画像"""
     
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='skill_profile')
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='skill_profile')
     
     # 核心技能领域
     technical_skills = models.JSONField('技术技能', default=list, help_text='掌握的技术栈')
