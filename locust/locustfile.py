@@ -186,16 +186,6 @@ class OperatorUser(CommonBehaviorMixin, HttpUser):
             'status': 'pending'
         }, name='[Operator] Claimable Tasks')
 
-    @task(2)
-    def update_task_progress(self):
-        """Update task progress (write operation)"""
-        task_id = self._get_random_task_id()
-        if task_id:
-            self.client.post(f'/api/workorder-tasks/{task_id}/update_quantity/', json={
-                'quantity_increment': random.randint(1, 5),
-                'quantity_defective': 0
-            }, name='[Operator] Update Progress')
-
     @task(1)
     def claim_task(self):
         """Claim an unassigned task"""
