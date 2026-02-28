@@ -11,6 +11,7 @@ from django.contrib.contenttypes.models import ContentType
 
 from workorder.models.core import WorkOrderTask, WorkOrder, WorkOrderProcess
 from workorder.models.base import Department, Process
+from workorder.models.system import UserProfile
 from workorder.views.work_order_tasks.task_stats import TaskStatsMixin
 
 
@@ -20,11 +21,15 @@ class PerformanceTestCase(TestCase):
     def setUp(self):
         """Create test data"""
         # Create department
-        self.department = Department.objects.create(name='Test Dept')
+        self.department = Department.objects.create(
+            name='Test Dept',
+            code='test_dept_perf'
+        )
 
         # Create user with permissions
         self.user = User.objects.create_user(username='testuser', password='testpass')
-        self.user.profile.departments.add(self.department)
+        self.user_profile = UserProfile.objects.create(user=self.user)
+        self.user_profile.departments.add(self.department)
 
         # Add change_workorder permission
         ct = ContentType.objects.get_for_model(WorkOrderTask)
@@ -209,7 +214,8 @@ class PerformanceTestCase(TestCase):
         # Create additional users with tasks to increase data volume
         for i in range(5):
             user = User.objects.create_user(username=f'operator{i}', password='pass')
-            user.profile.departments.add(self.department)
+            profile = UserProfile.objects.create(user=user)
+            profile.departments.add(self.department)
 
             # Create tasks for this user
             for j in range(3):

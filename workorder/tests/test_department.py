@@ -24,22 +24,26 @@ class DepartmentModelTest(TestCase):
 
     def setUp(self):
         """设置测试数据"""
+        self.suffix = uuid.uuid4().hex[:4]
+        self.root_code = f'test_hq_{self.suffix}'
+        self.child_code = f'test_prod_{self.suffix}'
+        self.grand_code = f'test_prt_{self.suffix}'
         self.root_dept = Department.objects.create(
             name='测试总部',
-            code='test_headquarters',
+            code=self.root_code,
             sort_order=0,
             is_active=True
         )
         self.child_dept = Department.objects.create(
             name='测试生产部',
-            code='test_production',
+            code=self.child_code,
             parent=self.root_dept,
             sort_order=1,
             is_active=True
         )
         self.grandchild_dept = Department.objects.create(
             name='测试印刷车间',
-            code='test_printing_workshop',
+            code=self.grand_code,
             parent=self.child_dept,
             sort_order=0,
             is_active=True
@@ -57,8 +61,8 @@ class DepartmentModelTest(TestCase):
 
     def test_natural_key(self):
         """测试自然键"""
-        self.assertEqual(self.root_dept.natural_key(), ('test_headquarters',))
-        retrieved = Department.get_by_natural_key('test_headquarters')
+        self.assertEqual(self.root_dept.natural_key(), (self.root_code,))
+        retrieved = Department.get_by_natural_key(self.root_code)
         self.assertEqual(retrieved, self.root_dept)
 
     def test_get_ancestors(self):
@@ -101,15 +105,18 @@ class DepartmentSerializerTest(TestCase):
 
     def setUp(self):
         """设置测试数据"""
+        self.suffix = uuid.uuid4().hex[:4]
+        self.root_code = f'test_hq_{self.suffix}'
+        self.child_code = f'test_prod_{self.suffix}'
         self.root_dept = Department.objects.create(
             name='测试总部',
-            code='test_headquarters',
+            code=self.root_code,
             sort_order=0,
             is_active=True
         )
         self.child_dept = Department.objects.create(
             name='测试生产部',
-            code='test_production',
+            code=self.child_code,
             parent=self.root_dept,
             sort_order=1,
             is_active=True
@@ -210,7 +217,7 @@ class DepartmentSerializerTest(TestCase):
         """测试循环引用（自己作为上级）"""
         data = {
             'name': '测试总部',
-            'code': 'test_headquarters',
+            'code': self.root_dept.code,
             'parent': self.root_dept.id,
             'sort_order': 0,
             'is_active': True
@@ -223,7 +230,7 @@ class DepartmentSerializerTest(TestCase):
         """测试循环引用（子部门作为上级）"""
         data = {
             'name': '测试总部',
-            'code': 'test_headquarters',
+            'code': self.root_dept.code,
             'parent': self.child_dept.id,
             'sort_order': 0,
             'is_active': True
@@ -236,8 +243,8 @@ class DepartmentSerializerTest(TestCase):
         """测试最大层级深度"""
         # 创建第三级部门
         level2_dept = Department.objects.create(
-            name='印刷车间',
-            code='printing',
+            name=f'测试印刷车间{self.suffix}',
+            code=f'printing_{self.suffix}',
             parent=self.child_dept,
             sort_order=0,
             is_active=True
@@ -246,7 +253,7 @@ class DepartmentSerializerTest(TestCase):
         # 尝试创建第四级部门（应该失败）
         data = {
             'name': '印刷组',
-            'code': 'printing_group',
+            'code': f'print_grp_{self.suffix}',
             'parent': level2_dept.id,
             'sort_order': 0,
             'is_active': True
@@ -271,7 +278,7 @@ class DepartmentAPITest(APITestCase):
         """设置测试数据"""
         self.base_count = Department.objects.count()
         self.active_base_count = Department.objects.filter(is_active=True).count()
-        self.unique_suffix = uuid.uuid4().hex[:8]
+        self.unique_suffix = uuid.uuid4().hex[:6]
         # 创建超级用户
         self.admin_user = User.objects.create_superuser(
             username='admin',
@@ -289,13 +296,13 @@ class DepartmentAPITest(APITestCase):
         # 创建测试部门
         self.root_dept = Department.objects.create(
             name='测试总部',
-            code=f'test_headquarters_{self.unique_suffix}',
+            code=f'test_hq_{self.unique_suffix}',
             sort_order=0,
             is_active=True
         )
         self.child_dept = Department.objects.create(
             name='测试生产部',
-            code=f'test_production_{self.unique_suffix}',
+            code=f'test_prod_{self.unique_suffix}',
             parent=self.root_dept,
             sort_order=1,
             is_active=True
@@ -340,7 +347,7 @@ class DepartmentAPITest(APITestCase):
         url = reverse('department-detail', kwargs={'pk': self.child_dept.pk})
         data = {
             'name': '生产部门',
-            'code': 'test_production',  # 保持不变
+            'code': self.child_dept.code,  # 保持不变
             'sort_order': 2,
             'is_active': True
         }
