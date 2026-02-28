@@ -282,17 +282,26 @@ class SmartAssignmentService:
     @staticmethod
     def calculate_team_balance_score(team_users: List[User]) -> Dict[str, float]:
         """计算团队平衡性评分"""
-        skill_levels = [user.skill_profile.skill_level for user in team_users if user.skill_profile else 0]
-        work_capacities = [user.work_capacity for user in team_users if user.skill_profile else 5]
+        skill_levels = [
+            user.skill_profile.skill_level if user.skill_profile else 0
+            for user in team_users
+        ]
+        work_capacities = [
+            user.skill_profile.work_capacity if user.skill_profile else 5
+            for user in team_users
+        ]
         
         # 团队技能多样性
         skill_diversity = len(set(
-            skill.lower() for user in team_users for skill in user_profile.technical_skills or [] for user in team_users if user.skill_profile
+            skill.lower()
+            for user in team_users
+            if user.skill_profile
+            for skill in (user.skill_profile.technical_skills or [])
         ))
         
         # 平衡度计算
-        avg_skill_level = np.mean(skill_levels) if skill_levels else [1.0])
-        capacity_variance = np.var(work_capacities) if work_capacities else [1.0])
+        avg_skill_level = float(np.mean(skill_levels)) if skill_levels else 1.0
+        capacity_variance = float(np.var(work_capacities)) if work_capacities else 1.0
         
         # 平衡度评分：技能多样性 + 容量平衡
         diversity_score = (skill_diversity / len(skill_levels)) * 0.4

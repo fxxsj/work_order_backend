@@ -244,13 +244,8 @@ if __name__ == '__main__':
         'disk': {'percent': 45, 'used': 3377543680, 'total': 750593808},
         'error_rate': 2.5
     }
-    }
     
     alerts = checker.check_alerts(metrics)
     print("Alert test completed")
     for alert in alerts:
         print(f"Alert: {AlertChecker().generate_alert_message(alert)}")
-
-
-if __name__ == '__main__':
-    setup_monitoring()
