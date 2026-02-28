@@ -39,6 +39,38 @@ class UserFactory(factory.django.DjangoModelFactory):
             profile, _ = UserProfile.objects.get_or_create(user=self)
             profile.departments.add(dept)
 
+    @factory.post_generation
+    def add_permissions(self, create, extracted, **kwargs):
+        """Optionally add basic workorder permissions to the user."""
+        if not create:
+            return
+
+        if extracted is False:
+            return
+
+        if isinstance(extracted, (list, tuple, set)):
+            codenames = list(extracted)
+        elif isinstance(extracted, str):
+            codenames = [extracted]
+        else:
+            codenames = ['view_workorder', 'change_workorder']
+
+        try:
+            from django.contrib.auth.models import Permission
+            from django.contrib.contenttypes.models import ContentType
+            from workorder.models import WorkOrder
+
+            content_type = ContentType.objects.get_for_model(WorkOrder)
+            permissions = Permission.objects.filter(
+                content_type=content_type,
+                codename__in=codenames
+            )
+            if permissions.exists():
+                self.user_permissions.add(*permissions)
+        except Exception:
+            # Permissions may not exist yet in some test contexts
+            return
+
     @classmethod
     def _create(cls, model_class, *args, **kwargs):
         """Use create_user for password hashing"""

@@ -286,6 +286,11 @@ class WorkOrder(models.Model):
             return f"{self.order_number} - {first_product.product.name}"
         return f"{self.order_number}"
 
+    @property
+    def tasks(self):
+        """所有关联任务"""
+        return WorkOrderTask.objects.filter(work_order_process__work_order=self)
+
     def get_progress_percentage(self):
         """计算进度百分比"""
         total_processes = self.order_processes.count()

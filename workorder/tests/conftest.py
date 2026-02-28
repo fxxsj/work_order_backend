@@ -142,15 +142,22 @@ class TestDataFactory:
         )
 
     @staticmethod
-    def create_workorder_process(work_order=None, process=None, sequence=10, **kwargs):
+    def create_workorder_process(work_order=None, process=None, sequence=None, **kwargs):
         """创建测试施工单工序"""
         from workorder.models.core import WorkOrderProcess
+        from django.db.models import Max
 
         if not work_order:
             work_order = TestDataFactory.create_workorder()
 
         if not process:
             process = TestDataFactory.create_process()
+
+        if sequence is None:
+            current_max = WorkOrderProcess.objects.filter(work_order=work_order).aggregate(
+                max_seq=Max("sequence")
+            )["max_seq"] or 0
+            sequence = current_max + 10
 
         return WorkOrderProcess.objects.create(
             work_order=work_order,

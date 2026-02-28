@@ -82,7 +82,7 @@ class WorkOrderProcessFactory(factory.django.DjangoModelFactory):
 
     work_order = factory.SubFactory(WorkOrderFactory)
     process = factory.SubFactory(ProcessFactory)
-    sequence = 10
+    sequence = factory.Sequence(lambda n: (n + 1) * 10)
     status = 'pending'
 
     # Post-generation: create tasks

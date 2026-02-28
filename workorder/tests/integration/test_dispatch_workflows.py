@@ -61,7 +61,7 @@ class TestAutoDispatchWorkflow:
         assert response.status_code == status.HTTP_200_OK
 
         # Verify tasks are created
-        tasks = WorkOrderTask.objects.filter(work_order=workorder)
+        tasks = WorkOrderTask.objects.filter(work_order_process__work_order=workorder)
         assert tasks.count() == 3
 
         # Note: Auto-dispatch may or may not be enabled
@@ -108,7 +108,7 @@ class TestAutoDispatchWorkflow:
         api_client.post(f'/api/workorders/{workorder.id}/approve/')
 
         # Verify task was created
-        task = WorkOrderTask.objects.filter(work_order=workorder).first()
+        task = WorkOrderTask.objects.filter(work_order_process__work_order=workorder).first()
         assert task is not None
         # Note: Load balancing may or may not be implemented
         # Test documents the expectation
@@ -145,7 +145,7 @@ class TestAutoDispatchWorkflow:
         api_client.post(f'/api/workorders/{workorder.id}/approve/')
 
         # Verify task was created
-        task = WorkOrderTask.objects.filter(work_order=workorder).first()
+        task = WorkOrderTask.objects.filter(work_order_process__work_order=workorder).first()
         assert task is not None
         # Note: Auto-dispatch behavior depends on implementation
         # Test documents expected behavior with inactive rules

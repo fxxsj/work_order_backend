@@ -206,12 +206,16 @@ class TestWorkOrderLifecycle:
         user = UserFactory(username='user', departments=[dept])
 
         workorder = WorkOrderFactory(created_by=user, processes=1)
-        initial_task_count = WorkOrderTask.objects.filter(work_order=workorder).count()
+        initial_task_count = WorkOrderTask.objects.filter(
+            work_order_process__work_order=workorder
+        ).count()
         assert initial_task_count > 0
 
         # Delete workorder
         workorder.delete()
 
         # Verify tasks are deleted
-        final_task_count = WorkOrderTask.objects.filter(work_order=workorder).count()
+        final_task_count = WorkOrderTask.objects.filter(
+            work_order_process__work_order=workorder
+        ).count()
         assert final_task_count == 0
