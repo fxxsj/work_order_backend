@@ -1,13 +1,22 @@
 """Integration tests for task workflows"""
 import pytest
 import threading
+from django.contrib.auth.models import Group
 from rest_framework import status
 from rest_framework.test import APIClient
 from workorder.tests.factories import (
     WorkOrderFactory, UserFactory, DepartmentFactory, ProcessFactory,
-    WorkOrderTaskFactory, WorkOrderProcessFactory
+    WorkOrderTaskFactory, WorkOrderProcessFactory, WorkOrderProductFactory
 )
 from workorder.models import WorkOrder, WorkOrderTask
+
+
+def make_salesperson(user, customer):
+    group, _ = Group.objects.get_or_create(name="业务员")
+    user.groups.add(group)
+    if customer is not None:
+        customer.salesperson = user
+        customer.save(update_fields=["salesperson"])
 
 
 @pytest.mark.django_db
@@ -29,6 +38,8 @@ class TestWorkOrderTaskWorkflow:
             created_by=supervisor,
             processes=0  # We'll create processes manually
         )
+        WorkOrderProductFactory(work_order=workorder, quantity=100)
+        make_salesperson(supervisor, workorder.customer)
 
         # Create process with draft tasks
         process = ProcessFactory(name='Offset Printing')
@@ -40,7 +51,11 @@ class TestWorkOrderTaskWorkflow:
 
         # Act: Approve workorder
         api_client.force_authenticate(user=supervisor)
-        response = api_client.post(f'/api/workorders/{workorder.id}/approve/')
+        response = api_client.post(
+            f'/api/workorders/{workorder.id}/approve/',
+            {"approval_status": "approved"},
+            format="json"
+        )
 
         # Assert: Tasks are now formal (pending)
         assert response.status_code == status.HTTP_200_OK
@@ -67,7 +82,7 @@ class TestWorkOrderTaskWorkflow:
 
         api_client.force_authenticate(user=supervisor)
         response = api_client.post(f'/api/workorder-tasks/{task.id}/assign/', {
-            'operator_id': operator.id
+            'assigned_operator': operator.id
         }, format='json')
 
         assert response.status_code == status.HTTP_200_OK
@@ -96,7 +111,7 @@ class TestWorkOrderTaskWorkflow:
             try:
                 # Note: claim endpoint might not exist, using assign as fallback
                 response = client.post(f'/api/workorder-tasks/{task.id}/assign/', {
-                    'operator_id': user.id
+                    'assigned_operator': user.id
                 }, format='json')
                 if response.status_code == status.HTTP_200_OK:
                     results['success'] += 1
@@ -168,7 +183,7 @@ class TestWorkOrderTaskWorkflow:
 
         api_client.force_authenticate(user=supervisor)
         response = api_client.post(f'/api/workorder-tasks/{new_task.id}/assign/', {
-            'operator_id': operator.id
+            'assigned_operator': operator.id
         }, format='json')
 
         # The API may or may not enforce capacity limits
@@ -192,7 +207,7 @@ class TestWorkOrderTaskWorkflow:
         # Operator tries to assign (should fail)
         api_client.force_authenticate(user=operator)
         response = api_client.post(f'/api/workorder-tasks/{task.id}/assign/', {
-            'operator_id': other_operator.id
+            'assigned_operator': other_operator.id
         }, format='json')
 
         # May succeed if permission check is not strict

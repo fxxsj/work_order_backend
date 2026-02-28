@@ -31,7 +31,7 @@ class TestNotificationWorkflows:
 
         api_client.force_authenticate(user=supervisor)
         response = api_client.post(f'/api/workorder-tasks/{task.id}/assign/', {
-            'operator_id': operator.id
+            'assigned_operator': operator.id
         }, format='json')
 
         assert response.status_code == status.HTTP_200_OK

@@ -1,12 +1,21 @@
 """Integration tests for auto-dispatch workflows"""
 import pytest
+from django.contrib.auth.models import Group
 from rest_framework import status
 from rest_framework.test import APIClient
 from workorder.tests.factories import (
     WorkOrderFactory, UserFactory, DepartmentFactory, ProcessFactory,
-    WorkOrderProcessFactory, WorkOrderTaskFactory
+    WorkOrderProcessFactory, WorkOrderTaskFactory, WorkOrderProductFactory
 )
 from workorder.models import TaskAssignmentRule, WorkOrderTask
+
+
+def make_salesperson(user, customer):
+    group, _ = Group.objects.get_or_create(name="业务员")
+    user.groups.add(group)
+    if customer is not None:
+        customer.salesperson = user
+        customer.save(update_fields=["salesperson"])
 
 
 @pytest.mark.django_db
@@ -47,6 +56,8 @@ class TestAutoDispatchWorkflow:
             created_by=maker,
             processes=0  # We'll create processes manually
         )
+        WorkOrderProductFactory(work_order=workorder, quantity=100)
+        make_salesperson(supervisor, workorder.customer)
 
         WorkOrderProcessFactory(
             work_order=workorder,
@@ -56,7 +67,11 @@ class TestAutoDispatchWorkflow:
 
         # Approve workorder
         api_client.force_authenticate(user=supervisor)
-        response = api_client.post(f'/api/workorders/{workorder.id}/approve/')
+        response = api_client.post(
+            f'/api/workorders/{workorder.id}/approve/',
+            {"approval_status": "approved"},
+            format="json"
+        )
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -102,10 +117,16 @@ class TestAutoDispatchWorkflow:
         # Create and approve workorder
         supervisor = UserFactory(username='supervisor', departments=[dept1])
         workorder = WorkOrderFactory(approval_status='pending', processes=0)
+        WorkOrderProductFactory(work_order=workorder, quantity=100)
+        make_salesperson(supervisor, workorder.customer)
         WorkOrderProcessFactory(work_order=workorder, process=process, tasks=1)
 
         api_client.force_authenticate(user=supervisor)
-        api_client.post(f'/api/workorders/{workorder.id}/approve/')
+        api_client.post(
+            f'/api/workorders/{workorder.id}/approve/',
+            {"approval_status": "approved"},
+            format="json"
+        )
 
         # Verify task was created
         task = WorkOrderTask.objects.filter(work_order_process__work_order=workorder).first()
@@ -139,10 +160,16 @@ class TestAutoDispatchWorkflow:
 
         supervisor = UserFactory(username='supervisor', departments=[dept1])
         workorder = WorkOrderFactory(approval_status='pending', processes=0)
+        WorkOrderProductFactory(work_order=workorder, quantity=100)
+        make_salesperson(supervisor, workorder.customer)
         WorkOrderProcessFactory(work_order=workorder, process=process, tasks=1)
 
         api_client.force_authenticate(user=supervisor)
-        api_client.post(f'/api/workorders/{workorder.id}/approve/')
+        api_client.post(
+            f'/api/workorders/{workorder.id}/approve/',
+            {"approval_status": "approved"},
+            format="json"
+        )
 
         # Verify task was created
         task = WorkOrderTask.objects.filter(work_order_process__work_order=workorder).first()

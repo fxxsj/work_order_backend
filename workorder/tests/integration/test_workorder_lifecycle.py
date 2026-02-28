@@ -1,12 +1,22 @@
 """Integration tests for complete work order lifecycle"""
 import pytest
+from django.contrib.auth.models import Group
 from rest_framework import status
 from rest_framework.test import APIClient
 from workorder.tests.factories import (
     WorkOrderFactory, UserFactory, DepartmentFactory, ProcessFactory,
-    WorkOrderProcessFactory, CustomerFactory, ProductFactory
+    WorkOrderProcessFactory, CustomerFactory, ProductFactory,
+    WorkOrderProductFactory
 )
 from workorder.models import WorkOrder, WorkOrderTask
+
+
+def make_salesperson(user, customer):
+    group, _ = Group.objects.get_or_create(name="业务员")
+    user.groups.add(group)
+    if customer is not None:
+        customer.salesperson = user
+        customer.save(update_fields=["salesperson"])
 
 
 @pytest.mark.django_db
@@ -41,6 +51,8 @@ class TestWorkOrderLifecycle:
         assert response.status_code == status.HTTP_201_CREATED
         workorder_id = response.data['id']
         workorder = WorkOrder.objects.get(id=workorder_id)
+        WorkOrderProductFactory(work_order=workorder, product=product, quantity=100)
+        make_salesperson(supervisor, customer)
 
         # Add processes manually (API might not support nested creation)
         wop = WorkOrderProcessFactory(
@@ -55,7 +67,11 @@ class TestWorkOrderLifecycle:
 
         # Step 2: Approve workorder
         api_client.force_authenticate(user=supervisor)
-        response = api_client.post(f'/api/workorders/{workorder_id}/approve/')
+        response = api_client.post(
+            f'/api/workorders/{workorder_id}/approve/',
+            {"approval_status": "approved"},
+            format="json"
+        )
 
         assert response.status_code == status.HTTP_200_OK
         workorder.refresh_from_db()
@@ -72,7 +88,7 @@ class TestWorkOrderLifecycle:
 
         # Step 4: Supervisor assigns task to operator
         response = api_client.post(f'/api/workorder-tasks/{task.id}/assign/', {
-            'operator_id': operator.id
+            'assigned_operator': operator.id
         }, format='json')
 
         assert response.status_code == status.HTTP_200_OK
@@ -118,6 +134,8 @@ class TestWorkOrderLifecycle:
         assert response.status_code == status.HTTP_201_CREATED
         workorder_id = response.data['id']
         workorder = WorkOrder.objects.get(id=workorder_id)
+        WorkOrderProductFactory(work_order=workorder, quantity=100)
+        make_salesperson(supervisor, customer)
 
         # Create multiple processes
         WorkOrderProcessFactory(work_order=workorder, process=process1, tasks=1)
@@ -126,7 +144,11 @@ class TestWorkOrderLifecycle:
 
         # Approve
         api_client.force_authenticate(user=supervisor)
-        api_client.post(f'/api/workorders/{workorder_id}/approve/')
+        api_client.post(
+            f'/api/workorders/{workorder_id}/approve/',
+            {"approval_status": "approved"},
+            format="json"
+        )
 
         # Verify tasks for all processes
         workorder.refresh_from_db()
@@ -178,6 +200,7 @@ class TestWorkOrderLifecycle:
         dept = DepartmentFactory()
         user = UserFactory(username='user', departments=[dept])
         customer = CustomerFactory()
+        make_salesperson(user, customer)
 
         api_client.force_authenticate(user=user)
 
