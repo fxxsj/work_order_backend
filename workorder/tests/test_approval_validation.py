@@ -10,7 +10,7 @@ from ..models import (
     Customer, Product, Process, Artwork, Die, FoilingPlate, EmbossingPlate,
     Material
 )
-from datetime import datetime, timedelta, date
+from datetime import timedelta
 
 
 class ApprovalValidationBaseTest(TestCase):
@@ -18,6 +18,7 @@ class ApprovalValidationBaseTest(TestCase):
 
     def setUp(self):
         """公共测试数据"""
+        self.future_date = timezone.now().date() + timedelta(days=30)
         # 创建用户
         self.salesperson = User.objects.create_user(
             username='salesperson',
@@ -108,7 +109,7 @@ class BasicValidationTest(ApprovalValidationBaseTest):
         work_order = WorkOrder.objects.create(
             customer=self.customer,  # 先包含客户
             production_quantity=100,
-            delivery_date=date(2026, 1, 20),
+            delivery_date=self.future_date,
             created_by=self.creator,
             manager=self.creator
         )
@@ -125,13 +126,12 @@ class BasicValidationTest(ApprovalValidationBaseTest):
     
     def test_products_required(self):
         """测试产品信息必须"""
-        from datetime import date
 
         # 创建完整的施工单
         work_order = WorkOrder.objects.create(
             customer=self.customer,
             production_quantity=100,
-            delivery_date=date(2026, 1, 20),  # 使用 date 对象
+            delivery_date=self.future_date,  # 使用 date 对象
             created_by=self.creator,
             manager=self.creator
         )
@@ -150,13 +150,12 @@ class BasicValidationTest(ApprovalValidationBaseTest):
 
     def test_processes_required(self):
         """测试工序信息必须"""
-        from datetime import date
 
         # 创建完整的施工单
         work_order = WorkOrder.objects.create(
             customer=self.customer,
             production_quantity=100,
-            delivery_date=date(2026, 1, 20),  # 使用 date 对象
+            delivery_date=self.future_date,  # 使用 date 对象
             created_by=self.creator,
             manager=self.creator
         )
@@ -175,13 +174,12 @@ class BasicValidationTest(ApprovalValidationBaseTest):
 
     def test_delivery_date_required(self):
         """测试交货日期必须"""
-        from datetime import date
 
         # 创建施工单
         work_order = WorkOrder.objects.create(
             customer=self.customer,
             production_quantity=100,
-            delivery_date=date(2026, 1, 20),  # 使用 date 对象
+            delivery_date=self.future_date,  # 使用 date 对象
             created_by=self.creator,
             manager=self.creator
         )
@@ -216,7 +214,7 @@ class PlateProcessMatchTest(ApprovalValidationBaseTest):
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=100,
-            delivery_date=date(2026, 1, 20),
+            delivery_date=self.future_date,
             created_by=self.creator,
             manager=self.creator
         )
@@ -257,7 +255,7 @@ class PlateProcessMatchTest(ApprovalValidationBaseTest):
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=100,
-            delivery_date=date(2026, 1, 20),
+            delivery_date=self.future_date,
             created_by=self.creator,
             manager=self.creator
         )
@@ -293,7 +291,7 @@ class QuantityValidationTest(ApprovalValidationBaseTest):
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=None,  # 未填写
-            delivery_date=date(2026, 1, 20),
+            delivery_date=self.future_date,
             created_by=self.creator,
             manager=self.creator
         )
@@ -324,7 +322,7 @@ class QuantityValidationTest(ApprovalValidationBaseTest):
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=-10,  # 小于0
-            delivery_date=date(2026, 1, 20),
+            delivery_date=self.future_date,
             created_by=self.creator,
             manager=self.creator
         )
@@ -356,7 +354,7 @@ class QuantityValidationTest(ApprovalValidationBaseTest):
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=0,  # 等于0
-            delivery_date=date(2026, 1, 20),
+            delivery_date=self.future_date,
             created_by=self.creator,
             manager=self.creator
         )
@@ -387,7 +385,7 @@ class QuantityValidationTest(ApprovalValidationBaseTest):
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=100,
-            delivery_date=date(2026, 1, 20),
+            delivery_date=self.future_date,
             created_by=self.creator,
             manager=self.creator
         )
@@ -420,11 +418,14 @@ class DateValidationTest(ApprovalValidationBaseTest):
     
     def test_delivery_date_before_order_date(self):
         """测试交货日期不能早于下单日期"""
+        today = timezone.now().date()
+        order_date = today + timedelta(days=10)
+        delivery_date = today + timedelta(days=5)
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=100,
-            order_date=date(2026, 2, 10),
-            delivery_date=date(2026, 2, 5),  # 交货日期早于下单日期
+            order_date=order_date,
+            delivery_date=delivery_date,  # 交货日期早于下单日期
             created_by=self.creator,
             manager=self.creator
         )
@@ -449,16 +450,18 @@ class DateValidationTest(ApprovalValidationBaseTest):
         errors = work_order.validate_before_approval()
         
         self.assertIn('交货日期不能早于下单日期', errors[0])
-        self.assertIn('2026-02-05', errors[0])
-        self.assertIn('2026-02-10', errors[0])
+        self.assertIn(str(delivery_date), errors[0])
+        self.assertIn(str(order_date), errors[0])
     
     def test_delivery_date_same_as_order_date(self):
         """测试交货日期可以等于下单日期"""
+        today = timezone.now().date()
+        same_date = today + timedelta(days=10)
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=100,
-            order_date=date(2026, 2, 1),
-            delivery_date=date(2026, 2, 1),  # 相同日期
+            order_date=same_date,
+            delivery_date=same_date,  # 相同日期
             created_by=self.creator,
             manager=self.creator
         )
@@ -488,11 +491,14 @@ class DateValidationTest(ApprovalValidationBaseTest):
     
     def test_delivery_date_after_order_date(self):
         """测试交货日期可以晚于下单日期"""
+        today = timezone.now().date()
+        order_date = today + timedelta(days=5)
+        delivery_date = today + timedelta(days=10)
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=100,
-            order_date=date(2026, 2, 1),
-            delivery_date=date(2026, 2, 10),  # 晚于下单日期
+            order_date=order_date,
+            delivery_date=delivery_date,  # 晚于下单日期
             created_by=self.creator,
             manager=self.creator
         )
@@ -564,7 +570,7 @@ class MaterialValidationTest(ApprovalValidationBaseTest):
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=100,
-            delivery_date=date(2026, 1, 20),
+            delivery_date=self.future_date,
             created_by=self.creator,
             manager=self.creator
         )
@@ -604,7 +610,7 @@ class MaterialValidationTest(ApprovalValidationBaseTest):
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=100,
-            delivery_date=date(2026, 1, 20),
+            delivery_date=self.future_date,
             created_by=self.creator,
             manager=self.creator
         )
@@ -655,7 +661,7 @@ class ProcessSequenceValidationTest(ApprovalValidationBaseTest):
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=100,
-            delivery_date=date(2026, 1, 20),
+            delivery_date=self.future_date,
             created_by=self.creator,
             manager=self.creator
         )
@@ -694,7 +700,7 @@ class ProcessSequenceValidationTest(ApprovalValidationBaseTest):
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=100,
-            delivery_date=date(2026, 1, 20),
+            delivery_date=self.future_date,
             created_by=self.creator,
             manager=self.creator
         )
@@ -734,7 +740,7 @@ class ProcessSequenceValidationTest(ApprovalValidationBaseTest):
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=100,
-            delivery_date=date(2026, 1, 20),
+            delivery_date=self.future_date,
             created_by=self.creator,
             manager=self.creator
         )
@@ -773,7 +779,7 @@ class ProcessSequenceValidationTest(ApprovalValidationBaseTest):
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=100,
-            delivery_date=date(2026, 1, 20),
+            delivery_date=self.future_date,
             created_by=self.creator,
             manager=self.creator
         )
@@ -873,7 +879,7 @@ class IntegrationTest(ApprovalValidationBaseTest):
         work_order = WorkOrder(
             customer=self.customer,
             production_quantity=-10,  # 错误1：数量小于0
-            delivery_date=date(2026, 2, 1),
+            delivery_date=self.future_date,
             created_by=self.creator,
             manager=self.creator
         )
@@ -892,4 +898,3 @@ class IntegrationTest(ApprovalValidationBaseTest):
         self.assertGreater(len(errors), 1)
         self.assertTrue(any('生产数量' in e for e in errors))
         self.assertTrue(any('工序' in e for e in errors))
-

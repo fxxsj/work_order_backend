@@ -23,21 +23,21 @@ class DepartmentModelTest(TestCase):
     def setUp(self):
         """设置测试数据"""
         self.root_dept = Department.objects.create(
-            name='总部',
-            code='headquarters',
+            name='测试总部',
+            code='test_headquarters',
             sort_order=0,
             is_active=True
         )
         self.child_dept = Department.objects.create(
-            name='生产部',
-            code='production',
+            name='测试生产部',
+            code='test_production',
             parent=self.root_dept,
             sort_order=1,
             is_active=True
         )
         self.grandchild_dept = Department.objects.create(
-            name='印刷车间',
-            code='printing_workshop',
+            name='测试印刷车间',
+            code='test_printing_workshop',
             parent=self.child_dept,
             sort_order=0,
             is_active=True
@@ -45,18 +45,18 @@ class DepartmentModelTest(TestCase):
 
     def test_department_str(self):
         """测试部门字符串表示"""
-        self.assertEqual(str(self.root_dept), '总部')
-        self.assertEqual(str(self.child_dept), '生产部')
+        self.assertEqual(str(self.root_dept), '测试总部')
+        self.assertEqual(str(self.child_dept), '测试生产部')
 
     def test_get_full_name(self):
         """测试获取完整名称"""
-        self.assertEqual(self.root_dept.get_full_name(), '总部')
-        self.assertEqual(self.child_dept.get_full_name(), '总部 - 生产部')
+        self.assertEqual(self.root_dept.get_full_name(), '测试总部')
+        self.assertEqual(self.child_dept.get_full_name(), '测试总部 - 测试生产部')
 
     def test_natural_key(self):
         """测试自然键"""
-        self.assertEqual(self.root_dept.natural_key(), ('headquarters',))
-        retrieved = Department.get_by_natural_key('headquarters')
+        self.assertEqual(self.root_dept.natural_key(), ('test_headquarters',))
+        retrieved = Department.get_by_natural_key('test_headquarters')
         self.assertEqual(retrieved, self.root_dept)
 
     def test_get_ancestors(self):
@@ -100,14 +100,14 @@ class DepartmentSerializerTest(TestCase):
     def setUp(self):
         """设置测试数据"""
         self.root_dept = Department.objects.create(
-            name='总部',
-            code='headquarters',
+            name='测试总部',
+            code='test_headquarters',
             sort_order=0,
             is_active=True
         )
         self.child_dept = Department.objects.create(
-            name='生产部',
-            code='production',
+            name='测试生产部',
+            code='test_production',
             parent=self.root_dept,
             sort_order=1,
             is_active=True
@@ -207,8 +207,8 @@ class DepartmentSerializerTest(TestCase):
     def test_circular_reference_self(self):
         """测试循环引用（自己作为上级）"""
         data = {
-            'name': '总部',
-            'code': 'headquarters',
+            'name': '测试总部',
+            'code': 'test_headquarters',
             'parent': self.root_dept.id,
             'sort_order': 0,
             'is_active': True
@@ -220,8 +220,8 @@ class DepartmentSerializerTest(TestCase):
     def test_circular_reference_descendant(self):
         """测试循环引用（子部门作为上级）"""
         data = {
-            'name': '总部',
-            'code': 'headquarters',
+            'name': '测试总部',
+            'code': 'test_headquarters',
             'parent': self.child_dept.id,
             'sort_order': 0,
             'is_active': True
@@ -283,14 +283,14 @@ class DepartmentAPITest(APITestCase):
 
         # 创建测试部门
         self.root_dept = Department.objects.create(
-            name='总部',
-            code='headquarters',
+            name='测试总部',
+            code='test_headquarters',
             sort_order=0,
             is_active=True
         )
         self.child_dept = Department.objects.create(
-            name='生产部',
-            code='production',
+            name='测试生产部',
+            code='test_production',
             parent=self.root_dept,
             sort_order=1,
             is_active=True
@@ -311,7 +311,7 @@ class DepartmentAPITest(APITestCase):
         response = self.client.get(url, {'search': '生产'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['count'], 1)
-        self.assertEqual(response.data['results'][0]['name'], '生产部')
+        self.assertEqual(response.data['results'][0]['name'], '测试生产部')
 
     def test_create_department(self):
         """测试创建部门"""
@@ -333,7 +333,7 @@ class DepartmentAPITest(APITestCase):
         url = reverse('department-detail', kwargs={'pk': self.child_dept.pk})
         data = {
             'name': '生产部门',
-            'code': 'production',  # 保持不变
+            'code': 'test_production',  # 保持不变
             'sort_order': 2,
             'is_active': True
         }
