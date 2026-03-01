@@ -342,6 +342,9 @@ SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_AGE = 86400  # 24 hours
 
 # Logging settings (P1 优化：完善的日志系统)
+LOGS_DIR = BASE_DIR / "logs"
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -382,18 +385,20 @@ LOGGING = {
         "file": {
             "level": "INFO",
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": os.path.join(BASE_DIR, "logs/django.log"),
+            "filename": str(LOGS_DIR / "django.log"),
             "maxBytes": 1024 * 1024 * 10,  # 10 MB
             "backupCount": 10,
             "formatter": "verbose",
+            "encoding": "utf-8",
         },
         "file_error": {
             "level": "ERROR",
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": os.path.join(BASE_DIR, "logs/django_error.log"),
+            "filename": str(LOGS_DIR / "django_error.log"),
             "maxBytes": 1024 * 1024 * 10,  # 10 MB
             "backupCount": 10,
             "formatter": "verbose",
+            "encoding": "utf-8",
         },
     },
     "loggers": {
@@ -417,13 +422,6 @@ LOGGING = {
         },
     },
 }
-
-# 确保日志目录存在
-import os
-
-LOGS_DIR = os.path.join(BASE_DIR, "logs")
-if not os.path.exists(LOGS_DIR):
-    os.makedirs(LOGS_DIR)
 
 # P1 优化: 缓存配置
 # 根据环境自动选择缓存后端

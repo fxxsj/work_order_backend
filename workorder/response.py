@@ -3,8 +3,9 @@
 """
 
 from typing import Any, Dict, Optional, Union
-from django.utils import timezone
 from rest_framework.response import Response
+
+from .response_format import build_error_payload, build_success_payload
 
 
 class APIResponse:
@@ -14,13 +15,7 @@ class APIResponse:
     def success(data: Any = None, message: str = '操作成功', code: int = 200) -> Response:
         """成功响应"""
         return Response(
-            {
-                'success': True,
-                'code': code,
-                'message': message,
-                'data': data,
-                'timestamp': timezone.now().isoformat(),
-            },
+            build_success_payload(data=data, message=message, code=code),
             status=code,
         )
 
@@ -33,14 +28,7 @@ class APIResponse:
     ) -> Response:
         """错误响应"""
         return Response(
-            {
-                'success': False,
-                'code': code,
-                'message': message,
-                'errors': errors or {},
-                'data': data,
-                'timestamp': timezone.now().isoformat(),
-            },
+            build_error_payload(message=message, code=code, errors=errors, data=data),
             status=code,
         )
 

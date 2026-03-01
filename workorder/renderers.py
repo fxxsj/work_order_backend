@@ -2,8 +2,9 @@
 统一 JSON 响应渲染器
 """
 
-from django.utils import timezone
 from rest_framework.renderers import JSONRenderer
+
+from .response_format import standardize_renderer_payload
 
 
 class StandardJSONRenderer(JSONRenderer):
@@ -18,74 +19,5 @@ class StandardJSONRenderer(JSONRenderer):
         response = renderer_context.get('response')
         status_code = getattr(response, 'status_code', 200)
 
-        if data is None:
-            return super().render(data, accepted_media_type, renderer_context)
-
-        if isinstance(data, dict) and data.get('success') in (True, False) and 'message' in data:
-            return super().render(data, accepted_media_type, renderer_context)
-
-        timestamp = timezone.now().isoformat()
-
-        if status_code >= 400:
-            message = None
-            errors = {}
-
-            if isinstance(data, dict):
-                message = data.get('message') or data.get('error') or data.get('detail')
-                errors = data
-            else:
-                message = str(data)
-                errors = {'detail': data}
-
-            if not message and isinstance(data, dict):
-                message = _extract_first_error_message(data)
-
-            if not message:
-                message = '请求失败'
-
-            payload = {
-                'success': False,
-                'code': status_code,
-                'message': message,
-                'errors': errors,
-                'data': None,
-                'timestamp': timestamp,
-            }
-            return super().render(payload, accepted_media_type, renderer_context)
-
-        message = '操作成功'
-        payload_data = data
-        if isinstance(data, dict):
-            if 'message' in data and 'data' in data:
-                message = data.get('message') or message
-                payload_data = data.get('data')
-        payload = {
-            'success': True,
-            'code': status_code,
-            'message': message,
-            'data': payload_data,
-            'timestamp': timestamp,
-        }
+        payload = standardize_renderer_payload(data=data, status_code=status_code)
         return super().render(payload, accepted_media_type, renderer_context)
-
-
-def _extract_first_error_message(data):
-    if not isinstance(data, dict):
-        return None
-
-    for key, value in data.items():
-        if isinstance(value, list) and value:
-            return f"{key}: {value[0]}"
-        if isinstance(value, str) and value:
-            return f"{key}: {value}"
-        if isinstance(value, dict):
-            nested = _extract_first_error_message(value)
-            if nested:
-                return f"{key}: {nested}"
-
-    if 'detail' in data and isinstance(data['detail'], str):
-        return data['detail']
-    if 'non_field_errors' in data and isinstance(data['non_field_errors'], list):
-        if data['non_field_errors']:
-            return str(data['non_field_errors'][0])
-    return None
