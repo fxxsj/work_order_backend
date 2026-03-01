@@ -10,7 +10,7 @@ from django.db.models import Count, Q, Sum
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from workorder.response import APIResponse
 
 from ..models.products import Product
 from ..models.sales import SalesOrder, SalesOrderItem
@@ -62,18 +62,12 @@ class SalesOrderViewSet(BaseViewSet):
         """提交销售订单"""
         sales_order = self.get_object()
         if sales_order.status != "draft":
-            return Response(
-                {"error": "只有草稿状态的订单才能提交"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("只有草稿状态的订单才能提交", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有草稿状态的订单才能提交"})
 
         # 验证订单数据完整性
         errors = sales_order.validate_before_approval()
         if errors:
-            return Response(
-                {"error": "订单数据验证失败", "errors": errors},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("订单数据验证失败", code=status.HTTP_400_BAD_REQUEST, data={"error": "订单数据验证失败", "errors": errors})
 
         # 更新订单状态
         sales_order.status = "submitted"
@@ -82,25 +76,19 @@ class SalesOrderViewSet(BaseViewSet):
         sales_order.save()
 
         serializer = self.get_serializer(sales_order)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         """审核通过销售订单"""
         sales_order = self.get_object()
         if sales_order.status != "submitted":
-            return Response(
-                {"error": "只有已提交状态的订单才能审核"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("只有已提交状态的订单才能审核", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已提交状态的订单才能审核"})
 
         # 再次验证订单数据完整性
         errors = sales_order.validate_before_approval()
         if errors:
-            return Response(
-                {"error": "订单数据验证失败", "errors": errors},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("订单数据验证失败", code=status.HTTP_400_BAD_REQUEST, data={"error": "订单数据验证失败", "errors": errors})
 
         # 更新订单状态
         sales_order.status = "approved"
@@ -113,23 +101,18 @@ class SalesOrderViewSet(BaseViewSet):
         self._reduce_product_stock(sales_order)
 
         serializer = self.get_serializer(sales_order)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
         """拒绝销售订单"""
         sales_order = self.get_object()
         if sales_order.status != "submitted":
-            return Response(
-                {"error": "只有已提交状态的订单才能拒绝"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("只有已提交状态的订单才能拒绝", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已提交状态的订单才能拒绝"})
 
         reason = request.data.get("reason")
         if not reason:
-            return Response(
-                {"error": "请提供拒绝原因"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("请提供拒绝原因", code=status.HTTP_400_BAD_REQUEST, data={"error": "请提供拒绝原因"})
 
         # 更新订单状态为已拒绝
         sales_order.status = "rejected"
@@ -140,23 +123,20 @@ class SalesOrderViewSet(BaseViewSet):
         sales_order.save()
 
         serializer = self.get_serializer(sales_order)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     def start_production(self, request, pk=None):
         """开始生产（将订单状态改为生产中）"""
         sales_order = self.get_object()
         if sales_order.status != "approved":
-            return Response(
-                {"error": "只有已审核的订单才能开始生产"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("只有已审核的订单才能开始生产", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已审核的订单才能开始生产"})
 
         sales_order.status = "in_production"
         sales_order.save()
 
         serializer = self.get_serializer(sales_order)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     def _check_stock_availability(self, sales_order):
         """检查库存是否充足
@@ -270,27 +250,21 @@ class SalesOrderViewSet(BaseViewSet):
         """完成订单"""
         sales_order = self.get_object()
         if sales_order.status not in ["approved", "in_production"]:
-            return Response(
-                {"error": "只有已审核或生产中的订单才能完成"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("只有已审核或生产中的订单才能完成", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已审核或生产中的订单才能完成"})
 
         sales_order.status = "completed"
         sales_order.actual_delivery_date = timezone.now().date()
         sales_order.save()
 
         serializer = self.get_serializer(sales_order)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         """取消订单"""
         sales_order = self.get_object()
         if sales_order.status in ["completed", "cancelled", "rejected"]:
-            return Response(
-                {"error": "已完成、已取消或已拒绝的订单不能再次取消"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("已完成、已取消或已拒绝的订单不能再次取消", code=status.HTTP_400_BAD_REQUEST, data={"error": "已完成、已取消或已拒绝的订单不能再次取消"})
 
         # 如果订单已审核或生产中，需要恢复库存
         self._restore_product_stock(sales_order)
@@ -301,7 +275,7 @@ class SalesOrderViewSet(BaseViewSet):
         sales_order.save()
 
         serializer = self.get_serializer(sales_order)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     def update_payment(self, request, pk=None):
@@ -318,7 +292,7 @@ class SalesOrderViewSet(BaseViewSet):
         sales_order.save()  # save方法会自动更新payment_status
 
         serializer = self.get_serializer(sales_order)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
 
 class SalesOrderItemViewSet(BaseViewSet):

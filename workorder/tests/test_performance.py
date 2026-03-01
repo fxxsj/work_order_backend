@@ -117,7 +117,7 @@ class PerformanceTestCase(TestCase):
 
         # Check response
         self.assertEqual(response.status_code, 200)
-        results = response.data['results']
+        results = response.data['data']['results']
         self.assertGreater(len(results), 0)
 
         # Check query count (should be < 10 for optimized version)
@@ -156,7 +156,7 @@ class PerformanceTestCase(TestCase):
 
         # Check response
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['department_id'], self.department.id)
+        self.assertEqual(response.data['data']['department_id'], self.department.id)
 
         # Check query count (should be < 15 for optimized version)
         query_count = len(connection.queries)
@@ -168,14 +168,14 @@ class PerformanceTestCase(TestCase):
         )
 
         # Verify data integrity
-        summary = response.data['summary']
+        summary = response.data['data']['summary']
         self.assertIn('total_tasks', summary)
         self.assertIn('pending_tasks', summary)
         self.assertIn('completed_tasks', summary)
         self.assertIn('completion_rate', summary)
 
         # Verify priority distribution
-        priority_dist = response.data['priority_distribution']
+        priority_dist = response.data['data']['priority_distribution']
         self.assertIn('urgent', priority_dist)
         self.assertIn('high', priority_dist)
         self.assertIn('normal', priority_dist)
@@ -260,4 +260,4 @@ class PerformanceTestCase(TestCase):
         )
 
         # Verify we got data for all operators
-        self.assertGreaterEqual(len(response.data['results']), 6)
+        self.assertGreaterEqual(len(response.data['data']['results']), 6)

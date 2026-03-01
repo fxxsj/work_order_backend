@@ -1,7 +1,6 @@
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate, login, logout
@@ -9,6 +8,7 @@ from django.contrib.auth.models import User, Group, Permission
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
 from .serializers import UserSerializer
+from workorder.response import APIResponse
 import re
 
 
@@ -23,10 +23,7 @@ class LoginView(APIView):
         password = request.data.get('password')
 
         if not username or not password:
-            return Response(
-                {'error': '请提供用户名和密码'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error('请提供用户名和密码', code=status.HTTP_400_BAD_REQUEST)
 
         user = authenticate(request, username=username, password=password)
 
@@ -46,7 +43,7 @@ class LoginView(APIView):
             else:
                 permissions = list(user.get_all_permissions())
 
-            return Response({
+            return APIResponse.success(data={
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
@@ -60,10 +57,7 @@ class LoginView(APIView):
                 'token': token.key,  # 添加认证令牌
             })
         else:
-            return Response(
-                {'error': '用户名或密码错误'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+            return APIResponse.error('用户名或密码错误', code=status.HTTP_401_UNAUTHORIZED)
 
 
 @api_view(['POST'])
@@ -71,7 +65,7 @@ class LoginView(APIView):
 def logout_view(request):
     """用户登出"""
     logout(request)
-    return Response({'message': '已成功登出'})
+    return APIResponse.success(message='已成功登出')
 
 
 @api_view(['GET'])
@@ -93,7 +87,7 @@ def get_current_user(request):
             # 使用 get_all_permissions() 获取所有权限字符串（格式：app_label.codename）
             permissions = list(request.user.get_all_permissions())
         
-        return Response({
+        return APIResponse.success(data={
             'id': request.user.id,
             'username': request.user.username,
             'email': request.user.email,
@@ -106,10 +100,7 @@ def get_current_user(request):
             'permissions': permissions,  # 添加权限列表
         })
     else:
-        return Response(
-            {'error': '未登录'},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
+        return APIResponse.error('未登录', code=status.HTTP_401_UNAUTHORIZED)
 
 
 @api_view(['POST'])
@@ -123,23 +114,14 @@ def register_view(request):
     last_name = request.data.get('last_name', '')
     
     if not username or not password:
-        return Response(
-            {'error': '请提供用户名和密码'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return APIResponse.error('请提供用户名和密码', code=status.HTTP_400_BAD_REQUEST)
     
     # 验证用户名格式（允许中文、字母、数字、下划线、连字符）
     if not re.match(r'^[\w\u4e00-\u9fa5-]+$', username):
-        return Response(
-            {'error': '用户名只能包含字母、数字、下划线、连字符和中文字符'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return APIResponse.error('用户名只能包含字母、数字、下划线、连字符和中文字符', code=status.HTTP_400_BAD_REQUEST)
     
     if User.objects.filter(username=username).exists():
-        return Response(
-            {'error': '用户名已存在'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return APIResponse.error('用户名已存在', code=status.HTTP_400_BAD_REQUEST)
     
     user = User.objects.create_user(
         username=username,
@@ -152,13 +134,13 @@ def register_view(request):
     # 自动登录
     login(request, user)
     
-    return Response({
+    return APIResponse.success(data={
         'id': user.id,
         'username': user.username,
         'email': user.email,
         'first_name': user.first_name,
         'last_name': user.last_name,
-    }, status=status.HTTP_201_CREATED)
+    }, message='注册成功', code=status.HTTP_201_CREATED)
 
 
 @api_view(['GET'])
@@ -177,12 +159,9 @@ def get_salespersons(request):
             salespersons = User.objects.none()
         
         serializer = UserSerializer(salespersons, many=True)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
     except Exception as e:
-        return Response(
-            {'error': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return APIResponse.error(str(e), code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
@@ -203,12 +182,9 @@ def get_users_by_department(request):
 
         users = users.order_by('username')
         serializer = UserSerializer(users, many=True)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
     except Exception as e:
-        return Response(
-            {'error': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return APIResponse.error(str(e), code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
@@ -221,42 +197,27 @@ def change_password(request):
 
     # 验证参数
     if not old_password or not new_password or not confirm_password:
-        return Response(
-            {'error': '请提供旧密码、新密码和确认密码'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return APIResponse.error('请提供旧密码、新密码和确认密码', code=status.HTTP_400_BAD_REQUEST)
 
     # 验证新密码和确认密码是否一致
     if new_password != confirm_password:
-        return Response(
-            {'error': '新密码和确认密码不一致'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return APIResponse.error('新密码和确认密码不一致', code=status.HTTP_400_BAD_REQUEST)
 
     # 验证旧密码是否正确
     if not request.user.check_password(old_password):
-        return Response(
-            {'error': '旧密码错误'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return APIResponse.error('旧密码错误', code=status.HTTP_400_BAD_REQUEST)
 
     # 验证新密码长度
     if len(new_password) < 6:
-        return Response(
-            {'error': '新密码长度至少为6位'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return APIResponse.error('新密码长度至少为6位', code=status.HTTP_400_BAD_REQUEST)
 
     # 修改密码
     try:
         request.user.set_password(new_password)
         request.user.save()
-        return Response({'message': '密码修改成功'})
+        return APIResponse.success(message='密码修改成功')
     except Exception as e:
-        return Response(
-            {'error': f'密码修改失败: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return APIResponse.error(f'密码修改失败: {str(e)}', code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['PUT', 'PATCH'])
@@ -280,21 +241,19 @@ def update_profile(request):
         groups = list(request.user.groups.values_list('name', flat=True))
         permissions = ['*'] if request.user.is_superuser else list(request.user.get_all_permissions())
 
-        return Response({
-            'id': request.user.id,
-            'username': request.user.username,
-            'email': request.user.email,
-            'first_name': request.user.first_name,
-            'last_name': request.user.last_name,
-            'is_staff': request.user.is_staff,
-            'is_superuser': request.user.is_superuser,
-            'groups': groups,
-            'permissions': permissions,
-            'message': '个人信息更新成功'
-        })
-    except Exception as e:
-        return Response(
-            {'error': f'个人信息更新失败: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        return APIResponse.success(
+            data={
+                'id': request.user.id,
+                'username': request.user.username,
+                'email': request.user.email,
+                'first_name': request.user.first_name,
+                'last_name': request.user.last_name,
+                'is_staff': request.user.is_staff,
+                'is_superuser': request.user.is_superuser,
+                'groups': groups,
+                'permissions': permissions,
+            },
+            message='个人信息更新成功',
         )
-
+    except Exception as e:
+        return APIResponse.error(f'个人信息更新失败: {str(e)}', code=status.HTTP_500_INTERNAL_SERVER_ERROR)

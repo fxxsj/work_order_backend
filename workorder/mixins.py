@@ -6,8 +6,8 @@
 
 from django.db import transaction
 from rest_framework import status
-from rest_framework.response import Response
 from workorder.exceptions import BusinessLogicError
+from workorder.response import APIResponse
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,16 +23,10 @@ class TransactionMixin:
                 return self.create(request, *args, **kwargs)
         except BusinessLogicError as e:
             logger.warning(f"业务逻辑错误: {str(e)}")
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error(str(e), code=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"创建失败: {str(e)}", exc_info=True)
-            return Response(
-                {'error': '系统错误，请稍后重试'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return APIResponse.error('系统错误，请稍后重试', code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def transactional_update(self, request, *args, **kwargs):
         """带事务的更新操作"""
@@ -41,16 +35,10 @@ class TransactionMixin:
                 return self.update(request, *args, **kwargs)
         except BusinessLogicError as e:
             logger.warning(f"业务逻辑错误: {str(e)}")
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error(str(e), code=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"更新失败: {str(e)}", exc_info=True)
-            return Response(
-                {'error': '系统错误，请稍后重试'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return APIResponse.error('系统错误，请稍后重试', code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def transactional_destroy(self, request, *args, **kwargs):
         """带事务的删除操作"""
@@ -59,16 +47,10 @@ class TransactionMixin:
                 return self.destroy(request, *args, **kwargs)
         except BusinessLogicError as e:
             logger.warning(f"业务逻辑错误: {str(e)}")
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error(str(e), code=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"删除失败: {str(e)}", exc_info=True)
-            return Response(
-                {'error': '系统错误，请稍后重试'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return APIResponse.error('系统错误，请稍后重试', code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class OptimisticLockMixin:
@@ -92,13 +74,14 @@ class OptimisticLockMixin:
         if expected_version is not None:
             current_version = instance.version
             if current_version != int(expected_version):
-                return Response(
-                    {
-                        'error': '数据已被其他用户修改，请刷新后重试',
+                return APIResponse.error(
+                    '数据已被其他用户修改，请刷新后重试',
+                    code=status.HTTP_409_CONFLICT,
+                    data={
                         'current_version': current_version,
-                        'your_version': int(expected_version)
+                        'your_version': int(expected_version),
                     },
-                    status=status.HTTP_409_CONFLICT
+                    errors={'code': 'VERSION_CONFLICT'},
                 )
 
         return None

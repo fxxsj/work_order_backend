@@ -306,6 +306,10 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "workorder.pagination.CustomPagination",
     "PAGE_SIZE": 20,
+    "DEFAULT_RENDERER_CLASSES": [
+        "workorder.renderers.StandardJSONRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",
+    ],
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",
@@ -318,6 +322,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",  # 认证用户可读写，未认证用户只读
     ],
+    "EXCEPTION_HANDLER": "workorder.error_handler.custom_exception_handler",
     # P1 优化: 添加速率限制配置
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",

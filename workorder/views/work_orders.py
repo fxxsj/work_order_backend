@@ -25,7 +25,7 @@ from drf_spectacular.utils import (
 )
 from rest_framework import filters, serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from workorder.response import APIResponse
 
 logger = logging.getLogger(__name__)
 
@@ -228,14 +228,12 @@ class WorkOrderViewSet(BaseViewSet):
         sequence = request.data.get("sequence", 0)
 
         if not process_id:
-            return Response(
-                {"error": "请提供工序ID"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("请提供工序ID", code=status.HTTP_400_BAD_REQUEST, data={"error": "请提供工序ID"})
 
         try:
             process = Process.objects.get(id=process_id)
         except Process.DoesNotExist:
-            return Response({"error": "工序不存在"}, status=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error("工序不存在", code=status.HTTP_404_NOT_FOUND, data={"error": "工序不存在"})
 
         # 检查是否已存在相同 sequence 的工序
         # 如果存在，自动调整 sequence 为下一个可用的值
@@ -259,17 +257,14 @@ class WorkOrderViewSet(BaseViewSet):
         ).first()
 
         if existing_same_process:
-            return Response(
-                {"error": "该工序已经添加到施工单中"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("该工序已经添加到施工单中", code=status.HTTP_400_BAD_REQUEST, data={"error": "该工序已经添加到施工单中"})
 
         work_order_process = WorkOrderProcess.objects.create(
             work_order=work_order, process=process, sequence=sequence
         )
 
         serializer = WorkOrderProcessSerializer(work_order_process)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     def add_material(self, request, pk=None):
@@ -279,21 +274,19 @@ class WorkOrderViewSet(BaseViewSet):
         notes = request.data.get("notes", "")
 
         if not material_id:
-            return Response(
-                {"error": "请提供物料ID"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("请提供物料ID", code=status.HTTP_400_BAD_REQUEST, data={"error": "请提供物料ID"})
 
         try:
             material = Material.objects.get(id=material_id)
         except Material.DoesNotExist:
-            return Response({"error": "物料不存在"}, status=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error("物料不存在", code=status.HTTP_404_NOT_FOUND, data={"error": "物料不存在"})
 
         work_order_material = WorkOrderMaterial.objects.create(
             work_order=work_order, material=material, notes=notes
         )
 
         serializer = WorkOrderMaterialSerializer(work_order_material)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     def update_status(self, request, pk=None):
@@ -302,13 +295,13 @@ class WorkOrderViewSet(BaseViewSet):
         new_status = request.data.get("status")
 
         if new_status not in dict(WorkOrder.STATUS_CHOICES):
-            return Response({"error": "无效的状态"}, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error("无效的状态", code=status.HTTP_400_BAD_REQUEST, data={"error": "无效的状态"})
 
         work_order.status = new_status
         work_order.save()
 
         serializer = self.get_serializer(work_order)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"], throttle_classes=[ApprovalRateThrottle])
     def approve(self, request, pk=None):
@@ -320,32 +313,22 @@ class WorkOrderViewSet(BaseViewSet):
         # P1 优化: 输入验证
         approval_status = request.data.get("approval_status")
         if approval_status not in ["approved", "rejected"]:
-            return Response(
-                {"error": "审核状态无效，必须是 approved 或 rejected"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("审核状态无效，必须是 approved 或 rejected", code=status.HTTP_400_BAD_REQUEST, data={"error": "审核状态无效，必须是 approved 或 rejected"})
 
         # 检查用户是否为业务员
         if not request.user.groups.filter(name="业务员").exists():
-            return Response(
-                {"error": "只有业务员可以审核施工单"}, status=status.HTTP_403_FORBIDDEN
-            )
+            return APIResponse.error("只有业务员可以审核施工单", code=status.HTTP_403_FORBIDDEN, data={"error": "只有业务员可以审核施工单"})
 
         # 检查业务员是否负责该施工单的客户
         if work_order.customer.salesperson != request.user:
-            return Response(
-                {"error": "只能审核自己负责的施工单"}, status=status.HTTP_403_FORBIDDEN
-            )
+            return APIResponse.error("只能审核自己负责的施工单", code=status.HTTP_403_FORBIDDEN, data={"error": "只能审核自己负责的施工单"})
 
         # 检查当前审核状态（只有待审核的施工单才能审核）
         # 注意：通过 request_reapproval 接口请求重新审核后，状态会重置为 pending
         if work_order.approval_status != "pending":
-            return Response(
-                {
+            return APIResponse.error('只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。', code=status.HTTP_400_BAD_REQUEST, data={
                     "error": '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。'
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+                })
 
         approval_status = request.data.get(
             "approval_status"
@@ -354,25 +337,16 @@ class WorkOrderViewSet(BaseViewSet):
         rejection_reason = request.data.get("rejection_reason", "")
 
         if approval_status not in ["approved", "rejected"]:
-            return Response(
-                {"error": "审核状态必须是 approved 或 rejected"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("审核状态必须是 approved 或 rejected", code=status.HTTP_400_BAD_REQUEST, data={"error": "审核状态必须是 approved 或 rejected"})
 
         # 审核拒绝时，强制要求填写拒绝原因
         if approval_status == "rejected" and not rejection_reason:
-            return Response(
-                {"error": "审核拒绝时，必须填写拒绝原因"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("审核拒绝时，必须填写拒绝原因", code=status.HTTP_400_BAD_REQUEST, data={"error": "审核拒绝时，必须填写拒绝原因"})
 
         # 审核前数据完整性检查
         validation_errors = work_order.validate_before_approval()
         if validation_errors:
-            return Response(
-                {"error": "施工单数据不完整，无法审核", "details": validation_errors},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("施工单数据不完整，无法审核", code=status.HTTP_400_BAD_REQUEST, data={"error": "施工单数据不完整，无法审核", "details": validation_errors})
 
         # 记录审核历史
         approval_log = WorkOrderApprovalLog.objects.create(
@@ -454,7 +428,7 @@ class WorkOrderViewSet(BaseViewSet):
             )
 
         serializer = self.get_serializer(work_order)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     def resubmit_for_approval(self, request, pk=None):
@@ -463,19 +437,13 @@ class WorkOrderViewSet(BaseViewSet):
 
         # 检查当前审核状态（只有被拒绝的施工单才能重新提交）
         if work_order.approval_status != "rejected":
-            return Response(
-                {"error": "只有被拒绝的施工单才能重新提交审核"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("只有被拒绝的施工单才能重新提交审核", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有被拒绝的施工单才能重新提交审核"})
 
         # 检查用户是否有权限（制表人或创建人）
         if work_order.manager != request.user and work_order.created_by != request.user:
             # 检查是否有编辑施工单的权限
             if not request.user.has_perm("workorder.change_workorder"):
-                return Response(
-                    {"error": "只有制表人、创建人或有编辑权限的用户才能重新提交审核"},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+                return APIResponse.error("只有制表人、创建人或有编辑权限的用户才能重新提交审核", code=status.HTTP_403_FORBIDDEN, data={"error": "只有制表人、创建人或有编辑权限的用户才能重新提交审核"})
 
         # 重置审核状态为 pending
         work_order.approval_status = "pending"
@@ -484,7 +452,7 @@ class WorkOrderViewSet(BaseViewSet):
         work_order.save()
 
         serializer = self.get_serializer(work_order)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     def request_reapproval(self, request, pk=None):
@@ -510,17 +478,11 @@ class WorkOrderViewSet(BaseViewSet):
         if work_order.created_by != request.user and work_order.manager != request.user:
             # 检查是否有编辑施工单的权限
             if not request.user.has_perm("workorder.change_workorder"):
-                return Response(
-                    {"error": "只有创建人、制表人或有编辑权限的用户可以请求重新审核"},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+                return APIResponse.error("只有创建人、制表人或有编辑权限的用户可以请求重新审核", code=status.HTTP_403_FORBIDDEN, data={"error": "只有创建人、制表人或有编辑权限的用户可以请求重新审核"})
 
         # 检查状态：只有已审核通过的施工单可以请求重新审核
         if work_order.approval_status != "approved":
-            return Response(
-                {"error": "只有已审核通过的施工单可以请求重新审核"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("只有已审核通过的施工单可以请求重新审核", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已审核通过的施工单可以请求重新审核"})
 
         # 获取请求原因（可选，但建议填写）
         request_reason = request.data.get("reason", "")
@@ -567,13 +529,11 @@ class WorkOrderViewSet(BaseViewSet):
             )
 
         serializer = self.get_serializer(work_order)
-        return Response(
-            {
+        return APIResponse.error("您没有权限导出施工单数据", code=status.HTTP_403_FORBIDDEN, data={
                 **serializer.data,
                 "message": "重新审核请求已提交，已通知原审核人",
                 "original_approver": (
-                    original_approver.username if original_approver else None
-                ),
+                    original_approver.username if original_approver else None),
             }
         )
 
@@ -774,8 +734,7 @@ class WorkOrderViewSet(BaseViewSet):
             for item in product_stats
         ]
 
-        return Response(
-            {
+        return APIResponse.success(data={
                 # 基础统计
                 "total_count": total_count,
                 "status_statistics": status_statistics,
@@ -806,17 +765,14 @@ class WorkOrderViewSet(BaseViewSet):
                     "customer_statistics": customer_statistics,
                     "product_statistics": product_statistics,
                 },
-            }
-        )
+            })
 
     @action(detail=False, methods=["get"], throttle_classes=[ExportRateThrottle])
     def export(self, request):
         """导出施工单列表到 Excel（P1 优化：添加速率限制）"""
         # 权限检查：需要查看权限
         if not request.user.has_perm("workorder.view_workorder"):
-            return Response(
-                {"error": "您没有权限导出施工单数据"}, status=status.HTTP_403_FORBIDDEN
-            )
+            return APIResponse.error("您没有权限导出施工单数据", code=status.HTTP_400_BAD_REQUEST, data={"error": "您没有权限导出施工单数据"})
 
         # 获取过滤后的查询集（使用 get_queryset 确保权限过滤）
         queryset = self.filter_queryset(self.get_queryset())
@@ -856,26 +812,21 @@ class WorkOrderViewSet(BaseViewSet):
 
         # 验证输入
         if not isinstance(new_process_ids, list):
-            return Response(
-                {"error": "process_ids 必须是列表"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST, data={"error": "process_ids 必须是列表"})
 
         # 获取当前工序ID列表
         old_process_ids = list(work_order.order_processes.values_list("id", flat=True))
 
         # 验证施工单是否已审核
         if work_order.approval_status == "approved":
-            return Response(
-                {"error": "已审核的施工单不能修改工序"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("已审核的施工单不能修改工序", code=status.HTTP_400_BAD_REQUEST, data={"error": "已审核的施工单不能修改工序"})
 
         # 调用 TaskSyncService 计算预览
         preview = TaskSyncService.preview_sync(
             work_order, old_process_ids, new_process_ids
         )
 
-        return Response({"preview": preview})
+        return APIResponse.error("process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST, data={"preview": preview})
 
     @action(detail=True, methods=["post"])
     def sync_tasks_execute(self, request, pk=None):
@@ -904,40 +855,36 @@ class WorkOrderViewSet(BaseViewSet):
 
         # 验证输入
         if not isinstance(new_process_ids, list):
-            return Response(
-                {"error": "process_ids 必须是列表"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST, data={"error": "process_ids 必须是列表"})
 
         # 获取当前工序ID列表
         old_process_ids = list(work_order.order_processes.values_list("id", flat=True))
 
         # 验证施工单是否已审核
         if work_order.approval_status == "approved":
-            return Response(
-                {"error": "已审核的施工单不能同步任务"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("已审核的施工单不能同步任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "已审核的施工单不能同步任务"})
 
         # 要求确认标志（防止误操作）
         if not request.data.get("confirmed"):
-            return Response(
-                {"error": "需要确认后才能执行同步，请设置 confirmed=true"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("需要确认后才能执行同步，请设置 confirmed=true", code=status.HTTP_400_BAD_REQUEST, data={"error": "需要确认后才能执行同步，请设置 confirmed=true"})
 
         # 执行同步
         try:
             result = TaskSyncService.execute_sync(
                 work_order, old_process_ids, new_process_ids
             )
-            return Response(
-                {"result": result, "message": result.get("message", "任务同步完成")}
+            return APIResponse.success(
+                data={
+                    "result": result,
+                    "message": result.get("message", "任务同步完成"),
+                }
             )
         except Exception as e:
             logger.error(f"执行任务同步失败: {str(e)}", exc_info=True)
-            return Response(
-                {"error": f"同步失败: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            return APIResponse.error(
+                f"同步失败: {str(e)}",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                data={"error": f"同步失败: {str(e)}"},
             )
 
     @action(detail=True, methods=["get"])
@@ -979,13 +926,11 @@ class WorkOrderViewSet(BaseViewSet):
         # 检查是否可以同步（未审核的施工单才能同步）
         can_sync = work_order.approval_status != "approved"
 
-        return Response(
-            {
+        return APIResponse.success(data={
                 "sync_needed": has_changes and can_sync,
                 "current_process_ids": current_process_ids,
                 "can_sync": can_sync,
-            }
-        )
+            })
 
 
 class DraftTaskViewSet(BaseViewSet):
@@ -1076,23 +1021,16 @@ class DraftTaskViewSet(BaseViewSet):
         updates = request.data.get("updates", {})
 
         if not task_ids:
-            return Response(
-                {"error": "请提供要更新的任务ID列表"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("请提供要更新的任务ID列表", code=status.HTTP_400_BAD_REQUEST, data={"error": "请提供要更新的任务ID列表"})
 
         if not updates:
-            return Response(
-                {"error": "请提供要更新的字段"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("请提供要更新的字段", code=status.HTTP_400_BAD_REQUEST, data={"error": "请提供要更新的字段"})
 
         # 获取任务并验证权限
         queryset = self.get_queryset().filter(id__in=task_ids)
 
         if queryset.count() != len(task_ids):
-            return Response(
-                {"error": "部分任务不存在或无权访问"}, status=status.HTTP_404_NOT_FOUND
-            )
+            return APIResponse.error("部分任务不存在或无权访问", code=status.HTTP_404_NOT_FOUND, data={"error": "部分任务不存在或无权访问"})
 
         # 批量更新
         updated_count = 0
@@ -1115,8 +1053,7 @@ class DraftTaskViewSet(BaseViewSet):
             task.save()
             updated_count += 1
 
-        return Response(
-            {
+        return APIResponse.success(data={
                 "message": f"成功更新 {updated_count} 个草稿任务",
                 "updated_count": updated_count,
                 "total_requested": len(task_ids),

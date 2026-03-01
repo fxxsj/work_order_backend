@@ -9,7 +9,7 @@ from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from workorder.response import APIResponse
 
 from ..models.system import Notification, TaskAssignmentRule
 from ..serializers.system import NotificationSerializer, TaskAssignmentRuleSerializer
@@ -49,7 +49,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
         notification = self.get_object()
         notification.mark_as_read()
         serializer = self.get_serializer(notification)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=False, methods=["post"])
     def mark_all_read(self, request):
@@ -57,7 +57,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
         count = Notification.objects.filter(
             recipient=request.user, is_read=False
         ).update(is_read=True, read_at=timezone.now())
-        return Response({"message": f"已标记 {count} 条通知为已读"})
+        return APIResponse.success(message=f"已标记 {count} 条通知为已读")
 
     @action(detail=False, methods=["get"])
     def unread_count(self, request):
@@ -65,7 +65,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
         count = Notification.objects.filter(
             recipient=request.user, is_read=False
         ).count()
-        return Response({"unread_count": count})
+        return APIResponse.success(data={"unread_count": count})
 
 
 # ==================== 采购管理视图集 ====================
@@ -100,8 +100,8 @@ class TaskAssignmentRuleViewSet(BaseViewSet):
 
         preview_data = DispatchPreviewService.generate_preview()
 
-        return Response(
-            {
+        return APIResponse.success(
+            data={
                 "preview": preview_data,
                 "global_enabled": AutoDispatchService.is_global_dispatch_enabled(),
                 "generated_at": timezone.now().isoformat(),
@@ -114,7 +114,7 @@ class TaskAssignmentRuleViewSet(BaseViewSet):
         from ..services.dispatch_service import AutoDispatchService
 
         enabled = AutoDispatchService.is_global_dispatch_enabled()
-        return Response({"enabled": enabled})
+        return APIResponse.success(data={"enabled": enabled})
 
     @action(detail=False, methods=["post"])
     def set_global_state(self, request):
@@ -127,4 +127,4 @@ class TaskAssignmentRuleViewSet(BaseViewSet):
 
         enabled = request.data.get("enabled", False)
         new_state = AutoDispatchService.set_global_dispatch_enabled(enabled)
-        return Response({"enabled": new_state})
+        return APIResponse.success(data={"enabled": new_state})

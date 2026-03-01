@@ -49,7 +49,7 @@ class TestWorkOrderLifecycle:
         }, format='json')
 
         assert response.status_code == status.HTTP_201_CREATED
-        workorder_id = response.data['id']
+        workorder_id = response.data['data']['id']
         workorder = WorkOrder.objects.get(id=workorder_id)
         WorkOrderProductFactory(work_order=workorder, product=product, quantity=100)
         make_salesperson(supervisor, customer)
@@ -131,7 +131,7 @@ class TestWorkOrderLifecycle:
         }, format='json')
 
         assert response.status_code == status.HTTP_201_CREATED
-        workorder_id = response.data['id']
+        workorder_id = response.data['data']['id']
         workorder = WorkOrder.objects.get(id=workorder_id)
         WorkOrderProductFactory(work_order=workorder, quantity=100)
         make_salesperson(supervisor, customer)
@@ -176,7 +176,7 @@ class TestWorkOrderLifecycle:
         }, format='json')
 
         assert response.status_code == status.HTTP_201_CREATED
-        workorder_id = response.data['id']
+        workorder_id = response.data['data']['id']
         workorder = WorkOrder.objects.get(id=workorder_id)
 
         # Add first process with tasks
@@ -216,7 +216,7 @@ class TestWorkOrderLifecycle:
         # List workorders
         response = api_client.get('/api/workorders/')
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['count'] >= 4
+        assert response.data['data']['count'] >= 4
 
     def test_workorder_deletion_cascade(self, api_client):
         """

@@ -16,7 +16,7 @@ from django.utils import timezone
 from django_filters import CharFilter, FilterSet, NumberFilter
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from workorder.response import APIResponse
 
 from ..export_utils import export_tasks, export_work_orders
 from ..models.assets import Artwork, Die
@@ -83,17 +83,11 @@ class WorkOrderProcessViewSet(BaseViewSet):
 
         # 检查是否可以开始
         if not process.can_start():
-            return Response(
-                {"error": "该工序不能开始，请先完成前置工序"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("该工序不能开始，请先完成前置工序", code=status.HTTP_400_BAD_REQUEST, data={"error": "该工序不能开始，请先完成前置工序"})
 
         # 如果状态不是 pending，不能重新开始
         if process.status != "pending":
-            return Response(
-                {"error": "该工序已经开始或完成，不能重新开始"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("该工序已经开始或完成，不能重新开始", code=status.HTTP_400_BAD_REQUEST, data={"error": "该工序已经开始或完成，不能重新开始"})
 
         # 生成任务
         process.generate_tasks()
@@ -119,7 +113,7 @@ class WorkOrderProcessViewSet(BaseViewSet):
         process.generate_tasks()
 
         serializer = self.get_serializer(process)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     def complete(self, request, pk=None):
@@ -134,10 +128,7 @@ class WorkOrderProcessViewSet(BaseViewSet):
 
         # 检查状态
         if process.status != "in_progress":
-            return Response(
-                {"error": "只有进行中的工序才能完成"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("只有进行中的工序才能完成", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有进行中的工序才能完成"})
 
         # 获取完成数量和不良品数量
         quantity_completed = request.data.get("quantity_completed", 0)
@@ -171,27 +162,25 @@ class WorkOrderProcessViewSet(BaseViewSet):
                 )
 
                 serializer = self.get_serializer(process)
-                return Response(serializer.data)
+                return APIResponse.success(data=serializer.data)
 
             # 自动完成失败，需要强制完成
             if not force_complete:
                 incomplete_count = incomplete_tasks.count()
-                return Response(
-                    {
+                return APIResponse.error(
+                    f"该工序还有 {incomplete_count} 个任务未完成，无法完成工序",
+                    code=status.HTTP_400_BAD_REQUEST,
+                    data={
                         "error": f"该工序还有 {incomplete_count} 个任务未完成，无法完成工序",
                         "incomplete_tasks": incomplete_count,
                         "requires_force": True,
                         "message": "请先完成所有任务，或提供强制完成原因进行强制完成",
                     },
-                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
             # 强制完成：需要提供原因
             if not force_reason:
-                return Response(
-                    {"error": "强制完成工序需要提供完成原因"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return APIResponse.error("强制完成工序需要提供完成原因", code=status.HTTP_400_BAD_REQUEST, data={"error": "强制完成工序需要提供完成原因"})
 
             # 强制完成：将所有未完成的任务标记为已完成
             for task in incomplete_tasks:
@@ -241,7 +230,7 @@ class WorkOrderProcessViewSet(BaseViewSet):
             work_order.save()
 
         serializer = self.get_serializer(process)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=False, methods=["post"])
     def batch_start(self, request):
@@ -259,16 +248,12 @@ class WorkOrderProcessViewSet(BaseViewSet):
         department_id = request.data.get("department")
 
         if not process_ids:
-            return Response(
-                {"error": "请提供工序ID列表"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("请提供工序ID列表", code=status.HTTP_400_BAD_REQUEST, data={"error": "请提供工序ID列表"})
 
         # 获取工序
         processes = WorkOrderProcess.objects.filter(id__in=process_ids)
         if processes.count() != len(process_ids):
-            return Response(
-                {"error": "部分工序不存在"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("部分工序不存在", code=status.HTTP_400_BAD_REQUEST, data={"error": "部分工序不存在"})
 
         # 批量开始工序
         started_processes = []
@@ -321,8 +306,8 @@ class WorkOrderProcessViewSet(BaseViewSet):
             except Exception as e:
                 failed_processes.append({"process_id": process.id, "error": str(e)})
 
-        return Response(
-            {
+        return APIResponse.success(
+            data={
                 "message": f"成功开始 {len(started_processes)} 个工序，失败 {len(failed_processes)} 个",
                 "started_count": len(started_processes),
                 "failed_count": len(failed_processes),
@@ -358,17 +343,12 @@ class WorkOrderProcessViewSet(BaseViewSet):
 
         # 验证必填字段
         if not reason:
-            return Response(
-                {"error": "调整原因不能为空，请说明为什么需要调整分派"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("调整原因不能为空，请说明为什么需要调整分派", code=status.HTTP_400_BAD_REQUEST, data={"error": "调整原因不能为空，请说明为什么需要调整分派"})
 
         # 获取所有任务
         tasks = work_order_process.tasks.all()
         if not tasks.exists():
-            return Response(
-                {"error": "该工序还没有生成任务"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("该工序还没有生成任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "该工序还没有生成任务"})
 
         # 验证部门
         new_department = None
@@ -378,9 +358,7 @@ class WorkOrderProcessViewSet(BaseViewSet):
 
                 new_department = Department.objects.get(id=department_id)
             except Department.DoesNotExist:
-                return Response(
-                    {"error": "部门不存在"}, status=status.HTTP_404_NOT_FOUND
-                )
+                return APIResponse.error("部门不存在", code=status.HTTP_404_NOT_FOUND, data={"error": "部门不存在"})
 
         # 验证操作员
         new_operator = None
@@ -390,9 +368,7 @@ class WorkOrderProcessViewSet(BaseViewSet):
 
                 new_operator = User.objects.get(id=operator_id)
             except User.DoesNotExist:
-                return Response(
-                    {"error": "操作员不存在"}, status=status.HTTP_404_NOT_FOUND
-                )
+                return APIResponse.error("操作员不存在", code=status.HTTP_404_NOT_FOUND, data={"error": "操作员不存在"})
 
         # 批量更新任务
         updated_count = 0
@@ -457,8 +433,7 @@ class WorkOrderProcessViewSet(BaseViewSet):
             work_order_process.save()
 
         serializer = self.get_serializer(work_order_process)
-        return Response(
-            {
+        return APIResponse.success(data={
                 **serializer.data,
                 "message": f"成功调整 {updated_count} 个任务的分派",
                 "updated_tasks_count": updated_count,

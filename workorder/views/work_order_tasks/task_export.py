@@ -11,7 +11,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from workorder.response import APIResponse
 
 from workorder.models.core import WorkOrderTask
 
@@ -73,11 +73,12 @@ class TaskExportMixin:
         # 限制导出数量（防止导出过多数据）
         max_export = 10000
         if queryset.count() > max_export:
-            return Response(
-                {
+            return APIResponse.error(
+                f"导出数据量过大（{queryset.count()}条），最多支持导出{max_export}条",
+                code=status.HTTP_400_BAD_REQUEST,
+                data={
                     "error": f"导出数据量过大（{queryset.count()}条），最多支持导出{max_export}条"
                 },
-                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # 创建工作簿

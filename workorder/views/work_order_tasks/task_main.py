@@ -17,7 +17,7 @@ from drf_spectacular.utils import (
 )
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from workorder.response import APIResponse
 
 from workorder.exceptions import (
     BusinessLogicError,
@@ -147,6 +147,38 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
     ]
     ordering = ["-created_at"]
 
+    def _wrap_response(self, response):
+        wrapped = APIResponse.success(data=response.data, code=response.status_code)
+        for key, value in response.headers.items():
+            wrapped.headers[key] = value
+        return wrapped
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        return self._wrap_response(response)
+
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
+        return self._wrap_response(response)
+
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        return self._wrap_response(response)
+
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        return self._wrap_response(response)
+
+    def partial_update(self, request, *args, **kwargs):
+        response = super().partial_update(request, *args, **kwargs)
+        return self._wrap_response(response)
+
+    def destroy(self, request, *args, **kwargs):
+        response = super().destroy(request, *args, **kwargs)
+        if response.status_code == status.HTTP_204_NO_CONTENT:
+            return APIResponse.success(message='删除成功', data=None, code=status.HTTP_204_NO_CONTENT)
+        return self._wrap_response(response)
+
     def get_queryset(self):
         """
         根据用户权限过滤查询集
@@ -228,7 +260,7 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         serializer = TaskAssignmentSerializer(data=request.data)
 
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error('请求参数错误', code=status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
 
         try:
             result = TaskAssignmentService.assign_to_operator(
@@ -242,13 +274,13 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             task.refresh_from_db()
             response_serializer = self.get_serializer(task)
 
-            return Response(
-                {
+            return APIResponse.success(
+                data={
                     "detail": "任务分配成功",
                     "data": result,
                     "task": response_serializer.data,
                 },
-                status=status.HTTP_200_OK,
+                code=status.HTTP_200_OK,
             )
 
         except (PermissionDeniedError, BusinessLogicError, TaskConflictError) as e:
@@ -277,12 +309,17 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             retry_info = TaskAssignmentService.get_retry_suggestion(e)
             error_response["retry"] = retry_info
 
-            return Response(error_response, status=status_code)
+            return APIResponse.error(
+                error_response.get("detail", "请求失败"),
+                code=status_code,
+                data=error_response,
+            )
         except Exception as e:
             logger.error(f"任务分配失败: {str(e)}")
-            return Response(
-                {"detail": "任务分配失败，请稍后重试", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            return APIResponse.error(
+                "任务分配失败，请稍后重试",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                data={"detail": "任务分配失败，请稍后重试", "error": str(e)},
             )
 
     @action(detail=False, methods=["get"], url_path="department-operators")
@@ -297,20 +334,18 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
 
         department_id = request.query_params.get("department_id")
         if not department_id:
-            return Response(
-                {"detail": "请提供 department_id 参数"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.success(data={"detail": "请提供 department_id 参数"})
 
         try:
             operators = TaskAssignmentService.get_department_operators(department_id)
-            return Response(
-                {"department_id": int(department_id), "operators": operators}
+            return APIResponse.success(
+                data={"department_id": int(department_id), "operators": operators}
             )
         except Department.DoesNotExist:
-            return Response(
-                {"detail": f"部门ID {department_id} 不存在"},
-                status=status.HTTP_404_NOT_FOUND,
+            return APIResponse.error(
+                f"部门ID {department_id} 不存在",
+                code=status.HTTP_404_NOT_FOUND,
+                data={"detail": f"部门ID {department_id} 不存在"},
             )
 
     @action(detail=True, methods=["post"], url_path="claim")
@@ -342,13 +377,13 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             task.refresh_from_db()
             response_serializer = self.get_serializer(task)
 
-            return Response(
-                {
+            return APIResponse.success(
+                data={
                     "detail": result.get("message", "任务认领成功"),
                     "data": result,
                     "task": response_serializer.data,
                 },
-                status=status.HTTP_200_OK,
+                code=status.HTTP_200_OK,
             )
 
         except (BusinessLogicError, TaskConflictError) as e:
@@ -379,12 +414,17 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             retry_info = TaskAssignmentService.get_retry_suggestion(e)
             error_response["retry"] = retry_info
 
-            return Response(error_response, status=status_code)
+            return APIResponse.error(
+                error_response.get("detail", "请求失败"),
+                code=status_code,
+                data=error_response,
+            )
         except Exception as e:
             logger.error(f"任务认领失败: {str(e)}")
-            return Response(
-                {"detail": "任务认领失败，请稍后重试", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            return APIResponse.error(
+                "任务认领失败，请稍后重试",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                data={"detail": "任务认领失败，请稍后重试", "error": str(e)},
             )
 
     @action(detail=False, methods=["get"], url_path="claimable")
@@ -406,20 +446,22 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
 
             if page is not None:
                 serializer = self.get_serializer(page, many=True)
-                return self.get_paginated_response(
+                paginated = self.get_paginated_response(
                     {"claimable_count": len(claimable_ids), "results": serializer.data}
                 )
+                return APIResponse.success(data=paginated.data)
 
             serializer = self.get_serializer(queryset, many=True)
-            return Response(
-                {"claimable_count": len(claimable_ids), "results": serializer.data}
+            return APIResponse.success(
+                data={"claimable_count": len(claimable_ids), "results": serializer.data}
             )
 
         except Exception as e:
             logger.error(f"获取可认领任务列表失败: {str(e)}")
-            return Response(
-                {"detail": "获取可认领任务列表失败", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            return APIResponse.error(
+                "获取可认领任务列表失败",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                data={"detail": "获取可认领任务列表失败", "error": str(e)},
             )
 
     @action(detail=False, methods=["get"], url_path="operator_center")
@@ -444,14 +486,14 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             user.profile.departments.all() if hasattr(user, "profile") else []
         )
         if not user_departments:
-            return Response(
-                {
+            return APIResponse.success(
+                data={
                     "detail": "您未分配到任何部门",
                     "my_tasks": [],
                     "claimable_tasks": [],
                     "summary": {},
                 },
-                status=status.HTTP_200_OK,
+                code=status.HTTP_200_OK,
             )
 
         # Get my assigned tasks
@@ -494,10 +536,8 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             "claimable_count": len(claimable_ids),
         }
 
-        return Response(
-            {
+        return APIResponse.success(data={
                 "my_tasks": my_serializer.data,
                 "claimable_tasks": claimable_serializer.data,
                 "summary": summary,
-            }
-        )
+            })

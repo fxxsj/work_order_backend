@@ -314,7 +314,7 @@ class DepartmentAPITest(APITestCase):
         url = reverse('department-list')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['count'], self.base_count + 2)
+        self.assertEqual(response.data['data']['count'], self.base_count + 2)
 
     def test_search_departments(self):
         """测试搜索部门"""
@@ -322,9 +322,9 @@ class DepartmentAPITest(APITestCase):
         url = reverse('department-list')
         response = self.client.get(url, {'search': self.child_dept.code})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertGreaterEqual(response.data['count'], 1)
+        self.assertGreaterEqual(response.data['data']['count'], 1)
         self.assertTrue(
-            any(item['id'] == self.child_dept.id for item in response.data['results'])
+            any(item['id'] == self.child_dept.id for item in response.data['data']['results'])
         )
 
     def test_create_department(self):
@@ -370,7 +370,7 @@ class DepartmentAPITest(APITestCase):
         url = reverse('department-detail', kwargs={'pk': self.root_dept.pk})
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('error', response.data)
+        self.assertIn('message', response.data)
         self.assertEqual(Department.objects.count(), self.base_count + 2)
 
     def test_tree_action(self):
@@ -379,10 +379,8 @@ class DepartmentAPITest(APITestCase):
         url = reverse('department-tree')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        root = next(
-            (item for item in response.data if item['id'] == self.root_dept.id),
-            None
-        )
+        data = response.data['data']
+        root = next((item for item in data if item['id'] == self.root_dept.id), None)
         self.assertIsNotNone(root)
         self.assertTrue(
             any(child['id'] == self.child_dept.id for child in root.get('children', []))
@@ -394,7 +392,7 @@ class DepartmentAPITest(APITestCase):
         url = reverse('department-all')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), self.base_count + 2)
+        self.assertEqual(len(response.data['data']), self.base_count + 2)
 
     def test_all_action_filter_active(self):
         """测试获取所有启用的部门"""
@@ -406,7 +404,7 @@ class DepartmentAPITest(APITestCase):
         url = reverse('department-all')
         response = self.client.get(url, {'is_active': 'true'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), self.active_base_count + 1)
+        self.assertEqual(len(response.data['data']), self.active_base_count + 1)
 
     def test_unauthorized_access(self):
         """测试未授权访问"""
@@ -428,4 +426,4 @@ class DepartmentAPITest(APITestCase):
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('code', response.data)
+        self.assertIn('errors', response.data)

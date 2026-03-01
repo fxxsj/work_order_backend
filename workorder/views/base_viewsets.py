@@ -6,7 +6,8 @@
 """
 
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, viewsets
+from rest_framework import filters, viewsets, status
+from workorder.response import APIResponse
 
 from ..permissions import SuperuserFriendlyModelPermissions
 
@@ -53,6 +54,38 @@ class BaseViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    def _wrap_response(self, response):
+        wrapped = APIResponse.success(data=response.data, code=response.status_code)
+        for key, value in response.headers.items():
+            wrapped.headers[key] = value
+        return wrapped
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        return self._wrap_response(response)
+
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
+        return self._wrap_response(response)
+
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        return self._wrap_response(response)
+
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        return self._wrap_response(response)
+
+    def partial_update(self, request, *args, **kwargs):
+        response = super().partial_update(request, *args, **kwargs)
+        return self._wrap_response(response)
+
+    def destroy(self, request, *args, **kwargs):
+        response = super().destroy(request, *args, **kwargs)
+        if response.status_code == status.HTTP_204_NO_CONTENT:
+            return APIResponse.success(message='删除成功', data=None, code=status.HTTP_204_NO_CONTENT)
+        return self._wrap_response(response)
+
 
 class ReadOnlyBaseViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -81,3 +114,17 @@ class ReadOnlyBaseViewSet(viewsets.ReadOnlyModelViewSet):
         """获取查询集（只读）"""
         queryset = super().get_queryset()
         return queryset
+
+    def _wrap_response(self, response):
+        wrapped = APIResponse.success(data=response.data, code=response.status_code)
+        for key, value in response.headers.items():
+            wrapped.headers[key] = value
+        return wrapped
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        return self._wrap_response(response)
+
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
+        return self._wrap_response(response)

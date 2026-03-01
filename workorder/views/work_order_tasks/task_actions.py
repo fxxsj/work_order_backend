@@ -10,7 +10,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from workorder.response import APIResponse
 
 from workorder.models.assets import Artwork, Die
 from workorder.models.core import TaskLog, WorkOrder, WorkOrderTask
@@ -89,21 +89,15 @@ class TaskActionsMixin:
                     ):
                         # 检查是否是施工单创建人
                         if task.work_order_process.work_order.created_by != user:
-                            return Response(
-                                {
+                            return APIResponse.error("您没有权限更新此任务。只能更新自己分派的任务或本部门的任务。", code=status.HTTP_403_FORBIDDEN, data={
                                     "error": "您没有权限更新此任务。只能更新自己分派的任务或本部门的任务。"
-                                },
-                                status=status.HTTP_403_FORBIDDEN,
-                            )
+                                })
                 else:
                     # 任务未分派，只有施工单创建人可以更新
                     if task.work_order_process.work_order.created_by != user:
-                        return Response(
-                            {
+                        return APIResponse.error("您没有权限更新此任务。只能更新自己分派的任务或本部门的任务。", code=status.HTTP_403_FORBIDDEN, data={
                                 "error": "您没有权限更新此任务。只能更新自己分派的任务或本部门的任务。"
-                            },
-                            status=status.HTTP_403_FORBIDDEN,
-                        )
+                            })
 
         from workorder.process_codes import ProcessCodes
 
@@ -111,13 +105,10 @@ class TaskActionsMixin:
         expected_version = request.data.get("version")
         if expected_version is not None:
             if task.version != expected_version:
-                return Response(
-                    {
+                return APIResponse.error("任务已被其他操作员更新，请刷新后重试", code=status.HTTP_409_CONFLICT, data={
                         "error": "任务已被其他操作员更新，请刷新后重试",
                         "current_version": task.version,
-                    },
-                    status=status.HTTP_409_CONFLICT,
-                )
+                    })
 
         work_order_process = task.work_order_process
         work_order = work_order_process.work_order
@@ -131,9 +122,7 @@ class TaskActionsMixin:
         die_ids = request.data.get("die_ids", [])
 
         if quantity_increment is None:
-            return Response(
-                {"error": "请提供本次完成数量"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("请提供本次完成数量", code=status.HTTP_400_BAD_REQUEST, data={"error": "请提供本次完成数量"})
 
         # 计算新的完成数量（增量更新）
         quantity_before = task.quantity_completed
@@ -142,25 +131,13 @@ class TaskActionsMixin:
         # 业务条件验证：制版任务需图稿/刀模等已确认
         if task.task_type == "plate_making":
             if task.artwork and not task.artwork.confirmed:
-                return Response(
-                    {"error": "图稿未确认，无法更新任务"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return APIResponse.error("图稿未确认，无法更新任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "图稿未确认，无法更新任务"})
             if task.die and not task.die.confirmed:
-                return Response(
-                    {"error": "刀模未确认，无法更新任务"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return APIResponse.error("刀模未确认，无法更新任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "刀模未确认，无法更新任务"})
             if task.foiling_plate and not task.foiling_plate.confirmed:
-                return Response(
-                    {"error": "烫金版未确认，无法更新任务"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return APIResponse.error("烫金版未确认，无法更新任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "烫金版未确认，无法更新任务"})
             if task.embossing_plate and not task.embossing_plate.confirmed:
-                return Response(
-                    {"error": "压凸版未确认，无法更新任务"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return APIResponse.error("压凸版未确认，无法更新任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "压凸版未确认，无法更新任务"})
 
         # 业务条件验证：开料任务需物料状态满足条件
         if task.task_type == "cutting" and task.material:
@@ -170,25 +147,21 @@ class TaskActionsMixin:
             if work_order_material:
                 if ProcessCodes.requires_material_cut_status(process_code):
                     if work_order_material.purchase_status != "cut":
-                        return Response(
-                            {"error": "物料未开料，无法更新开料任务"},
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
+                        return APIResponse.error("物料未开料，无法更新开料任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "物料未开料，无法更新开料任务"})
 
         # 验证增量数量
         if new_quantity_completed < 0:
-            return Response(
-                {"error": "更新后完成数量不能小于0"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("更新后完成数量不能小于0", code=status.HTTP_400_BAD_REQUEST, data={"error": "更新后完成数量不能小于0"})
         if (
             task.production_quantity
             and new_quantity_completed > task.production_quantity
         ):
-            return Response(
-                {
+            return APIResponse.error(
+                f"更新后完成数量（{new_quantity_completed}）不能超过生产数量（{task.production_quantity}）",
+                code=status.HTTP_400_BAD_REQUEST,
+                data={
                     "error": f"更新后完成数量（{new_quantity_completed}）不能超过生产数量（{task.production_quantity}）"
                 },
-                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # 记录更新前的状态和数量
@@ -204,26 +177,18 @@ class TaskActionsMixin:
 
         if is_design_task:
             if not artwork_ids or len(artwork_ids) == 0:
-                return Response(
-                    {"error": "请至少选择一个图稿"}, status=status.HTTP_400_BAD_REQUEST
-                )
+                return APIResponse.error("请至少选择一个图稿", code=status.HTTP_400_BAD_REQUEST, data={"error": "请至少选择一个图稿"})
             artworks = Artwork.objects.filter(id__in=artwork_ids)
             if artworks.count() != len(artwork_ids):
-                return Response(
-                    {"error": "部分图稿不存在"}, status=status.HTTP_400_BAD_REQUEST
-                )
+                return APIResponse.error("部分图稿不存在", code=status.HTTP_400_BAD_REQUEST, data={"error": "部分图稿不存在"})
             work_order.artworks.add(*artworks)
             task.artwork = artworks.first()
         elif is_die_design_task:
             if not die_ids or len(die_ids) == 0:
-                return Response(
-                    {"error": "请至少选择一个刀模"}, status=status.HTTP_400_BAD_REQUEST
-                )
+                return APIResponse.error("请至少选择一个刀模", code=status.HTTP_400_BAD_REQUEST, data={"error": "请至少选择一个刀模"})
             dies = Die.objects.filter(id__in=die_ids)
             if dies.count() != len(die_ids):
-                return Response(
-                    {"error": "部分刀模不存在"}, status=status.HTTP_400_BAD_REQUEST
-                )
+                return APIResponse.error("部分刀模不存在", code=status.HTTP_400_BAD_REQUEST, data={"error": "部分刀模不存在"})
             work_order.dies.add(*dies)
             task.die = dies.first()
 
@@ -313,7 +278,7 @@ class TaskActionsMixin:
         task.work_order_process.check_and_update_status()
 
         serializer = self.get_serializer(task)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @extend_schema(
         tags=["任务"],
@@ -378,21 +343,15 @@ class TaskActionsMixin:
                     ):
                         # 检查是否是施工单创建人
                         if task.work_order_process.work_order.created_by != user:
-                            return Response(
-                                {
+                            return APIResponse.error("您没有权限完成此任务。只能完成自己分派的任务或本部门的任务。", code=status.HTTP_403_FORBIDDEN, data={
                                     "error": "您没有权限完成此任务。只能完成自己分派的任务或本部门的任务。"
-                                },
-                                status=status.HTTP_403_FORBIDDEN,
-                            )
+                                })
                 else:
                     # 任务未分派，只有施工单创建人可以完成
                     if task.work_order_process.work_order.created_by != user:
-                        return Response(
-                            {
+                        return APIResponse.error("您没有权限完成此任务。只能完成自己分派的任务或本部门的任务。", code=status.HTTP_403_FORBIDDEN, data={
                                 "error": "您没有权限完成此任务。只能完成自己分派的任务或本部门的任务。"
-                            },
-                            status=status.HTTP_403_FORBIDDEN,
-                        )
+                            })
 
         from workorder.process_codes import ProcessCodes
 
@@ -400,13 +359,10 @@ class TaskActionsMixin:
         expected_version = request.data.get("version")
         if expected_version is not None:
             if task.version != expected_version:
-                return Response(
-                    {
+                return APIResponse.error("任务已被其他操作员更新，请刷新后重试", code=status.HTTP_409_CONFLICT, data={
                         "error": "任务已被其他操作员更新，请刷新后重试",
                         "current_version": task.version,
-                    },
-                    status=status.HTTP_409_CONFLICT,
-                )
+                    })
 
         work_order_process = task.work_order_process
         work_order = work_order_process.work_order
@@ -422,33 +378,18 @@ class TaskActionsMixin:
         # 业务条件验证：制版任务需图稿/刀模等已确认
         if task.task_type == "plate_making" and task.artwork:
             if not task.artwork.confirmed:
-                return Response(
-                    {"error": "图稿未确认，无法完成任务"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return APIResponse.error("图稿未确认，无法完成任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "图稿未确认，无法完成任务"})
 
         # 业务条件验证：制版任务需图稿/刀模等已确认
         if task.task_type == "plate_making":
             if task.artwork and not task.artwork.confirmed:
-                return Response(
-                    {"error": "图稿未确认，无法完成任务"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return APIResponse.error("图稿未确认，无法完成任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "图稿未确认，无法完成任务"})
             if task.die and not task.die.confirmed:
-                return Response(
-                    {"error": "刀模未确认，无法完成任务"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return APIResponse.error("刀模未确认，无法完成任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "刀模未确认，无法完成任务"})
             if task.foiling_plate and not task.foiling_plate.confirmed:
-                return Response(
-                    {"error": "烫金版未确认，无法完成任务"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return APIResponse.error("烫金版未确认，无法完成任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "烫金版未确认，无法完成任务"})
             if task.embossing_plate and not task.embossing_plate.confirmed:
-                return Response(
-                    {"error": "压凸版未确认，无法完成任务"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return APIResponse.error("压凸版未确认，无法完成任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "压凸版未确认，无法完成任务"})
 
         # 业务条件验证：开料任务需物料状态满足条件
         if task.task_type == "cutting" and task.material:
@@ -458,10 +399,7 @@ class TaskActionsMixin:
             if work_order_material:
                 if ProcessCodes.requires_material_cut_status(process_code):
                     if work_order_material.purchase_status != "cut":
-                        return Response(
-                            {"error": "物料未开料，无法完成开料任务"},
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
+                        return APIResponse.error("物料未开料，无法完成开料任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "物料未开料，无法完成开料任务"})
 
         # 记录更新前的状态和数量
         status_before = task.status
@@ -479,30 +417,22 @@ class TaskActionsMixin:
 
         if is_design_task:
             if not artwork_ids or len(artwork_ids) == 0:
-                return Response(
-                    {"error": "请至少选择一个图稿"}, status=status.HTTP_400_BAD_REQUEST
-                )
+                return APIResponse.error("请至少选择一个图稿", code=status.HTTP_400_BAD_REQUEST, data={"error": "请至少选择一个图稿"})
             from workorder.models.assets import Artwork
 
             artworks = Artwork.objects.filter(id__in=artwork_ids)
             if artworks.count() != len(artwork_ids):
-                return Response(
-                    {"error": "部分图稿不存在"}, status=status.HTTP_400_BAD_REQUEST
-                )
+                return APIResponse.error("部分图稿不存在", code=status.HTTP_400_BAD_REQUEST, data={"error": "部分图稿不存在"})
             work_order.artworks.add(*artworks)
             task.artwork = artworks.first()
         elif is_die_design_task:
             if not die_ids or len(die_ids) == 0:
-                return Response(
-                    {"error": "请至少选择一个刀模"}, status=status.HTTP_400_BAD_REQUEST
-                )
+                return APIResponse.error("请至少选择一个刀模", code=status.HTTP_400_BAD_REQUEST, data={"error": "请至少选择一个刀模"})
             from workorder.models.assets import Die
 
             dies = Die.objects.filter(id__in=die_ids)
             if dies.count() != len(die_ids):
-                return Response(
-                    {"error": "部分刀模不存在"}, status=status.HTTP_400_BAD_REQUEST
-                )
+                return APIResponse.error("部分刀模不存在", code=status.HTTP_400_BAD_REQUEST, data={"error": "部分刀模不存在"})
             work_order.dies.add(*dies)
             task.die = dies.first()
 
@@ -563,7 +493,7 @@ class TaskActionsMixin:
         task.work_order_process.check_and_update_status()
 
         serializer = self.get_serializer(task)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     def split(self, request, pk=None):
@@ -582,31 +512,25 @@ class TaskActionsMixin:
 
         # 检查任务是否已经拆分
         if task.subtasks.exists():
-            return Response(
-                {"error": "该任务已经拆分，无法再次拆分"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("该任务已经拆分，无法再次拆分", code=status.HTTP_400_BAD_REQUEST, data={"error": "该任务已经拆分，无法再次拆分"})
 
         # 检查任务是否已完成
         if task.status == "completed":
-            return Response(
-                {"error": "已完成的任务无法拆分"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("已完成的任务无法拆分", code=status.HTTP_400_BAD_REQUEST, data={"error": "已完成的任务无法拆分"})
 
         splits = request.data.get("splits", [])
         if not splits or len(splits) < 2:
-            return Response(
-                {"error": "至少需要拆分为2个子任务"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("至少需要拆分为2个子任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "至少需要拆分为2个子任务"})
 
         # 验证拆分数量总和不超过父任务数量
         total_split_quantity = sum(s.get("production_quantity", 0) for s in splits)
         if total_split_quantity > task.production_quantity:
-            return Response(
-                {
+            return APIResponse.error(
+                f"子任务数量总和（{total_split_quantity}）不能超过父任务数量（{task.production_quantity}）",
+                code=status.HTTP_400_BAD_REQUEST,
+                data={
                     "error": f"子任务数量总和（{total_split_quantity}）不能超过父任务数量（{task.production_quantity}）"
                 },
-                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # 创建子任务
@@ -614,9 +538,10 @@ class TaskActionsMixin:
         for idx, split_data in enumerate(splits):
             production_quantity = split_data.get("production_quantity", 0)
             if production_quantity <= 0:
-                return Response(
-                    {"error": f"第{idx+1}个子任务的生产数量必须大于0"},
-                    status=status.HTTP_400_BAD_REQUEST,
+                return APIResponse.error(
+                    f"第{idx+1}个子任务的生产数量必须大于0",
+                    code=status.HTTP_400_BAD_REQUEST,
+                    data={"error": f"第{idx+1}个子任务的生产数量必须大于0"},
                 )
 
             # 获取分派信息
@@ -664,13 +589,13 @@ class TaskActionsMixin:
         )
 
         serializer = self.get_serializer(task)
-        return Response(
-            {
+        return APIResponse.success(
+            data={
                 "message": f"任务已成功拆分为{len(created_subtasks)}个子任务",
                 "parent_task": serializer.data,
                 "subtasks_count": len(created_subtasks),
             },
-            status=status.HTTP_201_CREATED,
+            code=status.HTTP_201_CREATED,
         )
 
     @action(detail=True, methods=["post"])
@@ -708,9 +633,7 @@ class TaskActionsMixin:
                         )
                         task.assigned_department = department
                 except Department.DoesNotExist:
-                    return Response(
-                        {"error": "部门不存在"}, status=status.HTTP_404_NOT_FOUND
-                    )
+                    return APIResponse.error("部门不存在", code=status.HTTP_400_BAD_REQUEST, data={"error": "部门不存在"})
             else:
                 if task.assigned_department:
                     changes.append(
@@ -737,9 +660,7 @@ class TaskActionsMixin:
                         )
                         task.assigned_operator = operator
                 except User.DoesNotExist:
-                    return Response(
-                        {"error": "操作员不存在"}, status=status.HTTP_404_NOT_FOUND
-                    )
+                    return APIResponse.error("操作员不存在", code=status.HTTP_404_NOT_FOUND, data={"error": "操作员不存在"})
             else:
                 if task.assigned_operator:
                     old_operator_name = (
@@ -777,7 +698,7 @@ class TaskActionsMixin:
             )
 
         serializer = self.get_serializer(task)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
@@ -801,21 +722,14 @@ class TaskActionsMixin:
 
         # 验证取消原因
         if not cancellation_reason:
-            return Response(
-                {"error": "请填写取消原因"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("请填写取消原因", code=status.HTTP_400_BAD_REQUEST, data={"error": "请填写取消原因"})
 
         # 检查任务状态
         if task.status == "cancelled":
-            return Response(
-                {"error": "任务已经取消，无法重复取消"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("任务已经取消，无法重复取消", code=status.HTTP_400_BAD_REQUEST, data={"error": "任务已经取消，无法重复取消"})
 
         if task.status == "completed":
-            return Response(
-                {"error": "已完成的任务无法取消"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("已完成的任务无法取消", code=status.HTTP_400_BAD_REQUEST, data={"error": "已完成的任务无法取消"})
 
         # 权限检查：生产主管、创建人或任务分派的操作员可以取消
         # 这里简化处理，实际可以根据用户角色和部门进行更细粒度的控制
@@ -833,9 +747,7 @@ class TaskActionsMixin:
             can_cancel = True
 
         if not can_cancel:
-            return Response(
-                {"error": "您没有权限取消此任务"}, status=status.HTTP_403_FORBIDDEN
-            )
+            return APIResponse.error("您没有权限取消此任务", code=status.HTTP_403_FORBIDDEN, data={"error": "您没有权限取消此任务"})
 
         # 检查是否会影响工序完成状态
         work_order_process = task.work_order_process
@@ -843,12 +755,9 @@ class TaskActionsMixin:
         if work_order_process.tasks.count() == 1:
             # 如果工序状态不是pending，需要特殊处理
             if work_order_process.status != "pending":
-                return Response(
-                    {
+                return APIResponse.error("该任务是工序的唯一任务，取消后工序无法完成。请先处理工序状态", code=status.HTTP_400_BAD_REQUEST, data={
                         "error": "该任务是工序的唯一任务，取消后工序无法完成。请先处理工序状态"
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                    })
 
         # 记录取消前的状态
         status_before = task.status
@@ -896,4 +805,4 @@ class TaskActionsMixin:
                 pass
 
         serializer = self.get_serializer(task)
-        return Response({"message": "任务已成功取消", "task": serializer.data})
+        return APIResponse.success(data={"message": "任务已成功取消", "task": serializer.data})

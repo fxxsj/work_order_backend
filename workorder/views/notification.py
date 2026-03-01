@@ -15,7 +15,7 @@ from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.response import Response
+from workorder.response import APIResponse
 
 from ..models.system import Notification
 
@@ -88,11 +88,12 @@ class NotificationViewSet(viewsets.GenericViewSet):
         page = self.paginate_queryset(notifications)
         if page is not None:
             data = [NotificationSerializer.serialize_notification(n) for n in page]
-            return self.get_paginated_response(data)
+            paginated = self.get_paginated_response(data)
+            return APIResponse.success(data=paginated.data)
 
         # 如果没有分页，返回所有
         data = [NotificationSerializer.serialize_notification(n) for n in notifications]
-        return Response(data)
+        return APIResponse.success(data=data)
 
     @action(detail=True, methods=["post"])
     def mark_read(self, request, pk=None):
@@ -102,23 +103,21 @@ class NotificationViewSet(viewsets.GenericViewSet):
             notification.is_read = True
             notification.save(update_fields=["is_read"])
 
-            return Response(
-                {
-                    "message": "通知已标记为已读",
-                    "notification": NotificationSerializer.serialize_notification(
-                        notification
-                    ),
-                }
+            return APIResponse.success(
+                data={
+                    "notification": NotificationSerializer.serialize_notification(notification),
+                },
+                message="通知已标记为已读",
             )
         except Notification.DoesNotExist:
-            return Response({"error": "通知不存在"}, status=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error("通知不存在", code=status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=["post"])
     def mark_all_read(self, request):
         """标记所有通知为已读"""
         count = self.get_queryset().filter(is_read=False).update(is_read=True)
 
-        return Response({"message": f"已标记 {count} 条通知为已读", "count": count})
+        return APIResponse.success(data={"count": count}, message=f"已标记 {count} 条通知为已读")
 
     @action(detail=True, methods=["delete"])
     def delete(self, request, pk=None):
@@ -127,23 +126,23 @@ class NotificationViewSet(viewsets.GenericViewSet):
             notification = self.get_queryset().get(id=pk)
             notification.delete()
 
-            return Response({"message": "通知已删除"})
+            return APIResponse.success(message="通知已删除")
         except Notification.DoesNotExist:
-            return Response({"error": "通知不存在"}, status=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error("通知不存在", code=status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=["delete"])
     def delete_all_read(self, request):
         """删除所有已读通知"""
         count = self.get_queryset().filter(is_read=True).delete()[0]
 
-        return Response({"message": f"已删除 {count} 条已读通知", "count": count})
+        return APIResponse.success(data={"count": count}, message=f"已删除 {count} 条已读通知")
 
     @action(detail=False, methods=["get"])
     def unread_count(self, request):
         """获取未读通知数量"""
         count = self.get_queryset().filter(is_read=False).count()
 
-        return Response({"unread_count": count})
+        return APIResponse.success(data={"unread_count": count})
 
     @action(detail=False, methods=["get"])
     def statistics(self, request):
@@ -151,8 +150,8 @@ class NotificationViewSet(viewsets.GenericViewSet):
         queryset = self.get_queryset()
 
         # 简化版统计，避免使用可能导致阻塞的导入
-        return Response(
-            {
+        return APIResponse.success(
+            data={
                 "total_count": queryset.count(),
                 "unread_count": queryset.filter(is_read=False).count(),
                 "read_count": queryset.filter(is_read=True).count(),
@@ -164,7 +163,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
         """获取 WebSocket 连接票据（短期有效，一次性使用）"""
         ticket = secrets.token_urlsafe(32)
         cache.set(f"ws_ticket:{ticket}", request.user.id, timeout=60)
-        return Response({"ticket": ticket, "expires_in": 60})
+        return APIResponse.success(data={"ticket": ticket, "expires_in": 60})
 
 
 class SystemNotificationViewSet(viewsets.GenericViewSet):
@@ -182,11 +181,9 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
         expires_in_days = request.data.get("expires_in_days")
 
         if not title:
-            return Response({"error": "缺少 title"}, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error("缺少 title", code=status.HTTP_400_BAD_REQUEST)
         if not content:
-            return Response(
-                {"error": "缺少 content"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("缺少 content", code=status.HTTP_400_BAD_REQUEST)
 
         recipients = User.objects.all()
         if only_staff:
@@ -201,10 +198,7 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
                 days = int(expires_in_days)
                 expires_at = now + timedelta(days=days)
             except Exception:
-                return Response(
-                    {"error": "expires_in_days 必须为整数"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return APIResponse.error("expires_in_days 必须为整数", code=status.HTTP_400_BAD_REQUEST)
 
         notifications = [
             Notification(
@@ -221,9 +215,10 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
 
         Notification.objects.bulk_create(notifications, batch_size=1000)
 
-        return Response(
-            {"message": "系统公告已创建", "count": len(notifications)},
-            status=status.HTTP_201_CREATED,
+        return APIResponse.success(
+            data={"count": len(notifications)},
+            message="系统公告已创建",
+            code=status.HTTP_201_CREATED,
         )
 
     @action(detail=False, methods=["post"])
@@ -235,11 +230,9 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
         only_staff = bool(request.data.get("only_staff", False))
 
         if not title:
-            return Response({"error": "缺少 title"}, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error("缺少 title", code=status.HTTP_400_BAD_REQUEST)
         if not content:
-            return Response(
-                {"error": "缺少 content"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("缺少 content", code=status.HTTP_400_BAD_REQUEST)
 
         recipients = User.objects.all()
         if only_staff:
@@ -260,9 +253,10 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
         ]
         Notification.objects.bulk_create(notifications, batch_size=1000)
 
-        return Response(
-            {"message": "紧急警报已发送", "count": len(notifications)},
-            status=status.HTTP_201_CREATED,
+        return APIResponse.success(
+            data={"count": len(notifications)},
+            message="紧急警报已发送",
+            code=status.HTTP_201_CREATED,
         )
 
     @action(detail=False, methods=["get"])
@@ -278,12 +272,12 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
             "max_notifications_per_user": 1000,
         }
 
-        return Response(settings_data)
+        return APIResponse.success(data=settings_data)
 
     @action(detail=False, methods=["post"])
     def update_notification_settings(self, request):
         """更新通知设置"""
-        return Response({"message": "通知设置已更新"})
+        return APIResponse.success(message="通知设置已更新")
 
     @action(detail=False, methods=["get"])
     def system_status(self, request):
@@ -301,8 +295,8 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
                 created_at__gte=timezone.now() - timedelta(hours=24)
             ).count()
 
-            return Response(
-                {
+            return APIResponse.success(
+                data={
                     "status": "healthy",
                     "active_connections": 0,
                     "unsent_notifications": unsent_notifications,
@@ -313,13 +307,11 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
             )
 
         except Exception as e:
-            return Response(
-                {
-                    "status": "error",
-                    "error": str(e),
-                    "timestamp": timezone.now().isoformat(),
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            return APIResponse.error(
+                "通知系统异常",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                errors={"detail": str(e)},
+                data={"status": "error", "timestamp": timezone.now().isoformat()},
             )
 
 
@@ -348,7 +340,7 @@ class UserNotificationSettingsViewSet(viewsets.GenericViewSet):
             "quiet_hours_end": "08:00",
         }
 
-        return Response(settings_data)
+        return APIResponse.success(data=settings_data)
 
     @action(detail=False, methods=["post"])
     def update_settings(self, request):
@@ -359,8 +351,9 @@ class UserNotificationSettingsViewSet(viewsets.GenericViewSet):
         # 这里可以实现用户个性化设置的保存逻辑
         # 为了简化，暂时返回成功响应
 
-        return Response(
-            {"message": "通知设置已更新", "user_id": user.id, "settings": settings_data}
+        return APIResponse.success(
+            data={"user_id": user.id, "settings": settings_data},
+            message="通知设置已更新",
         )
 
     @action(detail=False, methods=["get"])
@@ -399,7 +392,7 @@ class UserNotificationSettingsViewSet(viewsets.GenericViewSet):
             },
         }
 
-        return Response(preferences)
+        return APIResponse.success(data=preferences)
 
 
 class NotificationTemplateViewSet(viewsets.GenericViewSet):
@@ -443,7 +436,7 @@ class NotificationTemplateViewSet(viewsets.GenericViewSet):
             },
         }
 
-        return Response(templates)
+        return APIResponse.success(data=templates)
 
     @action(detail=False, methods=["post"])
     def preview_template(self, request):
@@ -463,14 +456,14 @@ class NotificationTemplateViewSet(viewsets.GenericViewSet):
         }
 
         if template_name not in templates:
-            return Response({"error": "模板不存在"}, status=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error("模板不存在", code=status.HTTP_404_NOT_FOUND)
 
         template = templates[template_name]
         title = template["title"].format(**variables)
         message = template["message"].format(**variables)
 
-        return Response(
-            {
+        return APIResponse.success(
+            data={
                 "template_name": template_name,
                 "title": title,
                 "message": message,

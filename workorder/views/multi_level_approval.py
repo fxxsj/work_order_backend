@@ -10,7 +10,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from workorder.response import APIResponse
 
 from ..models.assets import (
     Artwork,
@@ -78,8 +78,7 @@ class ApprovalWorkflowViewSet(viewsets.ModelViewSet):
         workflow.is_active = True
         workflow.save(update_fields=["is_active"])
 
-        return Response(
-            {
+        return APIResponse.error("请提供源工作流ID和新名称", code=status.HTTP_400_BAD_REQUEST, data={
                 "message": "工作流已激活",
                 "workflow": ApprovalWorkflowSerializer(workflow).data,
             }
@@ -92,8 +91,7 @@ class ApprovalWorkflowViewSet(viewsets.ModelViewSet):
         workflow.is_active = False
         workflow.save(update_fields=["is_active"])
 
-        return Response(
-            {
+        return APIResponse.success(data={
                 "message": "工作流已停用",
                 "workflow": ApprovalWorkflowSerializer(workflow).data,
             }
@@ -112,12 +110,12 @@ class ApprovalWorkflowViewSet(viewsets.ModelViewSet):
             created_workflows.append(workflow)
 
         serializer = ApprovalWorkflowSerializer(created_workflows, many=True)
-        return Response(
-            {
+        return APIResponse.success(
+            data={
                 "message": f"已创建{len(created_workflows)}个默认工作流",
                 "workflows": serializer.data,
             },
-            status=status.HTTP_201_CREATED,
+            code=status.HTTP_201_CREATED,
         )
 
     @action(detail=False, methods=["post"])
@@ -127,10 +125,7 @@ class ApprovalWorkflowViewSet(viewsets.ModelViewSet):
         new_name = request.data.get("new_name")
 
         if not source_id or not new_name:
-            return Response(
-                {"error": "请提供源工作流ID和新名称"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("请提供源工作流ID和新名称", code=status.HTTP_400_BAD_REQUEST, data={"error": "请提供源工作流ID和新名称"})
 
         try:
             source_workflow = ApprovalWorkflow.objects.get(id=source_id)
@@ -146,15 +141,10 @@ class ApprovalWorkflowViewSet(viewsets.ModelViewSet):
             )
 
             serializer = ApprovalWorkflowSerializer(new_workflow)
-            return Response(
-                {"message": "工作流复制成功", "workflow": serializer.data},
-                status=status.HTTP_201_CREATED,
-            )
+            return APIResponse.success(data={"message": "工作流复制成功", "workflow": serializer.data}, code=status.HTTP_201_CREATED)
 
         except ApprovalWorkflow.DoesNotExist:
-            return Response(
-                {"error": "源工作流不存在"}, status=status.HTTP_404_NOT_FOUND
-            )
+            return APIResponse.error("源工作流不存在", code=status.HTTP_404_NOT_FOUND, data={"error": "源工作流不存在"})
 
 
 class ApprovalStepViewSet(viewsets.ModelViewSet):
@@ -188,16 +178,17 @@ class ApprovalStepViewSet(viewsets.ModelViewSet):
         step = self.get_object()
 
         if step.status != "pending":
-            return Response(
-                {"error": "只能开始待执行的步骤"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("只能开始待执行的步骤", code=status.HTTP_400_BAD_REQUEST, data={"error": "只能开始待执行的步骤"})
 
         step.status = "in_progress"
         step.started_at = timezone.now()
         step.save(update_fields=["status", "started_at"])
 
-        return Response(
-            {"message": "步骤已开始", "step": ApprovalStepSerializer(step).data}
+        return APIResponse.success(
+            data={
+                "message": "步骤已开始",
+                "step": ApprovalStepSerializer(step).data,
+            }
         )
 
     @action(detail=True, methods=["post"])
@@ -207,7 +198,7 @@ class ApprovalStepViewSet(viewsets.ModelViewSet):
         serializer = MultiLevelApprovalActionSerializer(data=request.data)
 
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error('请求参数错误', code=status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
 
         decision = serializer.validated_data["decision"]
         comments = serializer.validated_data.get("comments", "")
@@ -217,17 +208,14 @@ class ApprovalStepViewSet(viewsets.ModelViewSet):
         )
 
         if success:
-            return Response(
-                {
+            return APIResponse.success(data={
                     "message": "步骤已完成",
                     "decision": decision,
                     "step": ApprovalStepSerializer(step).data,
                 }
             )
         else:
-            return Response(
-                {"error": "步骤完成失败"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("步骤完成失败", code=status.HTTP_400_BAD_REQUEST, data={"error": "步骤完成失败"})
 
     @action(detail=True, methods=["post"])
     def escalate_step(self, request, pk=None):
@@ -236,7 +224,7 @@ class ApprovalStepViewSet(viewsets.ModelViewSet):
         serializer = EscalationActionSerializer(data=request.data)
 
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error('请求参数错误', code=status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
 
         escalation_reason = serializer.validated_data["escalation_reason"]
         to_step_id = serializer.validated_data.get("to_step_id")
@@ -257,12 +245,12 @@ class ApprovalStepViewSet(viewsets.ModelViewSet):
         step.completed_at = timezone.now()
         step.save(update_fields=["status", "decision", "completed_at"])
 
-        return Response(
-            {
+        return APIResponse.success(
+            data={
                 "message": "步骤已上报",
                 "escalation": ApprovalEscalationSerializer(escalation).data,
             },
-            status=status.HTTP_201_CREATED,
+            code=status.HTTP_201_CREATED,
         )
 
 
@@ -277,30 +265,23 @@ class MultiLevelApprovalViewSet(viewsets.GenericViewSet):
         order_id = request.data.get("order_id")
 
         if not order_id:
-            return Response(
-                {"error": "请提供施工单ID"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("请提供施工单ID", code=status.HTTP_400_BAD_REQUEST, data={"error": "请提供施工单ID"})
 
         try:
             work_order = WorkOrder.objects.get(id=order_id)
 
             if work_order.approval_status != "pending":
-                return Response(
-                    {"error": "只有待审核的订单可以提交审核"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return APIResponse.error("只有待审核的订单可以提交审核", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有待审核的订单可以提交审核"})
 
             # 启动多级审核流程
             approval_steps = MultiLevelApprovalService.start_approval_process(
                 work_order, request.user
             )
 
-            return Response(
-                {
+            return APIResponse.error("施工单不存在", code=status.HTTP_404_NOT_FOUND, data={
                     "message": "审核流程已启动",
                     "approval_steps": ApprovalStepSerializer(
-                        approval_steps, many=True
-                    ).data,
+                        approval_steps, many=True).data,
                     "order_number": work_order.order_number,
                     "workflow_type": MultiLevelApprovalService.determine_workflow_type(
                         work_order
@@ -309,7 +290,7 @@ class MultiLevelApprovalViewSet(viewsets.GenericViewSet):
             )
 
         except WorkOrder.DoesNotExist:
-            return Response({"error": "施工单不存在"}, status=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error("施工单不存在", code=status.HTTP_400_BAD_REQUEST, data={"error": "施工单不存在"})
 
     @action(detail=False, methods=["post"])
     def determine_workflow(self, request):
@@ -317,10 +298,10 @@ class MultiLevelApprovalViewSet(viewsets.GenericViewSet):
         serializer = WorkflowDeterminationSerializer(data=request.data)
 
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error('请求参数错误', code=status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
 
         result = serializer.save()  # save方法会调用to_representation
-        return Response(result)
+        return APIResponse.success(data=result)
 
     @action(detail=False, methods=["get"])
     def get_approval_status(self, request):
@@ -328,10 +309,10 @@ class MultiLevelApprovalViewSet(viewsets.GenericViewSet):
         serializer = ApprovalStatusSerializer(data=request.data)
 
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error('请求参数错误', code=status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
 
         result = serializer.save()  # save方法会调用to_representation
-        return Response(result)
+        return APIResponse.success(data=result)
 
     @action(detail=False, methods=["get"])
     def get_my_tasks(self, request):
@@ -348,7 +329,7 @@ class MultiLevelApprovalViewSet(viewsets.GenericViewSet):
         )
 
         serializer = ApprovalStepSerializer(steps, many=True)
-        return Response({"tasks": serializer.data, "total_count": steps.count()})
+        return APIResponse.error("请提供施工单ID", code=status.HTTP_400_BAD_REQUEST, data={"tasks": serializer.data, "total_count": steps.count()})
 
 
 class UrgentOrderViewSet(viewsets.GenericViewSet):
@@ -362,9 +343,7 @@ class UrgentOrderViewSet(viewsets.GenericViewSet):
         order_id = request.data.get("order_id")
 
         if not order_id:
-            return Response(
-                {"error": "请提供施工单ID"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("请提供施工单ID", code=status.HTTP_400_BAD_REQUEST, data={"error": "请提供施工单ID"})
 
         try:
             work_order = WorkOrder.objects.get(id=order_id)
@@ -375,30 +354,25 @@ class UrgentOrderViewSet(viewsets.GenericViewSet):
             )
 
             if success:
-                return Response(
-                    {
+                return APIResponse.error("标记失败", code=status.HTTP_400_BAD_REQUEST, data={
                         "message": "订单已标记为紧急",
                         "order_number": work_order.order_number,
                         "urgency_level": UrgentOrderService.calculate_urgency_level(
-                            work_order
-                        ),
+                            work_order),
                     }
                 )
             else:
-                return Response(
-                    {"error": "标记失败"}, status=status.HTTP_400_BAD_REQUEST
-                )
+                return APIResponse.error("标记失败", code=status.HTTP_400_BAD_REQUEST, data={"error": "标记失败"})
 
         except WorkOrder.DoesNotExist:
-            return Response({"error": "施工单不存在"}, status=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error("施工单不存在", code=status.HTTP_404_NOT_FOUND, data={"error": "施工单不存在"})
 
     @action(detail=False, methods=["get"])
     def get_urgent_orders(self, request):
         """获取紧急订单列表"""
         urgent_orders = UrgentOrderService.get_urgent_orders()
 
-        return Response(
-            {"urgent_orders": urgent_orders, "total_count": len(urgent_orders)}
+        return APIResponse.error("权限不足", code=status.HTTP_403_FORBIDDEN, data={"urgent_orders": urgent_orders, "total_count": len(urgent_orders)}
         )
 
     @action(detail=False, methods=["get"])
@@ -413,8 +387,7 @@ class UrgentOrderViewSet(viewsets.GenericViewSet):
         )  # 最近50条
 
         serializer = ApprovalEscalationSerializer(escalations, many=True)
-        return Response(
-            {"escalations": serializer.data, "total_count": escalations.count()}
+        return APIResponse.success(data={"escalations": serializer.data, "total_count": escalations.count()}
         )
 
 
@@ -459,8 +432,7 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
             priority="urgent", approval_status="pending"
         ).count()
 
-        return Response(
-            {
+        return APIResponse.success(data={
                 "overall": {
                     "total_orders": total_orders,
                     "pending_orders": pending_orders,
@@ -498,7 +470,7 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
     def dashboard(self, request):
         """管理员仪表板"""
         if not request.user.has_perm("workorder.view_workorder"):
-            return Response({"error": "权限不足"}, status=status.HTTP_403_FORBIDDEN)
+            return APIResponse.error("权限不足", code=status.HTTP_400_BAD_REQUEST, data={"error": "权限不足"})
 
         dashboard_data = {
             "pending_orders": ApprovalStep.objects.filter(status="pending").count(),
@@ -513,7 +485,7 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
             ).count(),
         }
 
-        return Response(dashboard_data)
+        return APIResponse.success(data=dashboard_data)
 
     @action(detail=False, methods=["post"])
     def smart_assign_task(self, request):
@@ -522,36 +494,31 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
         from ..services.smart_assignment import SmartAssignmentService
 
         if not request.user.has_perm("workorder.add_workorder"):
-            return Response({"error": "权限不足"}, status=status.HTTP_403_FORBIDDEN)
+            return APIResponse.error("权限不足", code=status.HTTP_403_FORBIDDEN, data={"error": "权限不足"})
 
         task_id = request.data.get("task_id")
         if not task_id:
-            return Response({"error": "缺少任务ID"}, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error("缺少任务ID", code=status.HTTP_400_BAD_REQUEST, data={"error": "缺少任务ID"})
 
         try:
             task = WorkOrderTask.objects.get(id=task_id)
         except WorkOrderTask.DoesNotExist:
-            return Response({"error": "任务不存在"}, status=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error("任务不存在", code=status.HTTP_404_NOT_FOUND, data={"error": "任务不存在"})
 
         # 使用智能分配服务
         assignment_service = SmartAssignmentService()
         result = assignment_service.smart_assign_single_task(task)
 
         if result["success"]:
-            return Response(
-                {
+            return APIResponse.error(result["error"], code=status.HTTP_400_BAD_REQUEST, data={
                     "message": "任务智能分配成功",
                     "task_id": task_id,
                     "assigned_to": result["assigned_to"],
                     "score": result["score"],
                     "reasons": result["reasons"],
-                }
-            )
+                })
         else:
-            return Response(
-                {"message": "智能分配失败", "error": result["error"]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error(result["error"], code=status.HTTP_400_BAD_REQUEST, data={"message": "智能分配失败", "error": result["error"]})
 
     @action(detail=False, methods=["post"])
     def smart_assign_workorder(self, request):
@@ -560,18 +527,16 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
         from ..services.smart_assignment import SmartAssignmentService
 
         if not request.user.has_perm("workorder.add_workorder"):
-            return Response({"error": "权限不足"}, status=status.HTTP_403_FORBIDDEN)
+            return APIResponse.error("权限不足", code=status.HTTP_403_FORBIDDEN, data={"error": "权限不足"})
 
         workorder_id = request.data.get("workorder_id")
         if not workorder_id:
-            return Response(
-                {"error": "缺少施工单ID"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("缺少施工单ID", code=status.HTTP_400_BAD_REQUEST, data={"error": "缺少施工单ID"})
 
         try:
             workorder = WorkOrder.objects.get(id=workorder_id)
         except WorkOrder.DoesNotExist:
-            return Response({"error": "施工单不存在"}, status=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error("施工单不存在", code=status.HTTP_404_NOT_FOUND, data={"error": "施工单不存在"})
 
         # 获取未分配的任务
         unassigned_tasks = WorkOrderTask.objects.filter(
@@ -589,8 +554,7 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
 
         success_count = sum(1 for r in results if r["result"]["success"])
 
-        return Response(
-            {
+        return APIResponse.error("权限不足", code=status.HTTP_403_FORBIDDEN, data={
                 "message": f"智能分配完成，成功分配 {success_count}/{len(results)} 个任务",
                 "workorder_id": workorder_id,
                 "total_tasks": len(results),
@@ -605,14 +569,14 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
         from ..services.smart_assignment import SmartAssignmentService
 
         if not request.user.has_perm("workorder.view_workorder"):
-            return Response({"error": "权限不足"}, status=status.HTTP_403_FORBIDDEN)
+            return APIResponse.error("权限不足", code=status.HTTP_400_BAD_REQUEST, data={"error": "权限不足"})
 
         department_id = request.query_params.get("department_id")
 
         assignment_service = SmartAssignmentService()
         analysis = assignment_service.analyze_team_balance(department_id)
 
-        return Response(analysis)
+        return APIResponse.success(data=analysis)
 
     @action(detail=False, methods=["get"])
     def user_performance_summary(self, request):
@@ -621,24 +585,24 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
 
         user_id = request.query_params.get("user_id")
         if not user_id:
-            return Response({"error": "缺少用户ID"}, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error("缺少用户ID", code=status.HTTP_400_BAD_REQUEST, data={"error": "缺少用户ID"})
 
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"error": "用户不存在"}, status=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error("用户不存在", code=status.HTTP_404_NOT_FOUND, data={"error": "用户不存在"})
 
         # 权限检查：用户只能查看自己的统计，管理员可以查看所有
         if (
             not request.user.has_perm("workorder.view_workorder")
             and request.user.id != user.id
         ):
-            return Response({"error": "权限不足"}, status=status.HTTP_403_FORBIDDEN)
+            return APIResponse.error("权限不足", code=status.HTTP_403_FORBIDDEN, data={"error": "权限不足"})
 
         assignment_service = SmartAssignmentService()
         summary = assignment_service.get_user_performance_summary(user)
 
-        return Response(summary)
+        return APIResponse.success(data=summary)
 
     @action(detail=False, methods=["post"])
     def update_skill_profile(self, request):
@@ -647,19 +611,19 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
 
         user_id = request.data.get("user_id")
         if not user_id:
-            return Response({"error": "缺少用户ID"}, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error("缺少用户ID", code=status.HTTP_400_BAD_REQUEST, data={"error": "缺少用户ID"})
 
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"error": "用户不存在"}, status=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error("用户不存在", code=status.HTTP_404_NOT_FOUND, data={"error": "用户不存在"})
 
         # 权限检查：用户只能更新自己的档案，管理员可以更新所有
         if (
             not request.user.has_perm("workorder.change_workorder")
             and request.user.id != user.id
         ):
-            return Response({"error": "权限不足"}, status=status.HTTP_403_FORBIDDEN)
+            return APIResponse.error("权限不足", code=status.HTTP_403_FORBIDDEN, data={"error": "权限不足"})
 
         skills_data = request.data.get("skills", [])
 
@@ -681,8 +645,7 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
             except Process.DoesNotExist:
                 continue
 
-        return Response(
-            {
+        return APIResponse.success(data={
                 "message": "技能档案更新成功",
                 "user_id": user_id,
                 "skills_count": skill_profile.skills.count(),

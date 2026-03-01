@@ -17,7 +17,7 @@ from django_filters import CharFilter, FilterSet, NumberFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from workorder.response import APIResponse
 
 from ..export_utils import export_tasks, export_work_orders
 from ..models.assets import Artwork, Die

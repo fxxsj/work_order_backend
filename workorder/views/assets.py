@@ -9,7 +9,7 @@ from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from workorder.response import APIResponse
 
 from ..models.assets import (
     Artwork,
@@ -48,19 +48,13 @@ class PlateMakingConfirmMixin:
         from django.db import transaction
 
         if not self.confirm_fk_field:
-            return Response(
-                {"error": "未配置 confirm_fk_field"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            return APIResponse.error("未配置 confirm_fk_field", code=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": "未配置 confirm_fk_field"})
 
         with transaction.atomic():
             asset = self._confirm_select_for_update(pk)
 
             if asset.confirmed:
-                return Response(
-                    {"error": self.confirm_error_message},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return APIResponse.error(self.confirm_error_message, code=status.HTTP_400_BAD_REQUEST, data={"error": self.confirm_error_message})
 
             asset.confirmed = True
             asset.confirmed_by = request.user
@@ -82,7 +76,7 @@ class PlateMakingConfirmMixin:
                     task.work_order_process.check_and_update_status()
 
         serializer = self.get_serializer(asset)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
 
 class ArtworkViewSet(PlateMakingConfirmMixin, BaseViewSet):
@@ -155,7 +149,7 @@ class ArtworkViewSet(PlateMakingConfirmMixin, BaseViewSet):
                 )
 
         serializer = self.get_serializer(new_artwork)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
 
     def get_queryset(self):
         """优化查询性能：预加载关联数据"""

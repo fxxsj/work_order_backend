@@ -235,4 +235,4 @@ class TestAutoDispatchWorkflow:
 
         assert response.status_code == status.HTTP_200_OK
         # Should return at least the active rule
-        assert response.data['count'] >= 1
+        assert response.data['data']['count'] >= 1

@@ -63,7 +63,7 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
 
         # 应该只看到客户1的施工单
         self.assertEqual(response.status_code, 200)
-        workorder_ids = [wo['id'] for wo in response.data['results']]
+        workorder_ids = [wo['id'] for wo in response.data['data']['results']]
         self.assertIn(self.wo1.id, workorder_ids)
         self.assertNotIn(self.wo2.id, workorder_ids)
 
@@ -169,7 +169,7 @@ class WorkOrderTaskPermissionTest(APITestCaseMixin, TestCase):
         # 可以查看自己的任务列表
         response = self.api_get('/api/workorder-tasks/', user=self.operator1)
         self.assertEqual(response.status_code, 200)
-        task_ids = [t['id'] for t in response.data['results']]
+        task_ids = [t['id'] for t in response.data['data']['results']]
         self.assertIn(task1.id, task_ids)
         self.assertNotIn(task2.id, task_ids)
 
@@ -353,8 +353,8 @@ class APIAuthenticationTest(TestCase):
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
-        self.assertIn('id', response.data)
-        self.assertEqual(response.data['username'], user.username)
+        self.assertIn('id', response.data['data'])
+        self.assertEqual(response.data['data']['username'], user.username)
 
     def test_login_wrong_password(self):
         """测试密码错误"""
@@ -377,7 +377,7 @@ class APIAuthenticationTest(TestCase):
             'username': user.username,
             'password': 'testpass123'
         })
-        token = login_response.data['token']
+        token = login_response.data['data']['token']
 
         # 登出（使用 token 认证）
         response = self.client.post('/api/auth/logout/', HTTP_AUTHORIZATION=f'Token {token}')
@@ -394,12 +394,12 @@ class APIAuthenticationTest(TestCase):
             'username': user.username,
             'password': 'testpass123'
         })
-        token = login_response.data['token']
+        token = login_response.data['data']['token']
 
         # 获取当前用户（使用 token 认证）
         response = self.client.get('/api/auth/user/', HTTP_AUTHORIZATION=f'Token {token}')
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['id'], user.id)
-        self.assertEqual(response.data['username'], user.username)
+        self.assertEqual(response.data['data']['id'], user.id)
+        self.assertEqual(response.data['data']['username'], user.username)

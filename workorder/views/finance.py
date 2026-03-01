@@ -15,7 +15,7 @@ from django.db.models import Count, DecimalField, F, Q, Sum
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from workorder.response import APIResponse
 
 from workorder.models import (
     CostCenter,
@@ -120,10 +120,12 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
         try:
             cost.auto_calculate_material_cost()
             serializer = self.get_serializer(cost)
-            return Response({"message": "材料成本计算成功", "data": serializer.data})
+            return APIResponse.success(data={"message": "材料成本计算成功", "data": serializer.data})
         except Exception as e:
-            return Response(
-                {"error": f"计算失败: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST
+            return APIResponse.error(
+                f"计算失败: {str(e)}",
+                code=status.HTTP_400_BAD_REQUEST,
+                data={"error": f"计算失败: {str(e)}"},
             )
 
     @action(detail=True, methods=["post"])
@@ -134,10 +136,12 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
         try:
             cost.calculate_total_cost()
             serializer = self.get_serializer(cost)
-            return Response({"message": "总成本计算成功", "data": serializer.data})
+            return APIResponse.success(data={"message": "总成本计算成功", "data": serializer.data})
         except Exception as e:
-            return Response(
-                {"error": f"计算失败: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST
+            return APIResponse.error(
+                f"计算失败: {str(e)}",
+                code=status.HTTP_400_BAD_REQUEST,
+                data={"error": f"计算失败: {str(e)}"},
             )
 
     @action(detail=False, methods=["get"])
@@ -161,7 +165,7 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
             total_variance=Sum("variance"),
         )
 
-        return Response(stats)
+        return APIResponse.success(data=stats)
 
 
 class InvoiceViewSet(viewsets.ModelViewSet):
@@ -223,10 +227,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         invoice = self.get_object()
 
         if invoice.status != "draft":
-            return Response(
-                {"error": "只有草稿状态的发票可以提交"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("只有草稿状态的发票可以提交", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有草稿状态的发票可以提交"})
 
         invoice.status = "issued"
         invoice.submitted_by = request.user
@@ -234,7 +235,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         invoice.save()
 
         serializer = self.get_serializer(invoice)
-        return Response({"message": "发票提交成功", "data": serializer.data})
+        return APIResponse.success(data={"message": "发票提交成功", "data": serializer.data})
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
@@ -242,10 +243,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         invoice = self.get_object()
 
         if invoice.status != "issued":
-            return Response(
-                {"error": "只有已开具状态的发票可以审核"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("只有已开具状态的发票可以审核", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已开具状态的发票可以审核"})
 
         # 获取审核意见
         approval_comment = request.data.get("approval_comment")
@@ -262,7 +260,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         invoice.save()
 
         serializer = self.get_serializer(invoice)
-        return Response({"message": "发票审核成功", "data": serializer.data})
+        return APIResponse.success(data={"message": "发票审核成功", "data": serializer.data})
 
     @action(detail=False, methods=["get"])
     def summary(self, request):
@@ -281,7 +279,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             queryset.values("status").annotate(count=Count("id")).order_by("status")
         )
 
-        return Response({"summary": summary, "by_status": list(status_stats)})
+        return APIResponse.success(data={"summary": summary, "by_status": list(status_stats)})
 
 
 class PaymentViewSet(viewsets.ModelViewSet):
@@ -352,7 +350,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
             .order_by("payment_method")
         )
 
-        return Response({"summary": summary, "by_method": list(method_stats)})
+        return APIResponse.success(data={"summary": summary, "by_method": list(method_stats)})
 
 
 class PaymentPlanViewSet(viewsets.ModelViewSet):
@@ -387,7 +385,7 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
         plan.update_status()
 
         serializer = self.get_serializer(plan)
-        return Response({"message": "状态更新成功", "data": serializer.data})
+        return APIResponse.success(data={"message": "状态更新成功", "data": serializer.data})
 
 
 class StatementViewSet(viewsets.ModelViewSet):
@@ -455,10 +453,7 @@ class StatementViewSet(viewsets.ModelViewSet):
         statement = self.get_object()
 
         if statement.status not in ["draft", "sent"]:
-            return Response(
-                {"error": "只有草稿或已发送状态的对账单可以确认"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("只有草稿或已发送状态的对账单可以确认", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有草稿或已发送状态的对账单可以确认"})
 
         # 获取确认信息
         confirmed = request.data.get("confirmed", True)
@@ -478,7 +473,7 @@ class StatementViewSet(viewsets.ModelViewSet):
         statement.save()
 
         serializer = self.get_serializer(statement)
-        return Response({"message": "对账单确认成功", "data": serializer.data})
+        return APIResponse.success(data={"message": "对账单确认成功", "data": serializer.data})
 
     @action(detail=False, methods=["get"])
     def generate(self, request):
@@ -489,9 +484,7 @@ class StatementViewSet(viewsets.ModelViewSet):
         period = request.query_params.get("period")
 
         if not period:
-            return Response(
-                {"error": "必须指定对账周期"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("必须指定对账周期", code=status.HTTP_400_BAD_REQUEST, data={"error": "必须指定对账周期"})
 
         # 解析周期 (格式: 2024-01)
         try:
@@ -503,10 +496,7 @@ class StatementViewSet(viewsets.ModelViewSet):
             last_day = monthrange(int(year), int(month))[1]
             end_date = date(int(year), int(month), last_day)
         except:
-            return Response(
-                {"error": "周期格式错误，应为 YYYY-MM"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return APIResponse.error("周期格式错误，应为 YYYY-MM", code=status.HTTP_400_BAD_REQUEST, data={"error": "周期格式错误，应为 YYYY-MM"})
 
         statement_type = None
         opening_balance = 0
@@ -581,14 +571,11 @@ class StatementViewSet(viewsets.ModelViewSet):
             # NOTE: 当前系统未建模“供应商付款”记录，本期贷方暂不计算。
             total_credit = 0
         else:
-            return Response(
-                {"error": "必须指定客户或供应商"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("必须指定客户或供应商", code=status.HTTP_400_BAD_REQUEST, data={"error": "必须指定客户或供应商"})
 
         closing_balance = opening_balance + total_debit - total_credit
 
-        return Response(
-            {
+        return APIResponse.success(data={
                 "statement_type": statement_type,
                 "period": period,
                 "start_date": start_date,
@@ -597,5 +584,4 @@ class StatementViewSet(viewsets.ModelViewSet):
                 "total_debit": total_debit,
                 "total_credit": total_credit,
                 "closing_balance": closing_balance,
-            }
-        )
+            })

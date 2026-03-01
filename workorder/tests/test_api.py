@@ -35,7 +35,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
-        self.assertGreater(len(response.data['results']), 0)
+        self.assertGreater(len(response.data['data']['results']), 0)
 
     def test_create_workorder(self):
         """测试创建施工单"""
@@ -57,7 +57,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
 
         # 应该成功创建
         self.assertEqual(response.status_code, 201)
-        self.assertIn('order_number', response.data)
+        self.assertIn('order_number', response.data['data'])
 
     def test_get_workorder_detail(self):
         """测试获取施工单详情"""
@@ -70,7 +70,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['id'], work_order.id)
+        self.assertEqual(response.data['data']['id'], work_order.id)
 
     def test_update_workorder(self):
         """测试更新施工单"""
@@ -148,8 +148,8 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
 
         # 应该只返回待开始的
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data['results']), 1)
-        self.assertEqual(response.data['results'][0]['status'], 'pending')
+        self.assertEqual(len(response.data['data']['results']), 1)
+        self.assertEqual(response.data['data']['results'][0]['status'], 'pending')
 
     def test_search_by_order_number(self):
         """测试按施工单号搜索"""
@@ -163,7 +163,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
 
         # 应该找到
         self.assertEqual(response.status_code, 200)
-        self.assertGreater(len(response.data['results']), 0)
+        self.assertGreater(len(response.data['data']['results']), 0)
 
 
 class WorkOrderProcessAPITest(APITestCaseMixin, TestCase):
@@ -192,7 +192,7 @@ class WorkOrderProcessAPITest(APITestCaseMixin, TestCase):
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
-        self.assertGreater(len(response.data['results']), 0)
+        self.assertGreater(len(response.data['data']['results']), 0)
 
     def test_start_process(self):
         """测试开始工序"""
@@ -277,7 +277,7 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
-        self.assertGreater(len(response.data['results']), 0)
+        self.assertGreater(len(response.data['data']['results']), 0)
 
     def test_update_task_quantity(self):
         """测试更新任务数量"""

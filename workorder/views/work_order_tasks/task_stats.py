@@ -11,7 +11,7 @@ from django.db.models import Avg, Count, F, Sum
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from workorder.response import APIResponse
 
 from workorder.export_utils import export_tasks
 from workorder.models import WorkOrderTask
@@ -46,9 +46,7 @@ class TaskStatsMixin:
         """导出任务列表到 Excel（P1 优化：添加速率限制）"""
         # 权限检查：需要查看权限
         if not request.user.has_perm("workorder.view_workorder"):
-            return Response(
-                {"error": "您没有权限导出任务数据"}, status=status.HTTP_403_FORBIDDEN
-            )
+            return APIResponse.error("您没有权限导出任务数据", code=status.HTTP_403_FORBIDDEN, data={"error": "您没有权限导出任务数据"})
 
         # 获取过滤后的查询集（使用 get_queryset 确保权限过滤）
         queryset = self.filter_queryset(self.get_queryset())
@@ -172,8 +170,7 @@ class TaskStatsMixin:
                 log_data["operator_name"] = log.operator.username
             results.append(log_data)
 
-        return Response(
-            {
+        return APIResponse.error("您没有权限查看部门工作负载统计", code=status.HTTP_403_FORBIDDEN, data={
                 "results": results,
                 "total": total,
                 "page": page,
@@ -216,7 +213,7 @@ class TaskStatsMixin:
 
         if cached_data is not None:
             logger.info(f"Cache HIT for collaboration stats (key: {cache_key})")
-            return Response(cached_data)
+            return APIResponse.success(data=cached_data)
 
         logger.info(f"Cache MISS for collaboration stats (key: {cache_key})")
 
@@ -428,7 +425,7 @@ class TaskStatsMixin:
         cache.set(cache_key, response_data, self.CACHE_TIMEOUT)
         logger.info(f"Cached collaboration stats (key: {cache_key})")
 
-        return Response(response_data)
+        return APIResponse.success(data=response_data)
 
     @action(detail=False, methods=["get"])
     def department_workload(self, request):
@@ -447,10 +444,7 @@ class TaskStatsMixin:
 
         # 权限检查：只有主管（有 change_workorder 权限的用户）可以访问
         if not request.user.has_perm("workorder.change_workorder"):
-            return Response(
-                {"error": "您没有权限查看部门工作负载统计"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            return APIResponse.error("您没有权限查看部门工作负载统计", code=status.HTTP_400_BAD_REQUEST, data={"error": "您没有权限查看部门工作负载统计"})
 
         # 获取部门ID参数
         department_id = request.query_params.get("department_id")
@@ -465,17 +459,12 @@ class TaskStatsMixin:
             if user_departments.exists():
                 department_id = user_departments.first().id
             else:
-                return Response(
-                    {"error": "未指定部门且用户不属于任何部门"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return APIResponse.error("未指定部门且用户不属于任何部门", code=status.HTTP_400_BAD_REQUEST, data={"error": "未指定部门且用户不属于任何部门"})
 
         try:
             department_id = int(department_id)
         except (ValueError, TypeError):
-            return Response(
-                {"error": "部门ID格式无效"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("部门ID格式无效", code=status.HTTP_400_BAD_REQUEST, data={"error": "部门ID格式无效"})
 
         # 获取部门信息
         try:
@@ -483,7 +472,7 @@ class TaskStatsMixin:
 
             department = Department.objects.get(id=department_id)
         except Department.DoesNotExist:
-            return Response({"error": "部门不存在"}, status=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error("部门不存在", code=status.HTTP_404_NOT_FOUND, data={"error": "部门不存在"})
 
         # Check cache first
         cache_key = f"{self.DEPT_WORKLOAD_CACHE_PREFIX}:{department_id}"
@@ -491,7 +480,7 @@ class TaskStatsMixin:
 
         if cached_data is not None:
             logger.info(f"Cache HIT for department {department_id} workload")
-            return Response(cached_data)
+            return APIResponse.success(data=cached_data)
 
         logger.info(f"Cache MISS for department {department_id} workload")
 
@@ -609,4 +598,4 @@ class TaskStatsMixin:
         cache.set(cache_key, response_data, self.CACHE_TIMEOUT)
         logger.info(f"Cached department workload data for department {department_id}")
 
-        return Response(response_data)
+        return APIResponse.success(data=response_data)

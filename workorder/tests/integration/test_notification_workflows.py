@@ -104,7 +104,7 @@ class TestNotificationWorkflows:
 
         assert response.status_code == status.HTTP_200_OK
         # User1 should only see their notifications
-        assert response.data['count'] >= 3
+        assert response.data['data']['count'] >= 3
 
     def test_mark_notification_as_read(self, api_client):
         """
@@ -163,4 +163,4 @@ class TestNotificationWorkflows:
 
         assert response.status_code == status.HTTP_200_OK
         # Should have at least 5 total notifications
-        assert response.data['count'] >= 5
+        assert response.data['data']['count'] >= 5

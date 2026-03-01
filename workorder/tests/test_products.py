@@ -218,7 +218,7 @@ class ProductAPITest(APITestCase):
         response = self.client.get('/api/products/')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 2)
+        self.assertEqual(len(response.data['data']['results']), 2)
 
     def test_search_products(self):
         """测试搜索产品"""
@@ -232,8 +232,8 @@ class ProductAPITest(APITestCase):
         response = self.client.get('/api/products/?search=印刷')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)
-        self.assertEqual(response.data['results'][0]['name'], '印刷产品A')
+        self.assertEqual(len(response.data['data']['results']), 1)
+        self.assertEqual(response.data['data']['results'][0]['name'], '印刷产品A')
 
     def test_filter_products_by_active(self):
         """测试按启用状态过滤产品"""
@@ -247,7 +247,7 @@ class ProductAPITest(APITestCase):
         response = self.client.get('/api/products/?is_active=true')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(len(response.data['data']['results']), 1)
 
 
 class ProductStockTest(TestCase):
@@ -374,4 +374,4 @@ class ProductMaterialAPITest(APITestCase):
         response = self.client.get(f'/api/product-materials/?product={self.product.id}')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(len(response.data['data']['results']), 1)

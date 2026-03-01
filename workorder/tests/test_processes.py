@@ -166,7 +166,7 @@ class ProcessAPITest(APITestCase):
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertGreater(len(response.data['results']), 0)
+        self.assertGreater(len(response.data['data']['results']), 0)
 
     def test_create_process(self):
         """测试创建工序"""
@@ -179,8 +179,8 @@ class ProcessAPITest(APITestCase):
         response = self.client.post(url, data, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['code'], 'DIE-CUT')
-        self.assertEqual(response.data['name'], '模切')
+        self.assertEqual(response.data['data']['code'], 'DIE-CUT')
+        self.assertEqual(response.data['data']['name'], '模切')
 
     def test_update_process(self):
         """测试更新工序"""
@@ -193,7 +193,7 @@ class ProcessAPITest(APITestCase):
         response = self.client.put(url, data, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['name'], '印刷工序')
+        self.assertEqual(response.data['data']['name'], '印刷工序')
 
     def test_delete_builtin_process(self):
         """测试不能删除内置工序"""
@@ -207,7 +207,7 @@ class ProcessAPITest(APITestCase):
         response = self.client.delete(url)
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('error', response.data)
+        self.assertIn('message', response.data)
 
     def test_batch_update_active(self):
         """测试批量更新启用状态"""
@@ -225,7 +225,7 @@ class ProcessAPITest(APITestCase):
         response = self.client.post(url, data, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['updated_count'], 2)
+        self.assertEqual(response.data['data']['updated_count'], 2)
 
         # 验证状态已更新
         self.process.refresh_from_db()
@@ -248,7 +248,7 @@ class ProcessAPITest(APITestCase):
         response = self.client.post(url, data, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('error', response.data)
+        self.assertIn('message', response.data)
 
     def test_filter_by_is_active(self):
         """测试按启用状态过滤"""
@@ -259,7 +259,7 @@ class ProcessAPITest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # 所有结果都应该 is_active=True
-        for result in response.data['results']:
+        for result in response.data['data']['results']:
             self.assertTrue(result['is_active'])
 
     def test_search_by_name(self):
@@ -268,8 +268,8 @@ class ProcessAPITest(APITestCase):
         response = self.client.get(url, {'search': '印刷'})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertGreater(len(response.data['results']), 0)
-        self.assertIn('印刷', response.data['results'][0]['name'])
+        self.assertGreater(len(response.data['data']['results']), 0)
+        self.assertIn('印刷', response.data['data']['results'][0]['name'])
 
 
 class ProcessPermissionTest(APITestCase):
