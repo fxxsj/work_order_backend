@@ -33,8 +33,6 @@ def custom_exception_handler(exc, context):
     if response is not None:
         # DRF 异常（如 APIException）
         message = str(exc.detail) if hasattr(exc, 'detail') else str(exc)
-        code = getattr(exc, 'default_code', 'error')
-
         if response.status_code == 400 and hasattr(response.data, 'items'):
             derived_message = _extract_first_error_message(response.data)
             if derived_message:
@@ -44,33 +42,16 @@ def custom_exception_handler(exc, context):
             'success': False,
             'code': response.status_code,
             'message': message,
-            'errors': {
-                'code': code,
-            },
+            'errors': response.data if hasattr(response.data, 'items') else {'detail': response.data},
             'data': None,
             'timestamp': timezone.now().isoformat(),
         }
-
-        # 如果有详细信息，添加到响应中
-        if hasattr(response.data, 'items'):
-            details = {}
-            for key, value in response.data.items():
-                if isinstance(value, list):
-                    details[key] = value
-                elif isinstance(value, str):
-                    details[key] = [value]
-                else:
-                    details[key] = [str(value)]
-
-            if details:
-                custom_response_data['errors']['details'] = details
 
         response.data = custom_response_data
 
         # 记录错误日志
         logger.error(
-            f"API Error: {custom_response_data['errors']['code']} - "
-            f"{custom_response_data['message']}",
+            f"API Error: {response.status_code} - {custom_response_data['message']}",
             extra={
                 'status_code': response.status_code,
                 'path': context['request'].path,
