@@ -34,6 +34,12 @@ def custom_exception_handler(exc, context):
         # DRF 异常（如 APIException）
         message = str(exc.detail) if hasattr(exc, 'detail') else str(exc)
         code = getattr(exc, 'default_code', 'error')
+
+        if response.status_code == 400 and hasattr(response.data, 'items'):
+            derived_message = _extract_first_error_message(response.data)
+            if derived_message:
+                message = derived_message
+
         custom_response_data = {
             'success': False,
             'code': response.status_code,
@@ -115,6 +121,28 @@ def custom_exception_handler(exc, context):
         )
 
     return response
+
+
+def _extract_first_error_message(data):
+    if not isinstance(data, dict):
+        return None
+
+    for key, value in data.items():
+        if isinstance(value, list) and value:
+            return f"{key}: {value[0]}"
+        if isinstance(value, str) and value:
+            return f"{key}: {value}"
+        if isinstance(value, dict):
+            nested = _extract_first_error_message(value)
+            if nested:
+                return f"{key}: {nested}"
+
+    if 'detail' in data and isinstance(data['detail'], str):
+        return data['detail']
+    if 'non_field_errors' in data and isinstance(data['non_field_errors'], list):
+        if data['non_field_errors']:
+            return str(data['non_field_errors'][0])
+    return None
 
 
 class ErrorHandler:

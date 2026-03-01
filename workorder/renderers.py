@@ -37,6 +37,9 @@ class StandardJSONRenderer(JSONRenderer):
                 message = str(data)
                 errors = {'detail': data}
 
+            if not message and isinstance(data, dict):
+                message = _extract_first_error_message(data)
+
             if not message:
                 message = '请求失败'
 
@@ -64,3 +67,25 @@ class StandardJSONRenderer(JSONRenderer):
             'timestamp': timestamp,
         }
         return super().render(payload, accepted_media_type, renderer_context)
+
+
+def _extract_first_error_message(data):
+    if not isinstance(data, dict):
+        return None
+
+    for key, value in data.items():
+        if isinstance(value, list) and value:
+            return f"{key}: {value[0]}"
+        if isinstance(value, str) and value:
+            return f"{key}: {value}"
+        if isinstance(value, dict):
+            nested = _extract_first_error_message(value)
+            if nested:
+                return f"{key}: {nested}"
+
+    if 'detail' in data and isinstance(data['detail'], str):
+        return data['detail']
+    if 'non_field_errors' in data and isinstance(data['non_field_errors'], list):
+        if data['non_field_errors']:
+            return str(data['non_field_errors'][0])
+    return None
