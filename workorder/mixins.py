@@ -6,6 +6,7 @@
 
 from django.db import transaction
 from rest_framework import status
+from workorder.constants import ErrorCodes
 from workorder.exceptions import BusinessLogicError
 from workorder.response import APIResponse
 import logging
@@ -81,7 +82,7 @@ class OptimisticLockMixin:
                         'current_version': current_version,
                         'your_version': int(expected_version),
                     },
-                    errors={'code': 'VERSION_CONFLICT'},
+                    errors={'code': ErrorCodes.VERSION_CONFLICT.value},
                 )
 
         return None

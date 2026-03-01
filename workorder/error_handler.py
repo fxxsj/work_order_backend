@@ -9,6 +9,7 @@ import traceback
 from rest_framework.views import exception_handler
 from django.utils import timezone
 from django.conf import settings
+from workorder.constants import ErrorCodes
 from workorder.response import APIResponse
 
 logger = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ def custom_exception_handler(exc, context):
             'code': 500,
             'message': error_message,
             'errors': {
-                'code': 'INTERNAL_ERROR',
+                'code': ErrorCodes.INTERNAL_ERROR.value,
             },
             'data': None,
             'timestamp': timezone.now().isoformat(),
@@ -145,7 +146,7 @@ class ErrorHandler:
         Returns:
             Response: 错误响应
         """
-        errors = {'code': 'VALIDATION_ERROR'}
+        errors = {'code': ErrorCodes.VALIDATION_ERROR.value}
         if details:
             errors['details'] = details
         return APIResponse.error(message=message, code=400, errors=errors, data=None)
@@ -164,7 +165,7 @@ class ErrorHandler:
         return APIResponse.error(
             message=message,
             code=403,
-            errors={'code': 'PERMISSION_DENIED'},
+            errors={'code': ErrorCodes.PERMISSION_DENIED.value},
             data=None,
         )
 
@@ -182,7 +183,7 @@ class ErrorHandler:
         return APIResponse.error(
             message=message,
             code=404,
-            errors={'code': 'NOT_FOUND'},
+            errors={'code': ErrorCodes.NOT_FOUND.value},
             data=None,
         )
 
@@ -198,7 +199,7 @@ class ErrorHandler:
         Returns:
             Response: 错误响应
         """
-        errors = {'code': 'BUSINESS_LOGIC_ERROR'}
+        errors = {'code': ErrorCodes.BUSINESS_LOGIC_ERROR.value}
         if details:
             errors['details'] = details
         return APIResponse.error(

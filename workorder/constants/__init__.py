@@ -58,6 +58,9 @@ from .permissions import (
     SUPPLIER,
 )
 
+# 错误码常量
+from .error_codes import ErrorCodes
+
 __all__ = [
     # 状态常量
     'WorkOrderStatus',
@@ -90,4 +93,6 @@ __all__ = [
     'PRODUCT',
     'MATERIAL',
     'SUPPLIER',
+    # 错误码常量
+    'ErrorCodes',
 ]
