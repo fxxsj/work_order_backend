@@ -8,6 +8,31 @@ from locust import HttpUser, task, between, events
 from locust.runners import MasterRunner
 from locust_config import TARGET_HOST, TEST_USERS
 
+def _unwrap_response_data(response):
+    """Extract payload from APIResponse wrapper if present."""
+    try:
+        payload = response.json()
+    except Exception:
+        return None
+    if isinstance(payload, dict) and 'data' in payload:
+        return payload.get('data')
+    return payload
+
+def _extract_results(payload):
+    """Handle list payloads from various pagination formats."""
+    if payload is None:
+        return []
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        if isinstance(payload.get('results'), list):
+            return payload['results']
+        if isinstance(payload.get('items'), list):
+            return payload['items']
+        if isinstance(payload.get('data'), list):
+            return payload['data']
+    return []
+
 class CommonBehaviorMixin:
     """Common behaviors shared across user types"""
 
@@ -26,18 +51,21 @@ class CommonBehaviorMixin:
         }, name='[Auth] Login')
 
         if response.status_code == 200:
-            data = response.json()
-            if 'token' in data:
-                self.token = data['token']
-                self.client.headers.update({
-                    'Authorization': f'Token {self.token}'
-                })
-            elif 'access' in data:
-                # JWT token format
-                self.token = data['access']
-                self.client.headers.update({
-                    'Authorization': f'Bearer {self.token}'
-                })
+            data = _unwrap_response_data(response)
+            if isinstance(data, dict):
+                token = data.get('token')
+                access = data.get('access')
+                if token:
+                    self.token = token
+                    self.client.headers.update({
+                        'Authorization': f'Token {self.token}'
+                    })
+                elif access:
+                    # JWT token format
+                    self.token = access
+                    self.client.headers.update({
+                        'Authorization': f'Bearer {self.token}'
+                    })
             self._load_user_ids()
 
     def _load_user_ids(self):
@@ -48,25 +76,25 @@ class CommonBehaviorMixin:
         if response.status_code != 200:
             self.user_ids = {}
             return
-        users = response.json() if isinstance(response.json(), list) else []
+        users = _extract_results(_unwrap_response_data(response))
         self.user_ids = {user.get('username'): user.get('id') for user in users}
 
     def _get_random_task_id(self):
         """Get a random task ID from the list"""
         response = self.client.get('/api/workorder-tasks/?page_size=1', name='[Tasks] Get random ID')
         if response.status_code == 200:
-            results = response.json().get('results', [])
+            results = _extract_results(_unwrap_response_data(response))
             if results:
-                return results[0]['id']
+                return results[0].get('id')
         return None
 
     def _get_random_workorder_id(self):
         """Get a random work order ID"""
         response = self.client.get('/api/workorders/?page_size=1', name='[WorkOrders] Get random ID')
         if response.status_code == 200:
-            results = response.json().get('results', [])
+            results = _extract_results(_unwrap_response_data(response))
             if results:
-                return results[0]['id']
+                return results[0].get('id')
         return None
 
 class WorkOrderUser(CommonBehaviorMixin, HttpUser):
@@ -146,9 +174,9 @@ class SupervisorUser(CommonBehaviorMixin, HttpUser):
         }, name='[Supervisor] Get Pending Task')
 
         if response.status_code == 200:
-            tasks = response.json().get('results', [])
+            tasks = _extract_results(_unwrap_response_data(response))
             if tasks:
-                task_id = tasks[0]['id']
+                task_id = tasks[0].get('id')
                 # Assign to random operator
                 operator_id = None
                 if hasattr(self, "user_ids"):
@@ -194,9 +222,8 @@ class OperatorUser(CommonBehaviorMixin, HttpUser):
         }, name='[Operator] Get Claimable')
 
         if response.status_code == 200:
-            payload = response.json()
-            tasks = payload.get('results') if isinstance(payload, dict) else []
-            if tasks and isinstance(tasks, list):
+            tasks = _extract_results(_unwrap_response_data(response))
+            if tasks:
                 task_id = tasks[0].get('id')
                 if task_id:
                     self.client.post(f'/api/workorder-tasks/{task_id}/claim/', name='[Operator] Claim Task')
