@@ -16,6 +16,28 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from workorder.response import APIResponse
+from workorder.docs.inventory import (
+    delivery_item_docs,
+    delivery_order_docs,
+    delivery_receive_docs,
+    delivery_reject_docs,
+    delivery_ship_docs,
+    delivery_summary_docs,
+    product_stock_adjust_docs,
+    product_stock_docs,
+    product_stock_expired_docs,
+    product_stock_expiring_docs,
+    product_stock_low_docs,
+    product_stock_summary_docs,
+    quality_complete_docs,
+    quality_inspection_docs,
+    quality_summary_docs,
+    stock_in_approve_docs,
+    stock_in_docs,
+    stock_in_submit_docs,
+    stock_out_approve_docs,
+    stock_out_docs,
+)
 
 from workorder.models import (
     DeliveryItem,
@@ -45,6 +67,7 @@ from workorder.serializers.inventory import (
 )
 
 
+@product_stock_docs
 class ProductStockViewSet(viewsets.ModelViewSet):
     """成品库存视图集"""
 
@@ -92,6 +115,7 @@ class ProductStockViewSet(viewsets.ModelViewSet):
         return queryset
 
     @action(detail=False, methods=["get"])
+    @product_stock_low_docs
     def low_stock(self, request):
         """库存预警 - 使用模型的 min_stock_level 字段"""
         # 查询低库存产品（可用数量 <= 最小库存）
@@ -107,6 +131,7 @@ class ProductStockViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data={"count": low_stocks.count(), "results": serializer.data})
 
     @action(detail=False, methods=["get"])
+    @product_stock_expired_docs
     def expired(self, request):
         """已过期库存"""
         # 查询已过期的库存
@@ -120,6 +145,7 @@ class ProductStockViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data={"count": expired_stocks.count(), "results": serializer.data})
 
     @action(detail=False, methods=["get"])
+    @product_stock_expiring_docs
     def expiring_soon(self, request):
         """即将过期库存"""
         from datetime import timedelta
@@ -147,6 +173,7 @@ class ProductStockViewSet(viewsets.ModelViewSet):
         )
 
     @action(detail=False, methods=["get"])
+    @product_stock_summary_docs
     def summary(self, request):
         """库存汇总 - 匹配前端期望格式"""
         queryset = self.get_queryset()
@@ -178,6 +205,7 @@ class ProductStockViewSet(viewsets.ModelViewSet):
             })
 
     @action(detail=True, methods=["post"])
+    @product_stock_adjust_docs
     def adjust(self, request, pk=None):
         """库存调整"""
         stock = self.get_object()
@@ -220,6 +248,7 @@ class ProductStockViewSet(viewsets.ModelViewSet):
         )
 
 
+@stock_in_docs
 class StockInViewSet(viewsets.ModelViewSet):
     """入库单视图集"""
 
@@ -254,6 +283,7 @@ class StockInViewSet(viewsets.ModelViewSet):
         return queryset
 
     @action(detail=True, methods=["post"])
+    @stock_in_submit_docs
     def submit(self, request, pk=None):
         """提交入库单"""
         stock_in = self.get_object()
@@ -270,6 +300,7 @@ class StockInViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data=serializer.data, message="入库单提交成功")
 
     @action(detail=True, methods=["post"])
+    @stock_in_approve_docs
     def approve(self, request, pk=None):
         """审核入库单"""
         stock_in = self.get_object()
@@ -305,6 +336,7 @@ class StockInViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data=serializer.data, message="入库单审核成功")
 
 
+@stock_out_docs
 class StockOutViewSet(viewsets.ModelViewSet):
     """出库单视图集"""
 
@@ -330,6 +362,7 @@ class StockOutViewSet(viewsets.ModelViewSet):
         return queryset
 
     @action(detail=True, methods=["post"])
+    @stock_out_approve_docs
     def approve(self, request, pk=None):
         """审核出库单"""
         stock_out = self.get_object()
@@ -422,6 +455,7 @@ class StockOutViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data=serializer.data, message="出库单审核成功")
 
 
+@delivery_item_docs
 class DeliveryItemViewSet(viewsets.ModelViewSet):
     """发货明细视图集"""
 
@@ -440,6 +474,7 @@ class DeliveryItemViewSet(viewsets.ModelViewSet):
         return queryset
 
 
+@delivery_order_docs
 class DeliveryOrderViewSet(viewsets.ModelViewSet):
     """发货单视图集"""
 
@@ -495,6 +530,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         return queryset
 
     @action(detail=True, methods=["post"])
+    @delivery_ship_docs
     def ship(self, request, pk=None):
         """发货 - 包含库存扣减逻辑"""
         delivery_order = self.get_object()
@@ -583,6 +619,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
             sales_order.save(update_fields=["status", "actual_delivery_date"])
 
     @action(detail=True, methods=["post"])
+    @delivery_receive_docs
     def receive(self, request, pk=None):
         """签收"""
         delivery_order = self.get_object()
@@ -609,6 +646,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data=serializer.data, message="签收成功")
 
     @action(detail=True, methods=["post"])
+    @delivery_reject_docs
     def reject(self, request, pk=None):
         """拒收 - 库存回退"""
         delivery_order = self.get_object()
@@ -671,6 +709,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data=serializer.data, message="拒收处理成功，库存已回退")
 
     @action(detail=False, methods=["get"])
+    @delivery_summary_docs
     def summary(self, request):
         """发货汇总"""
         queryset = self.get_queryset()
@@ -693,6 +732,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data={"summary": summary, "by_status": list(status_stats)})
 
 
+@quality_inspection_docs
 class QualityInspectionViewSet(viewsets.ModelViewSet):
     """质量检验视图集"""
 
@@ -743,6 +783,7 @@ class QualityInspectionViewSet(viewsets.ModelViewSet):
         return queryset
 
     @action(detail=True, methods=["post"])
+    @quality_complete_docs
     def complete(self, request, pk=None):
         """完成检验"""
         inspection = self.get_object()
@@ -770,6 +811,7 @@ class QualityInspectionViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data=serializer.data, message="检验完成")
 
     @action(detail=False, methods=["get"])
+    @quality_summary_docs
     def summary(self, request):
         """质检汇总"""
         queryset = self.get_queryset()

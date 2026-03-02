@@ -16,6 +16,25 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from workorder.response import APIResponse
+from workorder.docs.finance import (
+    cost_center_docs,
+    cost_item_docs,
+    invoice_approve_docs,
+    invoice_docs,
+    invoice_submit_docs,
+    invoice_summary_docs,
+    payment_docs,
+    payment_plan_docs,
+    payment_plan_update_docs,
+    payment_summary_docs,
+    production_cost_docs,
+    production_cost_material_docs,
+    production_cost_stats_docs,
+    production_cost_total_docs,
+    statement_confirm_docs,
+    statement_docs,
+    statement_generate_docs,
+)
 
 from workorder.models import (
     CostCenter,
@@ -43,6 +62,7 @@ from workorder.serializers.finance import (
 )
 
 
+@cost_center_docs
 class CostCenterViewSet(viewsets.ModelViewSet):
     """成本中心视图集"""
 
@@ -68,6 +88,7 @@ class CostCenterViewSet(viewsets.ModelViewSet):
         return queryset
 
 
+@cost_item_docs
 class CostItemViewSet(viewsets.ModelViewSet):
     """成本项目视图集"""
 
@@ -98,6 +119,7 @@ class CostItemViewSet(viewsets.ModelViewSet):
         return queryset
 
 
+@production_cost_docs
 class ProductionCostViewSet(viewsets.ModelViewSet):
     """生产成本视图集"""
 
@@ -113,6 +135,7 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
         return ProductionCostSerializer
 
     @action(detail=True, methods=["post"])
+    @production_cost_material_docs
     def calculate_material(self, request, pk=None):
         """自动计算材料成本"""
         cost = self.get_object()
@@ -128,6 +151,7 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
             )
 
     @action(detail=True, methods=["post"])
+    @production_cost_total_docs
     def calculate_total(self, request, pk=None):
         """计算总成本和差异"""
         cost = self.get_object()
@@ -143,6 +167,7 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
             )
 
     @action(detail=False, methods=["get"])
+    @production_cost_stats_docs
     def stats(self, request):
         """成本统计"""
         # 获取查询参数
@@ -166,6 +191,7 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data=stats)
 
 
+@invoice_docs
 class InvoiceViewSet(viewsets.ModelViewSet):
     """发票视图集"""
 
@@ -220,6 +246,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         return queryset
 
     @action(detail=True, methods=["post"])
+    @invoice_submit_docs
     def submit(self, request, pk=None):
         """提交发票"""
         invoice = self.get_object()
@@ -236,6 +263,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data=serializer.data, message="发票提交成功")
 
     @action(detail=True, methods=["post"])
+    @invoice_approve_docs
     def approve(self, request, pk=None):
         """审核发票"""
         invoice = self.get_object()
@@ -261,6 +289,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data=serializer.data, message="发票审核成功")
 
     @action(detail=False, methods=["get"])
+    @invoice_summary_docs
     def summary(self, request):
         """发票汇总"""
         queryset = self.get_queryset()
@@ -280,6 +309,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data={"summary": summary, "by_status": list(status_stats)})
 
 
+@payment_docs
 class PaymentViewSet(viewsets.ModelViewSet):
     """收款记录视图集"""
 
@@ -329,6 +359,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
         return queryset
 
     @action(detail=False, methods=["get"])
+    @payment_summary_docs
     def summary(self, request):
         """收款汇总"""
         queryset = self.get_queryset()
@@ -351,6 +382,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data={"summary": summary, "by_method": list(method_stats)})
 
 
+@payment_plan_docs
 class PaymentPlanViewSet(viewsets.ModelViewSet):
     """收款计划视图集"""
 
@@ -377,6 +409,7 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
         return queryset
 
     @action(detail=True, methods=["post"])
+    @payment_plan_update_docs
     def update_status(self, request, pk=None):
         """更新收款状态"""
         plan = self.get_object()
@@ -386,6 +419,7 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data=serializer.data, message="状态更新成功")
 
 
+@statement_docs
 class StatementViewSet(viewsets.ModelViewSet):
     """对账单视图集"""
 
@@ -446,6 +480,7 @@ class StatementViewSet(viewsets.ModelViewSet):
         return queryset
 
     @action(detail=True, methods=["post"])
+    @statement_confirm_docs
     def confirm(self, request, pk=None):
         """确认对账单"""
         statement = self.get_object()
@@ -474,6 +509,7 @@ class StatementViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data=serializer.data, message="对账单确认成功")
 
     @action(detail=False, methods=["get"])
+    @statement_generate_docs
     def generate(self, request):
         """生成对账单"""
         # 获取参数

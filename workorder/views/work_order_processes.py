@@ -56,8 +56,16 @@ from ..throttling import ApprovalRateThrottle, CreateRateThrottle, ExportRateThr
 from ..services.service_errors import ServiceError
 from ..services.work_order_process_service import WorkOrderProcessService
 from .base_viewsets import BaseViewSet
+from workorder.docs.work_order_processes import (
+    process_bulk_create_docs,
+    process_complete_docs,
+    process_reassign_docs,
+    process_start_docs,
+    work_order_process_docs,
+)
 
 
+@work_order_process_docs
 class WorkOrderProcessViewSet(BaseViewSet):
     """施工单工序视图集"""
 
@@ -79,6 +87,7 @@ class WorkOrderProcessViewSet(BaseViewSet):
         return WorkOrderProcessSerializer
 
     @action(detail=True, methods=["post"])
+    @process_start_docs
     def start(self, request, pk=None):
         """开始工序（生成任务）"""
         process = self.get_object()
@@ -96,6 +105,7 @@ class WorkOrderProcessViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
+    @process_complete_docs
     def complete(self, request, pk=None):
         """完成工序
 
@@ -127,6 +137,7 @@ class WorkOrderProcessViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=False, methods=["post"])
+    @process_bulk_create_docs
     def batch_start(self, request):
         """批量开始工序
 
@@ -151,6 +162,7 @@ class WorkOrderProcessViewSet(BaseViewSet):
         return APIResponse.success(data=result)
 
     @action(detail=True, methods=["post"])
+    @process_reassign_docs
     def reassign_tasks(self, request, pk=None):
         """批量重新分派工序的所有任务到新部门/操作员
 

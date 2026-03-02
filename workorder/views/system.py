@@ -10,12 +10,23 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from workorder.response import APIResponse
+from workorder.docs.system import (
+    notification_docs,
+    notification_mark_all_docs,
+    notification_mark_read_docs,
+    notification_unread_docs,
+    task_assignment_global_state_docs,
+    task_assignment_preview_docs,
+    task_assignment_rule_docs,
+    task_assignment_set_state_docs,
+)
 
 from ..models.system import Notification, TaskAssignmentRule
 from ..serializers.system import NotificationSerializer, TaskAssignmentRuleSerializer
 from .base_viewsets import BaseViewSet
 
 
+@notification_docs
 class NotificationViewSet(viewsets.ModelViewSet):
     """通知视图集"""
 
@@ -44,6 +55,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
         )
 
     @action(detail=True, methods=["post"])
+    @notification_mark_read_docs
     def mark_read(self, request, pk=None):
         """标记通知为已读"""
         notification = self.get_object()
@@ -52,6 +64,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=False, methods=["post"])
+    @notification_mark_all_docs
     def mark_all_read(self, request):
         """标记所有通知为已读"""
         count = Notification.objects.filter(
@@ -60,6 +73,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
         return APIResponse.success(message=f"已标记 {count} 条通知为已读")
 
     @action(detail=False, methods=["get"])
+    @notification_unread_docs
     def unread_count(self, request):
         """获取未读通知数量"""
         count = Notification.objects.filter(
@@ -71,6 +85,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
 # ==================== 采购管理视图集 ====================
 
 
+@task_assignment_rule_docs
 class TaskAssignmentRuleViewSet(BaseViewSet):
     """任务分派规则视图集"""
 
@@ -88,6 +103,7 @@ class TaskAssignmentRuleViewSet(BaseViewSet):
     ordering = ["process", "-priority", "department"]
 
     @action(detail=False, methods=["get"])
+    @task_assignment_preview_docs
     def preview(self, request):
         """生成分派预览
 
@@ -109,6 +125,7 @@ class TaskAssignmentRuleViewSet(BaseViewSet):
         )
 
     @action(detail=False, methods=["get"])
+    @task_assignment_global_state_docs
     def global_state(self, request):
         """获取全局自动分派启用状态"""
         from ..services.dispatch_service import AutoDispatchService
@@ -117,6 +134,7 @@ class TaskAssignmentRuleViewSet(BaseViewSet):
         return APIResponse.success(data={"enabled": enabled})
 
     @action(detail=False, methods=["post"])
+    @task_assignment_set_state_docs
     def set_global_state(self, request):
         """设置全局自动分派启用状态
 

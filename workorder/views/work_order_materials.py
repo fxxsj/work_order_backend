@@ -18,6 +18,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from workorder.response import APIResponse
+from workorder.docs.work_orders_items import work_order_material_docs
 
 from ..export_utils import export_tasks, export_work_orders
 from ..models.assets import Artwork, Die
@@ -56,6 +57,7 @@ from ..serializers.core import (
 from ..throttling import ApprovalRateThrottle, CreateRateThrottle, ExportRateThrottle
 
 
+@work_order_material_docs
 class WorkOrderMaterialViewSet(viewsets.ModelViewSet):
     """施工单物料视图集"""
 
