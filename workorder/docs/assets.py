@@ -2,7 +2,12 @@
 资产相关视图集的 OpenAPI 文档定义。
 """
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
 
 from workorder.schema import standard_error_response, standard_success_response
 from workorder.serializers.assets import (
@@ -25,6 +30,33 @@ artwork_docs = extend_schema_view(
             200: OpenApiResponse(
                 response=standard_success_response("ArtworkListResponse"),
                 description="图稿列表",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="图稿分页列表",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "count": 1,
+                                "next": None,
+                                "previous": None,
+                                "results": [
+                                    {
+                                        "id": 5,
+                                        "code": "ART-001",
+                                        "name": "礼盒外观图",
+                                        "version": 1,
+                                        "confirmed": False,
+                                    }
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             )
         },
     ),
@@ -122,6 +154,20 @@ confirm_docs = extend_schema(
         200: OpenApiResponse(
             response=standard_success_response("AssetConfirmResponse"),
             description="确认成功",
+            examples=[
+                OpenApiExample(
+                    name="示例响应",
+                    summary="确认成功返回",
+                    value={
+                        "success": True,
+                        "code": 200,
+                        "message": "操作成功",
+                        "data": {"confirmed": True},
+                        "timestamp": "2026-03-02T09:30:00+08:00",
+                    },
+                    response_only=True,
+                )
+            ],
         ),
         400: OpenApiResponse(
             response=standard_error_response("AssetConfirmBadRequest"),

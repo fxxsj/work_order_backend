@@ -2,7 +2,12 @@
 产品相关视图集的 OpenAPI 文档定义。
 """
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
 
 from workorder.schema import standard_error_response, standard_success_response
 from workorder.serializers.products import (
@@ -21,6 +26,33 @@ product_docs = extend_schema_view(
             200: OpenApiResponse(
                 response=standard_success_response("ProductListResponse"),
                 description="产品列表",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="产品分页列表",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "count": 1,
+                                "next": None,
+                                "previous": None,
+                                "results": [
+                                    {
+                                        "id": 12,
+                                        "code": "PROD-001",
+                                        "name": "礼盒",
+                                        "unit": "件",
+                                        "stock_quantity": "200.00",
+                                    }
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             )
         },
     ),
@@ -45,6 +77,26 @@ product_docs = extend_schema_view(
                     "ProductCreateResponse", ProductSerializer
                 ),
                 description="创建成功",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="创建成功返回",
+                        value={
+                            "success": True,
+                            "code": 201,
+                            "message": "操作成功",
+                            "data": {
+                                "id": 12,
+                                "code": "PROD-001",
+                                "name": "礼盒",
+                                "unit": "件",
+                                "stock_quantity": "0.00",
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             ),
             400: OpenApiResponse(
                 response=standard_error_response("ProductCreateBadRequest"),

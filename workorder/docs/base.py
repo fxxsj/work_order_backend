@@ -2,7 +2,13 @@
 基础数据视图集的 OpenAPI 文档定义。
 """
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view, inline_serializer
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
 from rest_framework import serializers
 
 from workorder.schema import standard_error_response, standard_success_response
@@ -21,6 +27,32 @@ customer_docs = extend_schema_view(
             200: OpenApiResponse(
                 response=standard_success_response("CustomerListResponse"),
                 description="客户列表",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="客户分页列表",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "count": 1,
+                                "next": None,
+                                "previous": None,
+                                "results": [
+                                    {
+                                        "id": 3,
+                                        "name": "示例客户",
+                                        "contact_person": "张三",
+                                        "phone": "13800138000",
+                                    }
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             )
         },
     ),
@@ -81,6 +113,27 @@ department_docs = extend_schema_view(
             200: OpenApiResponse(
                 response=standard_success_response("DepartmentListResponse"),
                 description="部门列表",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="部门分页列表",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "count": 1,
+                                "next": None,
+                                "previous": None,
+                                "results": [
+                                    {"id": 2, "name": "印刷车间", "code": "PRINT"}
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             )
         },
     ),
@@ -165,6 +218,27 @@ process_docs = extend_schema_view(
             200: OpenApiResponse(
                 response=standard_success_response("ProcessListResponse"),
                 description="工序列表",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="工序分页列表",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "count": 1,
+                                "next": None,
+                                "previous": None,
+                                "results": [
+                                    {"id": 5, "name": "印刷", "code": "PRINT"}
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             )
         },
     ),

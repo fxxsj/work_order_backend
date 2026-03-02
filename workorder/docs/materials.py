@@ -2,7 +2,12 @@
 物料相关视图集的 OpenAPI 文档定义。
 """
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
 
 from workorder.schema import standard_error_response, standard_success_response
 from workorder.serializers.materials import (
@@ -27,6 +32,33 @@ material_docs = extend_schema_view(
             200: OpenApiResponse(
                 response=standard_success_response("MaterialListResponse"),
                 description="物料列表",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="物料分页列表",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "count": 1,
+                                "next": None,
+                                "previous": None,
+                                "results": [
+                                    {
+                                        "id": 3,
+                                        "code": "MAT-001",
+                                        "name": "白卡纸",
+                                        "unit": "张",
+                                        "stock_quantity": "500.00",
+                                    }
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             )
         },
     ),
@@ -167,6 +199,34 @@ purchase_order_docs = extend_schema_view(
             200: OpenApiResponse(
                 response=standard_success_response("PurchaseOrderListResponse"),
                 description="采购单列表",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="采购单分页列表",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "count": 1,
+                                "next": None,
+                                "previous": None,
+                                "results": [
+                                    {
+                                        "id": 8,
+                                        "order_number": "PO202603020001",
+                                        "status": "draft",
+                                        "status_display": "草稿",
+                                        "supplier_name": "示例供应商",
+                                        "total_amount": "8000.00",
+                                    }
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             )
         },
     ),
@@ -318,6 +378,19 @@ purchase_order_receive_docs = extend_schema(
     tags=["物料"],
     summary="采购单收货",
     request=PurchaseReceiveRecordCreateSerializer,
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="采购收货",
+            value={
+                "received_date": "2026-03-02",
+                "received_quantity": 500,
+                "inspection_status": "pending",
+                "notes": "到货完好",
+            },
+            request_only=True,
+        )
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("PurchaseOrderReceiveResponse"),

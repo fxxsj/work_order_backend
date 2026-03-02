@@ -3,6 +3,7 @@
 """
 
 from drf_spectacular.utils import (
+    OpenApiExample,
     OpenApiResponse,
     extend_schema,
     extend_schema_view,
@@ -25,6 +26,34 @@ sales_order_docs = extend_schema_view(
             200: OpenApiResponse(
                 response=standard_success_response("SalesOrderListResponse"),
                 description="销售订单列表",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="销售订单分页列表",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "count": 1,
+                                "next": None,
+                                "previous": None,
+                                "results": [
+                                    {
+                                        "id": 15,
+                                        "order_number": "SO202603020001",
+                                        "customer_name": "示例客户",
+                                        "status": "draft",
+                                        "status_display": "草稿",
+                                        "total_amount": "12000.00",
+                                    }
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             )
         },
     ),
@@ -82,6 +111,14 @@ sales_order_approve_docs = extend_schema(
             "approval_comment": serializers.CharField(required=False, allow_blank=True)
         },
     ),
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="审核通过",
+            value={"approval_comment": "价格核对无误"},
+            request_only=True,
+        )
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("SalesOrderApproveResponse"),
@@ -101,6 +138,14 @@ sales_order_reject_docs = extend_schema(
         name="SalesOrderRejectRequest",
         fields={"reason": serializers.CharField()},
     ),
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="拒绝原因",
+            value={"reason": "客户资料不完整"},
+            request_only=True,
+        )
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("SalesOrderRejectResponse"),
@@ -170,6 +215,14 @@ sales_order_update_payment_docs = extend_schema(
             "payment_date": serializers.DateField(required=False),
         },
     ),
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="更新付款信息",
+            value={"paid_amount": "5000.00", "payment_date": "2026-03-02"},
+            request_only=True,
+        )
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("SalesOrderUpdatePaymentResponse"),
