@@ -204,7 +204,7 @@ class ProductAPITest(APITestCase):
         # 删除产品
         response = self.client.delete(f'/api/v1/products/{product.id}/')
 
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(Product.objects.count(), 0)
 
     def test_list_products(self):

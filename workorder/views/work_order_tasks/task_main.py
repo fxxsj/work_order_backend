@@ -83,7 +83,7 @@ logger = logging.getLogger(__name__)
         summary="删除任务",
         description="删除指定的任务。只有草稿状态的任务可以被删除。",
         responses={
-            204: OpenApiResponse(description="删除成功"),
+            200: OpenApiResponse(description="删除成功"),
             400: OpenApiResponse(description="无法删除非草稿任务"),
         },
     ),
@@ -176,7 +176,7 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         response = super().destroy(request, *args, **kwargs)
         if response.status_code == status.HTTP_204_NO_CONTENT:
-            return APIResponse.success(message='删除成功', data=None, code=status.HTTP_204_NO_CONTENT)
+            return APIResponse.success(message='删除成功', data=None, code=status.HTTP_200_OK)
         return self._wrap_response(response)
 
     def get_queryset(self):

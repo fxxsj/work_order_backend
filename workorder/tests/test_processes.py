@@ -313,7 +313,7 @@ class ProcessPermissionTest(APITestCase):
         url = reverse('process-detail', kwargs={'pk': self.process.pk})
         response = self.client.delete(url)
 
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_normal_user_cannot_delete_process(self):
         """测试普通用户不能删除工序"""
