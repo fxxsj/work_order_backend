@@ -12,8 +12,15 @@ from ..serializers.products import (
     ProductSerializer,
 )
 from .base_viewsets import BaseViewSet
+from workorder.docs.products import (
+    product_docs,
+    product_group_docs,
+    product_group_item_docs,
+    product_material_docs,
+)
 
 
+@product_docs
 class ProductViewSet(BaseViewSet):
     """产品视图集"""
 
@@ -31,6 +38,7 @@ class ProductViewSet(BaseViewSet):
         )
 
 
+@product_material_docs
 class ProductMaterialViewSet(BaseViewSet):
     """产品物料视图集"""
 
@@ -41,6 +49,7 @@ class ProductMaterialViewSet(BaseViewSet):
     ordering = ["product", "sort_order"]
 
 
+@product_group_docs
 class ProductGroupViewSet(BaseViewSet):
     """产品组视图集"""
 
@@ -52,6 +61,7 @@ class ProductGroupViewSet(BaseViewSet):
     ordering = ["code"]
 
 
+@product_group_item_docs
 class ProductGroupItemViewSet(BaseViewSet):
     """产品组子项视图集"""
 

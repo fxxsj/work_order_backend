@@ -11,6 +11,29 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, pagination, status
 from rest_framework.decorators import action
 from workorder.response import APIResponse
+from workorder.docs.materials import (
+    material_docs,
+    material_supplier_docs,
+    materials_low_stock_docs,
+    purchase_order_approve_docs,
+    purchase_order_cancel_docs,
+    purchase_order_docs,
+    purchase_order_item_docs,
+    purchase_order_pending_inspections_docs,
+    purchase_order_place_docs,
+    purchase_order_receive_docs,
+    purchase_order_receive_records_docs,
+    purchase_order_reject_docs,
+    purchase_order_submit_docs,
+    purchase_receive_record_docs,
+    receive_confirm_inspection_docs,
+    receive_pending_list_docs,
+    receive_pending_return_docs,
+    receive_pending_stock_docs,
+    receive_return_docs,
+    receive_stock_in_docs,
+    supplier_docs,
+)
 
 from ..models.materials import (
     Material,
@@ -35,6 +58,7 @@ from ..serializers.materials import (
 from .base_viewsets import BaseViewSet
 
 
+@material_docs
 class MaterialViewSet(BaseViewSet):
     """物料视图集（优化版）"""
 
@@ -50,6 +74,7 @@ class MaterialViewSet(BaseViewSet):
         return queryset.select_related("default_supplier")
 
 
+@supplier_docs
 class SupplierViewSet(BaseViewSet):
     """供应商视图集（优化版）"""
 
@@ -69,6 +94,7 @@ class SupplierViewSet(BaseViewSet):
         return queryset
 
 
+@material_supplier_docs
 class MaterialSupplierViewSet(BaseViewSet):
     """物料供应商关联视图集"""
 
@@ -80,6 +106,7 @@ class MaterialSupplierViewSet(BaseViewSet):
     ordering = ["-created_at"]
 
 
+@purchase_order_docs
 class PurchaseOrderViewSet(BaseViewSet):
     """采购单视图集（优化版）"""
 
@@ -140,6 +167,7 @@ class PurchaseOrderViewSet(BaseViewSet):
     # ========== 状态操作 Actions ==========
 
     @action(detail=True, methods=["post"])
+    @purchase_order_submit_docs
     def submit(self, request, pk=None):
         """提交采购单"""
         order = self.get_object()
@@ -153,6 +181,7 @@ class PurchaseOrderViewSet(BaseViewSet):
         return APIResponse.success(message="提交成功")
 
     @action(detail=True, methods=["post"])
+    @purchase_order_approve_docs
     def approve(self, request, pk=None):
         """批准采购单"""
         order = self.get_object()
@@ -166,6 +195,7 @@ class PurchaseOrderViewSet(BaseViewSet):
         return APIResponse.success(message="批准成功")
 
     @action(detail=True, methods=["post"])
+    @purchase_order_reject_docs
     def reject(self, request, pk=None):
         """拒绝采购单"""
         order = self.get_object()
@@ -178,6 +208,7 @@ class PurchaseOrderViewSet(BaseViewSet):
         return APIResponse.success(message="已拒绝，采购单已退回草稿状态")
 
     @action(detail=True, methods=["post"])
+    @purchase_order_place_docs
     def place_order(self, request, pk=None):
         """下单"""
         order = self.get_object()
@@ -194,6 +225,7 @@ class PurchaseOrderViewSet(BaseViewSet):
         return APIResponse.success(message="下单成功")
 
     @action(detail=True, methods=["post"])
+    @purchase_order_receive_docs
     def receive(self, request, pk=None):
         """分批收货（改进版）
 
@@ -265,6 +297,7 @@ class PurchaseOrderViewSet(BaseViewSet):
         )
 
     @action(detail=True, methods=["get"])
+    @purchase_order_receive_records_docs
     def receive_records(self, request, pk=None):
         """获取采购单的所有收货记录"""
         order = self.get_object()
@@ -286,6 +319,7 @@ class PurchaseOrderViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["get"])
+    @purchase_order_pending_inspections_docs
     def pending_inspections(self, request, pk=None):
         """获取待质检的收货记录"""
         order = self.get_object()
@@ -301,6 +335,7 @@ class PurchaseOrderViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
+    @purchase_order_cancel_docs
     def cancel(self, request, pk=None):
         """取消采购单"""
         order = self.get_object()
@@ -312,6 +347,7 @@ class PurchaseOrderViewSet(BaseViewSet):
         return APIResponse.success(message="取消成功")
 
     @action(detail=False, methods=["get"])
+    @materials_low_stock_docs
     def low_stock_materials(self, request):
         """获取库存预警物料"""
         # 查询库存低于最小库存的物料
@@ -331,6 +367,7 @@ class PurchaseOrderViewSet(BaseViewSet):
         return APIResponse.success(data={"materials": list(materials)})
 
 
+@purchase_order_item_docs
 class PurchaseOrderItemViewSet(BaseViewSet):
     """采购单明细视图集"""
 
@@ -361,6 +398,7 @@ class PurchaseOrderItemViewSet(BaseViewSet):
         )
 
 
+@purchase_receive_record_docs
 class PurchaseReceiveRecordViewSet(BaseViewSet):
     """采购收货记录视图集
 
@@ -414,6 +452,7 @@ class PurchaseReceiveRecordViewSet(BaseViewSet):
         )
 
     @action(detail=True, methods=["post"])
+    @receive_confirm_inspection_docs
     def confirm_inspection(self, request, pk=None):
         """确认质检结果
 
@@ -462,6 +501,7 @@ class PurchaseReceiveRecordViewSet(BaseViewSet):
         )
 
     @action(detail=True, methods=["post"])
+    @receive_stock_in_docs
     def stock_in(self, request, pk=None):
         """合格物料入库
 
@@ -493,6 +533,7 @@ class PurchaseReceiveRecordViewSet(BaseViewSet):
             return APIResponse.error("入库失败", code=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=["post"])
+    @receive_return_docs
     def process_return(self, request, pk=None):
         """处理退货
 
@@ -541,6 +582,7 @@ class PurchaseReceiveRecordViewSet(BaseViewSet):
             return APIResponse.error("退货处理失败", code=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=["get"])
+    @receive_pending_list_docs
     def pending_list(self, request):
         """获取所有待质检的收货记录"""
         records = (
@@ -559,6 +601,7 @@ class PurchaseReceiveRecordViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=False, methods=["get"])
+    @receive_pending_stock_docs
     def pending_stock_in(self, request):
         """获取待入库的收货记录（已质检但未入库）"""
         records = (
@@ -581,6 +624,7 @@ class PurchaseReceiveRecordViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=False, methods=["get"])
+    @receive_pending_return_docs
     def pending_return(self, request):
         """获取待退货的收货记录（有不合格物料但未退货）"""
         records = (
