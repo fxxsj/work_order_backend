@@ -14,6 +14,7 @@ from rest_framework.decorators import action
 from workorder.response import APIResponse
 
 from workorder.models.core import WorkOrderTask
+from workorder.docs.work_order_tasks_stats import task_export_post_docs
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class TaskExportMixin:
     """
 
     @action(detail=False, methods=["post"], url_path="export")
+    @task_export_post_docs
     def export_excel(self, request):
         """
         导出任务列表到Excel
@@ -76,9 +78,6 @@ class TaskExportMixin:
             return APIResponse.error(
                 f"导出数据量过大（{queryset.count()}条），最多支持导出{max_export}条",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={
-                    "error": f"导出数据量过大（{queryset.count()}条），最多支持导出{max_export}条"
-                },
             )
 
         # 创建工作簿
