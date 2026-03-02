@@ -11,6 +11,16 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
 from workorder.response import APIResponse
+from workorder.docs.sales import (
+    sales_order_approve_docs,
+    sales_order_cancel_docs,
+    sales_order_complete_docs,
+    sales_order_docs,
+    sales_order_item_docs,
+    sales_order_reject_docs,
+    sales_order_start_docs,
+    sales_order_submit_docs,
+)
 
 from ..models.products import Product
 from ..models.sales import SalesOrder, SalesOrderItem
@@ -22,6 +32,7 @@ from ..serializers.sales import (
 from .base_viewsets import BaseViewSet
 
 
+@sales_order_docs
 class SalesOrderViewSet(BaseViewSet):
     """销售订单视图集"""
 
@@ -58,6 +69,7 @@ class SalesOrderViewSet(BaseViewSet):
         serializer.save(created_by=self.request.user)
 
     @action(detail=True, methods=["post"])
+    @sales_order_submit_docs
     def submit(self, request, pk=None):
         """提交销售订单"""
         sales_order = self.get_object()
@@ -79,6 +91,7 @@ class SalesOrderViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
+    @sales_order_approve_docs
     def approve(self, request, pk=None):
         """审核通过销售订单"""
         sales_order = self.get_object()
@@ -104,6 +117,7 @@ class SalesOrderViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
+    @sales_order_reject_docs
     def reject(self, request, pk=None):
         """拒绝销售订单"""
         sales_order = self.get_object()
@@ -126,6 +140,7 @@ class SalesOrderViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
+    @sales_order_start_docs
     def start_production(self, request, pk=None):
         """开始生产（将订单状态改为生产中）"""
         sales_order = self.get_object()
@@ -246,6 +261,7 @@ class SalesOrderViewSet(BaseViewSet):
                     logging.warning(f"库存恢复警告：{e}")
 
     @action(detail=True, methods=["post"])
+    @sales_order_complete_docs
     def complete(self, request, pk=None):
         """完成订单"""
         sales_order = self.get_object()
@@ -260,6 +276,7 @@ class SalesOrderViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
+    @sales_order_cancel_docs
     def cancel(self, request, pk=None):
         """取消订单"""
         sales_order = self.get_object()
@@ -295,6 +312,7 @@ class SalesOrderViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
 
+@sales_order_item_docs
 class SalesOrderItemViewSet(BaseViewSet):
     """销售订单明细视图集"""
 

@@ -27,6 +27,26 @@ from workorder.services.approval_actions import (
 )
 from workorder.services.service_errors import ServiceError
 from workorder.policies.approval_policy import require_permission
+from workorder.docs.multi_level_approval import (
+    approval_report_dashboard_docs,
+    approval_report_stats_docs,
+    approval_step_complete_docs,
+    approval_step_docs,
+    approval_step_escalate_docs,
+    approval_step_start_docs,
+    approval_workflow_activate_docs,
+    approval_workflow_create_default_docs,
+    approval_workflow_deactivate_docs,
+    approval_workflow_docs,
+    approval_workflow_duplicate_docs,
+    escalation_history_docs,
+    multi_level_determine_docs,
+    multi_level_my_tasks_docs,
+    multi_level_status_docs,
+    multi_level_submit_docs,
+    urgent_list_docs,
+    urgent_mark_docs,
+)
 
 from ..models.assets import (
     Artwork,
@@ -71,6 +91,7 @@ from ..serializers.multi_level_approval import (
 )
 
 
+@approval_workflow_docs
 class ApprovalWorkflowViewSet(viewsets.ModelViewSet):
     """审核工作流管理视图集"""
 
@@ -86,6 +107,7 @@ class ApprovalWorkflowViewSet(viewsets.ModelViewSet):
     ordering = ["-created_at"]
 
     @action(detail=True, methods=["post"])
+    @approval_workflow_activate_docs
     def activate(self, request, pk=None):
         """激活工作流"""
         workflow = activate_workflow(self.get_object())
@@ -96,6 +118,7 @@ class ApprovalWorkflowViewSet(viewsets.ModelViewSet):
         )
 
     @action(detail=True, methods=["post"])
+    @approval_workflow_deactivate_docs
     def deactivate(self, request, pk=None):
         """停用工作流"""
         workflow = deactivate_workflow(self.get_object())
@@ -106,6 +129,7 @@ class ApprovalWorkflowViewSet(viewsets.ModelViewSet):
         )
 
     @action(detail=False, methods=["post"])
+    @approval_workflow_create_default_docs
     def create_default(self, request):
         """创建默认工作流"""
         created_workflows = create_default_workflows(request.user)
@@ -117,6 +141,7 @@ class ApprovalWorkflowViewSet(viewsets.ModelViewSet):
         )
 
     @action(detail=False, methods=["post"])
+    @approval_workflow_duplicate_docs
     def duplicate(self, request):
         """复制工作流"""
         source_id = request.data.get("source_id")
@@ -138,6 +163,7 @@ class ApprovalWorkflowViewSet(viewsets.ModelViewSet):
             )
 
 
+@approval_step_docs
 class ApprovalStepViewSet(viewsets.ModelViewSet):
     """审核步骤管理视图集"""
 
@@ -164,6 +190,7 @@ class ApprovalStepViewSet(viewsets.ModelViewSet):
         return queryset.filter(Q(assigned_to=user) | Q(work_order__created_by=user))
 
     @action(detail=True, methods=["post"])
+    @approval_step_start_docs
     def start_step(self, request, pk=None):
         """开始审核步骤"""
         try:
@@ -177,6 +204,7 @@ class ApprovalStepViewSet(viewsets.ModelViewSet):
         )
 
     @action(detail=True, methods=["post"])
+    @approval_step_complete_docs
     def complete_step(self, request, pk=None):
         """完成审核步骤"""
         step = self.get_object()
@@ -202,6 +230,7 @@ class ApprovalStepViewSet(viewsets.ModelViewSet):
         )
 
     @action(detail=True, methods=["post"])
+    @approval_step_escalate_docs
     def escalate_step(self, request, pk=None):
         """上报审核步骤"""
         step = self.get_object()
@@ -232,6 +261,7 @@ class MultiLevelApprovalViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     @action(detail=False, methods=["post"])
+    @multi_level_submit_docs
     def submit_for_approval(self, request):
         """提交施工单进行多级审核"""
         order_id = request.data.get("order_id")
@@ -253,6 +283,7 @@ class MultiLevelApprovalViewSet(viewsets.GenericViewSet):
         )
 
     @action(detail=False, methods=["post"])
+    @multi_level_determine_docs
     def determine_workflow(self, request):
         """确定施工单的审核工作流类型"""
         serializer = WorkflowDeterminationSerializer(data=request.data)
@@ -264,6 +295,7 @@ class MultiLevelApprovalViewSet(viewsets.GenericViewSet):
         return APIResponse.success(data=result)
 
     @action(detail=False, methods=["get"])
+    @multi_level_status_docs
     def get_approval_status(self, request):
         """获取施工单审核状态"""
         serializer = ApprovalStatusSerializer(data=request.data)
@@ -275,6 +307,7 @@ class MultiLevelApprovalViewSet(viewsets.GenericViewSet):
         return APIResponse.success(data=result)
 
     @action(detail=False, methods=["get"])
+    @multi_level_my_tasks_docs
     def get_my_tasks(self, request):
         """获取当前用户的审核任务"""
         user = request.user
@@ -300,6 +333,7 @@ class UrgentOrderViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     @action(detail=False, methods=["post"])
+    @urgent_mark_docs
     def mark_urgent(self, request):
         """标记施工单为紧急订单"""
         order_id = request.data.get("order_id")
@@ -330,6 +364,7 @@ class UrgentOrderViewSet(viewsets.GenericViewSet):
         )
 
     @action(detail=False, methods=["get"])
+    @urgent_list_docs
     def get_urgent_orders(self, request):
         """获取紧急订单列表"""
         try:
@@ -343,6 +378,7 @@ class UrgentOrderViewSet(viewsets.GenericViewSet):
         )
 
     @action(detail=False, methods=["get"])
+    @escalation_history_docs
     def get_escalation_history(self, request):
         """获取上报历史记录"""
         user = request.user
@@ -364,6 +400,7 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     @action(detail=False, methods=["get"])
+    @approval_report_stats_docs
     def get_statistics(self, request):
         """获取审核统计报告"""
         from datetime import timedelta
@@ -434,6 +471,7 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
         )
 
     @action(detail=False, methods=["get"])
+    @approval_report_dashboard_docs
     def dashboard(self, request):
         """管理员仪表板"""
         try:

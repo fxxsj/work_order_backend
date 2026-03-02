@@ -10,6 +10,17 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from workorder.response import APIResponse
+from workorder.docs.assets import (
+    artwork_docs,
+    artwork_product_docs,
+    die_docs,
+    die_product_docs,
+    embossing_plate_docs,
+    embossing_product_docs,
+    foiling_plate_docs,
+    foiling_product_docs,
+    confirm_docs,
+)
 
 from ..models.assets import (
     Artwork,
@@ -43,6 +54,7 @@ class PlateMakingConfirmMixin:
         return self.get_queryset().select_for_update().get(pk=pk)
 
     @action(detail=True, methods=["post"])
+    @confirm_docs
     def confirm(self, request, pk=None):
         """设计部确认资产，并尝试完成对应制版任务"""
         from django.db import transaction
@@ -79,6 +91,7 @@ class PlateMakingConfirmMixin:
         return APIResponse.success(data=serializer.data)
 
 
+@artwork_docs
 class ArtworkViewSet(PlateMakingConfirmMixin, BaseViewSet):
     """图稿视图集"""
 
@@ -159,6 +172,7 @@ class ArtworkViewSet(PlateMakingConfirmMixin, BaseViewSet):
         ).select_related("confirmed_by")
 
 
+@die_docs
 class DieViewSet(PlateMakingConfirmMixin, BaseViewSet):
     """刀模视图集"""
 
@@ -180,6 +194,7 @@ class DieViewSet(PlateMakingConfirmMixin, BaseViewSet):
         )
 
 
+@foiling_plate_docs
 class FoilingPlateViewSet(PlateMakingConfirmMixin, BaseViewSet):
     """烫金版视图集"""
 
@@ -201,6 +216,7 @@ class FoilingPlateViewSet(PlateMakingConfirmMixin, BaseViewSet):
         )
 
 
+@embossing_plate_docs
 class EmbossingPlateViewSet(PlateMakingConfirmMixin, BaseViewSet):
     """压凸版视图集"""
 
@@ -222,6 +238,7 @@ class EmbossingPlateViewSet(PlateMakingConfirmMixin, BaseViewSet):
         )
 
 
+@artwork_product_docs
 class ArtworkProductViewSet(viewsets.ModelViewSet):
     """图稿产品视图集"""
 
@@ -243,6 +260,7 @@ class ArtworkProductViewSet(viewsets.ModelViewSet):
         return ArtworkProductFilterSet
 
 
+@die_product_docs
 class DieProductViewSet(viewsets.ModelViewSet):
     """刀模产品视图集"""
 
@@ -264,6 +282,7 @@ class DieProductViewSet(viewsets.ModelViewSet):
         return DieProductFilterSet
 
 
+@foiling_product_docs
 class FoilingPlateProductViewSet(viewsets.ModelViewSet):
     """烫金版产品视图集"""
 
@@ -285,6 +304,7 @@ class FoilingPlateProductViewSet(viewsets.ModelViewSet):
         return FoilingPlateProductFilterSet
 
 
+@embossing_product_docs
 class EmbossingPlateProductViewSet(viewsets.ModelViewSet):
     """压凸版产品视图集"""
 
