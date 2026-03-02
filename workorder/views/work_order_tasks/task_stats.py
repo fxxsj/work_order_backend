@@ -170,7 +170,8 @@ class TaskStatsMixin:
                 log_data["operator_name"] = log.operator.username
             results.append(log_data)
 
-        return APIResponse.error("您没有权限查看部门工作负载统计", code=status.HTTP_403_FORBIDDEN, data={
+        return APIResponse.success(
+            data={
                 "results": results,
                 "total": total,
                 "page": page,
