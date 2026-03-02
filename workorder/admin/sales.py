@@ -64,6 +64,7 @@ class SalesOrderAdmin(admin.ModelAdmin):
         "approved_at",
         "created_at",
     ]
+    list_select_related = ["customer", "submitted_by", "approved_by", "created_by"]
     search_fields = ["order_number", "customer__name", "work_orders__order_number"]
     autocomplete_fields = [
         "customer",
@@ -136,11 +137,10 @@ class SalesOrderAdmin(admin.ModelAdmin):
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
 
+    @admin.display(description="客户")
     def customer_name(self, obj):
         """显示客户名称"""
         return obj.customer.name
-
-    customer_name.short_description = "客户"
 
     # 销售订单状态徽章
     status_badge = create_status_badge_method(
@@ -163,23 +163,20 @@ class SalesOrderAdmin(admin.ModelAdmin):
         }
     )
 
+    @admin.display(description="提交人")
     def submitted_by_name(self, obj):
         """显示提交人"""
         return obj.submitted_by.username if obj.submitted_by else "-"
 
-    submitted_by_name.short_description = "提交人"
-
+    @admin.display(description="审核人")
     def approved_by_name(self, obj):
         """显示审核人"""
         return obj.approved_by.username if obj.approved_by else "-"
 
-    approved_by_name.short_description = "审核人"
-
+    @admin.display(description="明细数量")
     def items_count(self, obj):
         """显示明细数量"""
         return obj.items.count()
-
-    items_count.short_description = "明细数量"
 
 
 @admin.register(SalesOrderItem)
@@ -199,25 +196,23 @@ class SalesOrderItemAdmin(admin.ModelAdmin):
         "created_at",
     ]
     list_filter = ["product", "sales_order", "created_at"]
+    list_select_related = ["sales_order", "product"]
     search_fields = ["sales_order__order_number", "product__name", "product__code"]
     autocomplete_fields = ["product", "sales_order"]
     readonly_fields = ["created_at", "updated_at", "subtotal"]
     ordering = ["sales_order", "id"]
 
+    @admin.display(description="销售订单号")
     def sales_order_number(self, obj):
         """显示销售订单号"""
         return obj.sales_order.order_number
 
-    sales_order_number.short_description = "销售订单号"
-
+    @admin.display(description="产品编码")
     def product_code(self, obj):
         """显示产品编码"""
         return obj.product.code
 
-    product_code.short_description = "产品编码"
-
+    @admin.display(description="产品名称")
     def product_name(self, obj):
         """显示产品名称"""
         return obj.product.name
-
-    product_name.short_description = "产品名称"

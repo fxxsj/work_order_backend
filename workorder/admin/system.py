@@ -43,6 +43,7 @@ class UserProfileAdmin(admin.ModelAdmin):
 
     readonly_fields = ["created_at", "updated_at"]
 
+    @admin.display(description="所属部门")
     def get_departments_display(self, obj):
         """显示部门名称列表"""
         if obj.pk:
@@ -50,8 +51,6 @@ class UserProfileAdmin(admin.ModelAdmin):
             if departments.exists():
                 return ", ".join([dept.name for dept in departments])
         return "-"
-
-    get_departments_display.short_description = "所属部门"
 
 
 @admin.register(WorkOrderApprovalLog)
@@ -80,6 +79,7 @@ class WorkOrderApprovalLogAdmin(admin.ModelAdmin):
         ("系统信息", {"fields": ("created_at",)}),
     )
 
+    @admin.display(description="审核状态")
     def approval_status_badge(self, obj):
         """审核状态徽章"""
         colors = {"pending": "orange", "approved": "green", "rejected": "red"}
@@ -91,19 +91,15 @@ class WorkOrderApprovalLogAdmin(admin.ModelAdmin):
             status_display,
         )
 
-    approval_status_badge.short_description = "审核状态"
-
+    @admin.display(description="有审核意见")
     def has_comment(self, obj):
         """是否有审核意见"""
         return "是" if obj.approval_comment else "否"
 
-    has_comment.short_description = "有审核意见"
-
+    @admin.display(description="有拒绝原因")
     def has_rejection_reason(self, obj):
         """是否有拒绝原因"""
         return "是" if obj.rejection_reason else "否"
-
-    has_rejection_reason.short_description = "有拒绝原因"
 
 
 @admin.register(TaskAssignmentRule)
@@ -148,6 +144,7 @@ class TaskAssignmentRuleAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="状态")
     def is_active_badge(self, obj):
         """显示启用状态"""
         if obj.is_active:
@@ -155,13 +152,10 @@ class TaskAssignmentRuleAdmin(admin.ModelAdmin):
         else:
             return format_html('<span style="color: #909399;">✗ 禁用</span>')
 
-    is_active_badge.short_description = "状态"
-
+    @admin.display(description="操作员选择策略")
     def operator_selection_strategy_display(self, obj):
         """显示操作员选择策略"""
         return obj.get_operator_selection_strategy_display()
-
-    operator_selection_strategy_display.short_description = "操作员选择策略"
 
 
 @admin.register(Notification)
@@ -213,6 +207,7 @@ class NotificationAdmin(admin.ModelAdmin):
             return qs.filter(created_at__gte=thirty_days_ago)
         return qs
 
+    @admin.action(description="删除30天前的通知")
     def delete_old_notifications(self, request, queryset):
         """批量删除30天前的通知"""
         thirty_days_ago = timezone.now() - timedelta(days=30)
@@ -220,5 +215,3 @@ class NotificationAdmin(admin.ModelAdmin):
         count = old_notifications.count()
         old_notifications.delete()
         self.message_user(request, f"{count} 条30天前的通知已删除。")
-
-    delete_old_notifications.short_description = "删除30天前的通知"

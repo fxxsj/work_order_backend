@@ -37,6 +37,7 @@ class CostCenterAdmin(admin.ModelAdmin):
     ordering = ["code"]
     autocomplete_fields = ["parent", "manager"]
     readonly_fields = ["created_at", "updated_at"]
+    list_select_related = ["parent", "manager"]
 
     fieldsets = (
         ("基本信息", {"fields": ("code", "name", "type", "parent", "is_active")}),
@@ -102,6 +103,7 @@ class ProductionCostAdmin(admin.ModelAdmin):
     readonly_fields = ["created_at", "updated_at"]
     autocomplete_fields = ["work_order", "calculated_by"]
     ordering = ["-created_at"]
+    list_select_related = ["work_order", "calculated_by"]
 
     fieldsets = (
         ("基本信息", {"fields": ("work_order", "period")}),
@@ -161,6 +163,7 @@ class InvoiceAdmin(admin.ModelAdmin):
         "sales_order",
         "work_order",
     ]
+    list_select_related = ["customer", "submitted_by", "approved_by", "created_by"]
     readonly_fields = [
         "invoice_number",
         "tax_amount",
@@ -230,6 +233,7 @@ class PaymentAdmin(admin.ModelAdmin):
     autocomplete_fields = ["customer", "created_by"]
     readonly_fields = ["payment_number", "created_at", "updated_at"]
     ordering = ["-created_at"]
+    list_select_related = ["customer", "created_by"]
 
     fieldsets = (
         (
@@ -255,17 +259,15 @@ class PaymentAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="客户")
     def customer_name(self, obj):
         """显示客户名称"""
         return obj.customer.name
 
-    customer_name.short_description = "客户"
-
+    @admin.display(description="创建人")
     def created_by_name(self, obj):
         """显示创建人"""
         return obj.created_by.username if obj.created_by else "-"
-
-    created_by_name.short_description = "创建人"
 
 
 # @admin.register(PaymentPlan)
@@ -288,6 +290,7 @@ class PaymentPlanAdmin(admin.ModelAdmin):
     autocomplete_fields = ["sales_order", "customer", "payment"]
     readonly_fields = ["created_at", "updated_at"]
     ordering = ["planned_date"]
+    list_select_related = ["sales_order", "customer", "payment"]
 
     fieldsets = (
         ("基本信息", {"fields": ("sales_order", "customer", "plan_name", "status")}),
@@ -304,17 +307,15 @@ class PaymentPlanAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="销售订单")
     def sales_order_number(self, obj):
         """显示销售订单号"""
         return obj.sales_order.order_number if obj.sales_order else "-"
 
-    sales_order_number.short_description = "销售订单"
-
+    @admin.display(description="客户")
     def customer_name(self, obj):
         """显示客户名称"""
         return obj.customer.name
-
-    customer_name.short_description = "客户"
 
 
 # @admin.register(Statement)
@@ -347,6 +348,7 @@ class StatementAdmin(admin.ModelAdmin):
     autocomplete_fields = ["partner", "confirmed_by", "created_by"]
     readonly_fields = ["statement_number", "created_at", "updated_at"]
     ordering = ["-created_at"]
+    list_select_related = ["partner", "confirmed_by", "created_by"]
 
     fieldsets = (
         (
@@ -376,11 +378,10 @@ class StatementAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="对方单位")
     def partner_name(self, obj):
         """显示对方单位名称"""
         return obj.partner.name if hasattr(obj.partner, "name") else str(obj.partner)
-
-    partner_name.short_description = "对方单位"
 
     # 发票状态徽章
     status_badge = create_status_badge_method(

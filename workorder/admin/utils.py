@@ -5,12 +5,18 @@ Django Admin 工具函数和通用方法
 用于减少代码重复并统一界面样式。
 """
 
+from django.contrib import admin
 from django.utils.html import format_html
 
 # ==================== 状态徽章工厂函数 ====================
 
 
-def create_status_badge_method(status_colors, default_color="#909399"):
+def create_status_badge_method(
+    status_colors,
+    default_color="#909399",
+    field="status",
+    display_method=None,
+):
     """
     创建状态徽章显示方法的工厂函数
 
@@ -18,6 +24,9 @@ def create_status_badge_method(status_colors, default_color="#909399"):
         status_colors: 状态到颜色的映射字典
                       例如: {'pending': '#909399', 'completed': '#67C23A'}
         default_color: 默认颜色（当状态不在映射中时使用）
+        field: 读取状态的字段名（默认 "status"）
+        display_method: 显示名称的方法名（可选），
+                        未提供则尝试使用 get_<field>_display
 
     Returns:
         一个可以用作 Admin 方法的函数
@@ -31,16 +40,30 @@ def create_status_badge_method(status_colors, default_color="#909399"):
             list_display = ['name', 'status_badge']
     """
 
+    @admin.display(description="状态")
     def status_badge(self, obj):
         """状态徽章"""
+        value = getattr(obj, field, None)
+        display = None
+        if display_method:
+            display_attr = getattr(obj, display_method, None)
+            if callable(display_attr):
+                display = display_attr()
+            elif display_attr is not None:
+                display = str(display_attr)
+        else:
+            display_attr = getattr(obj, f"get_{field}_display", None)
+            if callable(display_attr):
+                display = display_attr()
+        if display is None:
+            display = "" if value is None else str(value)
         return format_html(
             '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
             'background-color: {};">{}</span>',
-            status_colors.get(obj.status, default_color),
-            obj.get_status_display(),
+            status_colors.get(value, default_color),
+            display,
         )
 
-    status_badge.short_description = "状态"
     return status_badge
 
 
@@ -68,6 +91,7 @@ def create_priority_badge_method(priority_colors=None, default_color="#409EFF"):
             "urgent": "#F56C6C",
         }
 
+    @admin.display(description="优先级")
     def priority_badge(self, obj):
         """优先级徽章"""
         return format_html(
@@ -77,7 +101,6 @@ def create_priority_badge_method(priority_colors=None, default_color="#409EFF"):
             obj.get_priority_display(),
         )
 
-    priority_badge.short_description = "优先级"
     return priority_badge
 
 
@@ -168,6 +191,7 @@ def create_foreign_key_display_method(field_name, display_name=None):
             list_display = ['order_number', 'customer_name']
     """
 
+    @admin.display(description=display_name or field_name.replace("_", " ").title())
     def foreign_key_display(self, obj):
         """显示外键关联对象的名称"""
         foreign_obj = getattr(obj, field_name, None)
@@ -176,9 +200,6 @@ def create_foreign_key_display_method(field_name, display_name=None):
         # 尝试获取 name 属性，如果没有则使用 __str__
         return getattr(foreign_obj, "name", str(foreign_obj))
 
-    foreign_key_display.short_description = (
-        display_name or field_name.replace("_", " ").title()
-    )
     return foreign_key_display
 
 
@@ -199,14 +220,12 @@ def create_user_display_method(field_name, display_name=None):
             list_display = ['order_number', 'created_by_name']
     """
 
+    @admin.display(description=display_name or field_name.replace("_", " ").title())
     def user_display(self, obj):
         """显示用户名"""
         user = getattr(obj, field_name, None)
         return user.username if user else "-"
 
-    user_display.short_description = (
-        display_name or field_name.replace("_", " ").title()
-    )
     return user_display
 
 
@@ -220,17 +239,15 @@ class TimestampMixin:
     为 Admin 类提供标准的时间戳字段显示
     """
 
+    @admin.display(description="创建时间")
     def created_at_display(self, obj):
         """创建时间显示"""
         return obj.created_at.strftime("%Y-%m-%d %H:%M") if obj.created_at else "-"
 
-    created_at_display.short_description = "创建时间"
-
+    @admin.display(description="更新时间")
     def updated_at_display(self, obj):
         """更新时间显示"""
         return obj.updated_at.strftime("%Y-%m-%d %H:%M") if obj.updated_at else "-"
-
-    updated_at_display.short_description = "更新时间"
 
 
 class CreatedByMixin:
@@ -240,11 +257,10 @@ class CreatedByMixin:
     为 Admin 类提供标准的创建人字段显示
     """
 
+    @admin.display(description="创建人")
     def created_by_display(self, obj):
         """创建人显示"""
         return obj.created_by.username if obj.created_by else "-"
-
-    created_by_display.short_description = "创建人"
 
 
 class ReadOnlyMixin:

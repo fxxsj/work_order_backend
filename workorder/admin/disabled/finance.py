@@ -66,15 +66,13 @@ class PaymentAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="客户")
     def customer_name(self, obj):
         return obj.customer.name
 
-    customer_name.short_description = "客户"
-
+    @admin.display(description="创建人")
     def created_by_name(self, obj):
         return obj.created_by.username if obj.created_by else "-"
-
-    created_by_name.short_description = "创建人"
 
 
 @admin.register(PaymentPlan)
@@ -113,16 +111,15 @@ class PaymentPlanAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="销售订单")
     def sales_order_number(self, obj):
         return obj.sales_order.order_number if obj.sales_order else "-"
 
-    sales_order_number.short_description = "销售订单"
-
+    @admin.display(description="客户")
     def customer_name(self, obj):
         return obj.customer.name
 
-    customer_name.short_description = "客户"
-
+    @admin.display(description="状态")
     def status_display(self, obj):
         """状态显示"""
         colors = {
@@ -136,8 +133,6 @@ class PaymentPlanAdmin(admin.ModelAdmin):
             colors.get(obj.status, "#909399"),
             obj.get_status_display(),
         )
-
-    status_display.short_description = "状态"
 
 
 @admin.register(Statement)
@@ -201,17 +196,15 @@ class StatementAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="单据类型")
     def statement_type_display(self, obj):
         """单据类型显示"""
         return obj.get_statement_type_display()
 
-    statement_type_display.short_description = "单据类型"
-
+    @admin.display(description="对方单位")
     def partner_name(self, obj):
         """显示对方单位名称"""
         return obj.partner.name if hasattr(obj.partner, "name") else str(obj.partner)
-
-    partner_name.short_description = "对方单位"
 
     # 发票状态徽章
     status_badge = create_status_badge_method(

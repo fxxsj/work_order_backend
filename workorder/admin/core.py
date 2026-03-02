@@ -111,12 +111,14 @@ class WorkOrderAdmin(admin.ModelAdmin):
         "manager",
     ]
 
+    list_select_related = ["customer", "manager", "created_by"]
+
+    @admin.display(description="制表人")
     def manager_display(self, obj):
         """制表人显示"""
         return obj.manager.username if obj.manager else "-"
 
-    manager_display.short_description = "制表人"
-
+    @admin.display(description="产品")
     def product_name_display(self, obj):
         """显示产品名称（从 products 关联中获取）"""
         products = obj.products.all()
@@ -127,8 +129,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
             return first_product.product.name if first_product.product else "-"
         return "-"
 
-    product_name_display.short_description = "产品"
-
+    @admin.display(description="数量")
     def quantity_display(self, obj):
         """显示数量（从 products 关联中计算总和）"""
         products = obj.products.all()
@@ -136,8 +137,6 @@ class WorkOrderAdmin(admin.ModelAdmin):
             total = sum(p.quantity for p in products)
             return total
         return 0
-
-    quantity_display.short_description = "数量"
 
     search_fields = [
         "order_number",
@@ -203,6 +202,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
 
+    @admin.display(description="进度")
     def progress_bar(self, obj):
         """进度条"""
         percentage = obj.get_progress_percentage()
@@ -217,8 +217,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
             percentage,
         )
 
-    progress_bar.short_description = "进度"
-
+    @admin.display(description="当前进度")
     def progress_display(self, obj):
         """进度显示（只读字段）"""
         if obj.pk:
@@ -240,8 +239,6 @@ class WorkOrderAdmin(admin.ModelAdmin):
                 percentage,
             )
         return "-"
-
-    progress_display.short_description = "当前进度"
 
     def get_queryset(self, request):
         """优化查询"""
@@ -277,6 +274,8 @@ class WorkOrderProcessAdmin(admin.ModelAdmin):
         "actual_start_time",
         "created_at",
     ]
+
+    list_select_related = ["work_order", "process", "department", "operator"]
 
     search_fields = [
         "work_order__order_number",
@@ -357,6 +356,7 @@ class WorkOrderMaterialAdmin(admin.ModelAdmin):
         "material",
         "created_at",
     ]
+    list_select_related = ["work_order", "material"]
     search_fields = ["work_order__order_number", "material__name", "material__code"]
     autocomplete_fields = ["work_order", "material"]
 
@@ -413,6 +413,11 @@ class ProcessLogAdmin(admin.ModelAdmin):
     ]
 
     list_filter = ["log_type", "created_at", "operator"]
+    list_select_related = [
+        "work_order_process",
+        "work_order_process__work_order",
+        "operator",
+    ]
     search_fields = ["work_order_process__work_order__order_number", "content"]
     autocomplete_fields = ["work_order_process", "operator"]
     readonly_fields = ["created_at"]
@@ -426,16 +431,17 @@ class ProcessLogAdmin(admin.ModelAdmin):
             "resume": "#67C23A",
             "complete": "#67C23A",
             "note": "#909399",
-        }
+        },
+        field="log_type",
+        display_method="get_log_type_display",
     )
 
+    @admin.display(description="内容")
     def content_preview(self, obj):
         """内容预览"""
         if len(obj.content) > 50:
             return obj.content[:50] + "..."
         return obj.content
-
-    content_preview.short_description = "内容"
 
 
 @admin.register(WorkOrderTask)
@@ -469,6 +475,20 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
         "assigned_department",
         "assigned_operator",
         "created_at",
+    ]
+
+    list_select_related = [
+        "work_order_process",
+        "work_order_process__work_order",
+        "work_order_process__process",
+        "assigned_department",
+        "assigned_operator",
+        "artwork",
+        "die",
+        "product",
+        "material",
+        "foiling_plate",
+        "embossing_plate",
     ]
 
     search_fields = [

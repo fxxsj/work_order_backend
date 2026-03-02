@@ -64,20 +64,17 @@ class ProductStockAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="产品编码")
     def product_code(self, obj):
         return obj.product.code
 
-    product_code.short_description = "产品编码"
-
+    @admin.display(description="产品")
     def product_name(self, obj):
         return obj.product.name
 
-    product_name.short_description = "产品"
-
+    @admin.display(description="可用数量")
     def available_quantity(self, obj):
         return obj.quantity - obj.reserved_quantity
-
-    available_quantity.short_description = "可用数量"
 
     status_badge = create_status_badge_method(STOCK_STATUS_COLORS)
 
@@ -120,10 +117,9 @@ class StockInAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="产品")
     def product_name(self, obj):
         return obj.product.name
-
-    product_name.short_description = "产品"
 
     status_badge = create_status_badge_method(
         {
@@ -134,10 +130,9 @@ class StockInAdmin(admin.ModelAdmin):
         }
     )
 
+    @admin.display(description="审核人")
     def approved_by_name(self, obj):
         return obj.approved_by.username if obj.approved_by else "-"
-
-    approved_by_name.short_description = "审核人"
 
 
 @admin.register(StockOut)
@@ -178,10 +173,9 @@ class StockOutAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="产品")
     def product_name(self, obj):
         return obj.product.name
-
-    product_name.short_description = "产品"
 
     status_badge = create_status_badge_method(
         {
@@ -253,16 +247,15 @@ class QualityInspectionAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="产品")
     def product_name(self, obj):
         return obj.product.name
 
-    product_name.short_description = "产品"
-
+    @admin.display(description="检验类型")
     def inspection_type_display(self, obj):
         return obj.get_inspection_type_display()
 
-    inspection_type_display.short_description = "检验类型"
-
+    @admin.display(description="检验结果")
     def result_badge(self, obj):
         colors = {"pending": "#909399", "passed": "#67C23A", "failed": "#F56C6C"}
         return format_html(
@@ -272,8 +265,6 @@ class QualityInspectionAdmin(admin.ModelAdmin):
             obj.get_result_display(),
         )
 
-    result_badge.short_description = "检验结果"
-
     status_badge = create_status_badge_method(
         {
             "pending": "#909399",
@@ -282,7 +273,6 @@ class QualityInspectionAdmin(admin.ModelAdmin):
         }
     )
 
+    @admin.display(description="检验人")
     def inspector_name(self, obj):
         return obj.inspector.username if obj.inspector else "-"
-
-    inspector_name.short_description = "检验人"

@@ -74,14 +74,12 @@ class DepartmentAdmin(admin.ModelAdmin):
 
     readonly_fields = ["created_at"]
 
+    @admin.display(description="子部门数", ordering="children__count")
     def get_children_count(self, obj):
         """显示子部门数量"""
         if obj.pk:
             return obj.children.count()
         return 0
-
-    get_children_count.short_description = "子部门数"
-    get_children_count.admin_order_field = "children__count"
 
 
 @admin.register(Process)

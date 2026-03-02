@@ -66,6 +66,7 @@ class ProductStockAdmin(admin.ModelAdmin):
     ]
     search_fields = ["product__name", "product__code", "batch_number", "location"]
     list_filter = ["status", "production_date", "expiry_date", "created_at"]
+    list_select_related = ["product"]
     autocomplete_fields = ["product"]
     readonly_fields = ["created_at", "updated_at", "days_until_expiry", "total_value"]
     ordering = ["-created_at"]
@@ -93,23 +94,20 @@ class ProductStockAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="产品编码")
     def product_code(self, obj):
         """显示产品编码"""
         return obj.product.code
 
-    product_code.short_description = "产品编码"
-
+    @admin.display(description="产品")
     def product_name(self, obj):
         """显示产品名称"""
         return obj.product.name
 
-    product_name.short_description = "产品"
-
+    @admin.display(description="可用数量")
     def available_quantity(self, obj):
         """计算可用数量"""
         return obj.quantity - obj.reserved_quantity
-
-    available_quantity.short_description = "可用数量"
 
     # 库存状态徽章
     status_badge = create_status_badge_method(STOCK_STATUS_COLORS)
@@ -132,6 +130,7 @@ class StockInAdmin(admin.ModelAdmin):
     ]
     search_fields = ["order_number", "product__name", "batch_number"]
     list_filter = ["status", "stock_in_date", "approved_at", "created_at"]
+    list_select_related = ["product", "work_order", "approved_by", "created_by"]
     autocomplete_fields = ["product", "work_order", "approved_by", "created_by"]
     readonly_fields = ["order_number", "created_at", "updated_at"]
     ordering = ["-created_at"]
@@ -153,11 +152,10 @@ class StockInAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="产品")
     def product_name(self, obj):
         """显示产品名称"""
         return obj.product.name
-
-    product_name.short_description = "产品"
 
     # 入库单状态徽章
     status_badge = create_status_badge_method(
@@ -169,11 +167,10 @@ class StockInAdmin(admin.ModelAdmin):
         }
     )
 
+    @admin.display(description="审核人")
     def approved_by_name(self, obj):
         """显示审核人"""
         return obj.approved_by.username if obj.approved_by else "-"
-
-    approved_by_name.short_description = "审核人"
 
 
 # @admin.register(StockOut)
@@ -192,6 +189,7 @@ class StockOutAdmin(admin.ModelAdmin):
     ]
     search_fields = ["order_number", "product__name"]
     list_filter = ["outbound_type", "status", "outbound_date", "created_at"]
+    list_select_related = ["product", "delivery_order", "created_by"]
     autocomplete_fields = ["product", "delivery_order", "created_by"]
     readonly_fields = ["order_number", "created_at", "updated_at"]
     ordering = ["-created_at"]
@@ -214,11 +212,10 @@ class StockOutAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="产品")
     def product_name(self, obj):
         """显示产品名称"""
         return obj.product.name
-
-    product_name.short_description = "产品"
 
     # 出库单状态徽章
     status_badge = create_status_badge_method(
@@ -252,6 +249,7 @@ class DeliveryOrderAdmin(admin.ModelAdmin):
         "tracking_number",
     ]
     list_filter = ["status", "delivery_date", "created_at"]
+    list_select_related = ["customer", "sales_order", "created_by"]
     autocomplete_fields = ["customer", "sales_order", "created_by"]
     readonly_fields = ["order_number", "created_at", "updated_at"]
     ordering = ["-created_at"]
@@ -289,17 +287,15 @@ class DeliveryOrderAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="客户")
     def customer_name(self, obj):
         """显示客户名称"""
         return obj.customer.name
 
-    customer_name.short_description = "客户"
-
+    @admin.display(description="销售订单")
     def sales_order_number(self, obj):
         """显示销售订单号"""
         return obj.sales_order.order_number if obj.sales_order else "-"
-
-    sales_order_number.short_description = "销售订单"
 
     # 发货单状态徽章
     status_badge = create_status_badge_method(
@@ -330,27 +326,25 @@ class DeliveryItemAdmin(admin.ModelAdmin):
     ]
     search_fields = ["delivery_order__order_number", "product__name"]
     list_filter = ["created_at"]
+    list_select_related = ["delivery_order", "product"]
     autocomplete_fields = ["delivery_order", "product"]
     readonly_fields = ["created_at"]
     ordering = ["delivery_order", "id"]
 
+    @admin.display(description="发货单号")
     def delivery_order_number(self, obj):
         """显示发货单号"""
         return obj.delivery_order.order_number
 
-    delivery_order_number.short_description = "发货单号"
-
+    @admin.display(description="产品编码")
     def product_code(self, obj):
         """显示产品编码"""
         return obj.product.code
 
-    product_code.short_description = "产品编码"
-
+    @admin.display(description="产品")
     def product_name(self, obj):
         """显示产品名称"""
         return obj.product.name
-
-    product_name.short_description = "产品"
 
 
 # @admin.register(QualityInspection)
@@ -377,6 +371,7 @@ class QualityInspectionAdmin(admin.ModelAdmin):
         "inspection_date",
         "created_at",
     ]
+    list_select_related = ["product", "work_order", "stock_in", "inspector", "created_by"]
     autocomplete_fields = [
         "product",
         "work_order",
@@ -445,18 +440,17 @@ class QualityInspectionAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="产品")
     def product_name(self, obj):
         """显示产品名称"""
         return obj.product.name
 
-    product_name.short_description = "产品"
-
+    @admin.display(description="检验员")
     def inspector_name(self, obj):
         """显示检验员"""
         return obj.inspector.username if obj.inspector else "-"
 
-    inspector_name.short_description = "检验员"
-
+    @admin.display(description="检验结果")
     def result_badge(self, obj):
         """结果徽章"""
         colors = {
@@ -470,8 +464,6 @@ class QualityInspectionAdmin(admin.ModelAdmin):
             colors.get(obj.result, "#909399"),
             obj.get_result_display(),
         )
-
-    result_badge.short_description = "检验结果"
 
     # 质检状态徽章
     status_badge = create_status_badge_method(

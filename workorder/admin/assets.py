@@ -107,14 +107,14 @@ class ArtworkAdmin(admin.ModelAdmin):
         ("其他", {"fields": ("notes", "created_at", "updated_at")}),
     )
 
+    @admin.display(description="图稿编码")
     def full_code_display(self, obj):
         """显示完整编码（包含版本号）"""
         if obj.pk:
             return obj.get_full_code()
         return "-"
 
-    full_code_display.short_description = "图稿编码"
-
+    @admin.display(description="色数")
     def color_display(self, obj):
         """显示颜色信息，格式：CMK+928C,金色（5色）"""
         parts = []
@@ -150,8 +150,6 @@ class ArtworkAdmin(admin.ModelAdmin):
             result += f"（{total_count}色）"
 
         return result
-
-    color_display.short_description = "色数"
 
     def save_model(self, request, obj, form, change):
         """保存时自动生成主编码"""

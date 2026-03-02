@@ -93,12 +93,10 @@ class SupplierAdmin(admin.ModelAdmin):
         qs = qs.annotate(_material_count=Count("materialsupplier"))
         return qs
 
+    @admin.display(description="供应物料数", ordering="_material_count")
     def material_count(self, obj):
         """显示供应物料数量（优化版）"""
         return getattr(obj, "_material_count", obj.default_materials.count())
-
-    material_count.short_description = "供应物料数"
-    material_count.admin_order_field = "_material_count"
 
 
 @admin.register(MaterialSupplier)
@@ -116,6 +114,7 @@ class MaterialSupplierAdmin(admin.ModelAdmin):
         "min_order_quantity",
     ]
     list_filter = ["is_preferred", "created_at"]
+    list_select_related = ["material", "supplier"]
     search_fields = [
         "material__name",
         "material__code",
@@ -131,29 +130,25 @@ class MaterialSupplierAdmin(admin.ModelAdmin):
     ordering = ["material", "supplier"]
     readonly_fields = ["created_at"]
 
+    @admin.display(description="物料编码")
     def material_code(self, obj):
         """显示物料编码"""
         return obj.material.code
-
-    material_code.short_description = "物料编码"
-
+ 
+    @admin.display(description="物料名称")
     def material_name(self, obj):
         """显示物料名称"""
         return obj.material.name
-
-    material_name.short_description = "物料名称"
-
+ 
+    @admin.display(description="供应商编码")
     def supplier_code(self, obj):
         """显示供应商编码"""
         return obj.supplier.code
-
-    supplier_code.short_description = "供应商编码"
-
+ 
+    @admin.display(description="供应商名称")
     def supplier_name(self, obj):
         """显示供应商名称"""
         return obj.supplier.name
-
-    supplier_name.short_description = "供应商名称"
 
 
 @admin.register(PurchaseOrder)
@@ -172,6 +167,7 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
         "created_at",
     ]
     list_filter = ["status", "supplier", "submitted_at", "approved_at", "created_at"]
+    list_select_related = ["supplier", "submitted_by", "approved_by", "work_order"]
     search_fields = ["order_number", "supplier__name", "work_order__order_number"]
     autocomplete_fields = ["supplier", "work_order"]
     readonly_fields = ["order_number", "created_at", "updated_at"]
@@ -211,30 +207,27 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
 
         return qs
 
+    @admin.display(description="供应商")
     def supplier_name(self, obj):
         """显示供应商名称"""
         return obj.supplier.name
-
-    supplier_name.short_description = "供应商"
-
+ 
+    @admin.display(description="提交人")
     def submitted_by_name(self, obj):
         """显示提交人"""
         return obj.submitted_by.username if obj.submitted_by else "-"
-
-    submitted_by_name.short_description = "提交人"
-
+ 
+    @admin.display(description="审核人")
     def approved_by_name(self, obj):
         """显示审核人"""
         return obj.approved_by.username if obj.approved_by else "-"
-
-    approved_by_name.short_description = "审核人"
-
+ 
+    @admin.display(description="明细数量")
     def items_count(self, obj):
         """显示明细数量（优化版）"""
         return getattr(obj, "_items_count", obj.items.count())
-
-    items_count.short_description = "明细数量"
-
+ 
+    @admin.display(description="收货进度")
     def received_progress(self, obj):
         """显示收货进度（优化版）"""
         # 使用预计算的注解字段
@@ -268,8 +261,6 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
             percentage,
         )
 
-    received_progress.short_description = "收货进度"
-
     # 采购单状态徽章
     status_badge = create_status_badge_method(
         {
@@ -299,35 +290,31 @@ class PurchaseOrderItemAdmin(admin.ModelAdmin):
         "created_at",
     ]
     list_filter = ["status", "material", "purchase_order", "created_at"]
+    list_select_related = ["purchase_order", "material"]
     search_fields = ["purchase_order__order_number", "material__name", "material__code"]
     autocomplete_fields = ["material", "purchase_order", "work_order_material"]
     readonly_fields = ["created_at", "updated_at"]
     ordering = ["purchase_order", "id"]
 
+    @admin.display(description="采购单号")
     def purchase_order_number(self, obj):
         """显示采购单号"""
         return obj.purchase_order.order_number
-
-    purchase_order_number.short_description = "采购单号"
-
+ 
+    @admin.display(description="物料编码")
     def material_code(self, obj):
         """显示物料编码"""
         return obj.material.code
-
-    material_code.short_description = "物料编码"
-
+ 
+    @admin.display(description="物料名称")
     def material_name(self, obj):
         """显示物料名称"""
         return obj.material.name
-
-    material_name.short_description = "物料名称"
-
+ 
+    @admin.display(description="小计", ordering="subtotal")
     def subtotal(self, obj):
         """计算小计"""
         return obj.quantity * obj.unit_price
-
-    subtotal.short_description = "小计"
-    subtotal.admin_order_field = "subtotal"
 
     # 收货状态徽章
     status_badge = create_status_badge_method(
