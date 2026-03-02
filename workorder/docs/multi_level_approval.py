@@ -2,7 +2,14 @@
 多级审核相关视图集的 OpenAPI 文档定义。
 """
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view, inline_serializer
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
 from rest_framework import serializers
 
 from workorder.schema import standard_error_response, standard_success_response
@@ -199,6 +206,125 @@ multi_level_status_docs = extend_schema(
         200: OpenApiResponse(
             response=standard_success_response("MultiLevelStatusResponse"),
             description="审核状态",
+        )
+    },
+)
+
+smart_assign_task_docs = extend_schema(
+    tags=["审核"],
+    summary="智能分配任务",
+    request=inline_serializer(
+        name="ApprovalSmartAssignTaskRequest",
+        fields={"task_id": serializers.IntegerField()},
+    ),
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response("ApprovalSmartAssignTaskResponse"),
+            description="分配成功",
+        ),
+        400: OpenApiResponse(
+            response=standard_error_response("ApprovalSmartAssignTaskBadRequest"),
+            description="请求无效",
+        ),
+        403: OpenApiResponse(
+            response=standard_error_response("ApprovalSmartAssignTaskForbidden"),
+            description="权限不足",
+        ),
+        404: OpenApiResponse(
+            response=standard_error_response("ApprovalSmartAssignTaskNotFound"),
+            description="任务不存在",
+        ),
+    },
+)
+
+smart_assign_workorder_docs = extend_schema(
+    tags=["审核"],
+    summary="智能分配施工单任务",
+    request=inline_serializer(
+        name="ApprovalSmartAssignWorkOrderRequest",
+        fields={"workorder_id": serializers.IntegerField()},
+    ),
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response("ApprovalSmartAssignWorkOrderResponse"),
+            description="分配成功",
+        ),
+        400: OpenApiResponse(
+            response=standard_error_response("ApprovalSmartAssignWorkOrderBadRequest"),
+            description="请求无效",
+        ),
+        403: OpenApiResponse(
+            response=standard_error_response("ApprovalSmartAssignWorkOrderForbidden"),
+            description="权限不足",
+        ),
+        404: OpenApiResponse(
+            response=standard_error_response("ApprovalSmartAssignWorkOrderNotFound"),
+            description="施工单不存在",
+        ),
+    },
+)
+
+team_skill_analysis_docs = extend_schema(
+    tags=["审核"],
+    summary="团队技能分析",
+    parameters=[
+        OpenApiParameter(
+            name="department_id",
+            type=OpenApiTypes.INT,
+            required=False,
+            description="部门ID",
+        )
+    ],
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response("ApprovalTeamSkillAnalysisResponse"),
+            description="分析结果",
+        ),
+        403: OpenApiResponse(
+            response=standard_error_response("ApprovalTeamSkillAnalysisForbidden"),
+            description="权限不足",
+        ),
+    },
+)
+
+user_performance_summary_docs = extend_schema(
+    tags=["审核"],
+    summary="用户绩效统计",
+    parameters=[
+        OpenApiParameter(
+            name="user_id",
+            type=OpenApiTypes.INT,
+            required=True,
+            description="用户ID",
+        )
+    ],
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response("ApprovalUserPerformanceResponse"),
+            description="统计结果",
+        ),
+        400: OpenApiResponse(
+            response=standard_error_response("ApprovalUserPerformanceBadRequest"),
+            description="请求无效",
+        ),
+        403: OpenApiResponse(
+            response=standard_error_response("ApprovalUserPerformanceForbidden"),
+            description="权限不足",
+        ),
+        404: OpenApiResponse(
+            response=standard_error_response("ApprovalUserPerformanceNotFound"),
+            description="用户不存在",
+        ),
+    },
+)
+
+update_skill_profile_docs = extend_schema(
+    tags=["审核"],
+    summary="更新用户技能档案",
+    responses={
+        501: OpenApiResponse(
+            response=standard_error_response("ApprovalSkillProfileNotImplemented"),
+            description="功能不可用",
         )
     },
 )

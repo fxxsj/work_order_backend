@@ -11,15 +11,16 @@ from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from workorder.response import APIResponse
 from workorder.docs.assets import (
+    artwork_create_version_docs,
     artwork_docs,
     artwork_product_docs,
+    confirm_docs,
     die_docs,
     die_product_docs,
     embossing_plate_docs,
     embossing_product_docs,
     foiling_plate_docs,
     foiling_product_docs,
-    confirm_docs,
 )
 
 from ..models.assets import (
@@ -106,6 +107,7 @@ class ArtworkViewSet(PlateMakingConfirmMixin, BaseViewSet):
     ordering = ["-base_code", "-version"]
 
     @action(detail=True, methods=["post"])
+    @artwork_create_version_docs
     def create_version(self, request, pk=None):
         """基于现有图稿创建新版本
 

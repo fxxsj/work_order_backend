@@ -44,8 +44,13 @@ from workorder.docs.multi_level_approval import (
     multi_level_my_tasks_docs,
     multi_level_status_docs,
     multi_level_submit_docs,
+    smart_assign_task_docs,
+    smart_assign_workorder_docs,
+    team_skill_analysis_docs,
     urgent_list_docs,
     urgent_mark_docs,
+    update_skill_profile_docs,
+    user_performance_summary_docs,
 )
 
 from ..models.assets import (
@@ -495,6 +500,7 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
         return APIResponse.success(data=dashboard_data)
 
     @action(detail=False, methods=["post"])
+    @smart_assign_task_docs
     def smart_assign_task(self, request):
         """智能分配任务"""
         from ..models.core import WorkOrderTask
@@ -528,6 +534,7 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
         return APIResponse.error(result["error"], code=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=["post"])
+    @smart_assign_workorder_docs
     def smart_assign_workorder(self, request):
         """智能分配整个施工单的所有任务"""
         from ..models.core import WorkOrder
@@ -558,6 +565,7 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
         )
 
     @action(detail=False, methods=["get"])
+    @team_skill_analysis_docs
     def team_skill_analysis(self, request):
         """团队技能分析"""
         from ..services.smart_assignment import SmartAssignmentService
@@ -575,6 +583,7 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
         return APIResponse.success(data=analysis)
 
     @action(detail=False, methods=["get"])
+    @user_performance_summary_docs
     def user_performance_summary(self, request):
         """用户绩效统计"""
         from ..services.smart_assignment import SmartAssignmentService
@@ -601,6 +610,7 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
         return APIResponse.success(data=summary)
 
     @action(detail=False, methods=["post"])
+    @update_skill_profile_docs
     def update_skill_profile(self, request):
         """更新用户技能档案"""
         return APIResponse.error("技能画像已禁用", code=status.HTTP_501_NOT_IMPLEMENTED)

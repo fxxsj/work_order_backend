@@ -16,6 +16,7 @@ from workorder.docs.base import (
     department_docs,
     department_tree_docs,
     process_all_docs,
+    process_batch_update_active_docs,
     process_docs,
 )
 
@@ -259,6 +260,7 @@ class ProcessViewSet(BaseViewSet):
         return super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=["post"])
+    @process_batch_update_active_docs
     def batch_update_active(self, request):
         """批量更新工序启用状态"""
         ids = request.data.get("ids", [])

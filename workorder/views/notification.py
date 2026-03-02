@@ -166,6 +166,20 @@ class NotificationViewSet(viewsets.GenericViewSet):
         return APIResponse.success(data={"count": count}, message=f"已标记 {count} 条通知为已读")
 
     @action(detail=True, methods=["delete"])
+    @extend_schema(
+        tags=["通知"],
+        summary="删除通知",
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("NotificationDeleteResponse"),
+                description="删除成功",
+            ),
+            404: OpenApiResponse(
+                response=standard_error_response("NotificationDeleteNotFoundResponse"),
+                description="通知不存在",
+            ),
+        },
+    )
     def delete(self, request, pk=None):
         """删除通知"""
         try:
@@ -177,6 +191,16 @@ class NotificationViewSet(viewsets.GenericViewSet):
             return APIResponse.error("通知不存在", code=status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=["delete"])
+    @extend_schema(
+        tags=["通知"],
+        summary="删除所有已读通知",
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("NotificationDeleteAllReadResponse"),
+                description="删除成功",
+            )
+        },
+    )
     def delete_all_read(self, request):
         """删除所有已读通知"""
         count = self.get_queryset().filter(is_read=True).delete()[0]
@@ -184,6 +208,16 @@ class NotificationViewSet(viewsets.GenericViewSet):
         return APIResponse.success(data={"count": count}, message=f"已删除 {count} 条已读通知")
 
     @action(detail=False, methods=["get"])
+    @extend_schema(
+        tags=["通知"],
+        summary="获取未读通知数量",
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("NotificationUnreadCountResponse"),
+                description="未读数量",
+            )
+        },
+    )
     def unread_count(self, request):
         """获取未读通知数量"""
         count = self.get_queryset().filter(is_read=False).count()
@@ -191,6 +225,16 @@ class NotificationViewSet(viewsets.GenericViewSet):
         return APIResponse.success(data={"unread_count": count})
 
     @action(detail=False, methods=["get"])
+    @extend_schema(
+        tags=["通知"],
+        summary="获取通知统计",
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("NotificationStatisticsResponse"),
+                description="通知统计",
+            )
+        },
+    )
     def statistics(self, request):
         """获取通知统计"""
         queryset = self.get_queryset()
@@ -205,6 +249,16 @@ class NotificationViewSet(viewsets.GenericViewSet):
         )
 
     @action(detail=False, methods=["post"])
+    @extend_schema(
+        tags=["通知"],
+        summary="获取 WebSocket 连接票据",
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("NotificationWsTicketResponse"),
+                description="连接票据",
+            )
+        },
+    )
     def ws_ticket(self, request):
         """获取 WebSocket 连接票据（短期有效，一次性使用）"""
         ticket = secrets.token_urlsafe(32)

@@ -30,6 +30,13 @@ from workorder.serializers.core import TaskAssignmentSerializer, WorkOrderTaskSe
 from workorder.schema import standard_error_response, standard_success_response
 from workorder.services.task_assignment import TaskAssignmentService
 
+from workorder.docs.work_order_tasks_actions import (
+    task_assign_docs,
+    task_claim_docs,
+    task_claimable_docs,
+    task_department_operators_docs,
+    task_operator_center_docs,
+)
 from .task_export import TaskExportMixin
 from .task_filters import WorkOrderTaskFilterSet
 
@@ -262,6 +269,7 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             task.work_order_process.check_and_update_status()
 
     @action(detail=True, methods=["post"], url_path="assign")
+    @task_assign_docs
     def assign(self, request, pk=None):
         """分配任务给指定操作员
 
@@ -342,6 +350,7 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             )
 
     @action(detail=False, methods=["get"], url_path="department-operators")
+    @task_department_operators_docs
     def department_operators(self, request):
         """获取部门操作员列表
 
@@ -372,6 +381,7 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             )
 
     @action(detail=True, methods=["post"], url_path="claim")
+    @task_claim_docs
     def claim(self, request, pk=None):
         """操作员认领任务
 
@@ -450,6 +460,7 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             )
 
     @action(detail=False, methods=["get"], url_path="claimable")
+    @task_claimable_docs
     def claimable(self, request):
         """获取当前用户可认领的任务列表
 
@@ -486,6 +497,7 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             )
 
     @action(detail=False, methods=["get"], url_path="operator_center")
+    @task_operator_center_docs
     def operator_center(self, request):
         """Operator task center data: assigned tasks + claimable tasks
 

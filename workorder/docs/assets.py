@@ -130,6 +130,23 @@ confirm_docs = extend_schema(
     },
 )
 
+artwork_create_version_docs = extend_schema(
+    tags=["资产"],
+    summary="创建图稿新版本",
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response(
+                "ArtworkCreateVersionResponse", ArtworkSerializer
+            ),
+            description="创建成功",
+        ),
+        400: OpenApiResponse(
+            response=standard_error_response("ArtworkCreateVersionBadRequest"),
+            description="请求无效",
+        ),
+    },
+)
+
 
 artwork_product_docs = extend_schema_view(
     list=extend_schema(

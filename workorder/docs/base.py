@@ -2,7 +2,8 @@
 基础数据视图集的 OpenAPI 文档定义。
 """
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view, inline_serializer
+from rest_framework import serializers
 
 from workorder.schema import standard_error_response, standard_success_response
 from workorder.serializers.base import (
@@ -213,6 +214,29 @@ process_docs = extend_schema_view(
             ),
         },
     ),
+)
+
+
+process_batch_update_active_docs = extend_schema(
+    tags=["工序"],
+    summary="批量更新工序启用状态",
+    request=inline_serializer(
+        name="ProcessBatchUpdateActiveRequest",
+        fields={
+            "ids": serializers.ListField(child=serializers.IntegerField()),
+            "is_active": serializers.BooleanField(required=False),
+        },
+    ),
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response("ProcessBatchUpdateActiveResponse"),
+            description="更新成功",
+        ),
+        400: OpenApiResponse(
+            response=standard_error_response("ProcessBatchUpdateActiveBadRequest"),
+            description="请求无效",
+        ),
+    },
 )
 
 

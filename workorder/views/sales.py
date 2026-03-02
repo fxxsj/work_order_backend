@@ -20,6 +20,7 @@ from workorder.docs.sales import (
     sales_order_reject_docs,
     sales_order_start_docs,
     sales_order_submit_docs,
+    sales_order_update_payment_docs,
 )
 
 from ..models.products import Product
@@ -295,6 +296,7 @@ class SalesOrderViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
+    @sales_order_update_payment_docs
     def update_payment(self, request, pk=None):
         """更新付款信息"""
         sales_order = self.get_object()

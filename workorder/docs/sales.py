@@ -158,6 +158,30 @@ sales_order_cancel_docs = extend_schema(
     },
 )
 
+sales_order_update_payment_docs = extend_schema(
+    tags=["销售"],
+    summary="更新订单付款信息",
+    request=inline_serializer(
+        name="SalesOrderUpdatePaymentRequest",
+        fields={
+            "paid_amount": serializers.DecimalField(
+                max_digits=12, decimal_places=2, required=False
+            ),
+            "payment_date": serializers.DateField(required=False),
+        },
+    ),
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response("SalesOrderUpdatePaymentResponse"),
+            description="更新成功",
+        ),
+        400: OpenApiResponse(
+            response=standard_error_response("SalesOrderUpdatePaymentBadRequest"),
+            description="请求无效",
+        ),
+    },
+)
+
 sales_order_item_docs = extend_schema_view(
     list=extend_schema(
         tags=["销售"],
