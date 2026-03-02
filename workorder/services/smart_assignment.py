@@ -9,10 +9,8 @@
 5. 学习型算法优化
 """
 
-from django.db import models
 from django.db.models import Count, Q, Avg, Max, Min
 from django.utils import timezone
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from typing import List, Dict, Optional, Tuple, Any
 import logging
@@ -23,40 +21,6 @@ import json
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
-
-
-class SkillProfile(models.Model):
-    """操作员技能画像"""
-    
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='skill_profile')
-    
-    # 核心技能领域
-    technical_skills = models.JSONField('技术技能', default=list, help_text='掌握的技术栈')
-    experience_years = models.IntegerField('经验年限', default=0)
-    skill_level = models.IntegerField('技能等级', default=1, help_text='1-10级')
-    certification = models.JSONField('认证证书', default=list)
-    
-    # 性能指标
-    task_completion_rate = models.FloatField('任务完成率', default=0.0, help_text='最近30天任务完成率')
-    avg_completion_time = models.FloatField('平均完成时间(小时)', default=0.0, help_text='平均任务完成时间')
-    error_rate = models.FloatField('错误率', default=0.0, help_text='错误率')
-    quality_score = models.FloatField('质量评分', default=0.0, help_text='质量评分(0-10)')
-    
-    # 工作偏好
-    preferred_work_types = models.JSONField('偏好的工作类型', default=list)
-    work_capacity = models.IntegerField('工作容量', default=5, help_text='同时处理的最大任务数')
-    
-    created_at = models.DateTimeField('创建时间', auto_now_add=True)
-    updated_at = models.DateTimeField('更新时间', auto_now=True)
-    
-    class Meta:
-        verbose_name = '技能画像'
-        verbose_name_plural = '技能画像管理'
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['user']),
-            models.Index(fields=['skill_level']),
-        ]
 
 
 class TaskPerformanceData:
@@ -120,12 +84,9 @@ class SmartAssignmentService:
     """智能任务分派服务"""
     
     @staticmethod
-    def get_skill_profile(user) -> Optional[SkillProfile]:
+    def get_skill_profile(user):
         """获取用户技能画像"""
-        try:
-            return user.skill_profile
-        except SkillProfile.DoesNotExist:
-            return None
+        return None
     
     @staticmethod
     def calculate_skill_match_score(user_skills: List[str], task_requirements: List[str]) -> float:
@@ -179,9 +140,7 @@ class SmartAssignmentService:
     @staticmethod
     def calculate_workload_factor(user, current_tasks: int) -> float:
         """计算工作负载因子"""
-        user_profile = SmartAssignmentService.get_skill_profile(user)
-        if not user_profile:
-            return 1.0  # 默认中等负载
+        return 1.0  # 技能画像已禁用，返回默认负载
         
         capacity = user_profile.work_capacity or 5
         current_load = current_tasks / capacity
@@ -205,10 +164,6 @@ class SmartAssignmentService:
     @staticmethod
     def calculate_priority_score(user, task_priority: str, deadline_days: int = None) -> float:
         """计算优先级评分"""
-        user_profile = SmartAssignmentService.get_skill_profile(user)
-        if not user_profile:
-            return 0.0
-        
         # 基础优先级评分
         priority_scores = {
             'urgent': 1.0,
@@ -230,77 +185,26 @@ class SmartAssignmentService:
             else:
                 urgency_factor = 0.8
         
-        # 技能匹配度加成
-        skill_match = user_profile.skill_level or 1
-        
-        total_score = base_score + urgency_factor + (skill_match * 0.2)
+        # 技能画像已禁用，只返回基础评分
+        total_score = base_score + urgency_factor
         return min(total_score, 2.0)
     
     @staticmethod
     def get_optimal_operator(user, task_requirements: Dict[str, None]) -> Optional[User]:
         """获取最佳操作员选择"""
-        user_profile = SmartAssignmentService.get_skill_profile(user)
-        if not user_profile:
-            return None
-        
-        # 获取符合要求的候选人
-        available_users = User.objects.filter(
-            is_active=True,
-            skill_profile__technical_skills__contains=any(skill.lower() for skill in task_requirements if skill)
-        )
-        
-        if not available_users.exists():
-            return None
-        
-        # 计算每个候选人的适配度分数
-        candidates_scores = []
-        for user in available_users:
-            score = SmartAssignmentService.calculate_user_match_score(user, task_requirements)
-            candidates_scores.append(score)
-        
-        # 选择得分最高的用户
-        if candidates_scores:
-            return max(range(len(candidates_scores)), key=lambda i: candidates_scores[i])
         return None
 
     @staticmethod
     def calculate_user_match_score(user, task_requirements: Dict[str, None]) -> float:
         """计算用户匹配度"""
-        user_profile = SmartAssignmentService.get_skill_profile(user)
-        if not user_profile:
-            return 0.0
-        
-        score = SmartAssignmentService.calculate_skill_match_score(
-            user_profile.technical_skills or [],
-            task_requirements or []
-        )
-        
-        # 考虑工作负载
-        current_tasks = TaskPerformanceData.get_user_task_count(user)
-        workload_factor = SmartAssignmentService.calculate_workload_factor(user, current_tasks)
-        workload_score = min(workload_factor, 2.0)
-        
-        return min(score + workload_score, 2.0)
+        return 0.0
 
     @staticmethod
     def calculate_team_balance_score(team_users: List[User]) -> Dict[str, float]:
         """计算团队平衡性评分"""
-        skill_levels = [
-            user.skill_profile.skill_level if user.skill_profile else 0
-            for user in team_users
-        ]
-        work_capacities = [
-            user.skill_profile.work_capacity if user.skill_profile else 5
-            for user in team_users
-        ]
-        
-        # 团队技能多样性
-        skill_diversity = len(set(
-            skill.lower()
-            for user in team_users
-            if user.skill_profile
-            for skill in (user.skill_profile.technical_skills or [])
-        ))
+        skill_levels = [0 for _ in team_users]
+        work_capacities = [5 for _ in team_users]
+        skill_diversity = 0
         
         # 平衡度计算
         avg_skill_level = float(np.mean(skill_levels)) if skill_levels else 1.0
@@ -389,71 +293,8 @@ class LearningSystem:
 
     def update_skill_level(self, user_id: int, new_level: int):
         """更新用户技能等级"""
-        if user_id not in self.user_performance:
-            self.user_performance[user_id] = SkillProfile.objects.get(user=user_id)
-            self.user_performance[user_id].skill_level = new_level
-            self.user_performance[user_id].save()
+        return
 
     def get_system_recommendations(self) -> Dict[str, Any]:
         """获取系统改进建议"""
-        
-        # 分析整体性能数据
-        all_users = User.objects.filter(
-            is_active=True,
-            skill_profile__isnull=False
-        ).select_related('skill_profile')
-        
-        if not all_users.exists():
-            return {}
-        
-        total_performance = TaskPerformanceData()
-        for user in all_users:
-            perf_summary = self.get_user_performance_summary(user.id)
-            if perf_summary:
-                total_performance.task_count += perf_summary['total_tasks']
-                total_performance.success_rate += perf_summary['success_rate']
-                total_performance.avg_completion_time += perf_summary['avg_completion_time']
-                total_performance.error_rate += perf_summary['error_rate']
-                total_performance.quality_score += perf_summary['quality_score']
-                total_performance.skill_level = perf_summary['skill_level']
-        
-        # 分析问题和改进建议
-        recommendations = []
-        
-        # 检查技能不匹配的用户
-        skill_mismatch_users = []
-        for user in all_users:
-            user_profile = user.skill_profile
-            recent_performance = self.get_user_performance_summary(user.id)
-            
-            # 检查技能匹配度
-            skill_match_score = user_profile.skill_level / 10.0
-            if skill_match_score < 0.3:
-                skill_mismatch_users.append(user)
-        
-        # 检查工作负载不均衡
-        workload_scores = []
-        for user in all_users:
-            workload_score = SmartAssignmentService.calculate_workload_factor(user, TaskPerformanceData.get_user_task_count(user))
-            if workload_score > 1.5:  # 负载过高
-                workload_scores.append(user)
-        
-        if skill_mismatch_users:
-            recommendations.append({
-                'type': 'skill_mismatch',
-                'message': f'用户 {user.username} 的技能与任务需求不匹配',
-                'suggestion': '建议参加相关技能培训'
-            })
-        
-        if workload_scores:
-            recommendations.append({
-                'type': 'workload_imbalance',
-                'message': '团队工作量分配不均衡，建议重新分配任务',
-                'affected_users': [u.username for u in workload_scores]
-            })
-        
-        return {
-            'total_users': all_users.count(),
-            'performance_summary': total_performance.get_performance_summary(),
-            'recommendations': recommendations
-        }
+        return {}

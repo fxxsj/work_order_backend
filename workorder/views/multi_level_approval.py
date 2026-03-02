@@ -565,48 +565,4 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=["post"])
     def update_skill_profile(self, request):
         """更新用户技能档案"""
-        from ..services.smart_assignment import SkillProfile
-
-        user_id = request.data.get("user_id")
-        if not user_id:
-            return APIResponse.error("缺少用户ID", code=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return APIResponse.error("用户不存在", code=status.HTTP_404_NOT_FOUND)
-
-        # 权限检查：用户只能更新自己的档案，管理员可以更新所有
-        if (
-            not request.user.has_perm("workorder.change_workorder")
-            and request.user.id != user.id
-        ):
-            return APIResponse.error("权限不足", code=status.HTTP_403_FORBIDDEN)
-
-        skills_data = request.data.get("skills", [])
-
-        skill_profile, created = SkillProfile.objects.get_or_create(user=user)
-
-        # 清除现有技能
-        skill_profile.skills.clear()
-
-        # 添加新技能
-        for skill_data in skills_data:
-            from ..models.core import Process
-
-            process_id = skill_data.get("process_id")
-            level = skill_data.get("level", SkillProfile.SKILL_LEVEL_BASIC)
-
-            try:
-                process = Process.objects.get(id=process_id)
-                skill_profile.skills.add(process, through_defaults={"level": level})
-            except Process.DoesNotExist:
-                continue
-
-        return APIResponse.success(
-            data={
-                "user_id": user_id,
-                "skills_count": skill_profile.skills.count(),
-            },
-            message="技能档案更新成功",
-        )
+        return APIResponse.error("技能画像已禁用", code=status.HTTP_501_NOT_IMPLEMENTED)
