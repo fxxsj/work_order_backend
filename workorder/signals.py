@@ -11,9 +11,7 @@ from .models import (
     FoilingPlate, EmbossingPlate
 )
 
-# 用于存储保存前的状态，以便检测状态变化
-_material_status_cache = {}
-_plate_confirmation_cache = {}
+# 使用实例属性缓存保存前的状态，避免全局缓存带来的并发问题
 
 
 @receiver(pre_save, sender=WorkOrderMaterial)
@@ -22,7 +20,7 @@ def cache_material_status(sender, instance, **kwargs):
     if instance.pk:
         try:
             old_instance = WorkOrderMaterial.objects.get(pk=instance.pk)
-            _material_status_cache[instance.pk] = old_instance.purchase_status
+            instance._previous_purchase_status = old_instance.purchase_status
         except WorkOrderMaterial.DoesNotExist:
             pass
 
@@ -35,16 +33,10 @@ def update_cutting_task_on_material_status_change(sender, instance, created, **k
         return
     
     # 检查状态是否真的变化了（从非'cut'变为'cut'）
-    old_status = _material_status_cache.get(instance.pk)
+    old_status = getattr(instance, "_previous_purchase_status", None)
     if old_status == instance.purchase_status:
         # 状态未变化，不处理
-        if instance.pk in _material_status_cache:
-            del _material_status_cache[instance.pk]
         return
-    
-    # 清理缓存
-    if instance.pk in _material_status_cache:
-        del _material_status_cache[instance.pk]
     
     # 检查物料状态是否为'cut'（已开料）
     if instance.purchase_status == 'cut':
@@ -95,7 +87,7 @@ def cache_artwork_confirmation(sender, instance, **kwargs):
     if instance.pk:
         try:
             old_instance = Artwork.objects.get(pk=instance.pk)
-            _plate_confirmation_cache[f'artwork_{instance.pk}'] = old_instance.confirmed
+            instance._previous_confirmed = old_instance.confirmed
         except Artwork.DoesNotExist:
             pass
 
@@ -108,17 +100,10 @@ def update_plate_making_task_on_artwork_confirmation(sender, instance, created, 
         return
     
     # 检查确认状态是否真的变化了（从False变为True）
-    cache_key = f'artwork_{instance.pk}'
-    old_confirmed = _plate_confirmation_cache.get(cache_key, False)
+    old_confirmed = getattr(instance, "_previous_confirmed", False)
     if old_confirmed == instance.confirmed:
         # 状态未变化，不处理
-        if cache_key in _plate_confirmation_cache:
-            del _plate_confirmation_cache[cache_key]
         return
-    
-    # 清理缓存
-    if cache_key in _plate_confirmation_cache:
-        del _plate_confirmation_cache[cache_key]
     
     # 检查图稿是否已确认
     if instance.confirmed:
@@ -147,7 +132,7 @@ def cache_die_confirmation(sender, instance, **kwargs):
     if instance.pk:
         try:
             old_instance = Die.objects.get(pk=instance.pk)
-            _plate_confirmation_cache[f'die_{instance.pk}'] = old_instance.confirmed
+            instance._previous_confirmed = old_instance.confirmed
         except Die.DoesNotExist:
             pass
 
@@ -159,15 +144,9 @@ def update_plate_making_task_on_die_confirmation(sender, instance, created, **kw
         return
     
     # 检查确认状态是否真的变化了
-    cache_key = f'die_{instance.pk}'
-    old_confirmed = _plate_confirmation_cache.get(cache_key, False)
+    old_confirmed = getattr(instance, "_previous_confirmed", False)
     if old_confirmed == instance.confirmed:
-        if cache_key in _plate_confirmation_cache:
-            del _plate_confirmation_cache[cache_key]
         return
-    
-    if cache_key in _plate_confirmation_cache:
-        del _plate_confirmation_cache[cache_key]
     
     if instance.confirmed:
         plate_making_tasks = WorkOrderTask.objects.filter(
@@ -193,7 +172,7 @@ def cache_foiling_plate_confirmation(sender, instance, **kwargs):
     if instance.pk:
         try:
             old_instance = FoilingPlate.objects.get(pk=instance.pk)
-            _plate_confirmation_cache[f'foiling_{instance.pk}'] = old_instance.confirmed
+            instance._previous_confirmed = old_instance.confirmed
         except FoilingPlate.DoesNotExist:
             pass
 
@@ -205,15 +184,9 @@ def update_plate_making_task_on_foiling_plate_confirmation(sender, instance, cre
         return
     
     # 检查确认状态是否真的变化了
-    cache_key = f'foiling_{instance.pk}'
-    old_confirmed = _plate_confirmation_cache.get(cache_key, False)
+    old_confirmed = getattr(instance, "_previous_confirmed", False)
     if old_confirmed == instance.confirmed:
-        if cache_key in _plate_confirmation_cache:
-            del _plate_confirmation_cache[cache_key]
         return
-    
-    if cache_key in _plate_confirmation_cache:
-        del _plate_confirmation_cache[cache_key]
     
     if instance.confirmed:
         plate_making_tasks = WorkOrderTask.objects.filter(
@@ -239,7 +212,7 @@ def cache_embossing_plate_confirmation(sender, instance, **kwargs):
     if instance.pk:
         try:
             old_instance = EmbossingPlate.objects.get(pk=instance.pk)
-            _plate_confirmation_cache[f'embossing_{instance.pk}'] = old_instance.confirmed
+            instance._previous_confirmed = old_instance.confirmed
         except EmbossingPlate.DoesNotExist:
             pass
 
@@ -251,15 +224,9 @@ def update_plate_making_task_on_embossing_plate_confirmation(sender, instance, c
         return
     
     # 检查确认状态是否真的变化了
-    cache_key = f'embossing_{instance.pk}'
-    old_confirmed = _plate_confirmation_cache.get(cache_key, False)
+    old_confirmed = getattr(instance, "_previous_confirmed", False)
     if old_confirmed == instance.confirmed:
-        if cache_key in _plate_confirmation_cache:
-            del _plate_confirmation_cache[cache_key]
         return
-    
-    if cache_key in _plate_confirmation_cache:
-        del _plate_confirmation_cache[cache_key]
     
     if instance.confirmed:
         plate_making_tasks = WorkOrderTask.objects.filter(
@@ -290,4 +257,3 @@ def _parse_material_usage(usage_str):
     if numbers:
         return int(numbers[0])
     return 0
-

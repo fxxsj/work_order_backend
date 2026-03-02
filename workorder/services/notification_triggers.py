@@ -10,7 +10,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from datetime import timedelta
 
-from ..models.core import WorkOrder, WorkOrderProcess, WorkOrderTask, ProcessLog, TaskLog
+from ..models.core import WorkOrder, WorkOrderProcess, WorkOrderTask, ProcessLog
 from ..models.system import WorkOrderApprovalLog
 from ..services.realtime_notification import (
     notification_service, NotificationEvent, NotificationPriority
@@ -103,67 +103,21 @@ def approval_log_handler(sender, instance, created, **kwargs):
 @receiver(post_save, sender=ProcessLog)
 def process_log_handler(sender, instance, created, **kwargs):
     """工序日志创建时触发通知"""
-    if created:
-        if instance.action_type == 'completed':
-            # 工序完成
-            try:
-                workorder_process = WorkOrderProcess.objects.get(
-                    workorder=instance.work_order,
-                    process=instance.process
-                )
-                
-                notification_service.notify_process_completion(
-                    process=instance.process,
-                    workorder=instance.work_order,
-                    completed_by=instance.created_by
-                )
-                
-            except WorkOrderProcess.DoesNotExist:
-                pass
-        
-        elif instance.action_type == 'error':
-            # 工序出错
-            notification_service.send_notification(
-                event_type=NotificationEvent.PROCESS_ERROR,
-                recipients=[instance.work_order.created_by] + _get_supervisors(),
-                data={
-                    'title': '工序执行出错',
-                    'message': f'工序 {instance.process.name} 执行过程中出现错误',
-                    'process_id': instance.process.id,
-                    'process_name': instance.process.name,
-                    'workorder_id': instance.work_order.id,
-                    'workorder_number': instance.work_order.order_number,
-                    'error_message': instance.comments,
-                    'created_by': instance.created_by.username if instance.created_by else ''
-                },
-                priority=NotificationPriority.HIGH
-            )
+    if not created:
+        return
 
+    if instance.log_type != "complete":
+        return
 
-@receiver(post_save, sender=TaskLog)
-def task_log_handler(sender, instance, created, **kwargs):
-    """任务日志创建时触发通知"""
-    if created:
-        if instance.action_type == 'error':
-            # 任务出错
-            recipients = [instance.task.work_order_process.work_order.created_by]
-            recipients.extend(_get_supervisors())
+    workorder_process = instance.work_order_process
+    if not workorder_process:
+        return
 
-            notification_service.send_notification(
-                event_type=NotificationEvent.TASK_ERROR,
-                recipients=recipients,
-                data={
-                    'title': '任务执行出错',
-                    'message': f'任务 {instance.task.work_content} 执行过程中出现错误',
-                    'task_id': instance.task.id,
-                    'task_name': instance.task.work_content,
-                    'workorder_id': instance.task.work_order_process.work_order.id,
-                    'workorder_number': instance.task.work_order_process.work_order.order_number,
-                    'error_message': instance.content,
-                    'created_by': instance.operator.username if instance.operator else ''
-                },
-                priority=NotificationPriority.HIGH
-            )
+    notification_service.notify_process_completion(
+        process=workorder_process.process,
+        workorder=workorder_process.work_order,
+        completed_by=instance.operator,
+    )
 
 
 class DeadlineWarningService:
@@ -176,20 +130,20 @@ class DeadlineWarningService:
         
         today = date.today()
         
-        # 检查1天后到期的施工单
+        # 检查1天后到期的施工单（使用交货日期）
         one_day_later = today + timedelta(days=1)
         workorders_1_day = WorkOrder.objects.filter(
-            deadline=one_day_later,
+            delivery_date=one_day_later,
             status__in=['pending', 'in_progress']
         )
         
         for workorder in workorders_1_day:
             notification_service.notify_deadline_warning(workorder, 1)
         
-        # 检查3天后到期的施工单
+        # 检查3天后到期的施工单（使用交货日期）
         three_days_later = today + timedelta(days=3)
         workorders_3_days = WorkOrder.objects.filter(
-            deadline=three_days_later,
+            delivery_date=three_days_later,
             status__in=['pending', 'in_progress']
         )
         
@@ -201,10 +155,10 @@ class DeadlineWarningService:
         """检查逾期任务"""
         now = timezone.now()
         
-        # 检查逾期但未完成的任务
+        # 检查逾期但未完成的任务（使用工序计划结束时间）
         overdue_tasks = WorkOrderTask.objects.filter(
-            deadline__lt=now,
-            status__in=['pending', 'in_progress']
+            work_order_process__planned_end_time__lt=now,
+            status__in=["pending", "in_progress"],
         )
         
         for task in overdue_tasks:
@@ -222,51 +176,21 @@ class DeadlineWarningService:
                     'task_name': task.work_content,
                     'workorder_id': task.work_order_process.work_order.id,
                     'workorder_number': task.work_order_process.work_order.order_number,
-                    'deadline': task.deadline.isoformat() if hasattr(task, 'deadline') and task.deadline else None,
+                    'deadline': (
+                        task.work_order_process.planned_end_time.isoformat()
+                        if task.work_order_process and task.work_order_process.planned_end_time
+                        else None
+                    ),
                     'assigned_to': task.assigned_operator.username if task.assigned_operator else ''
                 },
                 priority=NotificationPriority.URGENT
             )
-
-
-class NotificationIntegrationService:
-    """通知集成服务"""
-    
-    @staticmethod
-    def initialize():
-        """初始化通知集成"""
-        # 这里可以设置定时任务
-        from celery import Celery
-        from django.conf import settings
-        
-        app = Celery('workorder')
-        
-        # 设置定时检查交货期预警
-        @app.task
-        def check_deadline_warnings():
-            DeadlineWarningService.check_deadline_warnings()
-        
-        @app.task
-        def check_overdue_tasks():
-            DeadlineWarningService.check_overdue_tasks()
-        
-        # 每天早上8点检查交货期预警
-        app.conf.beat_schedule = {
-            'check-deadline-warnings': {
-                'task': 'workorder.services.notification_triggers.check_deadline_warnings',
-                'schedule': 86400.0,  # 24小时
-            },
-            'check-overdue-tasks': {
-                'task': 'workorder.services.notification_triggers.check_overdue_tasks',
-                'schedule': 3600.0,  # 1小时
-            },
-        }
     
     @staticmethod
     def send_workorder_update_notification(workorder, updated_fields, updated_by=None):
         """发送施工单更新通知"""
         # 只对重要字段发送通知
-        important_fields = ['status', 'priority', 'deadline', 'total_amount']
+        important_fields = ["status", "priority", "delivery_date", "total_amount"]
         notified_fields = []
         
         for field in updated_fields:
@@ -295,6 +219,16 @@ class NotificationIntegrationService:
             )
 
 
+def check_deadline_warnings():
+    """供外部调度的交货期预警入口"""
+    DeadlineWarningService.check_deadline_warnings()
+
+
+def check_overdue_tasks():
+    """供外部调度的任务逾期检查入口"""
+    DeadlineWarningService.check_overdue_tasks()
+
+
 def _get_supervisors():
     """获取主管列表"""
     try:
@@ -304,7 +238,3 @@ def _get_supervisors():
         ).distinct()
     except Exception:
         return []
-
-
-# 初始化通知集成
-NotificationIntegrationService.initialize()

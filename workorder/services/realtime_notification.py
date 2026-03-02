@@ -206,7 +206,11 @@ class RealtimeNotificationService:
                 'assigned_by': assigned_by.username if assigned_by else '系统',
                 'quantity': task.production_quantity,
                 'priority': task.work_order_process.work_order.priority if task.work_order_process else 'normal',
-                'deadline': task.deadline.isoformat() if hasattr(task, 'deadline') and task.deadline else None,
+                'deadline': (
+                    task.work_order_process.planned_end_time.isoformat()
+                    if task.work_order_process and task.work_order_process.planned_end_time
+                    else None
+                ),
             },
             priority=self._map_priority(task.work_order_process.work_order.priority if task.work_order_process else 'normal'),
             channels=[NotificationChannel.WEBSOCKET, NotificationChannel.IN_APP]
@@ -372,6 +376,8 @@ class RealtimeNotificationService:
     
     def notify_deadline_warning(self, workorder, days_remaining):
         """通知交货期预警"""
+        if not workorder.delivery_date:
+            return
         recipients = [workorder.created_by]
         
         # 添加相关操作员
@@ -392,7 +398,7 @@ class RealtimeNotificationService:
                 'message': f'施工单 {workorder.order_number} 将在 {days_remaining} 天后到期',
                 'workorder_id': workorder.id,
                 'workorder_number': workorder.order_number,
-                'deadline': workorder.deadline.strftime('%Y-%m-%d'),
+                'deadline': workorder.delivery_date.strftime('%Y-%m-%d'),
                 'days_remaining': days_remaining
             },
             priority=priority
