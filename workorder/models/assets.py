@@ -18,6 +18,15 @@ from django.db.models import Max
 from django.utils import timezone
 
 
+class _SignalSafeQuerySet(models.QuerySet):
+    """禁止使用 update() 绕过 signals 的 QuerySet。"""
+
+    def update(self, **kwargs):
+        raise RuntimeError(
+            "禁止使用 update() 绕过 signals，请改用 save() 或业务服务方法。"
+        )
+
+
 class Artwork(models.Model):
     """图稿信息"""
 
@@ -84,6 +93,8 @@ class Artwork(models.Model):
     notes = models.TextField("备注", blank=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    objects = _SignalSafeQuerySet.as_manager()
 
     class Meta:
         verbose_name = "图稿"
@@ -245,6 +256,8 @@ class Die(models.Model):
         "更新时间", auto_now=True, help_text="刀模记录最后更新时间"
     )
 
+    objects = _SignalSafeQuerySet.as_manager()
+
     class Meta:
         verbose_name = "刀模"
         verbose_name_plural = "刀模管理"
@@ -373,6 +386,8 @@ class FoilingPlate(models.Model):
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
 
+    objects = _SignalSafeQuerySet.as_manager()
+
     class Meta:
         verbose_name = "烫金版"
         verbose_name_plural = "烫金版管理"
@@ -479,6 +494,8 @@ class EmbossingPlate(models.Model):
     notes = models.TextField("备注", blank=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    objects = _SignalSafeQuerySet.as_manager()
 
     class Meta:
         verbose_name = "压凸版"

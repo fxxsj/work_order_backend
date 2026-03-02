@@ -34,6 +34,15 @@ from django.utils import timezone
 # 配置日志记录器
 logger = logging.getLogger(__name__)
 
+
+class _SignalSafeQuerySet(models.QuerySet):
+    """禁止使用 update() 绕过 signals 的 QuerySet。"""
+
+    def update(self, **kwargs):
+        raise RuntimeError(
+            "禁止使用 update() 绕过 signals，请改用 save() 或业务服务方法。"
+        )
+
 # 导入 Process 和 Department 模型用于验证和分派
 try:
     from workorder.models.base import Department, Process
@@ -1291,6 +1300,8 @@ class WorkOrderMaterial(models.Model):
 
     notes = models.TextField("备注", blank=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
+
+    objects = _SignalSafeQuerySet.as_manager()
 
     class Meta:
         verbose_name = "施工单物料"
