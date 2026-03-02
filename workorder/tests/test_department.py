@@ -361,7 +361,7 @@ class DepartmentAPITest(APITestCase):
         self.client.force_authenticate(user=self.admin_user)
         url = reverse('department-detail', kwargs={'pk': self.child_dept.pk})
         response = self.client.delete(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(Department.objects.count(), self.base_count + 1)
 
     def test_delete_department_with_children(self):
