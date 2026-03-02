@@ -3,6 +3,7 @@ Django settings for work order tracking system.
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 from urllib.parse import parse_qsl, urlparse
 
@@ -48,6 +49,7 @@ INSTALLED_APPS = [
     # Third party apps
     "rest_framework",
     "rest_framework.authtoken",  # 添加 Token 认证支持
+    "rest_framework_simplejwt",
     "corsheaders",
     "django_filters",
     "drf_spectacular",  # API documentation
@@ -317,7 +319,7 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
         # 'rest_framework.authentication.SessionAuthentication',  # 暂时禁用，避免 CSRF 冲突
-        "rest_framework.authentication.TokenAuthentication",  # 只使用 Token 认证
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",  # 认证用户可读写，未认证用户只读
@@ -334,6 +336,12 @@ REST_FRAMEWORK = {
         "approval": "10/hour",  # 审核操作每小时最多 10 次
         "export": "20/hour",  # 导出操作每小时最多 20 次
     },
+}
+
+# JWT settings
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
 }
 
 # Session settings

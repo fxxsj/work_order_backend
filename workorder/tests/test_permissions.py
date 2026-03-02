@@ -372,15 +372,15 @@ class APIAuthenticationTest(TestCase):
         """测试登出"""
         user = TestDataFactory.create_user()
 
-        # 先登录获取 token
+        # 先登录获取 access token
         login_response = self.client.post('/api/v1/auth/login/', {
             'username': user.username,
             'password': 'testpass123'
         })
-        token = login_response.data['data']['token']
+        access = login_response.data['data']['access']
 
-        # 登出（使用 token 认证）
-        response = self.client.post('/api/v1/auth/logout/', HTTP_AUTHORIZATION=f'Token {token}')
+        # 登出（使用 JWT 认证）
+        response = self.client.post('/api/v1/auth/logout/', HTTP_AUTHORIZATION=f'Bearer {access}')
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
@@ -389,15 +389,15 @@ class APIAuthenticationTest(TestCase):
         """测试获取当前用户"""
         user = TestDataFactory.create_user()
 
-        # 先登录获取 token
+        # 先登录获取 access token
         login_response = self.client.post('/api/v1/auth/login/', {
             'username': user.username,
             'password': 'testpass123'
         })
-        token = login_response.data['data']['token']
+        access = login_response.data['data']['access']
 
-        # 获取当前用户（使用 token 认证）
-        response = self.client.get('/api/v1/auth/user/', HTTP_AUTHORIZATION=f'Token {token}')
+        # 获取当前用户（使用 JWT 认证）
+        response = self.client.get('/api/v1/auth/user/', HTTP_AUTHORIZATION=f'Bearer {access}')
 
         # 应该成功
         self.assertEqual(response.status_code, 200)

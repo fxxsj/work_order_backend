@@ -205,10 +205,10 @@ class APITestCaseMixin:
 
     def _get_auth_header(self, user):
         """获取用户的认证头"""
-        from rest_framework.authtoken.models import Token
-        # 确保用户有 Token
-        token, created = Token.objects.get_or_create(user=user)
-        return {'HTTP_AUTHORIZATION': f'Token {token.key}'}
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        refresh = RefreshToken.for_user(user)
+        return {"HTTP_AUTHORIZATION": f"Bearer {str(refresh.access_token)}"}
 
     def api_get(self, url, user=None, **kwargs):
         """GET 请求"""

@@ -2,7 +2,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
-from rest_framework.authtoken.models import Token
+from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User, Group, Permission
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
@@ -30,8 +30,7 @@ class LoginView(APIView):
         if user is not None:
             login(request, user)
 
-            # 获取或创建用户的 Token
-            token, created = Token.objects.get_or_create(user=user)
+            refresh = RefreshToken.for_user(user)
 
             # 获取用户所属的组
             groups = list(user.groups.values_list('name', flat=True))
@@ -54,7 +53,8 @@ class LoginView(APIView):
                 'groups': groups,
                 'is_salesperson': '业务员' in groups,
                 'permissions': permissions,  # 添加权限列表
-                'token': token.key,  # 添加认证令牌
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
             })
         else:
             return APIResponse.error('用户名或密码错误', code=status.HTTP_401_UNAUTHORIZED)
