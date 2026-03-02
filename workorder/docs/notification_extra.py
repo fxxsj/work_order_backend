@@ -2,7 +2,13 @@
 通知模块其他视图集的 OpenAPI 文档定义。
 """
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view, inline_serializer
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
 from rest_framework import serializers
 
 from workorder.schema import standard_error_response, standard_success_response
@@ -24,6 +30,19 @@ system_notification_docs = extend_schema_view(
                 "expires_in_days": serializers.IntegerField(required=False),
             },
         ),
+        examples=[
+            OpenApiExample(
+                name="示例请求",
+                summary="创建公告",
+                value={
+                    "title": "系统维护通知",
+                    "content": "今晚 22:00 进行维护",
+                    "only_staff": True,
+                    "expires_in_days": 2,
+                },
+                request_only=True,
+            )
+        ],
         responses={
             201: OpenApiResponse(
                 response=standard_success_response("SystemAnnouncementResponse"),
@@ -49,6 +68,18 @@ system_notification_docs = extend_schema_view(
                 "only_staff": serializers.BooleanField(required=False, default=False),
             },
         ),
+        examples=[
+            OpenApiExample(
+                name="示例请求",
+                summary="发送紧急警报",
+                value={
+                    "title": "紧急停机",
+                    "content": "设备故障，请暂停生产",
+                    "recipient_ids": [1, 2],
+                },
+                request_only=True,
+            )
+        ],
         responses={
             201: OpenApiResponse(
                 response=standard_success_response("SystemUrgentAlertResponse"),

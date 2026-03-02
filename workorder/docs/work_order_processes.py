@@ -2,7 +2,12 @@
 施工单工序相关视图集的 OpenAPI 文档定义。
 """
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
 
 from workorder.schema import standard_error_response, standard_success_response
 from workorder.serializers.core import WorkOrderProcessSerializer
@@ -16,6 +21,32 @@ work_order_process_docs = extend_schema_view(
             200: OpenApiResponse(
                 response=standard_success_response("WorkOrderProcessListResponse"),
                 description="工序列表",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="工序分页列表",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "count": 1,
+                                "next": None,
+                                "previous": None,
+                                "results": [
+                                    {
+                                        "id": 31,
+                                        "process_name": "印刷",
+                                        "status": "pending",
+                                        "status_display": "待开始",
+                                    }
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             )
         },
     ),

@@ -2,7 +2,7 @@
 监控与统计相关视图集的 OpenAPI 文档定义。
 """
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 
 from workorder.schema import standard_success_response
 
@@ -14,6 +14,24 @@ performance_stats_docs = extend_schema(
         200: OpenApiResponse(
             response=standard_success_response("PerformanceStatsResponse"),
             description="性能统计",
+            examples=[
+                OpenApiExample(
+                    name="示例响应",
+                    summary="性能统计",
+                    value={
+                        "success": True,
+                        "code": 200,
+                        "message": "操作成功",
+                        "data": {
+                            "avg_response_ms": 120,
+                            "p95_response_ms": 280,
+                            "requests": 1024,
+                        },
+                        "timestamp": "2026-03-02T09:00:00+08:00",
+                    },
+                    response_only=True,
+                )
+            ],
         )
     },
 )

@@ -4,6 +4,7 @@
 
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
+    OpenApiExample,
     OpenApiParameter,
     OpenApiResponse,
     extend_schema,
@@ -24,6 +25,14 @@ task_assign_docs = extend_schema(
             "notes": serializers.CharField(required=False, allow_blank=True),
         },
     ),
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="分派任务",
+            value={"operator_id": 9, "notes": "优先处理"},
+            request_only=True,
+        )
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("TaskAssignResponse"),
@@ -84,6 +93,14 @@ task_claim_docs = extend_schema(
         name="TaskClaimRequest",
         fields={"notes": serializers.CharField(required=False, allow_blank=True)},
     ),
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="认领任务备注",
+            value={"notes": "已接单"},
+            request_only=True,
+        )
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("TaskClaimResponse"),

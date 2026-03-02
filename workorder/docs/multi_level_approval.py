@@ -4,6 +4,7 @@
 
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
+    OpenApiExample,
     OpenApiParameter,
     OpenApiResponse,
     extend_schema,
@@ -29,6 +30,31 @@ approval_workflow_docs = extend_schema_view(
             200: OpenApiResponse(
                 response=standard_success_response("ApprovalWorkflowListResponse"),
                 description="工作流列表",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="工作流分页列表",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "count": 1,
+                                "next": None,
+                                "previous": None,
+                                "results": [
+                                    {
+                                        "id": 1,
+                                        "name": "默认审核流程",
+                                        "is_active": True,
+                                    }
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             )
         },
     ),
@@ -89,6 +115,14 @@ approval_workflow_duplicate_docs = extend_schema(
             "new_name": serializers.CharField(),
         },
     ),
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="复制工作流",
+            value={"source_id": 1, "new_name": "默认流程-副本"},
+            request_only=True,
+        )
+    ],
     responses={
         201: OpenApiResponse(
             response=standard_success_response("ApprovalWorkflowDuplicateResponse"),
@@ -176,6 +210,14 @@ multi_level_submit_docs = extend_schema(
         name="MultiLevelSubmitRequest",
         fields={"order_id": serializers.IntegerField()},
     ),
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="提交审核",
+            value={"order_id": 1},
+            request_only=True,
+        )
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("MultiLevelSubmitResponse"),
@@ -351,6 +393,14 @@ urgent_mark_docs = extend_schema(
             "reason": serializers.CharField(required=False, allow_blank=True),
         },
     ),
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="标记紧急",
+            value={"order_id": 1, "reason": "客户要求提前交付"},
+            request_only=True,
+        )
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("UrgentOrderMarkResponse"),
