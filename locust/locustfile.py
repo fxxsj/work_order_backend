@@ -8,6 +8,8 @@ from locust import HttpUser, task, between, events
 from locust.runners import MasterRunner
 from locust_config import TARGET_HOST, TEST_USERS
 
+API_PREFIX = "/api/v1"
+
 def _unwrap_response_data(response):
     """Extract payload from APIResponse wrapper if present."""
     try:
@@ -45,7 +47,7 @@ class CommonBehaviorMixin:
         user_type = random.choice(['supervisor', 'operator', 'maker'])
         credentials = TEST_USERS[user_type]
 
-        response = self.client.post('/api/auth/login/', json={
+        response = self.client.post(f'{API_PREFIX}/auth/login/', json={
             'username': credentials['username'],
             'password': credentials['password']
         }, name='[Auth] Login')
@@ -72,7 +74,7 @@ class CommonBehaviorMixin:
         """Load user IDs for known test users."""
         if hasattr(self, "user_ids"):
             return
-        response = self.client.get('/api/auth/users/', name='[Auth] User List')
+        response = self.client.get(f'{API_PREFIX}/auth/users/', name='[Auth] User List')
         if response.status_code != 200:
             self.user_ids = {}
             return
@@ -81,7 +83,7 @@ class CommonBehaviorMixin:
 
     def _get_random_task_id(self):
         """Get a random task ID from the list"""
-        response = self.client.get('/api/workorder-tasks/?page_size=1', name='[Tasks] Get random ID')
+        response = self.client.get(f'{API_PREFIX}/workorder-tasks/?page_size=1', name='[Tasks] Get random ID')
         if response.status_code == 200:
             results = _extract_results(_unwrap_response_data(response))
             if results:
@@ -90,7 +92,7 @@ class CommonBehaviorMixin:
 
     def _get_random_workorder_id(self):
         """Get a random work order ID"""
-        response = self.client.get('/api/workorders/?page_size=1', name='[WorkOrders] Get random ID')
+        response = self.client.get(f'{API_PREFIX}/workorders/?page_size=1', name='[WorkOrders] Get random ID')
         if response.status_code == 200:
             results = _extract_results(_unwrap_response_data(response))
             if results:
@@ -112,12 +114,12 @@ class WorkOrderUser(CommonBehaviorMixin, HttpUser):
         filters = {}
         if random.random() < 0.3:
             filters['status'] = random.choice(['pending', 'in_progress', 'completed'])
-        self.client.get('/api/workorder-tasks/', params=filters, name='[Tasks] List')
+        self.client.get(f'{API_PREFIX}/workorder-tasks/', params=filters, name='[Tasks] List')
 
     @task(3)
     def view_workorder_list(self):
         """View work order list (weight 3)"""
-        self.client.get('/api/workorders/', params={
+        self.client.get(f'{API_PREFIX}/workorders/', params={
             'page': random.randint(1, 3),
             'page_size': 20
         }, name='[WorkOrders] List')
@@ -127,17 +129,17 @@ class WorkOrderUser(CommonBehaviorMixin, HttpUser):
         """View task detail"""
         task_id = self._get_random_task_id()
         if task_id:
-            self.client.get(f'/api/workorder-tasks/{task_id}/', name='[Tasks] Detail')
+            self.client.get(f'{API_PREFIX}/workorder-tasks/{task_id}/', name='[Tasks] Detail')
 
     @task(1)
     def view_notifications(self):
         """View notifications (weight 1)"""
-        self.client.get('/api/notifications/', name='[Notifications] List')
+        self.client.get(f'{API_PREFIX}/notifications/', name='[Notifications] List')
 
     @task(1)
     def view_statistics(self):
         """View dashboard statistics"""
-        self.client.get('/api/workorders/statistics/', name='[Stats] WorkOrder Summary')
+        self.client.get(f'{API_PREFIX}/workorders/statistics/', name='[Stats] WorkOrder Summary')
 
 class SupervisorUser(CommonBehaviorMixin, HttpUser):
     """
@@ -154,7 +156,7 @@ class SupervisorUser(CommonBehaviorMixin, HttpUser):
         """View department tasks"""
         departments = [1, 2, 3, 4, 5]
         dept_id = random.choice(departments)
-        self.client.get('/api/workorder-tasks/', params={
+        self.client.get(f'{API_PREFIX}/workorder-tasks/', params={
             'assigned_department': dept_id,
             'status': 'pending'
         }, name='[Supervisor] Department Tasks')
@@ -162,13 +164,13 @@ class SupervisorUser(CommonBehaviorMixin, HttpUser):
     @task(3)
     def view_department_workload(self):
         """View department workload statistics"""
-        self.client.get('/api/workorder-tasks/department_workload/', name='[Supervisor] Workload')
+        self.client.get(f'{API_PREFIX}/workorder-tasks/department_workload/', name='[Supervisor] Workload')
 
     @task(2)
     def assign_task(self):
         """Assign a task to operator (lower weight - write operation)"""
         # Get a pending task
-        response = self.client.get('/api/workorder-tasks/', params={
+        response = self.client.get(f'{API_PREFIX}/workorder-tasks/', params={
             'status': 'pending',
             'page_size': 1
         }, name='[Supervisor] Get Pending Task')
@@ -182,14 +184,14 @@ class SupervisorUser(CommonBehaviorMixin, HttpUser):
                 if hasattr(self, "user_ids"):
                     operator_id = self.user_ids.get('test_operator')
                 if operator_id:
-                    self.client.post(f'/api/workorder-tasks/{task_id}/assign/', json={
+                    self.client.post(f'{API_PREFIX}/workorder-tasks/{task_id}/assign/', json={
                         'operator_id': operator_id
                     }, name='[Supervisor] Assign Task')
 
     @task(1)
     def view_dashboard(self):
         """View supervisor dashboard"""
-        self.client.get('/api/workorder-tasks/collaboration_stats/', name='[Supervisor] Dashboard')
+        self.client.get(f'{API_PREFIX}/workorder-tasks/collaboration_stats/', name='[Supervisor] Dashboard')
 
 class OperatorUser(CommonBehaviorMixin, HttpUser):
     """
@@ -203,21 +205,21 @@ class OperatorUser(CommonBehaviorMixin, HttpUser):
     @task(5)
     def view_my_tasks(self):
         """View my assigned tasks"""
-        self.client.get('/api/workorder-tasks/', params={
+        self.client.get(f'{API_PREFIX}/workorder-tasks/', params={
             'status': 'in_progress'
         }, name='[Operator] My Tasks')
 
     @task(3)
     def view_claimable_tasks(self):
         """View tasks I can claim"""
-        self.client.get('/api/workorder-tasks/', params={
+        self.client.get(f'{API_PREFIX}/workorder-tasks/', params={
             'status': 'pending'
         }, name='[Operator] Claimable Tasks')
 
     @task(1)
     def claim_task(self):
         """Claim an unassigned task"""
-        response = self.client.get('/api/workorder-tasks/claimable/', params={
+        response = self.client.get(f'{API_PREFIX}/workorder-tasks/claimable/', params={
             'page_size': 1
         }, name='[Operator] Get Claimable')
 
@@ -226,7 +228,7 @@ class OperatorUser(CommonBehaviorMixin, HttpUser):
             if tasks:
                 task_id = tasks[0].get('id')
                 if task_id:
-                    self.client.post(f'/api/workorder-tasks/{task_id}/claim/', name='[Operator] Claim Task')
+                    self.client.post(f'{API_PREFIX}/workorder-tasks/{task_id}/claim/', name='[Operator] Claim Task')
 
 class MakerUser(CommonBehaviorMixin, HttpUser):
     """
@@ -240,13 +242,13 @@ class MakerUser(CommonBehaviorMixin, HttpUser):
     @task(4)
     def view_my_workorders(self):
         """View work orders I created"""
-        self.client.get('/api/workorders/', name='[Maker] My WorkOrders')
+        self.client.get(f'{API_PREFIX}/workorders/', name='[Maker] My WorkOrders')
 
     @task(1)
     def create_workorder(self):
         """Create a new work order (write operation)"""
         # Minimal work order data for testing
-        self.client.post('/api/workorders/', json={
+        self.client.post(f'{API_PREFIX}/workorders/', json={
             'customer': 1,  # Assuming customer ID 1 exists
             'production_quantity': random.randint(100, 1000),
             'delivery_date': '2026-12-31',
@@ -256,7 +258,7 @@ class MakerUser(CommonBehaviorMixin, HttpUser):
     @task(2)
     def view_products(self):
         """View available products"""
-        self.client.get('/api/products/', name='[Maker] Products List')
+        self.client.get(f'{API_PREFIX}/products/', name='[Maker] Products List')
 
 @events.quitting.add_listener
 def on_quitting(environment, **kwargs):
