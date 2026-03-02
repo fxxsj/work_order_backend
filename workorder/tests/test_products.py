@@ -131,7 +131,7 @@ class ProductAPITest(APITestCase):
         self.client.force_authenticate(user=self.admin_user)
 
         response = self.client.post(
-            '/api/products/',
+            '/api/v1/products/',
             self.product_data,
             format='json'
         )
@@ -148,7 +148,7 @@ class ProductAPITest(APITestCase):
         invalid_data['code'] = 'PROD_001'  # 包含下划线
 
         response = self.client.post(
-            '/api/products/',
+            '/api/v1/products/',
             invalid_data,
             format='json'
         )
@@ -163,7 +163,7 @@ class ProductAPITest(APITestCase):
         invalid_data['unit_price'] = -10
 
         response = self.client.post(
-            '/api/products/',
+            '/api/v1/products/',
             invalid_data,
             format='json'
         )
@@ -184,7 +184,7 @@ class ProductAPITest(APITestCase):
         }
 
         response = self.client.patch(
-            f'/api/products/{product.id}/',
+            f'/api/v1/products/{product.id}/',
             update_data,
             format='json'
         )
@@ -202,7 +202,7 @@ class ProductAPITest(APITestCase):
         product = Product.objects.create(**self.product_data)
 
         # 删除产品
-        response = self.client.delete(f'/api/products/{product.id}/')
+        response = self.client.delete(f'/api/v1/products/{product.id}/')
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(Product.objects.count(), 0)
@@ -215,7 +215,7 @@ class ProductAPITest(APITestCase):
         Product.objects.create(code='PROD-001', name='产品1')
         Product.objects.create(code='PROD-002', name='产品2')
 
-        response = self.client.get('/api/products/')
+        response = self.client.get('/api/v1/products/')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['data']['results']), 2)
@@ -229,7 +229,7 @@ class ProductAPITest(APITestCase):
         Product.objects.create(code='PROD-002', name='包装产品B')
 
         # 搜索
-        response = self.client.get('/api/products/?search=印刷')
+        response = self.client.get('/api/v1/products/?search=印刷')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['data']['results']), 1)
@@ -244,7 +244,7 @@ class ProductAPITest(APITestCase):
         Product.objects.create(code='PROD-002', name='产品2', is_active=False)
 
         # 过滤启用产品
-        response = self.client.get('/api/products/?is_active=true')
+        response = self.client.get('/api/v1/products/?is_active=true')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['data']['results']), 1)
@@ -353,7 +353,7 @@ class ProductMaterialAPITest(APITestCase):
         }
 
         response = self.client.post(
-            '/api/product-materials/',
+            '/api/v1/product-materials/',
             data,
             format='json'
         )
@@ -371,7 +371,7 @@ class ProductMaterialAPITest(APITestCase):
             material=self.material
         )
 
-        response = self.client.get(f'/api/product-materials/?product={self.product.id}')
+        response = self.client.get(f'/api/v1/product-materials/?product={self.product.id}')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['data']['results']), 1)

@@ -41,7 +41,7 @@ class TestWorkOrderLifecycle:
 
         # Step 1: Create workorder with draft tasks
         api_client.force_authenticate(user=maker)
-        response = api_client.post('/api/workorders/', {
+        response = api_client.post('/api/v1/workorders/', {
             'customer': customer.id,
             'production_quantity': 100,
             'delivery_date': '2026-12-31',
@@ -69,7 +69,7 @@ class TestWorkOrderLifecycle:
         # Step 2: Approve workorder
         api_client.force_authenticate(user=supervisor)
         response = api_client.post(
-            f'/api/workorders/{workorder_id}/approve/',
+            f'/api/v1/workorders/{workorder_id}/approve/',
             {"approval_status": "approved"},
             format="json"
         )
@@ -86,7 +86,7 @@ class TestWorkOrderLifecycle:
         task = tasks.first()
 
         # Step 4: Supervisor assigns task to operator
-        response = api_client.post(f'/api/workorder-tasks/{task.id}/assign/', {
+        response = api_client.post(f'/api/v1/workorder-tasks/{task.id}/assign/', {
             'assigned_operator': operator.id
         }, format='json')
 
@@ -99,7 +99,7 @@ class TestWorkOrderLifecycle:
 
         # Step 6: Operator completes task
         api_client.force_authenticate(user=operator)
-        response = api_client.post(f'/api/workorder-tasks/{task.id}/complete/', {
+        response = api_client.post(f'/api/v1/workorder-tasks/{task.id}/complete/', {
             'completion_quantity': 100,
             'defective_quantity': 0
         }, format='json')
@@ -124,7 +124,7 @@ class TestWorkOrderLifecycle:
         customer = CustomerFactory()
 
         api_client.force_authenticate(user=maker)
-        response = api_client.post('/api/workorders/', {
+        response = api_client.post('/api/v1/workorders/', {
             'customer': customer.id,
             'production_quantity': 500,
             'delivery_date': '2026-12-31',
@@ -144,7 +144,7 @@ class TestWorkOrderLifecycle:
         # Approve
         api_client.force_authenticate(user=supervisor)
         api_client.post(
-            f'/api/workorders/{workorder_id}/approve/',
+            f'/api/v1/workorders/{workorder_id}/approve/',
             {"approval_status": "approved"},
             format="json"
         )
@@ -169,7 +169,7 @@ class TestWorkOrderLifecycle:
 
         # Create workorder
         api_client.force_authenticate(user=maker)
-        response = api_client.post('/api/workorders/', {
+        response = api_client.post('/api/v1/workorders/', {
             'customer': customer.id,
             'production_quantity': 100,
             'delivery_date': '2026-12-31',
@@ -205,7 +205,7 @@ class TestWorkOrderLifecycle:
 
         # Create workorders with different priorities
         for priority in ['low', 'normal', 'high', 'urgent']:
-            response = api_client.post('/api/workorders/', {
+            response = api_client.post('/api/v1/workorders/', {
                 'customer': customer.id,
                 'production_quantity': 100,
                 'priority': priority,
@@ -214,7 +214,7 @@ class TestWorkOrderLifecycle:
             assert response.status_code == status.HTTP_201_CREATED
 
         # List workorders
-        response = api_client.get('/api/workorders/')
+        response = api_client.get('/api/v1/workorders/')
         assert response.status_code == status.HTTP_200_OK
         assert response.data['data']['count'] >= 4
 

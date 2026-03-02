@@ -31,7 +31,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         )
 
         # 获取列表
-        response = self.api_get('/api/workorders/', user=self.user)
+        response = self.api_get('/api/v1/workorders/', user=self.user)
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
@@ -53,7 +53,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
             'processes': [self.process.id]  # 工序ID列表
         }
 
-        response = self.api_post('/api/workorders/', data, user=self.user)
+        response = self.api_post('/api/v1/workorders/', data, user=self.user)
 
         # 应该成功创建
         self.assertEqual(response.status_code, 201)
@@ -66,7 +66,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
             creator=self.user
         )
 
-        response = self.api_get(f'/api/workorders/{work_order.id}/', user=self.user)
+        response = self.api_get(f'/api/v1/workorders/{work_order.id}/', user=self.user)
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
@@ -85,7 +85,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
             'notes': '更新备注'
         }
 
-        response = self.api_patch(f'/api/workorders/{work_order.id}/', data, user=self.user)
+        response = self.api_patch(f'/api/v1/workorders/{work_order.id}/', data, user=self.user)
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
@@ -98,7 +98,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
             status='pending'
         )
 
-        response = self.api_delete(f'/api/workorders/{work_order.id}/', user=self.user)
+        response = self.api_delete(f'/api/v1/workorders/{work_order.id}/', user=self.user)
 
         # 应该成功
         self.assertEqual(response.status_code, 204)
@@ -111,7 +111,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         # 登出
         self.client.logout()
 
-        response = self.api_get('/api/workorders/')
+        response = self.api_get('/api/v1/workorders/')
 
         # 应该返回 401 或 403（取决于 DRF 配置）
         self.assertIn(response.status_code, [401, 403])
@@ -142,7 +142,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         in_progress_count = WorkOrder.objects.filter(status='in_progress').count()
 
         # 过滤待开始的施工单
-        response = self.api_get('/api/workorders/?status=pending', user=self.user)
+        response = self.api_get('/api/v1/workorders/?status=pending', user=self.user)
 
         # 调试输出已清理
 
@@ -159,7 +159,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         )
 
         # 搜索施工单号
-        response = self.api_get(f'/api/workorders/?search={work_order.order_number}', user=self.user)
+        response = self.api_get(f'/api/v1/workorders/?search={work_order.order_number}', user=self.user)
 
         # 应该找到
         self.assertEqual(response.status_code, 200)
@@ -188,7 +188,7 @@ class WorkOrderProcessAPITest(APITestCaseMixin, TestCase):
             process=self.process
         )
 
-        response = self.api_get(f'/api/workorder-processes/?work_order={self.work_order.id}', user=self.user)
+        response = self.api_get(f'/api/v1/workorder-processes/?work_order={self.work_order.id}', user=self.user)
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
@@ -204,7 +204,7 @@ class WorkOrderProcessAPITest(APITestCaseMixin, TestCase):
             sequence=10
         )
 
-        response = self.api_post(f'/api/workorder-processes/{wo_process.id}/start/', user=self.user)
+        response = self.api_post(f'/api/v1/workorder-processes/{wo_process.id}/start/', user=self.user)
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
@@ -235,7 +235,7 @@ class WorkOrderProcessAPITest(APITestCaseMixin, TestCase):
             'process_ids': [wo_process1.id, wo_process2.id]
         }
 
-        response = self.api_post('/api/workorder-processes/batch_start/', data, user=self.user)
+        response = self.api_post('/api/v1/workorder-processes/batch_start/', data, user=self.user)
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
@@ -273,7 +273,7 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
             production_quantity=100
         )
 
-        response = self.api_get(f'/api/workorder-tasks/?work_order_process={wo_process.id}', user=self.user)
+        response = self.api_get(f'/api/v1/workorder-tasks/?work_order_process={wo_process.id}', user=self.user)
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
@@ -301,7 +301,7 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
             'quantity_increment': 30
         }
 
-        response = self.api_post(f'/api/workorder-tasks/{task.id}/update_quantity/', data, user=self.user)
+        response = self.api_post(f'/api/v1/workorder-tasks/{task.id}/update_quantity/', data, user=self.user)
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
@@ -328,7 +328,7 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
             quantity_completed=80
         )
 
-        response = self.api_post(f'/api/workorder-tasks/{task.id}/complete/', user=self.user)
+        response = self.api_post(f'/api/v1/workorder-tasks/{task.id}/complete/', user=self.user)
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
@@ -365,7 +365,7 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
             'assigned_operator': self.user.id
         }
 
-        response = self.api_post(f'/api/workorder-tasks/{task.id}/assign/', data, user=self.user)
+        response = self.api_post(f'/api/v1/workorder-tasks/{task.id}/assign/', data, user=self.user)
 
         # 应该成功
         self.assertEqual(response.status_code, 200)

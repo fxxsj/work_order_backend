@@ -52,7 +52,7 @@ class TestWorkOrderTaskWorkflow:
         # Act: Approve workorder
         api_client.force_authenticate(user=supervisor)
         response = api_client.post(
-            f'/api/workorders/{workorder.id}/approve/',
+            f'/api/v1/workorders/{workorder.id}/approve/',
             {"approval_status": "approved"},
             format="json"
         )
@@ -81,7 +81,7 @@ class TestWorkOrderTaskWorkflow:
         task.save()
 
         api_client.force_authenticate(user=supervisor)
-        response = api_client.post(f'/api/workorder-tasks/{task.id}/assign/', {
+        response = api_client.post(f'/api/v1/workorder-tasks/{task.id}/assign/', {
             'assigned_operator': operator.id
         }, format='json')
 
@@ -110,7 +110,7 @@ class TestWorkOrderTaskWorkflow:
             client.force_authenticate(user=user)
             try:
                 # Note: claim endpoint might not exist, using assign as fallback
-                response = client.post(f'/api/workorder-tasks/{task.id}/assign/', {
+                response = client.post(f'/api/v1/workorder-tasks/{task.id}/assign/', {
                     'assigned_operator': user.id
                 }, format='json')
                 if response.status_code == status.HTTP_200_OK:
@@ -150,7 +150,7 @@ class TestWorkOrderTaskWorkflow:
         task.save()
 
         api_client.force_authenticate(user=operator)
-        response = api_client.post(f'/api/workorder-tasks/{task.id}/complete/', {
+        response = api_client.post(f'/api/v1/workorder-tasks/{task.id}/complete/', {
             'completion_quantity': task.production_quantity,
             'notes': 'Task completed'
         }, format='json')
@@ -182,7 +182,7 @@ class TestWorkOrderTaskWorkflow:
         new_task.save()
 
         api_client.force_authenticate(user=supervisor)
-        response = api_client.post(f'/api/workorder-tasks/{new_task.id}/assign/', {
+        response = api_client.post(f'/api/v1/workorder-tasks/{new_task.id}/assign/', {
             'assigned_operator': operator.id
         }, format='json')
 
@@ -206,7 +206,7 @@ class TestWorkOrderTaskWorkflow:
 
         # Operator tries to assign (should fail)
         api_client.force_authenticate(user=operator)
-        response = api_client.post(f'/api/workorder-tasks/{task.id}/assign/', {
+        response = api_client.post(f'/api/v1/workorder-tasks/{task.id}/assign/', {
             'assigned_operator': other_operator.id
         }, format='json')
 

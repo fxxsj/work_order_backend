@@ -106,7 +106,7 @@ class PerformanceTestCase(TestCase):
         mixin = TaskStatsMixin()
 
         factory = APIRequestFactory()
-        request = Request(factory.get('/api/workorder-tasks/collaboration_stats/'))
+        request = Request(factory.get('/api/v1/workorder-tasks/collaboration_stats/'))
         request.user = self.user
 
         # Reset query count
@@ -143,7 +143,7 @@ class PerformanceTestCase(TestCase):
         factory = APIRequestFactory()
         request = Request(
             factory.get(
-                f'/api/workorder-tasks/department_workload/?department_id={self.department.id}'
+                f'/api/v1/workorder-tasks/department_workload/?department_id={self.department.id}'
             )
         )
         request.user = self.user
@@ -186,7 +186,7 @@ class PerformanceTestCase(TestCase):
         """Test that task list queryset uses select_related properly"""
         from workorder.views.work_order_tasks.task_main import BaseWorkOrderTaskViewSet
         factory = APIRequestFactory()
-        request = Request(factory.get('/api/workorder-tasks/'))
+        request = Request(factory.get('/api/v1/workorder-tasks/'))
         request.user = self.user
 
         viewset = BaseWorkOrderTaskViewSet()
@@ -238,7 +238,7 @@ class PerformanceTestCase(TestCase):
                 )
 
         factory = APIRequestFactory()
-        request = Request(factory.get('/api/workorder-tasks/collaboration_stats/'))
+        request = Request(factory.get('/api/v1/workorder-tasks/collaboration_stats/'))
         request.user = self.user
         cache.clear()
 

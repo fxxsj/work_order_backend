@@ -43,7 +43,7 @@ def health_view(_request):
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/health/", health_view, name="health"),
-    path("api/", include("workorder.urls")),
+    path("api/v1/", include("workorder.urls")),
     # API documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     # Backward-compatible explicit OpenAPI JSON endpoint (some docs/tools expect this)

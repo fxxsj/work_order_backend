@@ -68,7 +68,7 @@ class TestAutoDispatchWorkflow:
         # Approve workorder
         api_client.force_authenticate(user=supervisor)
         response = api_client.post(
-            f'/api/workorders/{workorder.id}/approve/',
+            f'/api/v1/workorders/{workorder.id}/approve/',
             {"approval_status": "approved"},
             format="json"
         )
@@ -123,7 +123,7 @@ class TestAutoDispatchWorkflow:
 
         api_client.force_authenticate(user=supervisor)
         api_client.post(
-            f'/api/workorders/{workorder.id}/approve/',
+            f'/api/v1/workorders/{workorder.id}/approve/',
             {"approval_status": "approved"},
             format="json"
         )
@@ -166,7 +166,7 @@ class TestAutoDispatchWorkflow:
 
         api_client.force_authenticate(user=supervisor)
         api_client.post(
-            f'/api/workorders/{workorder.id}/approve/',
+            f'/api/v1/workorders/{workorder.id}/approve/',
             {"approval_status": "approved"},
             format="json"
         )
@@ -191,7 +191,7 @@ class TestAutoDispatchWorkflow:
 
         # Manually assign department (if API supports it)
         api_client.force_authenticate(user=supervisor)
-        response = api_client.patch(f'/api/workorder-tasks/{task.id}/', {
+        response = api_client.patch(f'/api/v1/workorder-tasks/{task.id}/', {
             'assigned_department': dept.id
         }, format='json')
 
@@ -228,7 +228,7 @@ class TestAutoDispatchWorkflow:
         api_client.force_authenticate(user=user)
 
         # Query rules
-        response = api_client.get('/api/task-assignment-rules/', {
+        response = api_client.get('/api/v1/task-assignment-rules/', {
             'process': process.id,
             'is_active': True
         })

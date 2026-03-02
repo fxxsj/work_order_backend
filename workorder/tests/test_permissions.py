@@ -59,7 +59,7 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
         self.client.force_login(self.salesperson1)
 
         # 获取施工单列表
-        response = self.api_get('/api/workorders/', user=self.salesperson1)
+        response = self.api_get('/api/v1/workorders/', user=self.salesperson1)
 
         # 应该只看到客户1的施工单
         self.assertEqual(response.status_code, 200)
@@ -77,7 +77,7 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
             'delivery_date': date(2026, 12, 31)
         }
 
-        response = self.api_post('/api/workorders/', data, user=self.salesperson1)
+        response = self.api_post('/api/v1/workorders/', data, user=self.salesperson1)
 
         # 应该成功
         self.assertEqual(response.status_code, 201)
@@ -92,7 +92,7 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
             'delivery_date': date(2026, 12, 31)
         }
 
-        response = self.api_post('/api/workorders/', data, user=self.salesperson1)
+        response = self.api_post('/api/v1/workorders/', data, user=self.salesperson1)
 
         # 当前实现允许业务员为任何客户创建施工单
         # 如果需要添加客户所有权限制，应该在 serializer 中添加 validate_customer 方法
@@ -167,7 +167,7 @@ class WorkOrderTaskPermissionTest(APITestCaseMixin, TestCase):
         self.client.force_login(self.operator1)
 
         # 可以查看自己的任务列表
-        response = self.api_get('/api/workorder-tasks/', user=self.operator1)
+        response = self.api_get('/api/v1/workorder-tasks/', user=self.operator1)
         self.assertEqual(response.status_code, 200)
         task_ids = [t['id'] for t in response.data['data']['results']]
         self.assertIn(task1.id, task_ids)
@@ -175,11 +175,11 @@ class WorkOrderTaskPermissionTest(APITestCaseMixin, TestCase):
 
         # 可以更新自己的任务（使用正确的参数名）
         data = {'quantity_increment': 10, 'version': task1.version}
-        response = self.api_post(f'/api/workorder-tasks/{task1.id}/update_quantity/', data, user=self.operator1)
+        response = self.api_post(f'/api/v1/workorder-tasks/{task1.id}/update_quantity/', data, user=self.operator1)
         self.assertEqual(response.status_code, 200)
 
         # 不能更新别人的任务（会得到404因为不在查询集中）
-        response = self.api_post(f'/api/workorder-tasks/{task2.id}/update_quantity/', data, user=self.operator1)
+        response = self.api_post(f'/api/v1/workorder-tasks/{task2.id}/update_quantity/', data, user=self.operator1)
         self.assertIn(response.status_code, [403, 404])
 
     def test_supervisor_can_update_department_tasks(self):
@@ -211,7 +211,7 @@ class WorkOrderTaskPermissionTest(APITestCaseMixin, TestCase):
 
         # 应该可以更新部门任务（使用正确的参数名）
         data = {'quantity_increment': 10, 'version': task.version}
-        response = self.api_post(f'/api/workorder-tasks/{task.id}/update_quantity/', data, user=self.supervisor)
+        response = self.api_post(f'/api/v1/workorder-tasks/{task.id}/update_quantity/', data, user=self.supervisor)
         self.assertEqual(response.status_code, 200)
 
 
@@ -278,7 +278,7 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
         self.client.force_login(self.salesperson1)
 
         # 审核施工单（使用正确的参数名）
-        response = self.api_post(f'/api/workorders/{self.wo1.id}/approve/', {
+        response = self.api_post(f'/api/v1/workorders/{self.wo1.id}/approve/', {
             'approval_status': 'approved'
         }, user=self.salesperson1)
 
@@ -294,7 +294,7 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
         self.client.force_login(self.salesperson2)
 
         # 尝试审核施工单
-        response = self.api_post(f'/api/workorders/{self.wo1.id}/approve/', {
+        response = self.api_post(f'/api/v1/workorders/{self.wo1.id}/approve/', {
             'approval_status': 'approved'
         }, user=self.salesperson2)
 
@@ -307,7 +307,7 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
         self.client.force_login(self.salesperson1)
 
         # 拒绝但未填写原因
-        response = self.api_post(f'/api/workorders/{self.wo1.id}/approve/', {
+        response = self.api_post(f'/api/v1/workorders/{self.wo1.id}/approve/', {
             'approval_status': 'rejected'
         }, user=self.salesperson1)
 
@@ -315,7 +315,7 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
         self.assertIn(response.status_code, [400, 403])
 
         # 拒绝并填写原因
-        response = self.api_post(f'/api/workorders/{self.wo1.id}/approve/', {
+        response = self.api_post(f'/api/v1/workorders/{self.wo1.id}/approve/', {
             'approval_status': 'rejected',
             'rejection_reason': '信息不完整'
         }, user=self.salesperson1)
@@ -337,7 +337,7 @@ class APIAuthenticationTest(TestCase):
 
     def test_login_required(self):
         """测试需要登录"""
-        response = self.client.get('/api/workorders/')
+        response = self.client.get('/api/v1/workorders/')
 
         # 未登录应该返回 401 或 403（取决于 DRF 配置）
         self.assertIn(response.status_code, [401, 403])
@@ -346,7 +346,7 @@ class APIAuthenticationTest(TestCase):
         """测试登录成功"""
         user = TestDataFactory.create_user()
 
-        response = self.client.post('/api/auth/login/', {
+        response = self.client.post('/api/v1/auth/login/', {
             'username': user.username,
             'password': 'testpass123'
         })
@@ -360,7 +360,7 @@ class APIAuthenticationTest(TestCase):
         """测试密码错误"""
         TestDataFactory.create_user()
 
-        response = self.client.post('/api/auth/login/', {
+        response = self.client.post('/api/v1/auth/login/', {
             'username': 'testuser',
             'password': 'wrongpassword'
         })
@@ -373,14 +373,14 @@ class APIAuthenticationTest(TestCase):
         user = TestDataFactory.create_user()
 
         # 先登录获取 token
-        login_response = self.client.post('/api/auth/login/', {
+        login_response = self.client.post('/api/v1/auth/login/', {
             'username': user.username,
             'password': 'testpass123'
         })
         token = login_response.data['data']['token']
 
         # 登出（使用 token 认证）
-        response = self.client.post('/api/auth/logout/', HTTP_AUTHORIZATION=f'Token {token}')
+        response = self.client.post('/api/v1/auth/logout/', HTTP_AUTHORIZATION=f'Token {token}')
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
@@ -390,14 +390,14 @@ class APIAuthenticationTest(TestCase):
         user = TestDataFactory.create_user()
 
         # 先登录获取 token
-        login_response = self.client.post('/api/auth/login/', {
+        login_response = self.client.post('/api/v1/auth/login/', {
             'username': user.username,
             'password': 'testpass123'
         })
         token = login_response.data['data']['token']
 
         # 获取当前用户（使用 token 认证）
-        response = self.client.get('/api/auth/user/', HTTP_AUTHORIZATION=f'Token {token}')
+        response = self.client.get('/api/v1/auth/user/', HTTP_AUTHORIZATION=f'Token {token}')
 
         # 应该成功
         self.assertEqual(response.status_code, 200)

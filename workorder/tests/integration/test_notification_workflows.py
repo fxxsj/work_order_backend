@@ -30,7 +30,7 @@ class TestNotificationWorkflows:
         initial_notification_count = Notification.objects.filter(recipient=operator).count()
 
         api_client.force_authenticate(user=supervisor)
-        response = api_client.post(f'/api/workorder-tasks/{task.id}/assign/', {
+        response = api_client.post(f'/api/v1/workorder-tasks/{task.id}/assign/', {
             'assigned_operator': operator.id
         }, format='json')
 
@@ -57,7 +57,7 @@ class TestNotificationWorkflows:
         task.save()
 
         api_client.force_authenticate(user=operator)
-        response = api_client.post(f'/api/workorder-tasks/{task.id}/complete/', {
+        response = api_client.post(f'/api/v1/workorder-tasks/{task.id}/complete/', {
             'completion_quantity': task.production_quantity
         }, format='json')
 
@@ -100,7 +100,7 @@ class TestNotificationWorkflows:
 
         # User1 requests notifications
         api_client.force_authenticate(user=user1)
-        response = api_client.get('/api/notifications/')
+        response = api_client.get('/api/v1/notifications/')
 
         assert response.status_code == status.HTTP_200_OK
         # User1 should only see their notifications
@@ -122,7 +122,7 @@ class TestNotificationWorkflows:
         )
 
         api_client.force_authenticate(user=user)
-        response = api_client.post(f'/api/notifications/{notification.id}/mark_read/')
+        response = api_client.post(f'/api/v1/notifications/{notification.id}/mark_read/')
 
         # Endpoint may or may not exist
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
@@ -159,7 +159,7 @@ class TestNotificationWorkflows:
             )
 
         api_client.force_authenticate(user=user)
-        response = api_client.get('/api/notifications/')
+        response = api_client.get('/api/v1/notifications/')
 
         assert response.status_code == status.HTTP_200_OK
         # Should have at least 5 total notifications
