@@ -141,25 +141,6 @@ class SmartAssignmentService:
     def calculate_workload_factor(user, current_tasks: int) -> float:
         """计算工作负载因子"""
         return 1.0  # 技能画像已禁用，返回默认负载
-        
-        capacity = user_profile.work_capacity or 5
-        current_load = current_tasks / capacity
-        
-        # 工作负载因子（1.0-3.0）
-        if current_load <= 0.2:
-            return 0.8
-        elif current_load <= 0.5:
-            return 0.6
-        elif current_load <= 0.8:
-            return 0.4
-        elif current_load <= 1.0:
-            return 1.2
-        elif current_load <= 1.5:
-            return 1.5
-        elif current_load <= 2.0:
-            return 1.8
-        else:
-            return 2.0
     
     @staticmethod
     def calculate_priority_score(user, task_priority: str, deadline_days: int = None) -> float:
