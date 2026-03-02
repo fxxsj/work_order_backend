@@ -29,7 +29,6 @@ class WorkOrderService:
             raise ServiceError(
                 "请提供工序ID",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "请提供工序ID"},
             )
 
         try:
@@ -38,7 +37,6 @@ class WorkOrderService:
             raise ServiceError(
                 "工序不存在",
                 code=status.HTTP_404_NOT_FOUND,
-                data={"error": "工序不存在"},
             ) from exc
 
         existing_process = WorkOrderProcess.objects.filter(
@@ -60,7 +58,6 @@ class WorkOrderService:
             raise ServiceError(
                 "该工序已经添加到施工单中",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "该工序已经添加到施工单中"},
             )
 
         return WorkOrderProcess.objects.create(
@@ -75,7 +72,6 @@ class WorkOrderService:
             raise ServiceError(
                 "请提供物料ID",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "请提供物料ID"},
             )
 
         try:
@@ -84,7 +80,6 @@ class WorkOrderService:
             raise ServiceError(
                 "物料不存在",
                 code=status.HTTP_404_NOT_FOUND,
-                data={"error": "物料不存在"},
             ) from exc
 
         return WorkOrderMaterial.objects.create(
@@ -97,7 +92,6 @@ class WorkOrderService:
             raise ServiceError(
                 "无效的状态",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "无效的状态"},
             )
 
         work_order.status = new_status
@@ -117,21 +111,18 @@ class WorkOrderService:
             raise ServiceError(
                 "审核状态无效，必须是 approved 或 rejected",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "审核状态无效，必须是 approved 或 rejected"},
             )
 
         if not user.groups.filter(name="业务员").exists():
             raise ServiceError(
                 "只有业务员可以审核施工单",
                 code=status.HTTP_403_FORBIDDEN,
-                data={"error": "只有业务员可以审核施工单"},
             )
 
         if work_order.customer.salesperson != user:
             raise ServiceError(
                 "只能审核自己负责的施工单",
                 code=status.HTTP_403_FORBIDDEN,
-                data={"error": "只能审核自己负责的施工单"},
             )
 
         if work_order.approval_status != "pending":
@@ -139,14 +130,12 @@ class WorkOrderService:
             raise ServiceError(
                 message,
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": message},
             )
 
         if approval_status == "rejected" and not rejection_reason:
             raise ServiceError(
                 "审核拒绝时，必须填写拒绝原因",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "审核拒绝时，必须填写拒绝原因"},
             )
 
         validation_errors = work_order.validate_before_approval()
@@ -154,10 +143,7 @@ class WorkOrderService:
             raise ServiceError(
                 "施工单数据不完整，无法审核",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={
-                    "error": "施工单数据不完整，无法审核",
-                    "details": validation_errors,
-                },
+                data={"details": validation_errors},
             )
 
         WorkOrderApprovalLog.objects.create(
@@ -231,7 +217,6 @@ class WorkOrderService:
             raise ServiceError(
                 "只有被拒绝的施工单才能重新提交审核",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "只有被拒绝的施工单才能重新提交审核"},
             )
 
         if work_order.manager != user and work_order.created_by != user:
@@ -239,7 +224,6 @@ class WorkOrderService:
                 raise ServiceError(
                     "只有制表人、创建人或有编辑权限的用户才能重新提交审核",
                     code=status.HTTP_403_FORBIDDEN,
-                    data={"error": "只有制表人、创建人或有编辑权限的用户才能重新提交审核"},
                 )
 
         work_order.approval_status = "pending"
@@ -256,14 +240,12 @@ class WorkOrderService:
                 raise ServiceError(
                     "只有创建人、制表人或有编辑权限的用户可以请求重新审核",
                     code=status.HTTP_403_FORBIDDEN,
-                    data={"error": "只有创建人、制表人或有编辑权限的用户可以请求重新审核"},
                 )
 
         if work_order.approval_status != "approved":
             raise ServiceError(
                 "只有已审核通过的施工单可以请求重新审核",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "只有已审核通过的施工单可以请求重新审核"},
             )
 
         original_approver = work_order.approved_by
@@ -299,4 +281,3 @@ class WorkOrderService:
             )
 
         return original_approver
-

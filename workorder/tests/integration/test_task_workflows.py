@@ -9,6 +9,7 @@ from workorder.tests.factories import (
     WorkOrderTaskFactory, WorkOrderProcessFactory, WorkOrderProductFactory
 )
 from workorder.models import WorkOrder, WorkOrderTask
+from workorder.models.core import TaskLog
 
 
 def make_salesperson(user, customer):
@@ -158,6 +159,64 @@ class TestWorkOrderTaskWorkflow:
         assert response.status_code == status.HTTP_200_OK
         task.refresh_from_db()
         assert task.status == 'completed'
+
+    def test_update_quantity_transitions_status_and_logs(self, api_client):
+        """
+        GIVEN: A pending task assigned to an operator
+        WHEN: Operator updates quantity incrementally
+        THEN: Task status becomes in_progress and a log is created
+        """
+        dept = DepartmentFactory()
+        operator = UserFactory(username='operator', departments=[dept])
+
+        task = WorkOrderTaskFactory(status='pending', production_quantity=100)
+        task.assigned_department = dept
+        task.assigned_operator = operator
+        task.save()
+
+        api_client.force_authenticate(user=operator)
+        response = api_client.post(
+            f'/api/v1/workorder-tasks/{task.id}/update_quantity/',
+            {'quantity_increment': 10, 'quantity_defective': 1, 'version': task.version},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        task.refresh_from_db()
+        assert task.status == 'in_progress'
+        assert task.quantity_completed == 10
+        assert TaskLog.objects.filter(task=task, log_type='update_quantity').exists()
+
+    def test_update_quantity_updates_product_stock(self, api_client):
+        """
+        GIVEN: A task with product linked and no accounted stock
+        WHEN: Operator updates quantity
+        THEN: Product stock increases by the same amount
+        """
+        dept = DepartmentFactory()
+        operator = UserFactory(username='operator', departments=[dept])
+        product = WorkOrderProductFactory().product
+        product.stock_quantity = 5
+        product.save(update_fields=['stock_quantity'])
+
+        task = WorkOrderTaskFactory(status='pending', production_quantity=20, task_type='packaging')
+        task.assigned_department = dept
+        task.assigned_operator = operator
+        task.product = product
+        task.save()
+
+        api_client.force_authenticate(user=operator)
+        response = api_client.post(
+            f'/api/v1/workorder-tasks/{task.id}/update_quantity/',
+            {'quantity_increment': 3, 'version': task.version},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        product.refresh_from_db()
+        task.refresh_from_db()
+        assert product.stock_quantity == 8
+        assert task.stock_accounted_quantity == 3
 
     def test_task_capacity_limit_enforced(self, api_client):
         """

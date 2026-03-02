@@ -5,6 +5,7 @@
 """
 
 import re
+from typing import Any, Dict, List, Optional
 
 from rest_framework import serializers
 
@@ -21,10 +22,10 @@ class ProductMaterialSerializer(serializers.ModelSerializer):
         model = ProductMaterial
         fields = "__all__"
 
-    def get_material_name(self, obj):
+    def get_material_name(self, obj) -> Optional[str]:
         return obj.material.name if obj.material else None
 
-    def get_material_code(self, obj):
+    def get_material_code(self, obj) -> Optional[str]:
         return obj.material.code if obj.material else None
 
 
@@ -55,13 +56,13 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = "__all__"
 
-    def get_available_group_stock(self, obj):
+    def get_available_group_stock(self, obj) -> Optional[float]:
         """获取套装可用库存（仅对套装主产品有效）"""
         if obj.is_group_main:
             return obj.get_available_group_stock()
         return None
 
-    def get_group_items(self, obj):
+    def get_group_items(self, obj) -> Optional[List[Dict[str, Any]]]:
         """获取套装子产品列表（仅对套装主产品有效）"""
         if not obj.is_group_main:
             return None

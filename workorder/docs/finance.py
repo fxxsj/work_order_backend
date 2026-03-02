@@ -2,7 +2,13 @@
 财务相关视图集的 OpenAPI 文档定义。
 """
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view, inline_serializer
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
 from rest_framework import serializers
 
 from workorder.schema import standard_error_response, standard_success_response
@@ -144,6 +150,35 @@ invoice_docs = extend_schema_view(
             200: OpenApiResponse(
                 response=standard_success_response("InvoiceListResponse"),
                 description="发票列表",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="发票分页列表",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "count": 1,
+                                "next": None,
+                                "previous": None,
+                                "results": [
+                                    {
+                                        "id": 7,
+                                        "invoice_number": "FP202603020001",
+                                        "invoice_type": "vat_normal",
+                                        "status": "draft",
+                                        "status_display": "待开具",
+                                        "amount": "12000.00",
+                                        "customer_name": "示例客户",
+                                    }
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             )
         },
     ),
@@ -186,6 +221,14 @@ invoice_approve_docs = extend_schema(
             "approval_comment": serializers.CharField(required=False, allow_blank=True),
         },
     ),
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="审核通过",
+            value={"approved": True, "approval_comment": "资料齐全"},
+            request_only=True,
+        )
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("InvoiceApproveResponse"),
@@ -319,6 +362,14 @@ statement_confirm_docs = extend_schema(
             "confirm_notes": serializers.CharField(required=False, allow_blank=True),
         },
     ),
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="确认对账单",
+            value={"confirmed": True, "confirm_notes": "核对无误"},
+            request_only=True,
+        )
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("StatementConfirmResponse"),

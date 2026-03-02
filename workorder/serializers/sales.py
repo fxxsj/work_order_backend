@@ -4,6 +4,8 @@
 包含销售订单和销售订单明细的序列化器。
 """
 
+from typing import List
+
 from rest_framework import serializers
 
 from ..models.sales import SalesOrder, SalesOrderItem
@@ -43,7 +45,7 @@ class SalesOrderListSerializer(serializers.ModelSerializer):
         model = SalesOrder
         fields = "__all__"
 
-    def get_items_count(self, obj):
+    def get_items_count(self, obj) -> int:
         """获取订单明细数量"""
         return obj.items.count()
 
@@ -82,7 +84,7 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def get_work_order_numbers(self, obj):
+    def get_work_order_numbers(self, obj) -> List[str]:
         """获取关联的施工单号列表"""
         return [wo.order_number for wo in obj.work_orders.all()]
 

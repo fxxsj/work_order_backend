@@ -10,6 +10,8 @@
 - QualityInspection: 质量检验
 """
 
+from typing import Optional
+
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
@@ -46,7 +48,7 @@ class ProductStockSerializer(serializers.ModelSerializer):
         model = ProductStock
         fields = "__all__"
 
-    def get_days_until_expiry(self, obj):
+    def get_days_until_expiry(self, obj) -> Optional[int]:
         """获取距离过期的天数"""
         if obj.expiry_date:
             from django.utils import timezone
@@ -55,15 +57,15 @@ class ProductStockSerializer(serializers.ModelSerializer):
             return delta.days
         return None
 
-    def get_available_quantity(self, obj):
+    def get_available_quantity(self, obj) -> float:
         """可用数量 = 库存数量 - 预留数量"""
         return float(obj.quantity - obj.reserved_quantity)
 
-    def get_total_value(self, obj):
+    def get_total_value(self, obj) -> float:
         """总价值 = 库存数量 * 单位成本"""
         return float(obj.quantity * obj.unit_cost)
 
-    def get_is_low_stock(self, obj):
+    def get_is_low_stock(self, obj) -> bool:
         """是否低库存"""
         available = obj.quantity - obj.reserved_quantity
         return available <= obj.min_stock_level
@@ -258,7 +260,7 @@ class DeliveryOrderSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["order_number"]
 
-    def get_items_count(self, obj):
+    def get_items_count(self, obj) -> int:
         """获取发货明细数量"""
         return obj.items.count()
 
@@ -291,11 +293,11 @@ class DeliveryOrderListSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
-    def get_items_count(self, obj):
+    def get_items_count(self, obj) -> int:
         """获取发货明细数量"""
         return obj.items.count()
 
-    def get_total_quantity(self, obj):
+    def get_total_quantity(self, obj) -> float:
         """获取总发货数量"""
         return sum(item.quantity for item in obj.items.all())
 
@@ -439,7 +441,7 @@ class QualityInspectionSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["inspection_number", "defective_rate"]
 
-    def get_defective_rate_formatted(self, obj):
+    def get_defective_rate_formatted(self, obj) -> str:
         """格式化不良率"""
         return f"{obj.defective_rate:.2f}%"
 

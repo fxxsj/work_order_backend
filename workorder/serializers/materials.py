@@ -123,7 +123,7 @@ class SupplierSerializer(serializers.ModelSerializer):
         model = Supplier
         fields = "__all__"
 
-    def get_material_count(self, obj):
+    def get_material_count(self, obj) -> int:
         """获取该供应商供应的物料数量（优化版：使用注解）"""
         # 使用预加载的注解字段，避免N+1查询
         if hasattr(obj, "_material_count"):

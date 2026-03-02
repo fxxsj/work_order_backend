@@ -10,6 +10,7 @@ from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
+    OpenApiExample,
     OpenApiParameter,
     OpenApiResponse,
     extend_schema,
@@ -79,6 +80,39 @@ logger = logging.getLogger(__name__)
             200: OpenApiResponse(
                 response=standard_success_response("WorkOrderTaskListResponse"),
                 description="任务列表",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="分页列表返回",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "count": 1,
+                                "next": None,
+                                "previous": None,
+                                "results": [
+                                    {
+                                        "id": 101,
+                                        "status": "in_progress",
+                                        "status_display": "进行中",
+                                        "work_content": "印刷 500 张",
+                                        "production_quantity": 500,
+                                        "quantity_completed": 120,
+                                        "assigned_department": 2,
+                                        "assigned_department_name": "印刷车间",
+                                        "assigned_operator": 9,
+                                        "assigned_operator_name": "王五",
+                                        "work_order_process": 31,
+                                    }
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             )
         },
     ),
@@ -92,6 +126,41 @@ logger = logging.getLogger(__name__)
                     "WorkOrderTaskDetailResponse", WorkOrderTaskSerializer
                 ),
                 description="任务详情",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="详情返回（节选）",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "id": 101,
+                                "status": "in_progress",
+                                "status_display": "进行中",
+                                "work_content": "印刷 500 张",
+                                "production_quantity": 500,
+                                "quantity_completed": 120,
+                                "work_order_process_info": {
+                                    "process": {
+                                        "id": 5,
+                                        "name": "印刷",
+                                        "code": "PRINT",
+                                    },
+                                    "work_order": {
+                                        "id": 1,
+                                        "order_number": "WO20260302001",
+                                        "priority": "normal",
+                                        "priority_display": "普通",
+                                        "delivery_date": "2026-03-10",
+                                    },
+                                },
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             ),
             404: OpenApiResponse(
                 response=standard_error_response("WorkOrderTaskNotFoundResponse"),

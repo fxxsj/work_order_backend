@@ -18,6 +18,7 @@ from django_filters import CharFilter, FilterSet, NumberFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
+    OpenApiExample,
     OpenApiResponse,
     extend_schema,
     extend_schema_view,
@@ -97,6 +98,49 @@ from .base_viewsets import BaseViewSet
             200: OpenApiResponse(
                 response=standard_success_response("WorkOrderListResponse"),
                 description="施工单列表",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="分页列表返回",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "count": 1,
+                                "next": None,
+                                "previous": None,
+                                "results": [
+                                    {
+                                        "id": 1,
+                                        "order_number": "WO20260302001",
+                                        "customer": 3,
+                                        "customer_name": "示例客户",
+                                        "salesperson_name": "李四",
+                                        "product_name": "礼盒",
+                                        "quantity": 1000,
+                                        "unit": "件",
+                                        "status": "pending",
+                                        "status_display": "待开始",
+                                        "priority": "normal",
+                                        "priority_display": "普通",
+                                        "order_date": "2026-03-01",
+                                        "delivery_date": "2026-03-10",
+                                        "production_quantity": 1000,
+                                        "manager": 5,
+                                        "manager_name": "张三",
+                                        "progress_percentage": 0,
+                                        "approval_status": "pending",
+                                        "approval_status_display": "待审核",
+                                        "created_at": "2026-03-02T09:00:00+08:00",
+                                    }
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             )
         },
     ),
@@ -104,12 +148,63 @@ from .base_viewsets import BaseViewSet
         tags=["施工单"],
         summary="创建施工单",
         description="创建新的施工单，自动生成所有工序的草稿任务。",
+        examples=[
+            OpenApiExample(
+                name="示例请求",
+                summary="创建施工单请求体",
+                value={
+                    "customer": 3,
+                    "priority": "normal",
+                    "order_date": "2026-03-01",
+                    "delivery_date": "2026-03-10",
+                    "production_quantity": 1000,
+                    "notes": "客户加急，请优先排产",
+                    "products_data": [
+                        {
+                            "product": 12,
+                            "quantity": 1000,
+                            "unit": "件",
+                            "specification": "210x285mm",
+                            "sort_order": 1,
+                        }
+                    ],
+                    "processes": [1, 2, 3],
+                    "artworks": [8],
+                },
+                request_only=True,
+            )
+        ],
         responses={
             201: OpenApiResponse(
                 response=standard_success_response(
                     "WorkOrderCreateResponse", WorkOrderDetailSerializer
                 ),
                 description="创建成功",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="创建成功返回",
+                        value={
+                            "success": True,
+                            "code": 201,
+                            "message": "操作成功",
+                            "data": {
+                                "id": 1,
+                                "order_number": "WO20260302001",
+                                "customer": 3,
+                                "status": "pending",
+                                "priority": "normal",
+                                "order_date": "2026-03-01",
+                                "delivery_date": "2026-03-10",
+                                "production_quantity": 1000,
+                                "notes": "客户加急，请优先排产",
+                                "created_at": "2026-03-02T09:00:00+08:00",
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             ),
             400: OpenApiResponse(
                 response=standard_error_response("WorkOrderCreateBadRequest"),
@@ -127,6 +222,48 @@ from .base_viewsets import BaseViewSet
                     "WorkOrderDetailResponse", WorkOrderDetailSerializer
                 ),
                 description="施工单详情",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="详情返回（节选）",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "id": 1,
+                                "order_number": "WO20260302001",
+                                "customer": 3,
+                                "customer_name": "示例客户",
+                                "status": "pending",
+                                "status_display": "待开始",
+                                "priority": "normal",
+                                "priority_display": "普通",
+                                "order_date": "2026-03-01",
+                                "delivery_date": "2026-03-10",
+                                "products": [
+                                    {
+                                        "id": 21,
+                                        "product": 12,
+                                        "product_name": "礼盒",
+                                        "quantity": 1000,
+                                        "unit": "件",
+                                    }
+                                ],
+                                "order_processes": [
+                                    {
+                                        "id": 31,
+                                        "process_name": "印刷",
+                                        "status": "pending",
+                                        "status_display": "待开始",
+                                    }
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             ),
             404: OpenApiResponse(
                 response=standard_error_response("WorkOrderNotFoundResponse"),

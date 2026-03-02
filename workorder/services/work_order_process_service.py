@@ -29,14 +29,12 @@ class WorkOrderProcessService:
             raise ServiceError(
                 "该工序不能开始，请先完成前置工序",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "该工序不能开始，请先完成前置工序"},
             )
 
         if process.status != "pending":
             raise ServiceError(
                 "该工序已经开始或完成，不能重新开始",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "该工序已经开始或完成，不能重新开始"},
             )
 
         process.generate_tasks()
@@ -73,7 +71,6 @@ class WorkOrderProcessService:
             raise ServiceError(
                 "只有进行中的工序才能完成",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "只有进行中的工序才能完成"},
             )
 
         tasks = process.tasks.all()
@@ -101,10 +98,9 @@ class WorkOrderProcessService:
                     f"该工序还有 {incomplete_count} 个任务未完成，无法完成工序",
                     code=status.HTTP_400_BAD_REQUEST,
                     data={
-                        "error": f"该工序还有 {incomplete_count} 个任务未完成，无法完成工序",
                         "incomplete_tasks": incomplete_count,
                         "requires_force": True,
-                        "message": "请先完成所有任务，或提供强制完成原因进行强制完成",
+                        "hint": "请先完成所有任务，或提供强制完成原因进行强制完成",
                     },
                 )
 
@@ -112,7 +108,6 @@ class WorkOrderProcessService:
                 raise ServiceError(
                     "强制完成工序需要提供完成原因",
                     code=status.HTTP_400_BAD_REQUEST,
-                    data={"error": "强制完成工序需要提供完成原因"},
                 )
 
             for task in incomplete_tasks:
@@ -167,7 +162,6 @@ class WorkOrderProcessService:
             raise ServiceError(
                 "请提供工序ID列表",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "请提供工序ID列表"},
             )
 
         processes = WorkOrderProcess.objects.filter(id__in=process_ids)
@@ -175,7 +169,6 @@ class WorkOrderProcessService:
             raise ServiceError(
                 "部分工序不存在",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "部分工序不存在"},
             )
 
         started_processes: List[int] = []
@@ -239,7 +232,6 @@ class WorkOrderProcessService:
             raise ServiceError(
                 "调整原因不能为空，请说明为什么需要调整分派",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "调整原因不能为空，请说明为什么需要调整分派"},
             )
 
         tasks = work_order_process.tasks.all()
@@ -247,7 +239,6 @@ class WorkOrderProcessService:
             raise ServiceError(
                 "该工序还没有生成任务",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": "该工序还没有生成任务"},
             )
 
         new_department = None
@@ -258,7 +249,6 @@ class WorkOrderProcessService:
                 raise ServiceError(
                     "部门不存在",
                     code=status.HTTP_404_NOT_FOUND,
-                    data={"error": "部门不存在"},
                 ) from exc
 
         new_operator = None
@@ -271,7 +261,6 @@ class WorkOrderProcessService:
                 raise ServiceError(
                     "操作员不存在",
                     code=status.HTTP_404_NOT_FOUND,
-                    data={"error": "操作员不存在"},
                 ) from exc
 
         updated_count = 0
@@ -336,4 +325,3 @@ class WorkOrderProcessService:
             "updated_tasks_count": updated_count,
             "total_tasks_count": tasks.count(),
         }
-

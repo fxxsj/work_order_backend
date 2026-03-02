@@ -4,6 +4,8 @@
 包含基础序列化器类和具体模型的序列化器。
 """
 
+from typing import List, Optional
+
 from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework import serializers
@@ -71,11 +73,11 @@ class UserSerializer(serializers.ModelSerializer):
             "is_salesperson",
         ]
 
-    def get_groups(self, obj):
+    def get_groups(self, obj) -> List[str]:
         """获取用户所属的组"""
         return list(obj.groups.values_list("name", flat=True))
 
-    def get_is_salesperson(self, obj):
+    def get_is_salesperson(self, obj) -> bool:
         """判断用户是否为业务员"""
         return obj.groups.filter(name="业务员").exists()
 
@@ -149,25 +151,25 @@ class DepartmentSerializer(serializers.ModelSerializer):
         model = Department
         fields = "__all__"
 
-    def get_process_names(self, obj):
+    def get_process_names(self, obj) -> List[str]:
         """获取工序名称列表"""
         if hasattr(obj, "processes"):
             return [f"{p.code} - {p.name}" for p in obj.processes.all()]
         return []
 
-    def get_parent_name(self, obj):
+    def get_parent_name(self, obj) -> Optional[str]:
         """获取上级部门名称"""
         if obj.parent:
             return obj.parent.name
         return None
 
-    def get_children_count(self, obj):
+    def get_children_count(self, obj) -> int:
         """获取子部门数量"""
         if hasattr(obj, "children"):
             return obj.children.count()
         return 0
 
-    def get_level(self, obj):
+    def get_level(self, obj) -> int:
         """获取部门层级"""
         return obj.get_level()
 

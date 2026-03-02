@@ -2,7 +2,13 @@
 库存相关视图集的 OpenAPI 文档定义。
 """
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view, inline_serializer
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
 from rest_framework import serializers
 
 from workorder.schema import standard_error_response, standard_success_response
@@ -25,6 +31,37 @@ product_stock_docs = extend_schema_view(
             200: OpenApiResponse(
                 response=standard_success_response("ProductStockListResponse"),
                 description="库存列表",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="库存分页列表",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "count": 1,
+                                "next": None,
+                                "previous": None,
+                                "results": [
+                                    {
+                                        "id": 10,
+                                        "product": 12,
+                                        "product_name": "礼盒",
+                                        "batch_no": "RK202603020001-21",
+                                        "quantity": "1000.00",
+                                        "reserved_quantity": "0.00",
+                                        "status": "in_stock",
+                                        "status_display": "在库",
+                                        "location": "A01-01-01",
+                                    }
+                                ],
+                            },
+                            "timestamp": "2026-03-02T09:00:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             )
         },
     ),
@@ -111,6 +148,30 @@ product_stock_adjust_docs = extend_schema(
         200: OpenApiResponse(
             response=standard_success_response("ProductStockAdjustResponse"),
             description="调整成功",
+            examples=[
+                OpenApiExample(
+                    name="示例响应",
+                    summary="库存调整返回",
+                    value={
+                        "success": True,
+                        "code": 200,
+                        "message": "操作成功",
+                        "data": {
+                            "message": "库存调整成功",
+                            "old_quantity": 1000.0,
+                            "new_quantity": 980.0,
+                            "data": {
+                                "id": 10,
+                                "batch_no": "RK202603020001-21",
+                                "quantity": "980.00",
+                                "status": "in_stock",
+                            },
+                        },
+                        "timestamp": "2026-03-02T10:00:00+08:00",
+                    },
+                    response_only=True,
+                )
+            ],
         ),
         400: OpenApiResponse(
             response=standard_error_response("ProductStockAdjustBadRequest"),
@@ -278,6 +339,17 @@ delivery_ship_docs = extend_schema(
             "tracking_number": serializers.CharField(required=False, allow_blank=True),
         },
     ),
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="发货请求体",
+            value={
+                "logistics_company": "顺丰",
+                "tracking_number": "SF123456789",
+            },
+            request_only=True,
+        )
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("DeliveryShipResponse"),
@@ -299,6 +371,14 @@ delivery_receive_docs = extend_schema(
             "received_notes": serializers.CharField(required=False, allow_blank=True),
         },
     ),
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="签收请求体",
+            value={"received_notes": "外包装完好"},
+            request_only=True,
+        )
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("DeliveryReceiveResponse"),
@@ -320,6 +400,14 @@ delivery_reject_docs = extend_schema(
             "reject_reason": serializers.CharField(required=True),
         },
     ),
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="拒收原因",
+            value={"reject_reason": "包装破损"},
+            request_only=True,
+        )
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("DeliveryRejectResponse"),
@@ -380,6 +468,14 @@ quality_complete_docs = extend_schema(
             "failed_quantity": serializers.IntegerField(required=False, default=0),
         },
     ),
+    examples=[
+        OpenApiExample(
+            name="示例请求",
+            summary="提交质检结果",
+            value={"result": "passed", "passed_quantity": 980, "failed_quantity": 20},
+            request_only=True,
+        )
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("QualityInspectionCompleteResponse"),

@@ -4,6 +4,8 @@
 包含图稿、刀模、烫金版、压凸版等资产的序列化器。
 """
 
+from typing import List, Optional
+
 from rest_framework import serializers
 
 from ..models.assets import (
@@ -91,7 +93,7 @@ class ArtworkSerializer(serializers.ModelSerializer):
             return [c.strip() for c in value if c and c.strip()]
         return value
 
-    def get_color_display(self, obj):
+    def get_color_display(self, obj) -> str:
         """生成色数显示文本，格式：CMK+928C,金色（5色）"""
         parts = []
         total_count = 0
@@ -127,31 +129,31 @@ class ArtworkSerializer(serializers.ModelSerializer):
 
         return result
 
-    def get_die_names(self, obj):
+    def get_die_names(self, obj) -> List[str]:
         """获取所有刀模名称"""
         return [die.name for die in obj.dies.all()]
 
-    def get_die_codes(self, obj):
+    def get_die_codes(self, obj) -> List[str]:
         """获取所有刀模编码"""
         return [die.code for die in obj.dies.all()]
 
-    def get_foiling_plate_names(self, obj):
+    def get_foiling_plate_names(self, obj) -> List[str]:
         """获取所有烫金版名称"""
         return [plate.name for plate in obj.foiling_plates.all()]
 
-    def get_foiling_plate_codes(self, obj):
+    def get_foiling_plate_codes(self, obj) -> List[str]:
         """获取所有烫金版编码"""
         return [plate.code for plate in obj.foiling_plates.all()]
 
-    def get_embossing_plate_names(self, obj):
+    def get_embossing_plate_names(self, obj) -> List[str]:
         """获取所有压凸版名称"""
         return [plate.name for plate in obj.embossing_plates.all()]
 
-    def get_embossing_plate_codes(self, obj):
+    def get_embossing_plate_codes(self, obj) -> List[str]:
         """获取所有压凸版编码"""
         return [plate.code for plate in obj.embossing_plates.all()]
 
-    def get_code(self, obj):
+    def get_code(self, obj) -> str:
         """获取完整编码（包含版本号），用于向后兼容"""
         return obj.get_full_code()
 
@@ -218,10 +220,10 @@ class DieProductSerializer(serializers.ModelSerializer):
         model = DieProduct
         fields = "__all__"
 
-    def get_product_name(self, obj):
+    def get_product_name(self, obj) -> Optional[str]:
         return obj.product.name if obj.product else None
 
-    def get_product_code(self, obj):
+    def get_product_code(self, obj) -> Optional[str]:
         return obj.product.code if obj.product else None
 
 
@@ -371,10 +373,10 @@ class FoilingPlateProductSerializer(serializers.ModelSerializer):
         model = FoilingPlateProduct
         fields = "__all__"
 
-    def get_product_name(self, obj):
+    def get_product_name(self, obj) -> Optional[str]:
         return obj.product.name if obj.product else None
 
-    def get_product_code(self, obj):
+    def get_product_code(self, obj) -> Optional[str]:
         return obj.product.code if obj.product else None
 
 
@@ -512,10 +514,10 @@ class EmbossingPlateProductSerializer(serializers.ModelSerializer):
         model = EmbossingPlateProduct
         fields = "__all__"
 
-    def get_product_name(self, obj):
+    def get_product_name(self, obj) -> Optional[str]:
         return obj.product.name if obj.product else None
 
-    def get_product_code(self, obj):
+    def get_product_code(self, obj) -> Optional[str]:
         return obj.product.code if obj.product else None
 
 

@@ -11,6 +11,8 @@
 - Statement: 对账单
 """
 
+from typing import Optional
+
 from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework import serializers
@@ -44,7 +46,7 @@ class CostCenterSerializer(serializers.ModelSerializer):
         model = CostCenter
         fields = "__all__"
 
-    def get_children_count(self, obj):
+    def get_children_count(self, obj) -> int:
         """获取子成本中心数量"""
         return obj.children.count() if hasattr(obj, "children") else 0
 
@@ -79,13 +81,13 @@ class ProductionCostSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["work_order"]
 
-    def get_customer_name(self, obj):
+    def get_customer_name(self, obj) -> Optional[str]:
         """获取客户名称"""
         if obj.work_order and obj.work_order.customer:
             return obj.work_order.customer.name
         return None
 
-    def get_variance_rate_formatted(self, obj):
+    def get_variance_rate_formatted(self, obj) -> str:
         """格式化差异率显示"""
         return f"{obj.variance_rate:.2f}%"
 
@@ -314,7 +316,7 @@ class PaymentPlanSerializer(serializers.ModelSerializer):
         model = PaymentPlan
         fields = "__all__"
 
-    def get_progress_percentage(self, obj):
+    def get_progress_percentage(self, obj) -> int:
         """获取收款进度"""
         if obj.plan_amount > 0:
             return int((obj.paid_amount / obj.plan_amount) * 100)
@@ -363,7 +365,7 @@ class StatementSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["statement_number", "closing_balance"]
 
-    def get_partner_name(self, obj):
+    def get_partner_name(self, obj) -> Optional[str]:
         """获取对方单位名称（兼容前端）"""
         if obj.statement_type == "customer" and obj.customer:
             return obj.customer.name

@@ -7,7 +7,12 @@
 from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiResponse,
+    extend_schema,
+    inline_serializer,
+)
 from rest_framework import serializers, status
 from rest_framework.decorators import action
 from workorder.response import APIResponse
@@ -66,12 +71,46 @@ class TaskActionsMixin:
                 ),
             },
         ),
+        examples=[
+            OpenApiExample(
+                name="示例请求",
+                summary="增量更新完成数量",
+                value={
+                    "quantity_increment": 50,
+                    "quantity_defective": 2,
+                    "notes": "本次印刷有少量破损",
+                    "version": 3,
+                },
+                request_only=True,
+            )
+        ],
         responses={
             200: OpenApiResponse(
                 response=standard_success_response(
                     "TaskUpdateQuantityResponse", WorkOrderTaskSerializer
                 ),
                 description="更新成功",
+                examples=[
+                    OpenApiExample(
+                        name="示例响应",
+                        summary="更新成功返回",
+                        value={
+                            "success": True,
+                            "code": 200,
+                            "message": "操作成功",
+                            "data": {
+                                "id": 101,
+                                "status": "in_progress",
+                                "status_display": "进行中",
+                                "quantity_completed": 170,
+                                "quantity_defective": 2,
+                                "updated_at": "2026-03-02T10:20:00+08:00",
+                            },
+                            "timestamp": "2026-03-02T10:20:00+08:00",
+                        },
+                        response_only=True,
+                    )
+                ],
             ),
             400: OpenApiResponse(
                 response=standard_error_response("TaskUpdateQuantityBadRequest"),
@@ -683,9 +722,10 @@ class TaskActionsMixin:
         if work_order_process.tasks.count() == 1:
             # 如果工序状态不是pending，需要特殊处理
             if work_order_process.status != "pending":
-                return APIResponse.error("该任务是工序的唯一任务，取消后工序无法完成。请先处理工序状态", code=status.HTTP_400_BAD_REQUEST, data={
-                        "error": "该任务是工序的唯一任务，取消后工序无法完成。请先处理工序状态"
-                    })
+                return APIResponse.error(
+                    "该任务是工序的唯一任务，取消后工序无法完成。请先处理工序状态",
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
 
         # 记录取消前的状态
         status_before = task.status
