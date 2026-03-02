@@ -2,6 +2,7 @@
 Django==4.2.11
 djangorestframework==3.14.0
 djangorestframework-simplejwt==5.2.2
+setuptools<81
 django-cors-headers==4.3.1
 django-filter==23.5
 
