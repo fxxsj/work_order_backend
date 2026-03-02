@@ -81,7 +81,7 @@ def task_status_change_handler(sender, instance, **kwargs):
                     # 任务完成 - 通知主管和创建者
                     notification_service.notify_task_completed(
                         task=instance,
-                        completed_by=instance.assigned_operator if instance.assigned_operator else instance.updated_by
+                        completed_by=instance.assigned_operator
                     )
                     
         except WorkOrderTask.DoesNotExist:
@@ -92,11 +92,11 @@ def task_status_change_handler(sender, instance, **kwargs):
 def approval_log_handler(sender, instance, created, **kwargs):
     """审核日志创建时触发通知"""
     if created:
-        if instance.action_type in ['approve', 'reject']:
+        if instance.approval_status in ['approved', 'rejected']:
             notification_service.notify_workorder_approval(
                 workorder=instance.work_order,
-                status='approved' if instance.action_type == 'approve' else 'rejected',
-                approved_by=instance.action_by
+                status='approved' if instance.approval_status == 'approved' else 'rejected',
+                approved_by=instance.approved_by
             )
 
 

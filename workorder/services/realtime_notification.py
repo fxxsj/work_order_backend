@@ -116,21 +116,37 @@ class RealtimeNotificationService:
         """保存通知到数据库"""
         try:
             from ..models.system import Notification
-            
+
+            valid_types = {choice[0] for choice in Notification.NOTIFICATION_TYPE_CHOICES}
+            event_type = data.get("event_type")
+            if event_type in valid_types:
+                notification_type = event_type
+            else:
+                mapping = {
+                    NotificationEvent.WORKORDER_APPROVED: "approval_passed",
+                    NotificationEvent.WORKORDER_REJECTED: "approval_rejected",
+                    NotificationEvent.TASK_ASSIGNED: "task_assigned",
+                    NotificationEvent.PROCESS_COMPLETED: "process_completed",
+                    NotificationEvent.DEADLINE_WARNING: "task_due_soon",
+                }
+                notification_type = mapping.get(event_type, "system")
+
             notifications = []
             for recipient in recipients:
-                notifications.append(Notification(
-                    user=recipient,
-                    event_type=data['event_type'],
-                    priority=data['priority'],
-                    title=data['data'].get('title', ''),
-                    message=data['data'].get('message', ''),
-                    data=data,
-                    is_read=False
-                ))
-            
+                notifications.append(
+                    Notification(
+                        recipient=recipient,
+                        notification_type=notification_type,
+                        priority=data.get("priority", NotificationPriority.NORMAL),
+                        title=data.get("data", {}).get("title", ""),
+                        content=data.get("data", {}).get("message", ""),
+                        data=data,
+                        is_read=False,
+                    )
+                )
+
             Notification.objects.bulk_create(notifications)
-            
+
         except Exception as e:
             logger.error(f"保存通知到数据库失败: {e}")
     
