@@ -51,11 +51,13 @@ from ..serializers.core import (
     WorkOrderProductSerializer,
     WorkOrderTaskSerializer,
 )
+from workorder.docs.process_logs import process_log_docs
 
 # P1 优化: 导入自定义速率限制
 from ..throttling import ApprovalRateThrottle, CreateRateThrottle, ExportRateThrottle
 
 
+@process_log_docs
 class ProcessLogViewSet(viewsets.ReadOnlyModelViewSet):
     """工序日志视图集（只读）"""
 
