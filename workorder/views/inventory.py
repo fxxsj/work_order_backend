@@ -259,7 +259,7 @@ class StockInViewSet(viewsets.ModelViewSet):
         stock_in = self.get_object()
 
         if stock_in.status != "draft":
-            return APIResponse.error("只有草稿状态的入库单可以提交", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有草稿状态的入库单可以提交"})
+            return APIResponse.error("只有草稿状态的入库单可以提交", code=status.HTTP_400_BAD_REQUEST)
 
         stock_in.status = "submitted"
         stock_in.submitted_by = request.user
@@ -275,7 +275,7 @@ class StockInViewSet(viewsets.ModelViewSet):
         stock_in = self.get_object()
 
         if stock_in.status != "submitted":
-            return APIResponse.error("只有已提交状态的入库单可以审核", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已提交状态的入库单可以审核"})
+            return APIResponse.error("只有已提交状态的入库单可以审核", code=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
             stock_in.status = "completed"
@@ -335,14 +335,14 @@ class StockOutViewSet(viewsets.ModelViewSet):
         stock_out = self.get_object()
 
         if stock_out.status != "submitted":
-            return APIResponse.error("只有已提交状态的出库单可以审核", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已提交状态的出库单可以审核"})
+            return APIResponse.error("只有已提交状态的出库单可以审核", code=status.HTTP_400_BAD_REQUEST)
 
         if stock_out.out_type != "delivery" or not stock_out.delivery_order_id:
-            return APIResponse.error("当前仅支持【发货出库】的审核扣减库存", code=status.HTTP_400_BAD_REQUEST, data={"error": "当前仅支持【发货出库】的审核扣减库存"})
+            return APIResponse.error("当前仅支持【发货出库】的审核扣减库存", code=status.HTTP_400_BAD_REQUEST)
 
         delivery_order = stock_out.delivery_order
         if delivery_order.status != "pending":
-            return APIResponse.error("发货单不是【待发货】状态，无法再次扣减库存", code=status.HTTP_400_BAD_REQUEST, data={"error": "发货单不是【待发货】状态，无法再次扣减库存"})
+            return APIResponse.error("发货单不是【待发货】状态，无法再次扣减库存", code=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
             for item in delivery_order.items.select_related(
@@ -503,7 +503,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         delivery_order = self.get_object()
 
         if delivery_order.status != "pending":
-            return APIResponse.error("只有待发货状态的发货单可以发货", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有待发货状态的发货单可以发货"})
+            return APIResponse.error("只有待发货状态的发货单可以发货", code=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
             # 1. 校验并扣减库存
@@ -592,7 +592,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         delivery_order = self.get_object()
 
         if delivery_order.status not in ["shipped", "in_transit"]:
-            return APIResponse.error("只有已发货或运输中的发货单可以签收", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已发货或运输中的发货单可以签收"})
+            return APIResponse.error("只有已发货或运输中的发货单可以签收", code=status.HTTP_400_BAD_REQUEST)
 
         # 更新签收信息
         delivery_order.status = "received"
@@ -618,11 +618,11 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         delivery_order = self.get_object()
 
         if delivery_order.status not in ["shipped", "in_transit"]:
-            return APIResponse.error("只有已发货或运输中的发货单可以拒收", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已发货或运输中的发货单可以拒收"})
+            return APIResponse.error("只有已发货或运输中的发货单可以拒收", code=status.HTTP_400_BAD_REQUEST)
 
         reject_reason = request.data.get("reject_reason", "")
         if not reject_reason:
-            return APIResponse.error("请填写拒收原因", code=status.HTTP_400_BAD_REQUEST, data={"error": "请填写拒收原因"})
+            return APIResponse.error("请填写拒收原因", code=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
             # 1. 回退库存
@@ -752,12 +752,12 @@ class QualityInspectionViewSet(viewsets.ModelViewSet):
         inspection = self.get_object()
 
         if inspection.result != "pending":
-            return APIResponse.error("该检验已经有结果了", code=status.HTTP_400_BAD_REQUEST, data={"error": "该检验已经有结果了"})
+            return APIResponse.error("该检验已经有结果了", code=status.HTTP_400_BAD_REQUEST)
 
         # 获取检验结果
         result = request.data.get("result")
         if not result:
-            return APIResponse.error("必须指定检验结果", code=status.HTTP_400_BAD_REQUEST, data={"error": "必须指定检验结果"})
+            return APIResponse.error("必须指定检验结果", code=status.HTTP_400_BAD_REQUEST)
 
         inspection.result = result
 

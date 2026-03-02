@@ -105,7 +105,7 @@ class TaskActionsMixin:
         die_ids = request.data.get("die_ids", [])
 
         if quantity_increment is None:
-            return APIResponse.error("请提供本次完成数量", code=status.HTTP_400_BAD_REQUEST, data={"error": "请提供本次完成数量"})
+            return APIResponse.error("请提供本次完成数量", code=status.HTTP_400_BAD_REQUEST)
 
         # 计算新的完成数量（增量更新）
         quantity_before = task.quantity_completed
@@ -119,7 +119,7 @@ class TaskActionsMixin:
 
         # 验证增量数量
         if new_quantity_completed < 0:
-            return APIResponse.error("更新后完成数量不能小于0", code=status.HTTP_400_BAD_REQUEST, data={"error": "更新后完成数量不能小于0"})
+            return APIResponse.error("更新后完成数量不能小于0", code=status.HTTP_400_BAD_REQUEST)
         if (
             task.production_quantity
             and new_quantity_completed > task.production_quantity
@@ -412,15 +412,15 @@ class TaskActionsMixin:
 
         # 检查任务是否已经拆分
         if task.subtasks.exists():
-            return APIResponse.error("该任务已经拆分，无法再次拆分", code=status.HTTP_400_BAD_REQUEST, data={"error": "该任务已经拆分，无法再次拆分"})
+            return APIResponse.error("该任务已经拆分，无法再次拆分", code=status.HTTP_400_BAD_REQUEST)
 
         # 检查任务是否已完成
         if task.status == "completed":
-            return APIResponse.error("已完成的任务无法拆分", code=status.HTTP_400_BAD_REQUEST, data={"error": "已完成的任务无法拆分"})
+            return APIResponse.error("已完成的任务无法拆分", code=status.HTTP_400_BAD_REQUEST)
 
         splits = request.data.get("splits", [])
         if not splits or len(splits) < 2:
-            return APIResponse.error("至少需要拆分为2个子任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "至少需要拆分为2个子任务"})
+            return APIResponse.error("至少需要拆分为2个子任务", code=status.HTTP_400_BAD_REQUEST)
 
         # 验证拆分数量总和不超过父任务数量
         total_split_quantity = sum(s.get("production_quantity", 0) for s in splits)
@@ -533,7 +533,7 @@ class TaskActionsMixin:
                         )
                         task.assigned_department = department
                 except Department.DoesNotExist:
-                    return APIResponse.error("部门不存在", code=status.HTTP_400_BAD_REQUEST, data={"error": "部门不存在"})
+                    return APIResponse.error("部门不存在", code=status.HTTP_400_BAD_REQUEST)
             else:
                 if task.assigned_department:
                     changes.append(
@@ -560,7 +560,7 @@ class TaskActionsMixin:
                         )
                         task.assigned_operator = operator
                 except User.DoesNotExist:
-                    return APIResponse.error("操作员不存在", code=status.HTTP_404_NOT_FOUND, data={"error": "操作员不存在"})
+                    return APIResponse.error("操作员不存在", code=status.HTTP_404_NOT_FOUND)
             else:
                 if task.assigned_operator:
                     old_operator_name = (
@@ -622,14 +622,14 @@ class TaskActionsMixin:
 
         # 验证取消原因
         if not cancellation_reason:
-            return APIResponse.error("请填写取消原因", code=status.HTTP_400_BAD_REQUEST, data={"error": "请填写取消原因"})
+            return APIResponse.error("请填写取消原因", code=status.HTTP_400_BAD_REQUEST)
 
         # 检查任务状态
         if task.status == "cancelled":
-            return APIResponse.error("任务已经取消，无法重复取消", code=status.HTTP_400_BAD_REQUEST, data={"error": "任务已经取消，无法重复取消"})
+            return APIResponse.error("任务已经取消，无法重复取消", code=status.HTTP_400_BAD_REQUEST)
 
         if task.status == "completed":
-            return APIResponse.error("已完成的任务无法取消", code=status.HTTP_400_BAD_REQUEST, data={"error": "已完成的任务无法取消"})
+            return APIResponse.error("已完成的任务无法取消", code=status.HTTP_400_BAD_REQUEST)
 
         # 权限检查：生产主管、创建人或任务分派的操作员可以取消
         # 这里简化处理，实际可以根据用户角色和部门进行更细粒度的控制
@@ -647,7 +647,7 @@ class TaskActionsMixin:
             can_cancel = True
 
         if not can_cancel:
-            return APIResponse.error("您没有权限取消此任务", code=status.HTTP_403_FORBIDDEN, data={"error": "您没有权限取消此任务"})
+            return APIResponse.error("您没有权限取消此任务", code=status.HTTP_403_FORBIDDEN)
 
         # 检查是否会影响工序完成状态
         work_order_process = task.work_order_process

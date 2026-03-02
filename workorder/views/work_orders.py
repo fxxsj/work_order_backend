@@ -576,7 +576,7 @@ class WorkOrderViewSet(BaseViewSet):
         """导出施工单列表到 Excel（P1 优化：添加速率限制）"""
         # 权限检查：需要查看权限
         if not request.user.has_perm("workorder.view_workorder"):
-            return APIResponse.error("您没有权限导出施工单数据", code=status.HTTP_400_BAD_REQUEST, data={"error": "您没有权限导出施工单数据"})
+            return APIResponse.error("您没有权限导出施工单数据", code=status.HTTP_400_BAD_REQUEST)
 
         # 获取过滤后的查询集（使用 get_queryset 确保权限过滤）
         queryset = self.filter_queryset(self.get_queryset())
@@ -616,14 +616,14 @@ class WorkOrderViewSet(BaseViewSet):
 
         # 验证输入
         if not isinstance(new_process_ids, list):
-            return APIResponse.error("process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST, data={"error": "process_ids 必须是列表"})
+            return APIResponse.error("process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST)
 
         # 获取当前工序ID列表
         old_process_ids = list(work_order.order_processes.values_list("id", flat=True))
 
         # 验证施工单是否已审核
         if work_order.approval_status == "approved":
-            return APIResponse.error("已审核的施工单不能修改工序", code=status.HTTP_400_BAD_REQUEST, data={"error": "已审核的施工单不能修改工序"})
+            return APIResponse.error("已审核的施工单不能修改工序", code=status.HTTP_400_BAD_REQUEST)
 
         # 调用 TaskSyncService 计算预览
         preview = TaskSyncService.preview_sync(
@@ -659,18 +659,18 @@ class WorkOrderViewSet(BaseViewSet):
 
         # 验证输入
         if not isinstance(new_process_ids, list):
-            return APIResponse.error("process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST, data={"error": "process_ids 必须是列表"})
+            return APIResponse.error("process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST)
 
         # 获取当前工序ID列表
         old_process_ids = list(work_order.order_processes.values_list("id", flat=True))
 
         # 验证施工单是否已审核
         if work_order.approval_status == "approved":
-            return APIResponse.error("已审核的施工单不能同步任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "已审核的施工单不能同步任务"})
+            return APIResponse.error("已审核的施工单不能同步任务", code=status.HTTP_400_BAD_REQUEST)
 
         # 要求确认标志（防止误操作）
         if not request.data.get("confirmed"):
-            return APIResponse.error("需要确认后才能执行同步，请设置 confirmed=true", code=status.HTTP_400_BAD_REQUEST, data={"error": "需要确认后才能执行同步，请设置 confirmed=true"})
+            return APIResponse.error("需要确认后才能执行同步，请设置 confirmed=true", code=status.HTTP_400_BAD_REQUEST)
 
         # 执行同步
         try:
@@ -825,16 +825,16 @@ class DraftTaskViewSet(BaseViewSet):
         updates = request.data.get("updates", {})
 
         if not task_ids:
-            return APIResponse.error("请提供要更新的任务ID列表", code=status.HTTP_400_BAD_REQUEST, data={"error": "请提供要更新的任务ID列表"})
+            return APIResponse.error("请提供要更新的任务ID列表", code=status.HTTP_400_BAD_REQUEST)
 
         if not updates:
-            return APIResponse.error("请提供要更新的字段", code=status.HTTP_400_BAD_REQUEST, data={"error": "请提供要更新的字段"})
+            return APIResponse.error("请提供要更新的字段", code=status.HTTP_400_BAD_REQUEST)
 
         # 获取任务并验证权限
         queryset = self.get_queryset().filter(id__in=task_ids)
 
         if queryset.count() != len(task_ids):
-            return APIResponse.error("部分任务不存在或无权访问", code=status.HTTP_404_NOT_FOUND, data={"error": "部分任务不存在或无权访问"})
+            return APIResponse.error("部分任务不存在或无权访问", code=status.HTTP_404_NOT_FOUND)
 
         # 批量更新
         updated_count = 0

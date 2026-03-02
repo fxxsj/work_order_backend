@@ -62,7 +62,7 @@ class SalesOrderViewSet(BaseViewSet):
         """提交销售订单"""
         sales_order = self.get_object()
         if sales_order.status != "draft":
-            return APIResponse.error("只有草稿状态的订单才能提交", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有草稿状态的订单才能提交"})
+            return APIResponse.error("只有草稿状态的订单才能提交", code=status.HTTP_400_BAD_REQUEST)
 
         # 验证订单数据完整性
         errors = sales_order.validate_before_approval()
@@ -83,7 +83,7 @@ class SalesOrderViewSet(BaseViewSet):
         """审核通过销售订单"""
         sales_order = self.get_object()
         if sales_order.status != "submitted":
-            return APIResponse.error("只有已提交状态的订单才能审核", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已提交状态的订单才能审核"})
+            return APIResponse.error("只有已提交状态的订单才能审核", code=status.HTTP_400_BAD_REQUEST)
 
         # 再次验证订单数据完整性
         errors = sales_order.validate_before_approval()
@@ -108,11 +108,11 @@ class SalesOrderViewSet(BaseViewSet):
         """拒绝销售订单"""
         sales_order = self.get_object()
         if sales_order.status != "submitted":
-            return APIResponse.error("只有已提交状态的订单才能拒绝", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已提交状态的订单才能拒绝"})
+            return APIResponse.error("只有已提交状态的订单才能拒绝", code=status.HTTP_400_BAD_REQUEST)
 
         reason = request.data.get("reason")
         if not reason:
-            return APIResponse.error("请提供拒绝原因", code=status.HTTP_400_BAD_REQUEST, data={"error": "请提供拒绝原因"})
+            return APIResponse.error("请提供拒绝原因", code=status.HTTP_400_BAD_REQUEST)
 
         # 更新订单状态为已拒绝
         sales_order.status = "rejected"
@@ -130,7 +130,7 @@ class SalesOrderViewSet(BaseViewSet):
         """开始生产（将订单状态改为生产中）"""
         sales_order = self.get_object()
         if sales_order.status != "approved":
-            return APIResponse.error("只有已审核的订单才能开始生产", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已审核的订单才能开始生产"})
+            return APIResponse.error("只有已审核的订单才能开始生产", code=status.HTTP_400_BAD_REQUEST)
 
         sales_order.status = "in_production"
         sales_order.save()
@@ -250,7 +250,7 @@ class SalesOrderViewSet(BaseViewSet):
         """完成订单"""
         sales_order = self.get_object()
         if sales_order.status not in ["approved", "in_production"]:
-            return APIResponse.error("只有已审核或生产中的订单才能完成", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已审核或生产中的订单才能完成"})
+            return APIResponse.error("只有已审核或生产中的订单才能完成", code=status.HTTP_400_BAD_REQUEST)
 
         sales_order.status = "completed"
         sales_order.actual_delivery_date = timezone.now().date()
@@ -264,7 +264,7 @@ class SalesOrderViewSet(BaseViewSet):
         """取消订单"""
         sales_order = self.get_object()
         if sales_order.status in ["completed", "cancelled", "rejected"]:
-            return APIResponse.error("已完成、已取消或已拒绝的订单不能再次取消", code=status.HTTP_400_BAD_REQUEST, data={"error": "已完成、已取消或已拒绝的订单不能再次取消"})
+            return APIResponse.error("已完成、已取消或已拒绝的订单不能再次取消", code=status.HTTP_400_BAD_REQUEST)
 
         # 如果订单已审核或生产中，需要恢复库存
         self._restore_product_stock(sales_order)

@@ -227,7 +227,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         invoice = self.get_object()
 
         if invoice.status != "draft":
-            return APIResponse.error("只有草稿状态的发票可以提交", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有草稿状态的发票可以提交"})
+            return APIResponse.error("只有草稿状态的发票可以提交", code=status.HTTP_400_BAD_REQUEST)
 
         invoice.status = "issued"
         invoice.submitted_by = request.user
@@ -243,7 +243,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         invoice = self.get_object()
 
         if invoice.status != "issued":
-            return APIResponse.error("只有已开具状态的发票可以审核", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有已开具状态的发票可以审核"})
+            return APIResponse.error("只有已开具状态的发票可以审核", code=status.HTTP_400_BAD_REQUEST)
 
         # 获取审核意见
         approval_comment = request.data.get("approval_comment")
@@ -453,7 +453,7 @@ class StatementViewSet(viewsets.ModelViewSet):
         statement = self.get_object()
 
         if statement.status not in ["draft", "sent"]:
-            return APIResponse.error("只有草稿或已发送状态的对账单可以确认", code=status.HTTP_400_BAD_REQUEST, data={"error": "只有草稿或已发送状态的对账单可以确认"})
+            return APIResponse.error("只有草稿或已发送状态的对账单可以确认", code=status.HTTP_400_BAD_REQUEST)
 
         # 获取确认信息
         confirmed = request.data.get("confirmed", True)
@@ -484,7 +484,7 @@ class StatementViewSet(viewsets.ModelViewSet):
         period = request.query_params.get("period")
 
         if not period:
-            return APIResponse.error("必须指定对账周期", code=status.HTTP_400_BAD_REQUEST, data={"error": "必须指定对账周期"})
+            return APIResponse.error("必须指定对账周期", code=status.HTTP_400_BAD_REQUEST)
 
         # 解析周期 (格式: 2024-01)
         try:
@@ -496,7 +496,7 @@ class StatementViewSet(viewsets.ModelViewSet):
             last_day = monthrange(int(year), int(month))[1]
             end_date = date(int(year), int(month), last_day)
         except:
-            return APIResponse.error("周期格式错误，应为 YYYY-MM", code=status.HTTP_400_BAD_REQUEST, data={"error": "周期格式错误，应为 YYYY-MM"})
+            return APIResponse.error("周期格式错误，应为 YYYY-MM", code=status.HTTP_400_BAD_REQUEST)
 
         statement_type = None
         opening_balance = 0
@@ -571,7 +571,7 @@ class StatementViewSet(viewsets.ModelViewSet):
             # NOTE: 当前系统未建模“供应商付款”记录，本期贷方暂不计算。
             total_credit = 0
         else:
-            return APIResponse.error("必须指定客户或供应商", code=status.HTTP_400_BAD_REQUEST, data={"error": "必须指定客户或供应商"})
+            return APIResponse.error("必须指定客户或供应商", code=status.HTTP_400_BAD_REQUEST)
 
         closing_balance = opening_balance + total_debit - total_credit
 

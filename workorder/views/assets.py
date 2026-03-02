@@ -48,7 +48,7 @@ class PlateMakingConfirmMixin:
         from django.db import transaction
 
         if not self.confirm_fk_field:
-            return APIResponse.error("未配置 confirm_fk_field", code=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": "未配置 confirm_fk_field"})
+            return APIResponse.error("未配置 confirm_fk_field", code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         with transaction.atomic():
             asset = self._confirm_select_for_update(pk)

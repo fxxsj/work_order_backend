@@ -47,7 +47,7 @@ class TaskStatsMixin:
         """导出任务列表到 Excel（P1 优化：添加速率限制）"""
         # 权限检查：需要查看权限
         if not request.user.has_perm("workorder.view_workorder"):
-            return APIResponse.error("您没有权限导出任务数据", code=status.HTTP_403_FORBIDDEN, data={"error": "您没有权限导出任务数据"})
+            return APIResponse.error("您没有权限导出任务数据", code=status.HTTP_403_FORBIDDEN)
 
         # 获取过滤后的查询集（使用 get_queryset 确保权限过滤）
         queryset = self.filter_queryset(self.get_queryset())
@@ -446,7 +446,7 @@ class TaskStatsMixin:
 
         # 权限检查：只有主管（有 change_workorder 权限的用户）可以访问
         if not request.user.has_perm("workorder.change_workorder"):
-            return APIResponse.error("您没有权限查看部门工作负载统计", code=status.HTTP_400_BAD_REQUEST, data={"error": "您没有权限查看部门工作负载统计"})
+            return APIResponse.error("您没有权限查看部门工作负载统计", code=status.HTTP_400_BAD_REQUEST)
 
         # 获取部门ID参数
         department_id = request.query_params.get("department_id")
@@ -461,12 +461,12 @@ class TaskStatsMixin:
             if user_departments.exists():
                 department_id = user_departments.first().id
             else:
-                return APIResponse.error("未指定部门且用户不属于任何部门", code=status.HTTP_400_BAD_REQUEST, data={"error": "未指定部门且用户不属于任何部门"})
+                return APIResponse.error("未指定部门且用户不属于任何部门", code=status.HTTP_400_BAD_REQUEST)
 
         try:
             department_id = int(department_id)
         except (ValueError, TypeError):
-            return APIResponse.error("部门ID格式无效", code=status.HTTP_400_BAD_REQUEST, data={"error": "部门ID格式无效"})
+            return APIResponse.error("部门ID格式无效", code=status.HTTP_400_BAD_REQUEST)
 
         # 获取部门信息
         try:
@@ -474,7 +474,7 @@ class TaskStatsMixin:
 
             department = Department.objects.get(id=department_id)
         except Department.DoesNotExist:
-            return APIResponse.error("部门不存在", code=status.HTTP_404_NOT_FOUND, data={"error": "部门不存在"})
+            return APIResponse.error("部门不存在", code=status.HTTP_404_NOT_FOUND)
 
         # Check cache first
         cache_key = f"{self.DEPT_WORKLOAD_CACHE_PREFIX}:{department_id}"
