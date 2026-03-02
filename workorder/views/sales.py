@@ -67,7 +67,7 @@ class SalesOrderViewSet(BaseViewSet):
         # 验证订单数据完整性
         errors = sales_order.validate_before_approval()
         if errors:
-            return APIResponse.error("订单数据验证失败", code=status.HTTP_400_BAD_REQUEST, data={"error": "订单数据验证失败", "errors": errors})
+            return APIResponse.error("订单数据验证失败", code=status.HTTP_400_BAD_REQUEST, errors=errors)
 
         # 更新订单状态
         sales_order.status = "submitted"
@@ -88,7 +88,7 @@ class SalesOrderViewSet(BaseViewSet):
         # 再次验证订单数据完整性
         errors = sales_order.validate_before_approval()
         if errors:
-            return APIResponse.error("订单数据验证失败", code=status.HTTP_400_BAD_REQUEST, data={"error": "订单数据验证失败", "errors": errors})
+            return APIResponse.error("订单数据验证失败", code=status.HTTP_400_BAD_REQUEST, errors=errors)
 
         # 更新订单状态
         sales_order.status = "approved"

@@ -68,7 +68,6 @@ class TaskBulkMixin:
             return APIResponse.error(
                 f"您没有权限更新以下任务：{unauthorized_tasks}",
                 code=status.HTTP_403_FORBIDDEN,
-                data={"error": f"您没有权限更新以下任务：{unauthorized_tasks}"},
             )
 
         # 处理数量增量（支持列表或单个值）
@@ -225,7 +224,6 @@ class TaskBulkMixin:
             return APIResponse.error(
                 f"您没有权限完成以下任务：{unauthorized_tasks}",
                 code=status.HTTP_403_FORBIDDEN,
-                data={"error": f"您没有权限完成以下任务：{unauthorized_tasks}"},
             )
 
         # 批量完成任务
@@ -342,7 +340,6 @@ class TaskBulkMixin:
             return APIResponse.error(
                 f"您没有权限取消以下任务：{unauthorized_tasks}",
                 code=status.HTTP_403_FORBIDDEN,
-                data={"error": f"您没有权限取消以下任务：{unauthorized_tasks}"},
             )
 
         # 批量取消任务

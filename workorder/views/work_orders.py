@@ -688,7 +688,6 @@ class WorkOrderViewSet(BaseViewSet):
             return APIResponse.error(
                 f"同步失败: {str(e)}",
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                data={"error": f"同步失败: {str(e)}"},
             )
 
     @action(detail=True, methods=["get"])

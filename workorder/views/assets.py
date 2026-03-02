@@ -54,7 +54,7 @@ class PlateMakingConfirmMixin:
             asset = self._confirm_select_for_update(pk)
 
             if asset.confirmed:
-                return APIResponse.error(self.confirm_error_message, code=status.HTTP_400_BAD_REQUEST, data={"error": self.confirm_error_message})
+                return APIResponse.error(self.confirm_error_message, code=status.HTTP_400_BAD_REQUEST)
 
             asset.confirmed = True
             asset.confirmed_by = request.user

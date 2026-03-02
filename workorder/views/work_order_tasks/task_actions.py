@@ -438,11 +438,10 @@ class TaskActionsMixin:
         for idx, split_data in enumerate(splits):
             production_quantity = split_data.get("production_quantity", 0)
             if production_quantity <= 0:
-                return APIResponse.error(
-                    f"第{idx+1}个子任务的生产数量必须大于0",
-                    code=status.HTTP_400_BAD_REQUEST,
-                    data={"error": f"第{idx+1}个子任务的生产数量必须大于0"},
-                )
+                    return APIResponse.error(
+                        f"第{idx+1}个子任务的生产数量必须大于0",
+                        code=status.HTTP_400_BAD_REQUEST,
+                    )
 
             # 获取分派信息
             assigned_department_id = split_data.get("assigned_department")

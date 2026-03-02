@@ -365,7 +365,6 @@ class StockOutViewSet(viewsets.ModelViewSet):
                         return APIResponse.error(
                             f"库存批次不可用: {item.stock_batch}",
                             code=status.HTTP_400_BAD_REQUEST,
-                            data={"error": f"库存批次不可用: {item.stock_batch}"},
                         )
 
                     available = stock.quantity - stock.reserved_quantity
@@ -374,7 +373,6 @@ class StockOutViewSet(viewsets.ModelViewSet):
                         return APIResponse.error(
                             f"批次库存不足: {item.stock_batch} 缺少 {missing}",
                             code=status.HTTP_400_BAD_REQUEST,
-                            data={"error": f"批次库存不足: {item.stock_batch} 缺少 {missing}"},
                         )
 
                     stock.quantity -= remaining
@@ -402,7 +400,6 @@ class StockOutViewSet(viewsets.ModelViewSet):
                     return APIResponse.error(
                         f"产品 {item.product.name} 库存不足，缺少 {remaining}",
                         code=status.HTTP_400_BAD_REQUEST,
-                        data={"error": f"产品 {item.product.name} 库存不足，缺少 {remaining}"},
                     )
 
                 if item.sales_order_item:
@@ -529,7 +526,6 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
                     return APIResponse.error(
                         f"产品 {item.product.name} 库存不足，缺少 {remaining}",
                         code=status.HTTP_400_BAD_REQUEST,
-                        data={"error": f"产品 {item.product.name} 库存不足，缺少 {remaining}"},
                     )
 
                 # 2. 更新销售订单明细已发货数量

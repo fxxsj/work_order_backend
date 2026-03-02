@@ -125,7 +125,6 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
             return APIResponse.error(
                 f"计算失败: {str(e)}",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": f"计算失败: {str(e)}"},
             )
 
     @action(detail=True, methods=["post"])
@@ -141,7 +140,6 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
             return APIResponse.error(
                 f"计算失败: {str(e)}",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={"error": f"计算失败: {str(e)}"},
             )
 
     @action(detail=False, methods=["get"])

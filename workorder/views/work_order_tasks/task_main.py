@@ -319,7 +319,6 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             return APIResponse.error(
                 "任务分配失败，请稍后重试",
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                data={"detail": "任务分配失败，请稍后重试", "error": str(e)},
             )
 
     @action(detail=False, methods=["get"], url_path="department-operators")
@@ -428,7 +427,6 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             return APIResponse.error(
                 "任务认领失败，请稍后重试",
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                data={"detail": "任务认领失败，请稍后重试", "error": str(e)},
             )
 
     @action(detail=False, methods=["get"], url_path="claimable")
@@ -465,7 +463,6 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             return APIResponse.error(
                 "获取可认领任务列表失败",
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                data={"detail": "获取可认领任务列表失败", "error": str(e)},
             )
 
     @action(detail=False, methods=["get"], url_path="operator_center")
