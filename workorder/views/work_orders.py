@@ -26,6 +26,22 @@ from drf_spectacular.utils import (
 from rest_framework import filters, serializers, status, viewsets
 from rest_framework.decorators import action
 from workorder.response import APIResponse
+from workorder.docs.work_orders import (
+    draft_task_bulk_update_docs,
+    draft_task_docs,
+    work_order_add_material_docs,
+    work_order_add_process_docs,
+    work_order_approve_docs,
+    work_order_docs,
+    work_order_export_docs,
+    work_order_request_reapproval_docs,
+    work_order_resubmit_docs,
+    work_order_statistics_docs,
+    work_order_sync_check_docs,
+    work_order_sync_execute_docs,
+    work_order_sync_preview_docs,
+    work_order_update_status_docs,
+)
 from workorder.schema import standard_error_response, standard_success_response
 
 logger = logging.getLogger(__name__)
@@ -119,6 +135,7 @@ from .base_viewsets import BaseViewSet
         },
     ),
 )
+@work_order_docs
 class WorkOrderViewSet(BaseViewSet):
     """施工单视图集"""
 
@@ -254,6 +271,7 @@ class WorkOrderViewSet(BaseViewSet):
         return response
 
     @action(detail=True, methods=["post"])
+    @work_order_add_process_docs
     def add_process(self, request, pk=None):
         """为施工单添加工序"""
         work_order = self.get_object()
@@ -271,6 +289,7 @@ class WorkOrderViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
+    @work_order_add_material_docs
     def add_material(self, request, pk=None):
         """为施工单添加物料"""
         work_order = self.get_object()
@@ -288,6 +307,7 @@ class WorkOrderViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
+    @work_order_update_status_docs
     def update_status(self, request, pk=None):
         """更新施工单状态"""
         work_order = self.get_object()
@@ -304,6 +324,7 @@ class WorkOrderViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"], throttle_classes=[ApprovalRateThrottle])
+    @work_order_approve_docs
     def approve(self, request, pk=None):
         """业务员审核施工单（完善版 - P1 优化：添加速率限制和输入验证）"""
         work_order = self.get_object()
@@ -325,6 +346,7 @@ class WorkOrderViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
+    @work_order_resubmit_docs
     def resubmit_for_approval(self, request, pk=None):
         """重新提交审核（审核拒绝后使用）"""
         work_order = self.get_object()
@@ -339,6 +361,7 @@ class WorkOrderViewSet(BaseViewSet):
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
+    @work_order_request_reapproval_docs
     def request_reapproval(self, request, pk=None):
         """请求重新审核（审核通过后发现错误需要修改）
 
@@ -373,6 +396,7 @@ class WorkOrderViewSet(BaseViewSet):
         )
 
     @action(detail=False, methods=["get"])
+    @work_order_statistics_docs
     def statistics(self, request):
         """统计数据（增强版：包含任务统计和生产效率分析）"""
         from datetime import timedelta
@@ -603,6 +627,7 @@ class WorkOrderViewSet(BaseViewSet):
             })
 
     @action(detail=False, methods=["get"], throttle_classes=[ExportRateThrottle])
+    @work_order_export_docs
     def export(self, request):
         """导出施工单列表到 Excel（P1 优化：添加速率限制）"""
         # 权限检查：需要查看权限
@@ -620,6 +645,7 @@ class WorkOrderViewSet(BaseViewSet):
         return export_work_orders(queryset, filename)
 
     @action(detail=True, methods=["post"])
+    @work_order_sync_preview_docs
     def sync_tasks_preview(self, request, pk=None):
         """预览任务同步变更（不执行同步）
 
@@ -664,6 +690,7 @@ class WorkOrderViewSet(BaseViewSet):
         return APIResponse.error("process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST, data={"preview": preview})
 
     @action(detail=True, methods=["post"])
+    @work_order_sync_execute_docs
     def sync_tasks_execute(self, request, pk=None):
         """执行任务同步（需要用户确认）
 
@@ -722,6 +749,7 @@ class WorkOrderViewSet(BaseViewSet):
             )
 
     @action(detail=True, methods=["get"])
+    @work_order_sync_check_docs
     def check_sync_needed(self, request, pk=None):
         """检查是否需要任务同步
 
@@ -767,6 +795,7 @@ class WorkOrderViewSet(BaseViewSet):
             })
 
 
+@draft_task_docs
 class DraftTaskViewSet(BaseViewSet):
     """草稿任务视图集（允许编辑和删除草稿状态的任务）"""
 
@@ -839,6 +868,7 @@ class DraftTaskViewSet(BaseViewSet):
         instance.delete()
 
     @action(detail=False, methods=["patch"])
+    @draft_task_bulk_update_docs
     def bulk_update(self, request):
         """批量更新草稿任务
 

@@ -13,6 +13,12 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from workorder.response import APIResponse
+from workorder.docs.work_order_tasks_stats import (
+    task_assignment_history_docs,
+    task_collaboration_stats_docs,
+    task_department_workload_docs,
+    task_export_docs,
+)
 
 from workorder.export_utils import export_tasks
 from workorder.models import WorkOrderTask
@@ -43,6 +49,7 @@ class TaskStatsMixin:
         return f"{self.COLLAB_STATS_CACHE_PREFIX}:{params_hash}"
 
     @action(detail=False, methods=["get"], throttle_classes=[ExportRateThrottle])
+    @task_export_docs
     def export(self, request):
         """导出任务列表到 Excel（P1 优化：添加速率限制）"""
         # 权限检查：需要查看权限
@@ -60,6 +67,7 @@ class TaskStatsMixin:
         return export_tasks(queryset, filename)
 
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
+    @task_assignment_history_docs
     def assignment_history(self, request):
         """分派历史查询：查询任务分派调整历史记录"""
         from django.db.models import Q
@@ -182,6 +190,7 @@ class TaskStatsMixin:
         )
 
     @action(detail=False, methods=["get"])
+    @task_collaboration_stats_docs
     def collaboration_stats(self, request):
         """协作统计：按操作员汇总完成任务数量、完成时间、不良品率等
 
@@ -430,6 +439,7 @@ class TaskStatsMixin:
         return APIResponse.success(data=response_data)
 
     @action(detail=False, methods=["get"])
+    @task_department_workload_docs
     def department_workload(self, request):
         """Department workload statistics for supervisor dashboard
 

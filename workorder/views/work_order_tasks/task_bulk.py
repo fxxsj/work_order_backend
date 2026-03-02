@@ -7,6 +7,10 @@
 from rest_framework import status
 from rest_framework.decorators import action
 from workorder.response import APIResponse
+from workorder.docs.work_order_tasks_bulk import (
+    batch_delete_docs,
+    batch_update_quantity_docs,
+)
 
 from workorder.models.core import TaskLog, WorkOrderTask
 from workorder.models.system import Notification
@@ -20,6 +24,7 @@ class TaskBulkMixin:
     """
 
     @action(detail=False, methods=["post"])
+    @batch_update_quantity_docs
     def batch_update_quantity(self, request):
         """批量更新任务数量"""
         """批量更新任务完成数量
@@ -548,6 +553,7 @@ class TaskBulkMixin:
         )
 
     @action(detail=False, methods=["post"], url_path="batch-delete")
+    @batch_delete_docs
     def batch_delete(self, request):
         """批量删除任务（仅草稿状态）
 

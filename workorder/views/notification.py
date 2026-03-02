@@ -17,6 +17,11 @@ from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from workorder.response import APIResponse
 from workorder.schema import standard_error_response, standard_success_response
+from workorder.docs.notification_extra import (
+    notification_template_docs,
+    system_notification_docs,
+    user_notification_settings_docs,
+)
 
 from ..models.system import Notification
 
@@ -207,6 +212,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
         return APIResponse.success(data={"ticket": ticket, "expires_in": 60})
 
 
+@system_notification_docs
 class SystemNotificationViewSet(viewsets.GenericViewSet):
     """系统通知管理视图集"""
 
@@ -356,6 +362,7 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
             )
 
 
+@user_notification_settings_docs
 class UserNotificationSettingsViewSet(viewsets.GenericViewSet):
     """用户通知设置视图集"""
 
@@ -436,6 +443,7 @@ class UserNotificationSettingsViewSet(viewsets.GenericViewSet):
         return APIResponse.success(data=preferences)
 
 
+@notification_template_docs
 class NotificationTemplateViewSet(viewsets.GenericViewSet):
     """通知模板视图集"""
 
