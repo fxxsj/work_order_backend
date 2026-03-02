@@ -1,6 +1,5 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     CustomerViewSet, DepartmentViewSet, ProcessViewSet, ProductViewSet,
     ProductMaterialViewSet, MaterialViewSet,
@@ -31,7 +30,7 @@ from .views.notification import (
     UserNotificationSettingsViewSet, NotificationTemplateViewSet
 )
 from .auth_views import (
-    LoginView, logout_view, get_current_user, register_view,
+    LoginView, LogoutView, TokenRefreshViewWithDocs, get_current_user, register_view,
     get_salespersons, get_users_by_department, change_password, update_profile
 )
 
@@ -99,8 +98,8 @@ router.register(r'notification-templates', NotificationTemplateViewSet, basename
 urlpatterns = [
     path('', include(router.urls)),
     path('auth/login/', LoginView.as_view(), name='login'),
-    path('auth/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
-    path('auth/logout/', logout_view, name='logout'),
+    path('auth/refresh/', TokenRefreshViewWithDocs.as_view(), name='token-refresh'),
+    path('auth/logout/', LogoutView.as_view(), name='logout'),
     path('auth/user/', get_current_user, name='current-user'),
     path('auth/register/', register_view, name='register'),
     path('auth/salespersons/', get_salespersons, name='salespersons'),

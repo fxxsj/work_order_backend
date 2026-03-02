@@ -8,7 +8,7 @@ import rest_framework.filters
 from django.contrib.auth.models import User
 from django.db.models import Q
 from django.utils import timezone
-from rest_framework import permissions, status, viewsets
+from rest_framework import permissions, status, viewsets, serializers
 from rest_framework.decorators import action
 from workorder.response import APIResponse
 from workorder.services.approval_actions import (
@@ -52,6 +52,12 @@ from workorder.docs.multi_level_approval import (
     update_skill_profile_docs,
     user_performance_summary_docs,
 )
+
+
+class EmptySerializer(serializers.Serializer):
+    """用于 OpenAPI 生成的空序列化器"""
+
+    pass
 
 from ..models.assets import (
     Artwork,
@@ -264,6 +270,7 @@ class MultiLevelApprovalViewSet(viewsets.GenericViewSet):
     """多级审核主视图集"""
 
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = EmptySerializer
 
     @action(detail=False, methods=["post"])
     @multi_level_submit_docs
@@ -336,6 +343,7 @@ class UrgentOrderViewSet(viewsets.GenericViewSet):
     """紧急订单管理视图集"""
 
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = EmptySerializer
 
     @action(detail=False, methods=["post"])
     @urgent_mark_docs
@@ -403,6 +411,7 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
     """审核报告视图集"""
 
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = EmptySerializer
 
     @action(detail=False, methods=["get"])
     @approval_report_stats_docs

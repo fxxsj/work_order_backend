@@ -305,7 +305,7 @@ if not DEBUG:
 
 # REST Framework settings
 REST_FRAMEWORK = {
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_SCHEMA_CLASS": "workorder.schema.TaggedAutoSchema",
     "DEFAULT_PAGINATION_CLASS": "workorder.pagination.CustomPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_RENDERER_CLASSES": [
@@ -531,10 +531,15 @@ SPECTACULAR_SETTINGS = {
         {"name": "工序", "description": "工序类型和属性管理"},
         {"name": "用户", "description": "用户信息和权限管理"},
         {"name": "通知", "description": "实时通知和历史记录"},
-        {"name": "统计", "description": "任务统计和数据分析"},
         {"name": "产品", "description": "产品信息和库存管理"},
         {"name": "物料", "description": "物料信息和采购管理"},
         {"name": "客户", "description": "客户信息和联系记录"},
+        {"name": "资产", "description": "图稿、刀模、制版等资产管理"},
+        {"name": "财务", "description": "成本、发票、收款与对账管理"},
+        {"name": "库存", "description": "成品与原料库存出入库管理"},
+        {"name": "销售", "description": "销售订单与交付管理"},
+        {"name": "审核", "description": "多级审核流程与统计"},
+        {"name": "系统", "description": "系统规则与通知配置"},
     ],
     "SCHEMA_PATH_PREFIX": "/api",
     "SCHEMA_PATH_PREFIX_TRIM": True,

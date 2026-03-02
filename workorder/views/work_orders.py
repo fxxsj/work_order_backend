@@ -808,6 +808,9 @@ class DraftTaskViewSet(BaseViewSet):
 
     def get_queryset(self):
         """只返回草稿状态的任务"""
+        if getattr(self, "swagger_fake_view", False):
+            return WorkOrderTask.objects.none()
+
         user = self.request.user
 
         # 获取草稿任务

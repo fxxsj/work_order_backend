@@ -1,15 +1,135 @@
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
+from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User, Group, Permission
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
 from .serializers import UserSerializer
 from workorder.response import APIResponse
+from workorder.schema import standard_error_response, standard_success_response
 import re
+
+
+class EmptySerializer(serializers.Serializer):
+    """用于 OpenAPI 生成的空序列化器"""
+
+    pass
+
+
+login_request_serializer = inline_serializer(
+    name="LoginRequest",
+    fields={
+        "username": serializers.CharField(),
+        "password": serializers.CharField(),
+    },
+)
+
+login_data_serializer = inline_serializer(
+    name="LoginResponseData",
+    fields={
+        "id": serializers.IntegerField(),
+        "username": serializers.CharField(),
+        "email": serializers.CharField(required=False, allow_blank=True),
+        "first_name": serializers.CharField(required=False, allow_blank=True),
+        "last_name": serializers.CharField(required=False, allow_blank=True),
+        "is_staff": serializers.BooleanField(),
+        "is_superuser": serializers.BooleanField(),
+        "groups": serializers.ListField(child=serializers.CharField()),
+        "is_salesperson": serializers.BooleanField(),
+        "permissions": serializers.ListField(child=serializers.CharField()),
+        "access": serializers.CharField(),
+        "refresh": serializers.CharField(),
+    },
+)
+
+register_request_serializer = inline_serializer(
+    name="RegisterRequest",
+    fields={
+        "username": serializers.CharField(),
+        "password": serializers.CharField(),
+        "email": serializers.CharField(required=False, allow_blank=True),
+        "first_name": serializers.CharField(required=False, allow_blank=True),
+        "last_name": serializers.CharField(required=False, allow_blank=True),
+    },
+)
+
+register_data_serializer = inline_serializer(
+    name="RegisterResponseData",
+    fields={
+        "id": serializers.IntegerField(),
+        "username": serializers.CharField(),
+        "email": serializers.CharField(required=False, allow_blank=True),
+        "first_name": serializers.CharField(required=False, allow_blank=True),
+        "last_name": serializers.CharField(required=False, allow_blank=True),
+    },
+)
+
+current_user_data_serializer = inline_serializer(
+    name="CurrentUserData",
+    fields={
+        "id": serializers.IntegerField(),
+        "username": serializers.CharField(),
+        "email": serializers.CharField(required=False, allow_blank=True),
+        "first_name": serializers.CharField(required=False, allow_blank=True),
+        "last_name": serializers.CharField(required=False, allow_blank=True),
+        "is_staff": serializers.BooleanField(),
+        "is_superuser": serializers.BooleanField(),
+        "groups": serializers.ListField(child=serializers.CharField()),
+        "is_salesperson": serializers.BooleanField(),
+        "permissions": serializers.ListField(child=serializers.CharField()),
+    },
+)
+
+change_password_request_serializer = inline_serializer(
+    name="ChangePasswordRequest",
+    fields={
+        "old_password": serializers.CharField(),
+        "new_password": serializers.CharField(),
+        "confirm_password": serializers.CharField(),
+    },
+)
+
+update_profile_request_serializer = inline_serializer(
+    name="UpdateProfileRequest",
+    fields={
+        "email": serializers.CharField(required=False, allow_blank=True),
+        "first_name": serializers.CharField(required=False, allow_blank=True),
+        "last_name": serializers.CharField(required=False, allow_blank=True),
+    },
+)
+
+update_profile_data_serializer = inline_serializer(
+    name="UpdateProfileResponseData",
+    fields={
+        "id": serializers.IntegerField(),
+        "username": serializers.CharField(),
+        "email": serializers.CharField(required=False, allow_blank=True),
+        "first_name": serializers.CharField(required=False, allow_blank=True),
+        "last_name": serializers.CharField(required=False, allow_blank=True),
+        "is_staff": serializers.BooleanField(),
+        "is_superuser": serializers.BooleanField(),
+        "groups": serializers.ListField(child=serializers.CharField()),
+        "permissions": serializers.ListField(child=serializers.CharField()),
+    },
+)
+
+token_refresh_request_serializer = inline_serializer(
+    name="TokenRefreshRequest",
+    fields={"refresh": serializers.CharField()},
+)
+
+token_refresh_response_serializer = inline_serializer(
+    name="TokenRefreshResponse",
+    fields={
+        "access": serializers.CharField(),
+        "refresh": serializers.CharField(required=False),
+    },
+)
 
 
 class LoginView(APIView):
@@ -17,6 +137,25 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []  # 禁用所有认证类，避免 CSRF 检查
 
+    @extend_schema(
+        tags=["用户"],
+        summary="用户登录",
+        request=login_request_serializer,
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("LoginResponse", login_data_serializer),
+                description="登录成功",
+            ),
+            400: OpenApiResponse(
+                response=standard_error_response("LoginBadRequest"),
+                description="请求无效",
+            ),
+            401: OpenApiResponse(
+                response=standard_error_response("LoginUnauthorized"),
+                description="用户名或密码错误",
+            ),
+        },
+    )
     def post(self, request):
         """用户登录"""
         username = request.data.get('username')
@@ -60,14 +199,63 @@ class LoginView(APIView):
             return APIResponse.error('用户名或密码错误', code=status.HTTP_401_UNAUTHORIZED)
 
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def logout_view(request):
-    """用户登出"""
-    logout(request)
-    return APIResponse.success(message='已成功登出')
+class LogoutView(APIView):
+    """用户登出视图"""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = EmptySerializer
+
+    @extend_schema(
+        tags=["用户"],
+        summary="用户登出",
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("LogoutResponse"),
+                description="登出成功",
+            )
+        },
+    )
+    def post(self, request):
+        """用户登出"""
+        logout(request)
+        return APIResponse.success(message='已成功登出')
 
 
+class TokenRefreshViewWithDocs(TokenRefreshView):
+    """刷新访问令牌视图"""
+
+    @extend_schema(
+        tags=["用户"],
+        summary="刷新访问令牌",
+        request=token_refresh_request_serializer,
+        responses={
+            200: OpenApiResponse(
+                response=token_refresh_response_serializer,
+                description="刷新成功",
+            ),
+            401: OpenApiResponse(description="无效或过期的刷新令牌"),
+        },
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
+
+@extend_schema(
+    tags=["用户"],
+    summary="获取当前登录用户信息",
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response(
+                "CurrentUserResponse", current_user_data_serializer
+            ),
+            description="用户信息",
+        ),
+        401: OpenApiResponse(
+            response=standard_error_response("CurrentUserUnauthorized"),
+            description="未登录",
+        ),
+    },
+)
 @api_view(['GET'])
 @ensure_csrf_cookie
 @permission_classes([AllowAny])
@@ -103,6 +291,23 @@ def get_current_user(request):
         return APIResponse.error('未登录', code=status.HTTP_401_UNAUTHORIZED)
 
 
+@extend_schema(
+    tags=["用户"],
+    summary="用户注册",
+    request=register_request_serializer,
+    responses={
+        201: OpenApiResponse(
+            response=standard_success_response(
+                "RegisterResponse", register_data_serializer
+            ),
+            description="注册成功",
+        ),
+        400: OpenApiResponse(
+            response=standard_error_response("RegisterBadRequest"),
+            description="请求无效",
+        ),
+    },
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_view(request):
@@ -143,6 +348,22 @@ def register_view(request):
     }, message='注册成功', code=status.HTTP_201_CREATED)
 
 
+@extend_schema(
+    tags=["用户"],
+    summary="获取业务员列表",
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response(
+                "SalespersonListResponse", UserSerializer, many=True
+            ),
+            description="业务员列表",
+        ),
+        500: OpenApiResponse(
+            response=standard_error_response("SalespersonListError"),
+            description="服务器错误",
+        ),
+    },
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_salespersons(request):
@@ -164,6 +385,22 @@ def get_salespersons(request):
         return APIResponse.error(str(e), code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@extend_schema(
+    tags=["用户"],
+    summary="按部门获取用户列表",
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response(
+                "DepartmentUserListResponse", UserSerializer, many=True
+            ),
+            description="用户列表",
+        ),
+        500: OpenApiResponse(
+            response=standard_error_response("DepartmentUserListError"),
+            description="服务器错误",
+        ),
+    },
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_users_by_department(request):
@@ -187,6 +424,25 @@ def get_users_by_department(request):
         return APIResponse.error(str(e), code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@extend_schema(
+    tags=["用户"],
+    summary="修改密码",
+    request=change_password_request_serializer,
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response("ChangePasswordResponse"),
+            description="修改成功",
+        ),
+        400: OpenApiResponse(
+            response=standard_error_response("ChangePasswordBadRequest"),
+            description="请求无效",
+        ),
+        500: OpenApiResponse(
+            response=standard_error_response("ChangePasswordServerError"),
+            description="服务器错误",
+        ),
+    },
+)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def change_password(request):
@@ -220,6 +476,24 @@ def change_password(request):
         return APIResponse.error(f'密码修改失败: {str(e)}', code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@extend_schema(
+    tags=["用户"],
+    summary="更新个人信息",
+    methods=["PUT", "PATCH"],
+    request=update_profile_request_serializer,
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response(
+                "UpdateProfileResponse", update_profile_data_serializer
+            ),
+            description="更新成功",
+        ),
+        500: OpenApiResponse(
+            response=standard_error_response("UpdateProfileServerError"),
+            description="服务器错误",
+        ),
+    },
+)
 @api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def update_profile(request):

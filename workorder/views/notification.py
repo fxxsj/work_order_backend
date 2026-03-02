@@ -15,6 +15,7 @@ from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
+from rest_framework import serializers
 from workorder.response import APIResponse
 from workorder.schema import standard_error_response, standard_success_response
 from workorder.docs.notification_extra import (
@@ -62,6 +63,12 @@ class NotificationSerializer:
         }
 
 
+class EmptySerializer(serializers.Serializer):
+    """用于 OpenAPI 生成的空序列化器"""
+
+    pass
+
+
 @extend_schema_view(
     list=extend_schema(
         tags=["通知"],
@@ -74,30 +81,18 @@ class NotificationSerializer:
             )
         },
     ),
-    partial_update=extend_schema(
-        tags=["通知"],
-        summary="标记通知为已读",
-        description="将指定通知标记为已读状态。",
-        responses={
-            200: OpenApiResponse(
-                response=standard_success_response("NotificationMarkReadResponse"),
-                description="标记成功",
-            ),
-            404: OpenApiResponse(
-                response=standard_error_response("NotificationNotFoundResponse"),
-                description="通知不存在",
-            ),
-        },
-    ),
 )
 class NotificationViewSet(viewsets.GenericViewSet):
     """通知管理视图集"""
 
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = NotificationPagination
+    serializer_class = EmptySerializer
 
     def get_queryset(self):
         """获取当前用户的通知查询集"""
+        if getattr(self, "swagger_fake_view", False):
+            return Notification.objects.none()
         return Notification.objects.filter(recipient=self.request.user).order_by(
             "-created_at"
         )
@@ -271,6 +266,7 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
     """系统通知管理视图集"""
 
     permission_classes = [permissions.IsAdminUser]
+    serializer_class = EmptySerializer
 
     @action(detail=False, methods=["post"])
     def create_announcement(self, request):
@@ -421,6 +417,7 @@ class UserNotificationSettingsViewSet(viewsets.GenericViewSet):
     """用户通知设置视图集"""
 
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = EmptySerializer
 
     @action(detail=False, methods=["get"])
     def get_settings(self, request):
@@ -502,6 +499,7 @@ class NotificationTemplateViewSet(viewsets.GenericViewSet):
     """通知模板视图集"""
 
     permission_classes = [permissions.IsAdminUser]
+    serializer_class = EmptySerializer
 
     @action(detail=False, methods=["get"])
     def get_templates(self, request):
