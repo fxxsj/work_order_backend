@@ -477,16 +477,26 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             await self.close(code=4001, reason="Missing token")
             return
 
-        # 验证 token 并获取用户（使用 sync_to_async 包装同步 ORM 调用）
-        from rest_framework.authtoken.models import Token
+        # 验证 JWT token 并获取用户（使用 sync_to_async 包装同步 ORM 调用）
+        from rest_framework_simplejwt.tokens import AccessToken
+        from rest_framework_simplejwt.exceptions import TokenError
         from asgiref.sync import sync_to_async
 
         try:
-            token_obj = await sync_to_async(Token.objects.select_related('user').get)(key=token)
-            user = token_obj.user
-        except Token.DoesNotExist:
-            logger.warning(f"WebSocket token 无效: {token[:10]}...")
-            await self.close(code=4001, reason="Invalid token")
+            # 解析 JWT access token
+            access_token = AccessToken(token)
+            user_id = access_token['user_id']
+
+            # 从数据库获取用户
+            from django.contrib.auth.models import User
+            user = await sync_to_async(User.objects.get)(id=user_id, is_active=True)
+        except TokenError as e:
+            logger.warning(f"WebSocket JWT token 无效: {token[:10]}... - {str(e)}")
+            await self.close(code=4001, reason="Invalid JWT token")
+            return
+        except User.DoesNotExist:
+            logger.warning(f"WebSocket JWT token 中的用户不存在: user_id={access_token.get('user_id')}")
+            await self.close(code=4001, reason="User not found")
             return
 
         if not user.is_authenticated:
