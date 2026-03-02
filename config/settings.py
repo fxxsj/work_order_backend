@@ -515,9 +515,9 @@ SPECTACULAR_SETTINGS = {
     - **统计分析**: 任务统计、部门负载、协作分析
 
     ## 认证方式
-    API 使用 Token 认证。在请求头中包含:
+    API 使用 JWT 认证。在请求头中包含:
     ```
-    Authorization: Token your_token_here
+    Authorization: Bearer <access_token>
     ```
     """,
     "VERSION": "1.0.0",
@@ -538,4 +538,14 @@ SPECTACULAR_SETTINGS = {
     ],
     "SCHEMA_PATH_PREFIX": "/api",
     "SCHEMA_PATH_PREFIX_TRIM": True,
+    "SECURITY": [{"bearerAuth": []}],
+    "COMPONENTS": {
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+            }
+        }
+    },
 }
