@@ -120,7 +120,7 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
         try:
             cost.auto_calculate_material_cost()
             serializer = self.get_serializer(cost)
-            return APIResponse.success(data={"message": "材料成本计算成功", "data": serializer.data})
+            return APIResponse.success(data=serializer.data, message="材料成本计算成功")
         except Exception as e:
             return APIResponse.error(
                 f"计算失败: {str(e)}",
@@ -136,7 +136,7 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
         try:
             cost.calculate_total_cost()
             serializer = self.get_serializer(cost)
-            return APIResponse.success(data={"message": "总成本计算成功", "data": serializer.data})
+            return APIResponse.success(data=serializer.data, message="总成本计算成功")
         except Exception as e:
             return APIResponse.error(
                 f"计算失败: {str(e)}",
@@ -235,7 +235,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         invoice.save()
 
         serializer = self.get_serializer(invoice)
-        return APIResponse.success(data={"message": "发票提交成功", "data": serializer.data})
+        return APIResponse.success(data=serializer.data, message="发票提交成功")
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
@@ -260,7 +260,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         invoice.save()
 
         serializer = self.get_serializer(invoice)
-        return APIResponse.success(data={"message": "发票审核成功", "data": serializer.data})
+        return APIResponse.success(data=serializer.data, message="发票审核成功")
 
     @action(detail=False, methods=["get"])
     def summary(self, request):
@@ -385,7 +385,7 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
         plan.update_status()
 
         serializer = self.get_serializer(plan)
-        return APIResponse.success(data={"message": "状态更新成功", "data": serializer.data})
+        return APIResponse.success(data=serializer.data, message="状态更新成功")
 
 
 class StatementViewSet(viewsets.ModelViewSet):
@@ -473,7 +473,7 @@ class StatementViewSet(viewsets.ModelViewSet):
         statement.save()
 
         serializer = self.get_serializer(statement)
-        return APIResponse.success(data={"message": "对账单确认成功", "data": serializer.data})
+        return APIResponse.success(data=serializer.data, message="对账单确认成功")
 
     @action(detail=False, methods=["get"])
     def generate(self, request):

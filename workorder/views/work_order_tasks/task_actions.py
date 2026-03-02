@@ -11,8 +11,15 @@ from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_seriali
 from rest_framework import serializers, status
 from rest_framework.decorators import action
 from workorder.response import APIResponse
+from workorder.services.service_errors import ServiceError
+from workorder.policies.task_policy import (
+    ensure_assets_confirmed,
+    ensure_material_cut_ready,
+    ensure_task_version,
+    ensure_user_can_modify_task,
+    resolve_design_assets,
+)
 
-from workorder.models.assets import Artwork, Die
 from workorder.models.core import TaskLog, WorkOrder, WorkOrderTask
 from workorder.models.system import Notification
 from workorder.serializers.core import WorkOrderTaskSerializer
@@ -72,43 +79,19 @@ class TaskActionsMixin:
 
         task = self.get_object()
 
-        # 权限检查：操作员只能更新自己分派的任务
-        user = request.user
-        if not user.is_superuser:
-            if task.assigned_operator != user:
-                # 检查是否是生产主管（本部门任务）
-                if task.assigned_department:
-                    user_departments = (
-                        user.profile.departments.all()
-                        if hasattr(user, "profile")
-                        else []
-                    )
-                    if (
-                        task.assigned_department not in user_departments
-                        or not user.has_perm("workorder.change_workorder")
-                    ):
-                        # 检查是否是施工单创建人
-                        if task.work_order_process.work_order.created_by != user:
-                            return APIResponse.error("您没有权限更新此任务。只能更新自己分派的任务或本部门的任务。", code=status.HTTP_403_FORBIDDEN, data={
-                                    "error": "您没有权限更新此任务。只能更新自己分派的任务或本部门的任务。"
-                                })
-                else:
-                    # 任务未分派，只有施工单创建人可以更新
-                    if task.work_order_process.work_order.created_by != user:
-                        return APIResponse.error("您没有权限更新此任务。只能更新自己分派的任务或本部门的任务。", code=status.HTTP_403_FORBIDDEN, data={
-                                "error": "您没有权限更新此任务。只能更新自己分派的任务或本部门的任务。"
-                            })
+        try:
+            ensure_user_can_modify_task(request.user, task, "更新")
+        except ServiceError as exc:
+            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
         from workorder.process_codes import ProcessCodes
 
         # 并发控制：检查版本号（乐观锁）
         expected_version = request.data.get("version")
-        if expected_version is not None:
-            if task.version != expected_version:
-                return APIResponse.error("任务已被其他操作员更新，请刷新后重试", code=status.HTTP_409_CONFLICT, data={
-                        "error": "任务已被其他操作员更新，请刷新后重试",
-                        "current_version": task.version,
-                    })
+        try:
+            ensure_task_version(task, expected_version)
+        except ServiceError as exc:
+            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
         work_order_process = task.work_order_process
         work_order = work_order_process.work_order
@@ -128,26 +111,11 @@ class TaskActionsMixin:
         quantity_before = task.quantity_completed
         new_quantity_completed = quantity_before + quantity_increment
 
-        # 业务条件验证：制版任务需图稿/刀模等已确认
-        if task.task_type == "plate_making":
-            if task.artwork and not task.artwork.confirmed:
-                return APIResponse.error("图稿未确认，无法更新任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "图稿未确认，无法更新任务"})
-            if task.die and not task.die.confirmed:
-                return APIResponse.error("刀模未确认，无法更新任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "刀模未确认，无法更新任务"})
-            if task.foiling_plate and not task.foiling_plate.confirmed:
-                return APIResponse.error("烫金版未确认，无法更新任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "烫金版未确认，无法更新任务"})
-            if task.embossing_plate and not task.embossing_plate.confirmed:
-                return APIResponse.error("压凸版未确认，无法更新任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "压凸版未确认，无法更新任务"})
-
-        # 业务条件验证：开料任务需物料状态满足条件
-        if task.task_type == "cutting" and task.material:
-            work_order_material = work_order.materials.filter(
-                material=task.material
-            ).first()
-            if work_order_material:
-                if ProcessCodes.requires_material_cut_status(process_code):
-                    if work_order_material.purchase_status != "cut":
-                        return APIResponse.error("物料未开料，无法更新开料任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "物料未开料，无法更新开料任务"})
+        try:
+            ensure_assets_confirmed(task, "更新")
+            ensure_material_cut_ready(task, process_code, work_order, "更新")
+        except ServiceError as exc:
+            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
         # 验证增量数量
         if new_quantity_completed < 0:
@@ -167,30 +135,20 @@ class TaskActionsMixin:
         # 记录更新前的状态和数量
         status_before = task.status
 
-        # 处理设计图稿/设计刀模任务
-        is_design_task = (
-            "设计图稿" in task.work_content or "更新图稿" in task.work_content
-        )
-        is_die_design_task = (
-            "设计刀模" in task.work_content or "更新刀模" in task.work_content
-        )
+        try:
+            artwork, die = resolve_design_assets(
+                task=task,
+                artwork_ids=artwork_ids,
+                die_ids=die_ids,
+                work_order=work_order,
+            )
+        except ServiceError as exc:
+            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
-        if is_design_task:
-            if not artwork_ids or len(artwork_ids) == 0:
-                return APIResponse.error("请至少选择一个图稿", code=status.HTTP_400_BAD_REQUEST, data={"error": "请至少选择一个图稿"})
-            artworks = Artwork.objects.filter(id__in=artwork_ids)
-            if artworks.count() != len(artwork_ids):
-                return APIResponse.error("部分图稿不存在", code=status.HTTP_400_BAD_REQUEST, data={"error": "部分图稿不存在"})
-            work_order.artworks.add(*artworks)
-            task.artwork = artworks.first()
-        elif is_die_design_task:
-            if not die_ids or len(die_ids) == 0:
-                return APIResponse.error("请至少选择一个刀模", code=status.HTTP_400_BAD_REQUEST, data={"error": "请至少选择一个刀模"})
-            dies = Die.objects.filter(id__in=die_ids)
-            if dies.count() != len(die_ids):
-                return APIResponse.error("部分刀模不存在", code=status.HTTP_400_BAD_REQUEST, data={"error": "部分刀模不存在"})
-            work_order.dies.add(*dies)
-            task.die = dies.first()
+        if artwork:
+            task.artwork = artwork
+        if die:
+            task.die = die
 
         # 更新任务数量（增量更新）
         task.quantity_completed = new_quantity_completed
@@ -326,43 +284,19 @@ class TaskActionsMixin:
 
         task = self.get_object()
 
-        # 权限检查：操作员只能完成自己分派的任务
-        user = request.user
-        if not user.is_superuser:
-            if task.assigned_operator != user:
-                # 检查是否是生产主管（本部门任务）
-                if task.assigned_department:
-                    user_departments = (
-                        user.profile.departments.all()
-                        if hasattr(user, "profile")
-                        else []
-                    )
-                    if (
-                        task.assigned_department not in user_departments
-                        or not user.has_perm("workorder.change_workorder")
-                    ):
-                        # 检查是否是施工单创建人
-                        if task.work_order_process.work_order.created_by != user:
-                            return APIResponse.error("您没有权限完成此任务。只能完成自己分派的任务或本部门的任务。", code=status.HTTP_403_FORBIDDEN, data={
-                                    "error": "您没有权限完成此任务。只能完成自己分派的任务或本部门的任务。"
-                                })
-                else:
-                    # 任务未分派，只有施工单创建人可以完成
-                    if task.work_order_process.work_order.created_by != user:
-                        return APIResponse.error("您没有权限完成此任务。只能完成自己分派的任务或本部门的任务。", code=status.HTTP_403_FORBIDDEN, data={
-                                "error": "您没有权限完成此任务。只能完成自己分派的任务或本部门的任务。"
-                            })
+        try:
+            ensure_user_can_modify_task(request.user, task, "完成")
+        except ServiceError as exc:
+            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
         from workorder.process_codes import ProcessCodes
 
         # 并发控制：检查版本号（乐观锁）
         expected_version = request.data.get("version")
-        if expected_version is not None:
-            if task.version != expected_version:
-                return APIResponse.error("任务已被其他操作员更新，请刷新后重试", code=status.HTTP_409_CONFLICT, data={
-                        "error": "任务已被其他操作员更新，请刷新后重试",
-                        "current_version": task.version,
-                    })
+        try:
+            ensure_task_version(task, expected_version)
+        except ServiceError as exc:
+            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
         work_order_process = task.work_order_process
         work_order = work_order_process.work_order
@@ -375,66 +309,32 @@ class TaskActionsMixin:
         artwork_ids = request.data.get("artwork_ids", [])
         die_ids = request.data.get("die_ids", [])
 
-        # 业务条件验证：制版任务需图稿/刀模等已确认
-        if task.task_type == "plate_making" and task.artwork:
-            if not task.artwork.confirmed:
-                return APIResponse.error("图稿未确认，无法完成任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "图稿未确认，无法完成任务"})
-
-        # 业务条件验证：制版任务需图稿/刀模等已确认
-        if task.task_type == "plate_making":
-            if task.artwork and not task.artwork.confirmed:
-                return APIResponse.error("图稿未确认，无法完成任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "图稿未确认，无法完成任务"})
-            if task.die and not task.die.confirmed:
-                return APIResponse.error("刀模未确认，无法完成任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "刀模未确认，无法完成任务"})
-            if task.foiling_plate and not task.foiling_plate.confirmed:
-                return APIResponse.error("烫金版未确认，无法完成任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "烫金版未确认，无法完成任务"})
-            if task.embossing_plate and not task.embossing_plate.confirmed:
-                return APIResponse.error("压凸版未确认，无法完成任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "压凸版未确认，无法完成任务"})
-
-        # 业务条件验证：开料任务需物料状态满足条件
-        if task.task_type == "cutting" and task.material:
-            work_order_material = work_order.materials.filter(
-                material=task.material
-            ).first()
-            if work_order_material:
-                if ProcessCodes.requires_material_cut_status(process_code):
-                    if work_order_material.purchase_status != "cut":
-                        return APIResponse.error("物料未开料，无法完成开料任务", code=status.HTTP_400_BAD_REQUEST, data={"error": "物料未开料，无法完成开料任务"})
+        try:
+            ensure_assets_confirmed(task, "完成")
+            ensure_material_cut_ready(task, process_code, work_order, "完成")
+        except ServiceError as exc:
+            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
         # 记录更新前的状态和数量
         status_before = task.status
         quantity_before = task.quantity_completed
 
-        # 处理设计图稿/设计刀模任务
         # 注意：设计不属于施工单工序，设计任务通过其他系统管理
         # 以下逻辑用于兼容可能已存在的设计任务（手动创建或历史数据）
-        is_design_task = (
-            "设计图稿" in task.work_content or "更新图稿" in task.work_content
-        )
-        is_die_design_task = (
-            "设计刀模" in task.work_content or "更新刀模" in task.work_content
-        )
+        try:
+            artwork, die = resolve_design_assets(
+                task=task,
+                artwork_ids=artwork_ids,
+                die_ids=die_ids,
+                work_order=work_order,
+            )
+        except ServiceError as exc:
+            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
-        if is_design_task:
-            if not artwork_ids or len(artwork_ids) == 0:
-                return APIResponse.error("请至少选择一个图稿", code=status.HTTP_400_BAD_REQUEST, data={"error": "请至少选择一个图稿"})
-            from workorder.models.assets import Artwork
-
-            artworks = Artwork.objects.filter(id__in=artwork_ids)
-            if artworks.count() != len(artwork_ids):
-                return APIResponse.error("部分图稿不存在", code=status.HTTP_400_BAD_REQUEST, data={"error": "部分图稿不存在"})
-            work_order.artworks.add(*artworks)
-            task.artwork = artworks.first()
-        elif is_die_design_task:
-            if not die_ids or len(die_ids) == 0:
-                return APIResponse.error("请至少选择一个刀模", code=status.HTTP_400_BAD_REQUEST, data={"error": "请至少选择一个刀模"})
-            from workorder.models.assets import Die
-
-            dies = Die.objects.filter(id__in=die_ids)
-            if dies.count() != len(die_ids):
-                return APIResponse.error("部分刀模不存在", code=status.HTTP_400_BAD_REQUEST, data={"error": "部分刀模不存在"})
-            work_order.dies.add(*dies)
-            task.die = dies.first()
+        if artwork:
+            task.artwork = artwork
+        if die:
+            task.die = die
 
         # 强制设置为已完成（不根据数量判断）
         task.status = "completed"
@@ -805,4 +705,6 @@ class TaskActionsMixin:
                 pass
 
         serializer = self.get_serializer(task)
-        return APIResponse.success(data={"message": "任务已成功取消", "task": serializer.data})
+        return APIResponse.success(
+            data={"task": serializer.data}, message="任务已成功取消"
+        )

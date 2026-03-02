@@ -267,7 +267,7 @@ class StockInViewSet(viewsets.ModelViewSet):
         stock_in.save()
 
         serializer = self.get_serializer(stock_in)
-        return APIResponse.success(data={"message": "入库单提交成功", "data": serializer.data})
+        return APIResponse.success(data=serializer.data, message="入库单提交成功")
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
@@ -302,7 +302,7 @@ class StockInViewSet(viewsets.ModelViewSet):
                 )
 
         serializer = self.get_serializer(stock_in)
-        return APIResponse.success(data={"message": "入库单审核成功", "data": serializer.data})
+        return APIResponse.success(data=serializer.data, message="入库单审核成功")
 
 
 class StockOutViewSet(viewsets.ModelViewSet):
@@ -422,7 +422,7 @@ class StockOutViewSet(viewsets.ModelViewSet):
             delivery_order.save(update_fields=["status", "delivery_date", "updated_at"])
 
         serializer = self.get_serializer(stock_out)
-        return APIResponse.success(data={"message": "出库单审核成功", "data": serializer.data})
+        return APIResponse.success(data=serializer.data, message="出库单审核成功")
 
 
 class DeliveryItemViewSet(viewsets.ModelViewSet):
@@ -610,7 +610,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         delivery_order.save()
 
         serializer = self.get_serializer(delivery_order)
-        return APIResponse.success(data={"message": "签收成功", "data": serializer.data})
+        return APIResponse.success(data=serializer.data, message="签收成功")
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
@@ -672,7 +672,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
                 )
 
         serializer = self.get_serializer(delivery_order)
-        return APIResponse.success(data={"message": "拒收处理成功，库存已回退", "data": serializer.data})
+        return APIResponse.success(data=serializer.data, message="拒收处理成功，库存已回退")
 
     @action(detail=False, methods=["get"])
     def summary(self, request):
@@ -771,7 +771,7 @@ class QualityInspectionViewSet(viewsets.ModelViewSet):
         inspection.save()
 
         serializer = self.get_serializer(inspection)
-        return APIResponse.success(data={"message": "检验完成", "data": serializer.data})
+        return APIResponse.success(data=serializer.data, message="检验完成")
 
     @action(detail=False, methods=["get"])
     def summary(self, request):

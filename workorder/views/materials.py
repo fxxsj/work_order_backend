@@ -150,7 +150,7 @@ class PurchaseOrderViewSet(BaseViewSet):
         order.submitted_by = request.user
         order.submitted_at = timezone.now()
         order.save()
-        return APIResponse.success(data={"message": "提交成功"})
+        return APIResponse.success(message="提交成功")
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
@@ -163,7 +163,7 @@ class PurchaseOrderViewSet(BaseViewSet):
         order.approved_by = request.user
         order.approved_at = timezone.now()
         order.save()
-        return APIResponse.success(data={"message": "批准成功"})
+        return APIResponse.success(message="批准成功")
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
@@ -175,7 +175,7 @@ class PurchaseOrderViewSet(BaseViewSet):
         order.status = "draft"  # 退回草稿
         order.rejection_reason = request.data.get("rejection_reason", "")
         order.save()
-        return APIResponse.success(data={"message": "已拒绝，采购单已退回草稿状态"})
+        return APIResponse.success(message="已拒绝，采购单已退回草稿状态")
 
     @action(detail=True, methods=["post"])
     def place_order(self, request, pk=None):
@@ -191,7 +191,7 @@ class PurchaseOrderViewSet(BaseViewSet):
         else:
             order.ordered_date = timezone.now().date()
         order.save()
-        return APIResponse.success(data={"message": "下单成功"})
+        return APIResponse.success(message="下单成功")
 
     @action(detail=True, methods=["post"])
     def receive(self, request, pk=None):
@@ -260,7 +260,9 @@ class PurchaseOrderViewSet(BaseViewSet):
                     "errors": errors,
                 }, code=status.HTTP_207_MULTI_STATUS)
 
-        return APIResponse.success(data={"message": "收货成功，请进行质检", "created_records": created_records})
+        return APIResponse.success(
+            data={"created_records": created_records}, message="收货成功，请进行质检"
+        )
 
     @action(detail=True, methods=["get"])
     def receive_records(self, request, pk=None):
@@ -307,7 +309,7 @@ class PurchaseOrderViewSet(BaseViewSet):
 
         order.status = "cancelled"
         order.save()
-        return APIResponse.success(data={"message": "取消成功"})
+        return APIResponse.success(message="取消成功")
 
     @action(detail=False, methods=["get"])
     def low_stock_materials(self, request):

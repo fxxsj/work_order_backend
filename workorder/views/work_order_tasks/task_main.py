@@ -334,7 +334,11 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
 
         department_id = request.query_params.get("department_id")
         if not department_id:
-            return APIResponse.success(data={"detail": "请提供 department_id 参数"})
+            return APIResponse.error(
+                "请提供 department_id 参数",
+                code=status.HTTP_400_BAD_REQUEST,
+                data={"detail": "请提供 department_id 参数"},
+            )
 
         try:
             operators = TaskAssignmentService.get_department_operators(department_id)
