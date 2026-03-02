@@ -16,6 +16,7 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from workorder.response import APIResponse
+from workorder.schema import standard_error_response, standard_success_response
 
 from ..models.system import Notification
 
@@ -61,11 +62,27 @@ class NotificationSerializer:
         tags=["通知"],
         summary="获取通知列表",
         description="返回当前用户的通知列表，仅显示最近30天的通知。",
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("NotificationListResponse"),
+                description="通知列表",
+            )
+        },
     ),
     partial_update=extend_schema(
         tags=["通知"],
         summary="标记通知为已读",
         description="将指定通知标记为已读状态。",
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("NotificationMarkReadResponse"),
+                description="标记成功",
+            ),
+            404: OpenApiResponse(
+                response=standard_error_response("NotificationNotFoundResponse"),
+                description="通知不存在",
+            ),
+        },
     ),
 )
 class NotificationViewSet(viewsets.GenericViewSet):
@@ -96,6 +113,20 @@ class NotificationViewSet(viewsets.GenericViewSet):
         return APIResponse.success(data=data)
 
     @action(detail=True, methods=["post"])
+    @extend_schema(
+        tags=["通知"],
+        summary="标记通知为已读",
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("NotificationMarkReadActionResponse"),
+                description="标记成功",
+            ),
+            404: OpenApiResponse(
+                response=standard_error_response("NotificationMarkReadNotFound"),
+                description="通知不存在",
+            ),
+        },
+    )
     def mark_read(self, request, pk=None):
         """标记通知为已读"""
         try:
@@ -113,6 +144,16 @@ class NotificationViewSet(viewsets.GenericViewSet):
             return APIResponse.error("通知不存在", code=status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=["post"])
+    @extend_schema(
+        tags=["通知"],
+        summary="标记所有通知为已读",
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("NotificationMarkAllReadResponse"),
+                description="批量标记成功",
+            )
+        },
+    )
     def mark_all_read(self, request):
         """标记所有通知为已读"""
         count = self.get_queryset().filter(is_read=False).update(is_read=True)

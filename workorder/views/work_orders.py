@@ -26,6 +26,7 @@ from drf_spectacular.utils import (
 from rest_framework import filters, serializers, status, viewsets
 from rest_framework.decorators import action
 from workorder.response import APIResponse
+from workorder.schema import standard_error_response, standard_success_response
 
 logger = logging.getLogger(__name__)
 
@@ -76,16 +77,46 @@ from .base_viewsets import BaseViewSet
         tags=["施工单"],
         summary="获取施工单列表",
         description="返回分页的施工单列表，支持按客户、状态、优先级等条件筛选。",
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("WorkOrderListResponse"),
+                description="施工单列表",
+            )
+        },
     ),
     create=extend_schema(
         tags=["施工单"],
         summary="创建施工单",
         description="创建新的施工单，自动生成所有工序的草稿任务。",
+        responses={
+            201: OpenApiResponse(
+                response=standard_success_response(
+                    "WorkOrderCreateResponse", WorkOrderDetailSerializer
+                ),
+                description="创建成功",
+            ),
+            400: OpenApiResponse(
+                response=standard_error_response("WorkOrderCreateBadRequest"),
+                description="请求无效",
+            ),
+        },
     ),
     retrieve=extend_schema(
         tags=["施工单"],
         summary="获取施工单详情",
         description="获取施工单的完整信息，包括关联的任务、产品和工序。",
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response(
+                    "WorkOrderDetailResponse", WorkOrderDetailSerializer
+                ),
+                description="施工单详情",
+            ),
+            404: OpenApiResponse(
+                response=standard_error_response("WorkOrderNotFoundResponse"),
+                description="施工单不存在",
+            ),
+        },
     ),
 )
 class WorkOrderViewSet(BaseViewSet):

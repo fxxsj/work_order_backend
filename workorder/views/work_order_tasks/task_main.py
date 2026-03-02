@@ -27,6 +27,7 @@ from workorder.exceptions import (
 from workorder.models.core import WorkOrderTask
 from workorder.permissions import WorkOrderTaskPermission
 from workorder.serializers.core import TaskAssignmentSerializer, WorkOrderTaskSerializer
+from workorder.schema import standard_error_response, standard_success_response
 from workorder.services.task_assignment import TaskAssignmentService
 
 from .task_export import TaskExportMixin
@@ -67,15 +68,28 @@ logger = logging.getLogger(__name__)
                 required=False,
             ),
         ],
-        responses={200: WorkOrderTaskSerializer},
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("WorkOrderTaskListResponse"),
+                description="任务列表",
+            )
+        },
     ),
     retrieve=extend_schema(
         tags=["任务"],
         summary="获取任务详情",
         description="获取指定任务的完整信息，包括关联的施工单、工序、部门和操作员。",
         responses={
-            200: WorkOrderTaskSerializer,
-            404: OpenApiResponse(description="任务不存在"),
+            200: OpenApiResponse(
+                response=standard_success_response(
+                    "WorkOrderTaskDetailResponse", WorkOrderTaskSerializer
+                ),
+                description="任务详情",
+            ),
+            404: OpenApiResponse(
+                response=standard_error_response("WorkOrderTaskNotFoundResponse"),
+                description="任务不存在",
+            ),
         },
     ),
     destroy=extend_schema(
@@ -83,8 +97,14 @@ logger = logging.getLogger(__name__)
         summary="删除任务",
         description="删除指定的任务。只有草稿状态的任务可以被删除。",
         responses={
-            204: OpenApiResponse(description="删除成功"),
-            400: OpenApiResponse(description="无法删除非草稿任务"),
+            200: OpenApiResponse(
+                response=standard_success_response("WorkOrderTaskDeleteResponse"),
+                description="删除成功",
+            ),
+            400: OpenApiResponse(
+                response=standard_error_response("WorkOrderTaskDeleteErrorResponse"),
+                description="无法删除非草稿任务",
+            ),
         },
     ),
 )

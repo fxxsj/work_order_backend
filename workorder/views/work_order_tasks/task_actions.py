@@ -11,6 +11,7 @@ from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_seriali
 from rest_framework import serializers, status
 from rest_framework.decorators import action
 from workorder.response import APIResponse
+from workorder.schema import standard_error_response, standard_success_response
 from workorder.services.service_errors import ServiceError
 from workorder.policies.task_policy import (
     ensure_assets_confirmed,
@@ -66,10 +67,24 @@ class TaskActionsMixin:
             },
         ),
         responses={
-            200: WorkOrderTaskSerializer,
-            400: OpenApiResponse(description="请求无效或业务规则验证失败"),
-            403: OpenApiResponse(description="权限不足"),
-            409: OpenApiResponse(description="并发冲突"),
+            200: OpenApiResponse(
+                response=standard_success_response(
+                    "TaskUpdateQuantityResponse", WorkOrderTaskSerializer
+                ),
+                description="更新成功",
+            ),
+            400: OpenApiResponse(
+                response=standard_error_response("TaskUpdateQuantityBadRequest"),
+                description="请求无效或业务规则验证失败",
+            ),
+            403: OpenApiResponse(
+                response=standard_error_response("TaskUpdateQuantityForbidden"),
+                description="权限不足",
+            ),
+            409: OpenApiResponse(
+                response=standard_error_response("TaskUpdateQuantityConflict"),
+                description="并发冲突",
+            ),
         },
     )
     @action(detail=True, methods=["post"])
@@ -271,10 +286,24 @@ class TaskActionsMixin:
             },
         ),
         responses={
-            200: WorkOrderTaskSerializer,
-            400: OpenApiResponse(description="请求无效或业务规则验证失败"),
-            403: OpenApiResponse(description="权限不足"),
-            409: OpenApiResponse(description="并发冲突"),
+            200: OpenApiResponse(
+                response=standard_success_response(
+                    "TaskCompleteResponse", WorkOrderTaskSerializer
+                ),
+                description="完成成功",
+            ),
+            400: OpenApiResponse(
+                response=standard_error_response("TaskCompleteBadRequest"),
+                description="请求无效或业务规则验证失败",
+            ),
+            403: OpenApiResponse(
+                response=standard_error_response("TaskCompleteForbidden"),
+                description="权限不足",
+            ),
+            409: OpenApiResponse(
+                response=standard_error_response("TaskCompleteConflict"),
+                description="并发冲突",
+            ),
         },
     )
     @action(detail=True, methods=["post"])
