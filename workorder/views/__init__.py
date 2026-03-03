@@ -71,6 +71,7 @@ from .work_order_tasks import WorkOrderTaskViewSet
 
 # 核心业务视图集（已拆分）
 from .work_orders import DraftTaskViewSet, WorkOrderViewSet
+from .work_order_flow_views import WorkOrderFlowViewSet
 
 __all__ = [
     # 基础视图集
@@ -138,4 +139,6 @@ __all__ = [
     "SystemNotificationViewSet",
     "UserNotificationSettingsViewSet",
     "NotificationTemplateViewSet",
+    # 流程视图集
+    "WorkOrderFlowViewSet",
 ]

@@ -11,7 +11,8 @@ from django.utils import timezone
 
 from workorder.models.core import WorkOrder, WorkOrderTask
 from workorder.models.sales import SalesOrder, SalesOrderItem
-from workorder.models.base import Customer, Product
+from workorder.models.base import Customer
+from workorder.models.products import Product
 from workorder.services.work_order_flow_service import WorkOrderFlowService
 from workorder.services.service_errors import ServiceError
 

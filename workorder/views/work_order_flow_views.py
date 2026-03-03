@@ -9,13 +9,36 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+from django.forms.models import model_to_dict
 
 from ..models.core import WorkOrder
 from ..models.sales import SalesOrder
-from ..serializers import WorkOrderSerializer
 from ..services.work_order_flow_service import WorkOrderFlowService
 from ..services.service_errors import ServiceError
-from ..utils.api_response import success_response, error_response
+
+
+def success_response(data=None, message="success", code=200):
+    """统一成功响应"""
+    return Response(
+        {
+            "code": 0,
+            "message": message,
+            "data": data,
+        },
+        status=code,
+    )
+
+
+def error_response(message="error", code=400, data=None):
+    """统一错误响应"""
+    return Response(
+        {
+            "code": code,
+            "message": message,
+            "data": data,
+        },
+        status=code,
+    )
 
 
 class WorkOrderFlowViewSet(viewsets.ViewSet):
@@ -62,9 +85,8 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
                 },
             )
 
-            serializer = WorkOrderSerializer(work_order)
             return success_response(
-                data=serializer.data,
+                data={"id": work_order.id, "order_number": work_order.order_number},
                 message="施工单创建成功",
                 code=status.HTTP_201_CREATED,
             )
@@ -233,27 +255,3 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
         except Exception as e:
             return error_response(message=f"检查失败：{str(e)}", code=500)
 
-
-# ========== API 响应工具函数 ==========
-def success_response(data=None, message="success", code=200):
-    """统一成功响应"""
-    return Response(
-        {
-            "code": 0,
-            "message": message,
-            "data": data,
-        },
-        status=code,
-    )
-
-
-def error_response(message="error", code=400, data=None):
-    """统一错误响应"""
-    return Response(
-        {
-            "code": code,
-            "message": message,
-            "data": data,
-        },
-        status=code,
-    )

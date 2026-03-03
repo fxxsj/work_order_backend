@@ -44,9 +44,9 @@ from ..models.system import (
 from ..models.base import Customer, Department
 from .service_errors import ServiceError
 from .work_order_service import WorkOrderService
-from .task_generation import TaskGenerationService
-from .dispatch_service import DispatchService
-from .notification_triggers import NotificationTriggers
+from .task_generation import DraftTaskGenerationService
+from .dispatch_service import AutoDispatchService
+from .notification_triggers_flow import NotificationTriggers
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +183,7 @@ class WorkOrderFlowService:
             WorkOrderFlowService._link_assets(work_order, additional_data)
 
         # 8. 生成草稿任务（不立即分派）
-        draft_task_count = TaskGenerationService.generate_draft_tasks(work_order)
+        draft_task_count = DraftTaskGenerationService.generate_draft_tasks(work_order)
         logger.info(f"施工单 {order_number} 生成了 {draft_task_count} 个草稿任务")
 
         # 9. 记录操作日志
@@ -328,7 +328,7 @@ class WorkOrderFlowService:
         )
 
         # 2. 自动分派任务
-        dispatch_result = DispatchService.auto_dispatch_workorder_tasks(work_order)
+        dispatch_result = WorkOrderFlowService._auto_dispatch_tasks(work_order)
         logger.info(
             f"施工单 {work_order.order_number} 自动分派了 {dispatch_result['dispatched_count']} 个任务"
         )
@@ -582,3 +582,54 @@ class WorkOrderFlowService:
             work_order.embossing_plates.set(additional_data["embossing_plate_ids"])
 
         logger.info(f"为施工单 {work_order.order_number} 关联了资产")
+
+    @staticmethod
+    def _auto_dispatch_tasks(work_order: WorkOrder) -> Dict[str, Any]:
+        """
+        自动分派施工单的所有任务
+
+        Args:
+            work_order: 施工单对象
+
+        Returns:
+            Dict: 分派结果
+            {
+                'dispatched_count': int,  # 已分派数量
+                'total_count': int,       # 总任务数
+                'notified_operators': [],  # 已通知的操作员ID列表
+                'operator_tasks': {},      # 操作员ID -> 任务数映射
+            }
+        """
+        # 获取所有未分派的正式任务
+        tasks = WorkOrderTask.objects.filter(
+            work_order_process__work_order=work_order,
+            is_draft=False,
+            assigned_department__isnull=True,
+        )
+
+        dispatched_count = 0
+        notified_operators = set()
+        operator_tasks = {}
+
+        # 遍历任务并自动分派
+        for task in tasks:
+            department = AutoDispatchService.dispatch_task(task)
+
+            if department:
+                task.assigned_department = department
+                task.save()
+                dispatched_count += 1
+
+                # 如果指定了操作员，记录
+                if task.assigned_operator:
+                    notified_operators.add(task.assigned_operator.id)
+                    operator_tasks[task.assigned_operator.id] = (
+                        operator_tasks.get(task.assigned_operator.id, 0) + 1
+                    )
+
+        return {
+            'dispatched_count': dispatched_count,
+            'total_count': tasks.count(),
+            'notified_operators': list(notified_operators),
+            'operator_tasks': operator_tasks,
+        }

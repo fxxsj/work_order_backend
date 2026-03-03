@@ -19,6 +19,8 @@ from .views import (
     # 库存视图集
     ProductStockViewSet, StockInViewSet, StockOutViewSet,
     DeliveryOrderViewSet, DeliveryItemViewSet, QualityInspectionViewSet,
+    # 流程视图集
+    WorkOrderFlowViewSet,
 )
 # 多级审批功能已启用。如需禁用，请注释下方导入与路由注册。
 from .views.multi_level_approval import (
@@ -59,6 +61,7 @@ router.register(r'product-group-items', ProductGroupItemViewSet)
 router.register(r'process-logs', ProcessLogViewSet)
 router.register(r'task-assignment-rules', TaskAssignmentRuleViewSet)
 router.register(r'notifications', NotificationViewSet, basename='notifications')
+router.register(r'workorders-flow', WorkOrderFlowViewSet, basename='workorder-flow')
 router.register(r'artworks', ArtworkViewSet)
 router.register(r'artwork-products', ArtworkProductViewSet)
 router.register(r'dies', DieViewSet)
