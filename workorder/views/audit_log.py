@@ -10,15 +10,13 @@ Date: 2026-03-04
 import logging
 from datetime import datetime, timedelta
 from django.utils import timezone
-from django.db.models import Q
 from rest_framework import status
+from workorder.response import APIResponse
 from rest_framework.decorators import action
-from rest_framework.response import Response
-from django_filters.rest_framework import DjangoFilterBackend
 from django.http import FileResponse
 
-from ..models.audit import AuditLog, AuditLogExport, AuditLogSettings
-from ..serializers.audit import AuditLogSerializer, AuditLogListSerializer, AuditLogExportSerializer, mask_sensitive_data
+from ..models.audit import AuditLog, AuditLogExport
+from ..serializers.audit import AuditLogSerializer, AuditLogListSerializer, AuditLogExportSerializer
 from .base_viewsets import ReadOnlyBaseViewSet
 
 logger = logging.getLogger(__name__)
@@ -105,10 +103,7 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
         """
         user_id = request.query_params.get('user_id')
         if not user_id:
-            return Response({
-                'code': 400,
-                'message': '缺少 user_id 参数'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(message='缺少 user_id 参数', code=status.HTTP_400_BAD_REQUEST)
 
         queryset = self.get_queryset().filter(user_id=user_id)
 
@@ -120,7 +115,7 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
             return self.get_paginated_response(serializer.data)
 
         serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=False, methods=['get'])
     def by_object(self, request):
@@ -135,10 +130,7 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
         object_id = request.query_params.get('object_id')
 
         if not object_id:
-            return Response({
-                'code': 400,
-                'message': '缺少 object_id 参数'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(message='缺少 object_id 参数', code=status.HTTP_400_BAD_REQUEST)
 
         queryset = self.get_queryset().filter(object_id=object_id)
 
@@ -153,7 +145,7 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
             return self.get_paginated_response(serializer.data)
 
         serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=False, methods=['get'])
     def statistics(self, request):
@@ -193,16 +185,12 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
             date = log.created_at.date().isoformat()
             date_stats[date] = date_stats.get(date, 0) + 1
 
-        return Response({
-            'code': 0,
-            'message': 'success',
-            'data': {
+        return APIResponse.success(data={
                 'total_count': total_count,
                 'action_type_stats': action_type_stats,
                 'user_stats': user_stats,
                 'date_stats': date_stats,
-            }
-        })
+            })
 
     @action(detail=False, methods=['post'])
     def export(self, request):
@@ -225,10 +213,7 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
         from ..services.audit_export_service import AuditExportService
 
         if not request.user.has_perm('workorder.add_auditlogexport') and not request.user.is_superuser:
-            return Response({
-                'code': 403,
-                'message': '无导出权限'
-            }, status=status.HTTP_403_FORBIDDEN)
+            return APIResponse.error(message='无导出权限', code=status.HTTP_403_FORBIDDEN)
 
         start_date = request.data.get('start_date')
         end_date = request.data.get('end_date')
@@ -242,16 +227,12 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
             end_date=end_date,
             filters=filters
         )
-        export_service.trigger_export(export)
+        export_service.perform_export(str(export.id))
 
-        return Response({
-            'code': 0,
-            'message': '导出任务已创建',
-            'data': {
+        return APIResponse.success(data={
                 'export_id': str(export.id),
                 'status': export.status,
-            }
-        })
+            }, message='导出任务已创建')
 
     @action(detail=True, methods=['get'])
     def diff(self, request, pk=None):
@@ -263,15 +244,9 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
         audit_log = self.get_object()
 
         if audit_log.action_type not in [AuditLog.ACTION_UPDATE, AuditLog.ACTION_CREATE, AuditLog.ACTION_DELETE]:
-            return Response({
-                'code': 400,
-                'message': '只有创建、更新、删除操作有变更详情'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(message='只有创建、更新、删除操作有变更详情', code=status.HTTP_400_BAD_REQUEST)
 
-        return Response({
-            'code': 0,
-            'message': 'success',
-            'data': {
+        return APIResponse.success(data={
                 'id': str(audit_log.id),
                 'action_type': audit_log.action_type,
                 'object_repr': audit_log.object_repr,
@@ -279,16 +254,12 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
                 'changes': mask_sensitive_data(audit_log.changes),
                 'user': audit_log.username,
                 'created_at': audit_log.created_at.isoformat(),
-            }
-        })
+            })
 
     @action(detail=False, methods=['get'], url_path='exports')
     def export_list(self, request):
         if not request.user.has_perm('workorder.view_auditlogexport') and not request.user.is_superuser:
-            return Response({
-                'code': 403,
-                'message': '无查看导出记录权限'
-            }, status=status.HTTP_403_FORBIDDEN)
+            return APIResponse.error(message='无查看导出记录权限', code=status.HTTP_403_FORBIDDEN)
 
         queryset = AuditLogExport.objects.all().select_related('user').order_by('-created_at')
 
@@ -321,29 +292,20 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
             return self.get_paginated_response(serializer.data)
 
         serializer = AuditLogExportSerializer(queryset, many=True)
-        return Response(serializer.data)
+        return APIResponse.success(data=serializer.data)
 
     @action(detail=False, methods=['get'], url_path=r'exports/(?P<export_id>[^/.]+)/download')
     def export_download(self, request, export_id=None):
         if not request.user.has_perm('workorder.view_auditlogexport') and not request.user.is_superuser:
-            return Response({
-                'code': 403,
-                'message': '无下载导出文件权限'
-            }, status=status.HTTP_403_FORBIDDEN)
+            return APIResponse.error(message='无下载导出文件权限', code=status.HTTP_403_FORBIDDEN)
 
         try:
             export = AuditLogExport.objects.get(id=export_id)
         except AuditLogExport.DoesNotExist:
-            return Response({
-                'code': 404,
-                'message': '导出记录不存在'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error(message='导出记录不存在', code=status.HTTP_404_NOT_FOUND)
 
         if export.status != AuditLogExport.STATUS_COMPLETED or not export.file_path:
-            return Response({
-                'code': 400,
-                'message': '导出文件尚未就绪'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(message='导出文件尚未就绪', code=status.HTTP_400_BAD_REQUEST)
 
         import os
         from django.conf import settings
@@ -353,16 +315,10 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
         file_path = os.path.abspath(export.file_path)
 
         if not file_path.startswith(export_dir + os.sep):
-            return Response({
-                'code': 400,
-                'message': '非法文件路径'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(message='非法文件路径', code=status.HTTP_400_BAD_REQUEST)
 
         if not os.path.exists(file_path):
-            return Response({
-                'code': 404,
-                'message': '导出文件不存在'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error(message='导出文件不存在', code=status.HTTP_404_NOT_FOUND)
 
         filename = os.path.basename(file_path)
         return FileResponse(open(file_path, 'rb'), as_attachment=True, filename=filename)
