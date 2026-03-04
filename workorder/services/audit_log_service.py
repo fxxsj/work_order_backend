@@ -19,6 +19,7 @@ from django.db.models.signals import post_save, post_delete, pre_save
 from django.db.models import Model
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
+from django.db.models.fields.files import FieldFile
 
 from ..models.audit import AuditLog, AuditLogSettings, AuditMixin
 from ..middleware.audit_log import get_current_request, get_client_ip as middleware_get_client_ip
@@ -164,6 +165,8 @@ def normalize_for_json(value):
         return value.isoformat()
     if isinstance(value, uuid.UUID):
         return str(value)
+    if isinstance(value, FieldFile):
+        return value.name or ''
     if isinstance(value, dict):
         return {key: normalize_for_json(val) for key, val in value.items()}
     if isinstance(value, (list, tuple, set)):
