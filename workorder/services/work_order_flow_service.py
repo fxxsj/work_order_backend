@@ -147,6 +147,12 @@ class WorkOrderFlowService:
                 code=400,
             )
 
+        if production_quantity is not None:
+            try:
+                production_quantity = int(production_quantity)
+            except (TypeError, ValueError) as exc:
+                raise ServiceError("生产数量无效", code=400) from exc
+
         if production_quantity is None:
             production_quantity = (
                 sales_order.items.aggregate(total=Sum("quantity"))["total"] or 0

@@ -70,6 +70,73 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
         except Exception as e:
             return APIResponse.error(message=f"创建失败：{str(e)}", code=500)
 
+    # ========== 批量从销售订单创建施工单 ==========
+    @action(detail=False, methods=["post"])
+    def create_from_sales_orders(self, request):
+        """
+        批量从销售订单创建施工单
+
+        请求体：
+        {
+            "sales_order_ids": [1, 2, 3],
+            "production_quantity": 1000,  # 可选，所有订单统一使用
+            "delivery_date": "2026-03-15",  # 可选
+            "priority": "normal",  # 可选
+            "notes": "备注信息"  # 可选
+        }
+        """
+        sales_order_ids = request.data.get("sales_order_ids") or []
+        if not isinstance(sales_order_ids, list) or len(sales_order_ids) == 0:
+            return APIResponse.error(message="sales_order_ids 不能为空", code=400)
+
+        created = []
+        failed = []
+
+        for sales_order_id in sales_order_ids:
+            try:
+                work_order = WorkOrderFlowService.create_from_sales_order(
+                    sales_order_id=sales_order_id,
+                    production_quantity=request.data.get("production_quantity"),
+                    delivery_date=request.data.get("delivery_date"),
+                    priority=request.data.get("priority", "normal"),
+                    notes=request.data.get("notes", ""),
+                    created_by=request.user,
+                    additional_data={},
+                )
+                created.append(
+                    {
+                        "sales_order_id": sales_order_id,
+                        "work_order_id": work_order.id,
+                        "order_number": work_order.order_number,
+                    }
+                )
+            except ServiceError as e:
+                failed.append(
+                    {
+                        "sales_order_id": sales_order_id,
+                        "error": str(e),
+                    }
+                )
+            except Exception as e:
+                failed.append(
+                    {
+                        "sales_order_id": sales_order_id,
+                        "error": f"创建失败：{str(e)}",
+                    }
+                )
+
+        message = "批量创建完成"
+        if created and not failed:
+            message = "批量创建成功"
+        elif not created and failed:
+            message = "批量创建失败"
+
+        return APIResponse.success(
+            data={"created": created, "failed": failed},
+            message=message,
+            code=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
     # ========== 流程 2: 提交审核 ==========
     @action(detail=True, methods=["post"])
     def submit_approval(self, request, pk=None):

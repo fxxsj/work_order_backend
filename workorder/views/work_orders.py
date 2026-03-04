@@ -359,7 +359,15 @@ class WorkOrderViewSet(BaseViewSet):
 
     def perform_create(self, serializer):
         # 自动设置创建人和制表人为当前用户
-        serializer.save(created_by=self.request.user, manager=self.request.user)
+        work_order = serializer.save(created_by=self.request.user, manager=self.request.user)
+        try:
+            from ..services.task_generation import DraftTaskGenerationService
+
+            DraftTaskGenerationService.generate_draft_tasks(work_order)
+        except Exception as e:
+            logger.warning(
+                f"施工单 {work_order.order_number} 自动生成草稿任务失败：{str(e)}"
+            )
 
     def destroy(self, request, *args, **kwargs):
         """删除施工单时处理级联删除验证和日志记录
@@ -524,7 +532,8 @@ class WorkOrderViewSet(BaseViewSet):
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
         serializer = self.get_serializer(work_order)
-        return APIResponse.error("您没有权限导出施工单数据", code=status.HTTP_403_FORBIDDEN, data={
+        return APIResponse.success(
+            data={
                 **serializer.data,
                 "message": "重新审核请求已提交，已通知原审核人",
                 "original_approver": (
