@@ -14,7 +14,9 @@ from django.forms.models import model_to_dict
 from ..models.core import WorkOrder
 from ..models.sales import SalesOrder
 from ..services.work_order_flow_service import WorkOrderFlowService
+from ..services.work_order_service import WorkOrderService
 from ..services.service_errors import ServiceError
+from ..serializers.core import WorkOrderDetailSerializer
 
 
 def success_response(data=None, message="success", code=200):
@@ -116,7 +118,7 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
                 comment=request.data.get("comment", ""),
             )
 
-            serializer = WorkOrderSerializer(updated_work_order)
+            serializer = WorkOrderDetailSerializer(updated_work_order)
             return success_response(
                 data=serializer.data,
                 message="施工单已提交审核",
@@ -148,7 +150,7 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
                 comment=request.data.get("comment", ""),
             )
 
-            serializer = WorkOrderSerializer(updated_work_order)
+            serializer = WorkOrderDetailSerializer(updated_work_order)
             return success_response(
                 data=serializer.data,
                 message="施工单已审核通过，任务已自动分派",
@@ -183,7 +185,7 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
                 reason=reason,
             )
 
-            serializer = WorkOrderSerializer(updated_work_order)
+            serializer = WorkOrderDetailSerializer(updated_work_order)
             return success_response(
                 data=serializer.data,
                 message="施工单已审核拒绝",
@@ -214,7 +216,7 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
                 reason=request.data.get("reason", ""),
             )
 
-            serializer = WorkOrderSerializer(work_order)
+            serializer = WorkOrderDetailSerializer(work_order)
             return success_response(
                 data=serializer.data,
                 message="已请求重新审核",
@@ -241,7 +243,7 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
             )
 
             if is_completed:
-                serializer = WorkOrderSerializer(work_order)
+                serializer = WorkOrderDetailSerializer(work_order)
                 return success_response(
                     data=serializer.data,
                     message="所有任务已完成，施工单已标记为完成",
@@ -254,4 +256,3 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
 
         except Exception as e:
             return error_response(message=f"检查失败：{str(e)}", code=500)
-

@@ -33,6 +33,7 @@ from ..models.core import (
     WorkOrderProcess,
     WorkOrderTask,
     WorkOrderProduct,
+    WorkOrderMaterial,
     APPROVED_ORDER_EDITABLE_FIELDS,
 )
 from ..models.sales import SalesOrder, SalesOrderItem
