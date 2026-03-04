@@ -39,7 +39,7 @@ class WorkOrderFlowServiceTest(TestCase):
         # 创建客户
         self.customer = Customer.objects.create(
             name="测试客户",
-            contact="张三",
+            contact_person="张三",
             phone="13800138000",
             salesperson=self.salesperson,
         )
@@ -329,7 +329,7 @@ class WorkOrderFlowIntegrationTest(TestCase):
         )
         self.customer = Customer.objects.create(
             name="集成测试客户",
-            contact="李四",
+            contact_person="李四",
             phone="13900139000",
             salesperson=self.user,
         )
