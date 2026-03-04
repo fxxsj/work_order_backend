@@ -48,7 +48,7 @@ class WorkOrderFlowServiceTest(TestCase):
         self.product = Product.objects.create(
             name="测试产品",
             code="TEST001",
-            price=10.0,
+            unit_price=10.0,
         )
 
         # 创建销售订单
@@ -336,7 +336,7 @@ class WorkOrderFlowIntegrationTest(TestCase):
         self.product = Product.objects.create(
             name="集成测试产品",
             code="INT001",
-            price=50.0,
+            unit_price=50.0,
         )
         self.sales_order = SalesOrder.objects.create(
             order_number="SOINT001",
