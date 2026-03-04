@@ -6,41 +6,13 @@
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
-from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.shortcuts import get_object_or_404
-from django.forms.models import model_to_dict
+from workorder.response import APIResponse
 
-from ..models.core import WorkOrder
-from ..models.sales import SalesOrder
 from ..services.work_order_flow_service import WorkOrderFlowService
 from ..services.work_order_service import WorkOrderService
 from ..services.service_errors import ServiceError
 from ..serializers.core import WorkOrderDetailSerializer
-
-
-def success_response(data=None, message="success", code=200):
-    """统一成功响应"""
-    return Response(
-        {
-            "code": 0,
-            "message": message,
-            "data": data,
-        },
-        status=code,
-    )
-
-
-def error_response(message="error", code=400, data=None):
-    """统一错误响应"""
-    return Response(
-        {
-            "code": code,
-            "message": message,
-            "data": data,
-        },
-        status=code,
-    )
 
 
 class WorkOrderFlowViewSet(viewsets.ViewSet):
@@ -87,16 +59,16 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
                 },
             )
 
-            return success_response(
+            return APIResponse.success(
                 data={"id": work_order.id, "order_number": work_order.order_number},
                 message="施工单创建成功",
                 code=status.HTTP_201_CREATED,
             )
 
         except ServiceError as e:
-            return error_response(message=str(e), code=e.code)
+            return APIResponse.error(message=str(e), code=e.code)
         except Exception as e:
-            return error_response(message=f"创建失败：{str(e)}", code=500)
+            return APIResponse.error(message=f"创建失败：{str(e)}", code=500)
 
     # ========== 流程 2: 提交审核 ==========
     @action(detail=True, methods=["post"])
@@ -119,15 +91,15 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
             )
 
             serializer = WorkOrderDetailSerializer(updated_work_order)
-            return success_response(
+            return APIResponse.success(
                 data=serializer.data,
                 message="施工单已提交审核",
             )
 
         except ServiceError as e:
-            return error_response(message=str(e), code=e.code)
+            return APIResponse.error(message=str(e), code=e.code)
         except Exception as e:
-            return error_response(message=f"提交失败：{str(e)}", code=500)
+            return APIResponse.error(message=f"提交失败：{str(e)}", code=500)
 
     # ========== 流程 3: 审核通过（自动化）==========
     @action(detail=True, methods=["post"])
@@ -151,15 +123,15 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
             )
 
             serializer = WorkOrderDetailSerializer(updated_work_order)
-            return success_response(
+            return APIResponse.success(
                 data=serializer.data,
                 message="施工单已审核通过，任务已自动分派",
             )
 
         except ServiceError as e:
-            return error_response(message=str(e), code=e.code)
+            return APIResponse.error(message=str(e), code=e.code)
         except Exception as e:
-            return error_response(message=f"审核失败：{str(e)}", code=500)
+            return APIResponse.error(message=f"审核失败：{str(e)}", code=500)
 
     # ========== 流程 4: 审核拒绝 ==========
     @action(detail=True, methods=["post"])
@@ -177,7 +149,7 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
             reason = request.data.get("reason", "")
 
             if not reason:
-                return error_response(message="拒绝原因不能为空", code=400)
+                return APIResponse.error(message="拒绝原因不能为空", code=400)
 
             updated_work_order = WorkOrderFlowService.handle_approval_rejected(
                 work_order=work_order,
@@ -186,15 +158,15 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
             )
 
             serializer = WorkOrderDetailSerializer(updated_work_order)
-            return success_response(
+            return APIResponse.success(
                 data=serializer.data,
                 message="施工单已审核拒绝",
             )
 
         except ServiceError as e:
-            return error_response(message=str(e), code=e.code)
+            return APIResponse.error(message=str(e), code=e.code)
         except Exception as e:
-            return error_response(message=f"审核失败：{str(e)}", code=500)
+            return APIResponse.error(message=f"审核失败：{str(e)}", code=500)
 
     # ========== 流程 5: 请求重新审核 ==========
     @action(detail=True, methods=["post"])
@@ -217,15 +189,15 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
             )
 
             serializer = WorkOrderDetailSerializer(work_order)
-            return success_response(
+            return APIResponse.success(
                 data=serializer.data,
                 message="已请求重新审核",
             )
 
         except ServiceError as e:
-            return error_response(message=str(e), code=e.code)
+            return APIResponse.error(message=str(e), code=e.code)
         except Exception as e:
-            return error_response(message=f"请求失败：{str(e)}", code=500)
+            return APIResponse.error(message=f"请求失败：{str(e)}", code=500)
 
     # ========== 工具方法：检查并完成施工单 ==========
     @action(detail=True, methods=["post"])
@@ -244,15 +216,15 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
 
             if is_completed:
                 serializer = WorkOrderDetailSerializer(work_order)
-                return success_response(
+                return APIResponse.success(
                     data=serializer.data,
                     message="所有任务已完成，施工单已标记为完成",
                 )
             else:
-                return success_response(
+                return APIResponse.success(
                     data={"status": "in_progress"},
                     message="施工单仍在进行中",
                 )
 
         except Exception as e:
-            return error_response(message=f"检查失败：{str(e)}", code=500)
+            return APIResponse.error(message=f"检查失败：{str(e)}", code=500)

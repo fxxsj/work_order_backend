@@ -24,6 +24,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 from django.db import transaction
+from django.db.models import Sum
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -96,7 +97,7 @@ class WorkOrderFlowService:
     def create_from_sales_order(
         *,
         sales_order_id: int,
-        production_quantity: int,
+        production_quantity: Optional[int],
         delivery_date: Optional[datetime] = None,
         priority: str = "normal",
         notes: str = "",
@@ -140,11 +141,19 @@ class WorkOrderFlowService:
                 "销售订单不存在", code=404
             ) from exc
 
-        if sales_order.status != "confirmed":
+        if sales_order.status != "approved":
             raise ServiceError(
-                f"只有已确认的销售订单才能创建施工单，当前状态：{sales_order.status}",
+                f"只有已审核的销售订单才能创建施工单，当前状态：{sales_order.status}",
                 code=400,
             )
+
+        if production_quantity is None:
+            production_quantity = (
+                sales_order.items.aggregate(total=Sum("quantity"))["total"] or 0
+            )
+
+        if production_quantity <= 0:
+            raise ServiceError("销售订单没有可生产数量", code=400)
 
         # 2. 生成施工单号
         order_number = WorkOrderFlowService._generate_order_number()
