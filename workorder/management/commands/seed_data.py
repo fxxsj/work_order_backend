@@ -161,8 +161,8 @@ class Command(BaseCommand):
                 material=material,
                 supplier=supplier,
                 defaults={
-                    "price": Decimal("12.50"),
-                    "is_default": True,
+                    "supplier_price": Decimal("12.50"),
+                    "is_preferred": True,
                 },
             )
 
@@ -198,7 +198,6 @@ class Command(BaseCommand):
                 product=product_item,
                 defaults={
                     "item_name": "子项",
-                    "quantity": 1,
                 },
             )
             ProductMaterial.objects.get_or_create(
@@ -337,11 +336,13 @@ class Command(BaseCommand):
                 work_order_process=work_order_process,
                 task=task,
             )
-            TaskAssignmentRule.objects.create(
+            TaskAssignmentRule.objects.get_or_create(
                 process=process_print,
                 department=dept_prod,
-                priority=100,
-                operator_selection_strategy="least_tasks",
+                defaults={
+                    "priority": 100,
+                    "operator_selection_strategy": "least_tasks",
+                },
             )
 
             # === 多级审核 ===
