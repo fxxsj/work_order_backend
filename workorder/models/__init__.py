@@ -23,6 +23,7 @@ from .assets import (
     FoilingPlate,
     FoilingPlateProduct,
 )
+from .audit import AuditLog, AuditLogExport, AuditLogSettings
 
 # 导入所有模型，保持向后兼容
 from .base import Customer, Department, Process
@@ -147,4 +148,8 @@ __all__ = [
     "DeliveryOrder",
     "DeliveryItem",
     "QualityInspection",
+    # 审计日志
+    "AuditLog",
+    "AuditLogExport",
+    "AuditLogSettings",
 ]

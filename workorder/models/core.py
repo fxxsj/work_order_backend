@@ -30,6 +30,7 @@ from django.contrib.auth.models import User
 from django.db import models, transaction
 from django.db.models import Max
 from django.utils import timezone
+from workorder.models.audit import AuditMixin
 
 # 配置日志记录器
 logger = logging.getLogger(__name__)
@@ -77,7 +78,7 @@ APPROVED_ORDER_EDITABLE_FIELDS = [
 ]
 
 
-class WorkOrder(models.Model):
+class WorkOrder(AuditMixin, models.Model):
     """印刷施工单"""
 
     STATUS_CHOICES = [
@@ -295,6 +296,9 @@ class WorkOrder(models.Model):
             return f"{self.order_number} - {first_product.product.name}"
         return f"{self.order_number}"
 
+    def get_audit_log_repr(self):
+        return f"施工单 {self.order_number}"
+
     @property
     def tasks(self):
         """所有关联任务"""
@@ -510,7 +514,7 @@ class WorkOrder(models.Model):
         super().save(*args, **kwargs)
 
 
-class WorkOrderProcess(models.Model):
+class WorkOrderProcess(AuditMixin, models.Model):
     """施工单工序记录"""
 
     STATUS_CHOICES = [
@@ -587,6 +591,9 @@ class WorkOrderProcess(models.Model):
         ]
 
     def __str__(self):
+        return f"{self.work_order.order_number} - {self.process.name}"
+
+    def get_audit_log_repr(self):
         return f"{self.work_order.order_number} - {self.process.name}"
 
     def can_start(self):
@@ -1394,7 +1401,7 @@ class TaskLog(models.Model):
         return f"{self.task} - {self.get_log_type_display()}"
 
 
-class WorkOrderTask(models.Model):
+class WorkOrderTask(AuditMixin, models.Model):
     """施工单任务（为工序生成的具体任务）"""
 
     TASK_TYPE_CHOICES = [
@@ -1571,6 +1578,9 @@ class WorkOrderTask(models.Model):
         ]
 
     def __str__(self):
+        return f"{self.work_order_process} - {self.work_content[:50]}"
+
+    def get_audit_log_repr(self):
         return f"{self.work_order_process} - {self.work_content[:50]}"
 
     @property

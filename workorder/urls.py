@@ -21,6 +21,7 @@ from .views import (
     DeliveryOrderViewSet, DeliveryItemViewSet, QualityInspectionViewSet,
     # 流程视图集
     WorkOrderFlowViewSet,
+    AuditLogViewSet,
 )
 # 多级审批功能已启用。如需禁用，请注释下方导入与路由注册。
 from .views.multi_level_approval import (
@@ -70,6 +71,7 @@ router.register(r'foiling-plates', FoilingPlateViewSet)
 router.register(r'foiling-plate-products', FoilingPlateProductViewSet)
 router.register(r'embossing-plates', EmbossingPlateViewSet)
 router.register(r'embossing-plate-products', EmbossingPlateProductViewSet)
+router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
 
 # 财务路由
 router.register(r'cost-centers', CostCenterViewSet, basename='cost-center')

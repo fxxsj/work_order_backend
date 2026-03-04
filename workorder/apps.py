@@ -13,4 +13,6 @@ class WorkorderConfig(AppConfig):
         import workorder.signals
         # 导入缓存失效信号处理器
         import workorder.performance.cache_invalidation  # noqa
-
+        # 注册审计日志信号
+        from workorder.services.audit_log_service import register_audit_signals
+        register_audit_signals(self)

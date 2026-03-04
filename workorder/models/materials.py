@@ -12,9 +12,10 @@
 from django.contrib.auth.models import User
 from django.db import models, transaction
 from django.utils import timezone
+from workorder.models.audit import AuditMixin
 
 
-class Material(models.Model):
+class Material(AuditMixin, models.Model):
     """物料信息"""
 
     name = models.CharField("物料名称", max_length=200)
@@ -72,6 +73,9 @@ class Material(models.Model):
 
     def __str__(self):
         return f"{self.code} - {self.name}"
+
+    def get_audit_log_repr(self):
+        return f"物料 {self.code} - {self.name}"
 
     def is_low_stock(self):
         """检查库存是否不足"""

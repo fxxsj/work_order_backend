@@ -11,9 +11,10 @@
 
 from django.contrib.auth.models import User
 from django.db import models, transaction
+from workorder.models.audit import AuditMixin
 
 
-class Product(models.Model):
+class Product(AuditMixin, models.Model):
     """产品信息"""
 
     # 产品类型选项
@@ -81,6 +82,9 @@ class Product(models.Model):
 
     def __str__(self):
         return f"{self.code} - {self.name}"
+
+    def get_audit_log_repr(self):
+        return f"产品 {self.code} - {self.name}"
 
     # ===== 产品类型相关方法 =====
 

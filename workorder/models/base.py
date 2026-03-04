@@ -9,9 +9,10 @@
 
 from django.contrib.auth.models import User
 from django.db import models
+from workorder.models.audit import AuditMixin
 
 
-class Customer(models.Model):
+class Customer(AuditMixin, models.Model):
     """客户信息"""
 
     name = models.CharField("客户名称", max_length=200)
@@ -46,6 +47,9 @@ class Customer(models.Model):
 
     def __str__(self):
         return self.name
+
+    def get_audit_log_repr(self):
+        return f"客户 {self.name}"
 
 
 class Department(models.Model):
