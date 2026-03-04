@@ -114,9 +114,9 @@ def capture_changes(instance, created=False):
             changes=changes,
             changed_fields=changed_fields,
             ip_address=context.get('ip_address'),
-            user_agent=context.get('user_agent'),
-            request_method=context.get('request_method'),
-            request_path=context.get('request_path'),
+            user_agent=context.get('user_agent') or '',
+            request_method=context.get('request_method') or '',
+            request_path=context.get('request_path') or '',
         )
 
         logger.info(f"审计日志已创建: {audit_log}")
@@ -320,9 +320,9 @@ def audit_log_delete(sender, instance, **kwargs):
             changes=changes,
             changed_fields=list(changes['old'].keys()),
             ip_address=context.get('ip_address'),
-            user_agent=context.get('user_agent'),
-            request_method=context.get('request_method'),
-            request_path=context.get('request_path'),
+            user_agent=context.get('user_agent') or '',
+            request_method=context.get('request_method') or '',
+            request_path=context.get('request_path') or '',
         )
 
         logger.info(f"删除审计日志已创建: {audit_log}")
