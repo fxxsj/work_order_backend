@@ -12,6 +12,9 @@ Date: 2026-03-04
 """
 
 import logging
+import uuid
+import decimal
+from datetime import date, datetime, time
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.db.models import Model
 from django.contrib.contenttypes.models import ContentType
@@ -148,7 +151,24 @@ def model_to_dict(instance, settings=None):
             except Exception:
                 pass
 
-    return data
+    return normalize_for_json(data)
+
+
+def normalize_for_json(value):
+    """
+    将数据转换为 JSON 可序列化格式
+    """
+    if isinstance(value, decimal.Decimal):
+        return str(value)
+    if isinstance(value, (datetime, date, time)):
+        return value.isoformat()
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: normalize_for_json(val) for key, val in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [normalize_for_json(item) for item in value]
+    return value
 
 
 def get_model_changes(instance, settings=None, old_data=None):
