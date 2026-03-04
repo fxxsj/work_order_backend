@@ -141,9 +141,9 @@ class WorkOrderFlowService:
                 "销售订单不存在", code=404
             ) from exc
 
-        if sales_order.status != "approved":
+        if sales_order.status not in ["confirmed", "approved"]:
             raise ServiceError(
-                f"只有已审核的销售订单才能创建施工单，当前状态：{sales_order.status}",
+                f"只有已确认的销售订单才能创建施工单，当前状态：{sales_order.status}",
                 code=400,
             )
 
