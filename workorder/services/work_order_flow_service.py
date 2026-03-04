@@ -24,7 +24,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Sum, F
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -38,6 +38,7 @@ from ..models.core import (
     APPROVED_ORDER_EDITABLE_FIELDS,
 )
 from ..models.sales import SalesOrder, SalesOrderItem
+from ..models.inventory import ProductStock
 from ..models.system import (
     WorkOrderApprovalLog,
     Notification,
@@ -143,9 +144,13 @@ class WorkOrderFlowService:
 
         if sales_order.status not in ["confirmed", "approved"]:
             raise ServiceError(
-                f"只有已确认的销售订单才能创建施工单，当前状态：{sales_order.status}",
+                f"只有已确认/已审核的销售订单才能创建施工单，当前状态：{sales_order.status}",
                 code=400,
             )
+
+        production_items = WorkOrderFlowService._build_production_items(sales_order)
+        if not production_items:
+            raise ServiceError("销售订单库存充足，无需生成施工单", code=400)
 
         if production_quantity is not None:
             try:
@@ -154,9 +159,7 @@ class WorkOrderFlowService:
                 raise ServiceError("生产数量无效", code=400) from exc
 
         if production_quantity is None:
-            production_quantity = (
-                sales_order.items.aggregate(total=Sum("quantity"))["total"] or 0
-            )
+            production_quantity = sum(item["produce_quantity"] for item in production_items)
 
         if production_quantity <= 0:
             raise ServiceError("销售订单没有可生产数量", code=400)
@@ -182,7 +185,9 @@ class WorkOrderFlowService:
         logger.info(f"从销售订单 {sales_order.order_number} 创建施工单 {order_number}")
 
         # 4. 复制销售订单产品
-        WorkOrderFlowService._copy_sales_order_products(work_order, sales_order)
+        WorkOrderFlowService._copy_sales_order_products(
+            work_order, sales_order, production_items=production_items
+        )
 
         # 5. 根据产品配置自动生成工序
         WorkOrderFlowService._auto_generate_processes(work_order)
@@ -500,22 +505,74 @@ class WorkOrderFlowService:
 
     @staticmethod
     def _copy_sales_order_products(
-        work_order: WorkOrder, sales_order: SalesOrder
+        work_order: WorkOrder,
+        sales_order: SalesOrder,
+        production_items: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
-        """复制销售订单产品到施工单"""
-        sales_items = SalesOrderItem.objects.filter(sales_order=sales_order)
+        """复制销售订单产品到施工单（按库存缺口生成）"""
+        if production_items is None:
+            production_items = WorkOrderFlowService._build_production_items(sales_order)
 
-        for item in sales_items:
+        created_count = 0
+        for item in production_items:
             WorkOrderProduct.objects.create(
                 work_order=work_order,
-                product=item.product,
-                quantity=item.quantity,
-                unit=item.unit,
+                product=item["product"],
+                quantity=item["produce_quantity"],
+                unit=item["unit"],
             )
+            created_count += 1
 
         logger.info(
-            f"复制了 {sales_items.count()} 个销售订单产品到施工单 {work_order.order_number}"
+            f"复制了 {created_count} 个销售订单产品到施工单 {work_order.order_number}"
         )
+
+    @staticmethod
+    def _build_production_items(
+        sales_order: SalesOrder,
+    ) -> List[Dict[str, Any]]:
+        """根据库存缺口计算需要生产的销售订单明细"""
+        sales_items = list(
+            SalesOrderItem.objects.select_related("product").filter(
+                sales_order=sales_order
+            )
+        )
+        if not sales_items:
+            return []
+
+        product_ids = {item.product_id for item in sales_items if item.product_id}
+
+        stock_totals = (
+            ProductStock.objects.filter(product_id__in=product_ids)
+            .values("product_id")
+            .annotate(
+                available_quantity=Sum(F("quantity") - F("reserved_quantity"))
+            )
+        )
+        available_map = {}
+        for item in stock_totals:
+            qty = item["available_quantity"] or 0
+            if qty < 0:
+                qty = 0
+            available_map[item["product_id"]] = qty
+
+        production_items = []
+        for item in sales_items:
+            available_qty = available_map.get(item.product_id, 0)
+            needed_qty = max(int(item.quantity) - int(available_qty), 0)
+            if needed_qty <= 0:
+                continue
+            production_items.append(
+                {
+                    "product": item.product,
+                    "unit": item.unit,
+                    "produce_quantity": needed_qty,
+                    "sales_quantity": item.quantity,
+                    "available_quantity": available_qty,
+                }
+            )
+
+        return production_items
 
     @staticmethod
     def _auto_generate_processes(work_order: WorkOrder) -> None:
