@@ -9,13 +9,14 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from workorder.response import APIResponse
 
+from ..models.core import WorkOrder
 from ..services.work_order_flow_service import WorkOrderFlowService
 from ..services.work_order_service import WorkOrderService
 from ..services.service_errors import ServiceError
 from ..serializers.core import WorkOrderDetailSerializer
 
 
-class WorkOrderFlowViewSet(viewsets.ViewSet):
+class WorkOrderFlowViewSet(viewsets.GenericViewSet):
     """
     施工单流程视图集
 
@@ -23,6 +24,8 @@ class WorkOrderFlowViewSet(viewsets.ViewSet):
     """
 
     permission_classes = [IsAuthenticated]
+    queryset = WorkOrder.objects.all()
+    serializer_class = WorkOrderDetailSerializer
 
     # ========== 流程 1: 从销售订单创建施工单 ==========
     @action(detail=False, methods=["post"])
