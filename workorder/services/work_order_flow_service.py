@@ -177,6 +177,8 @@ class WorkOrderFlowService:
             approval_status="pending",  # 待审核
         )
 
+        sales_order.work_orders.add(work_order)
+
         logger.info(f"从销售订单 {sales_order.order_number} 创建施工单 {order_number}")
 
         # 4. 复制销售订单产品
