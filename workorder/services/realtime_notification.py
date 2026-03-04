@@ -44,6 +44,9 @@ class NotificationEvent:
     WORKORDER_COMPLETED = 'workorder_completed'
     
     # 审核相关事件
+    APPROVAL_REQUESTED = 'approval_requested'
+    APPROVAL_PASSED = 'approval_passed'
+    APPROVAL_REJECTED = 'approval_rejected'
     APPROVAL_STEP_STARTED = 'approval_step_started'
     APPROVAL_STEP_COMPLETED = 'approval_step_completed'
     APPROVAL_ESCALATED = 'approval_escalated'

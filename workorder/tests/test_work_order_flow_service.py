@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from workorder.models.core import WorkOrder, WorkOrderTask
 from workorder.models.sales import SalesOrder, SalesOrderItem
-from workorder.models.base import Customer
+from workorder.models.base import Customer, Process
 from workorder.models.products import Product
 from workorder.services.work_order_flow_service import WorkOrderFlowService
 from workorder.services.service_errors import ServiceError
@@ -50,6 +50,15 @@ class WorkOrderFlowServiceTest(TestCase):
             code="TEST001",
             unit_price=10.0,
         )
+        self.process = Process.objects.create(
+            name="测试工序",
+            code="TEST_PROC",
+            artwork_required=False,
+            die_required=False,
+            foiling_plate_required=False,
+            embossing_plate_required=False,
+        )
+        self.product.default_processes.add(self.process)
 
         # 创建销售订单
         self.sales_order = SalesOrder.objects.create(
@@ -68,7 +77,6 @@ class WorkOrderFlowServiceTest(TestCase):
             product=self.product,
             quantity=100,
             unit_price=10.0,
-            total_price=1000.0,
         )
 
     # ========== 测试流程 1: 从销售订单创建施工单 ==========
@@ -87,10 +95,9 @@ class WorkOrderFlowServiceTest(TestCase):
         # 验证施工单创建成功
         self.assertIsNotNone(work_order)
         self.assertEqual(work_order.customer, self.customer)
-        self.assertEqual(work_order.sales_order, self.sales_order)
         self.assertEqual(work_order.production_quantity, 100)
-        self.assertEqual(work_order.status, "draft")
-        self.assertEqual(work_order.approval_status, "not_submitted")
+        self.assertEqual(work_order.status, "pending")
+        self.assertEqual(work_order.approval_status, "pending")
 
         # 验证施工单号格式
         self.assertTrue(work_order.order_number.startswith("WO"))
@@ -142,8 +149,7 @@ class WorkOrderFlowServiceTest(TestCase):
         )
 
         # 验证状态变更
-        self.assertEqual(updated_work_order.approval_status, "pending_approval")
-        self.assertIsNotNone(updated_work_order.submitted_at)
+        self.assertEqual(updated_work_order.approval_status, "pending")
 
     def test_submit_for_approval_invalid_transition(self):
         """测试无效的状态转换"""
@@ -220,12 +226,12 @@ class WorkOrderFlowServiceTest(TestCase):
         # 验证状态
         self.assertEqual(updated_work_order.approval_status, "rejected")
         self.assertEqual(updated_work_order.approved_by, self.approver)
-        self.assertEqual(updated_work_order.rejection_reason, "数据不完整")
+        self.assertEqual(updated_work_order.approval_comment, "数据不完整")
 
         # 验证草稿任务已删除
         draft_tasks = WorkOrderTask.objects.filter(
             work_order_process__work_order=work_order,
-            is_draft=True,
+            status="draft",
         )
         self.assertEqual(draft_tasks.count(), 0)
 
@@ -262,7 +268,6 @@ class WorkOrderFlowServiceTest(TestCase):
         self.assertTrue(is_completed)
         work_order.refresh_from_db()
         self.assertEqual(work_order.status, "completed")
-        self.assertIsNotNone(work_order.actual_completion_date)
 
     def test_check_and_complete_workorder_incomplete(self):
         """测试任务未完成时不标记施工单为完成"""
@@ -304,9 +309,9 @@ class WorkOrderFlowServiceTest(TestCase):
     def test_validate_status_transition_valid(self):
         """测试有效的状态转换"""
         # 不应该抛出异常
-        WorkOrderFlowService._validate_status_transition("draft", "pending_approval")
-        WorkOrderFlowService._validate_status_transition("pending_approval", "approved")
-        WorkOrderFlowService._validate_status_transition("approved", "in_progress")
+        WorkOrderFlowService._validate_status_transition("pending", "pending")
+        WorkOrderFlowService._validate_status_transition("pending", "approved")
+        WorkOrderFlowService._validate_status_transition("rejected", "pending")
 
     def test_validate_status_transition_invalid(self):
         """测试无效的状态转换"""
@@ -314,7 +319,7 @@ class WorkOrderFlowServiceTest(TestCase):
             WorkOrderFlowService._validate_status_transition("completed", "in_progress")
 
         with self.assertRaises(ServiceError):
-            WorkOrderFlowService._validate_status_transition("cancelled", "draft")
+            WorkOrderFlowService._validate_status_transition("approved", "pending")
 
 
 # ========== 集成测试：完整流程 ==========
@@ -338,6 +343,15 @@ class WorkOrderFlowIntegrationTest(TestCase):
             code="INT001",
             unit_price=50.0,
         )
+        self.process = Process.objects.create(
+            name="集成测试工序",
+            code="INT_PROC",
+            artwork_required=False,
+            die_required=False,
+            foiling_plate_required=False,
+            embossing_plate_required=False,
+        )
+        self.product.default_processes.add(self.process)
         self.sales_order = SalesOrder.objects.create(
             order_number="SOINT001",
             customer=self.customer,
@@ -352,7 +366,6 @@ class WorkOrderFlowIntegrationTest(TestCase):
             product=self.product,
             quantity=100,
             unit_price=50.0,
-            total_price=5000.0,
         )
 
     def test_complete_flow_from_sales_order_to_completion(self):
@@ -366,14 +379,14 @@ class WorkOrderFlowIntegrationTest(TestCase):
             notes="集成测试",
             created_by=self.user,
         )
-        self.assertEqual(work_order.status, "draft")
+        self.assertEqual(work_order.status, "pending")
 
         # 2. 提交审核
         work_order = WorkOrderFlowService.submit_for_approval(
             work_order_id=work_order.id,
             submitted_by=self.user,
         )
-        self.assertEqual(work_order.approval_status, "pending_approval")
+        self.assertEqual(work_order.approval_status, "pending")
 
         # 3. 审核通过（自动分派任务）
         work_order = WorkOrderFlowService.handle_approval_passed(

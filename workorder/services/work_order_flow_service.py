@@ -60,14 +60,9 @@ class WorkOrderFlowService:
 
     # ========== 状态转换规则 ==========
     ALLOWED_STATUS_TRANSITIONS = {
-        "draft": ["pending_approval", "cancelled"],
-        "pending_approval": ["approved", "rejected", "cancelled"],
-        "approved": ["in_progress", "cancelled"],
-        "rejected": ["pending_approval", "cancelled"],
-        "in_progress": ["paused", "completed", "cancelled"],
-        "paused": ["in_progress", "cancelled"],
-        "completed": [],  # 终态，不允许转换
-        "cancelled": [],  # 终态，不允许转换
+        "pending": ["pending", "approved", "rejected"],
+        "rejected": ["pending"],
+        "approved": [],
     }
 
     @staticmethod
@@ -157,14 +152,13 @@ class WorkOrderFlowService:
         work_order = WorkOrder.objects.create(
             order_number=order_number,
             customer=sales_order.customer,
-            sales_order=sales_order,  # 关联销售订单
             production_quantity=production_quantity,
-            delivery_date=delivery_date,
+            delivery_date=delivery_date or sales_order.delivery_date,
             priority=priority,
             notes=notes,
             created_by=created_by,
-            status="draft",  # 初始状态为草稿
-            approval_status="not_submitted",  # 未提交审核
+            status="pending",  # 初始状态
+            approval_status="pending",  # 待审核
         )
 
         logger.info(f"从销售订单 {sales_order.order_number} 创建施工单 {order_number}")
@@ -189,9 +183,9 @@ class WorkOrderFlowService:
         # 9. 记录操作日志
         WorkOrderApprovalLog.objects.create(
             work_order=work_order,
-            action_type="create_from_sales_order",
-            action_by=created_by,
-            comments=f"从销售订单 {sales_order.order_number} 自动创建",
+            approval_status=work_order.approval_status,
+            approved_by=created_by,
+            approval_comment=f"从销售订单 {sales_order.order_number} 自动创建",
         )
 
         # 10. 发送通知
@@ -216,9 +210,9 @@ class WorkOrderFlowService:
         提交施工单审核（完整流程）
 
         流程步骤：
-        1. 验证施工单状态（必须是草稿）
+        1. 验证施工单状态（必须是待审核）
         2. 验证施工单数据完整性（图稿、工序等）
-        3. 状态转换：draft → pending_approval
+        3. 状态转换：pending → pending（提交审核）
         4. 记录提交日志
         5. 发送审核通知给业务员
         6. 创建审核任务
@@ -244,7 +238,7 @@ class WorkOrderFlowService:
 
         # 2. 验证状态
         WorkOrderFlowService._validate_status_transition(
-            work_order.approval_status, "pending_approval"
+            work_order.approval_status, "pending"
         )
 
         # 3. 验证数据完整性
@@ -257,9 +251,7 @@ class WorkOrderFlowService:
             )
 
         # 4. 状态转换
-        work_order.approval_status = "pending_approval"
-        work_order.submitted_at = timezone.now()
-        work_order.submitted_comment = comment
+        work_order.approval_status = "pending"
         work_order.save()
 
         logger.info(f"施工单 {work_order.order_number} 提交审核")
@@ -267,9 +259,9 @@ class WorkOrderFlowService:
         # 5. 记录操作日志
         WorkOrderApprovalLog.objects.create(
             work_order=work_order,
-            action_type="submit_for_approval",
-            action_by=submitted_by,
-            comments=comment or "提交审核",
+            approval_status=work_order.approval_status,
+            approved_by=submitted_by,
+            approval_comment=comment or "提交审核",
         )
 
         # 6. 发送通知给业务员
@@ -344,9 +336,9 @@ class WorkOrderFlowService:
         # 4. 记录审核日志
         WorkOrderApprovalLog.objects.create(
             work_order=work_order,
-            action_type="approve",
-            action_by=approved_by,
-            comments=comment,
+            approval_status=work_order.approval_status,
+            approved_by=approved_by,
+            approval_comment=comment,
         )
 
         # 5. 发送通知
@@ -376,7 +368,7 @@ class WorkOrderFlowService:
 
         流程步骤：
         1. 删除所有草稿任务
-        2. 状态转换：pending_approval → rejected
+        2. 状态转换：pending → rejected
         3. 记录拒绝日志
         4. 发送通知给创建人
 
@@ -401,15 +393,16 @@ class WorkOrderFlowService:
         work_order.approval_status = "rejected"
         work_order.approved_by = rejected_by
         work_order.approved_at = timezone.now()
-        work_order.rejection_reason = reason
+        work_order.approval_comment = reason
         work_order.save()
 
         # 3. 记录拒绝日志
         WorkOrderApprovalLog.objects.create(
             work_order=work_order,
-            action_type="reject",
-            action_by=rejected_by,
-            comments=reason,
+            approval_status=work_order.approval_status,
+            approved_by=rejected_by,
+            approval_comment=reason,
+            rejection_reason=reason,
         )
 
         # 4. 发送通知
@@ -447,14 +440,13 @@ class WorkOrderFlowService:
 
         if total_tasks == completed_tasks and total_tasks > 0:
             work_order.status = "completed"
-            work_order.actual_completion_date = timezone.now()
             work_order.save()
 
             # 记录日志
             WorkOrderApprovalLog.objects.create(
                 work_order=work_order,
-                action_type="auto_complete",
-                comments="所有任务已完成，自动标记施工单为完成状态",
+                approval_status=work_order.approval_status,
+                approval_comment="所有任务已完成，自动标记施工单为完成状态",
             )
 
             # 发送通知
@@ -500,8 +492,7 @@ class WorkOrderFlowService:
                 work_order=work_order,
                 product=item.product,
                 quantity=item.quantity,
-                unit_price=item.unit_price,
-                total_price=item.total_price,
+                unit=item.unit,
             )
 
         logger.info(
@@ -511,12 +502,12 @@ class WorkOrderFlowService:
     @staticmethod
     def _auto_generate_processes(work_order: WorkOrder) -> None:
         """根据产品配置自动生成工序"""
-        products = work_order.products.all()
+        products = work_order.products.select_related("product").all()
         process_set = set()
 
-        for product in products:
+        for product_item in products:
             # 获取产品的默认工序
-            product_processes = product.processes.all()
+            product_processes = product_item.product.default_processes.all()
             for process in product_processes:
                 process_set.add(process)
 
@@ -538,24 +529,21 @@ class WorkOrderFlowService:
     @staticmethod
     def _auto_generate_materials(work_order: WorkOrder) -> None:
         """根据产品配置自动生成物料"""
-        products = work_order.products.all()
+        products = work_order.products.select_related("product").all()
 
-        for product in products:
+        for product_item in products:
             # 获取产品的默认物料
-            product_materials = product.product_materials.all()
+            product_materials = product_item.product.default_materials.all()
 
             for product_material in product_materials:
-                # 计算所需物料数量
-                required_quantity = (
-                    product_material.quantity_per_unit * work_order.production_quantity
-                )
-
                 # 创建施工单物料
                 WorkOrderMaterial.objects.create(
                     work_order=work_order,
                     material=product_material.material,
-                    required_quantity=required_quantity,
-                    notes=f"从产品 {product.name} 自动生成",
+                    material_size=product_material.material_size,
+                    material_usage=product_material.material_usage,
+                    need_cutting=product_material.need_cutting,
+                    notes=f"从产品 {product_item.product.name} 自动生成",
                 )
 
         logger.info(
@@ -603,7 +591,7 @@ class WorkOrderFlowService:
         # 获取所有未分派的正式任务
         tasks = WorkOrderTask.objects.filter(
             work_order_process__work_order=work_order,
-            is_draft=False,
+            status="pending",
             assigned_department__isnull=True,
         )
 
