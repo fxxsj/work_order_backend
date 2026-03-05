@@ -16,7 +16,12 @@ from rest_framework.decorators import action
 from django.http import FileResponse
 
 from ..models.audit import AuditLog, AuditLogExport
-from ..serializers.audit import AuditLogSerializer, AuditLogListSerializer, AuditLogExportSerializer
+from ..serializers.audit import (
+    AuditLogSerializer,
+    AuditLogListSerializer,
+    AuditLogExportSerializer,
+    mask_sensitive_data,
+)
 from .base_viewsets import ReadOnlyBaseViewSet
 
 logger = logging.getLogger(__name__)
