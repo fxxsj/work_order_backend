@@ -117,7 +117,7 @@ class WorkOrderFlowServiceTest(TestCase):
                 created_by=self.creator,
             )
 
-        self.assertIn("只有已确认的销售订单才能创建施工单", str(context.exception))
+        self.assertIn("只有已确认/已审核的销售订单才能创建施工单", str(context.exception))
 
     def test_create_from_sales_order_not_found(self):
         """测试销售订单不存在时创建失败"""
