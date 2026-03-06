@@ -89,6 +89,33 @@ from ..throttling import ApprovalRateThrottle, CreateRateThrottle, ExportRateThr
 from .base_viewsets import BaseViewSet
 
 
+class WorkOrderFilterSet(FilterSet):
+    product = NumberFilter(method="filter_product")
+    process = NumberFilter(method="filter_process")
+
+    class Meta:
+        model = WorkOrder
+        fields = [
+            "status",
+            "priority",
+            "customer",
+            "manager",
+            "approval_status",
+            "product",
+            "process",
+        ]
+
+    def filter_product(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(products__product_id=value).distinct()
+
+    def filter_process(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(order_processes__process_id=value).distinct()
+
+
 @extend_schema_view(
     list=extend_schema(
         tags=["施工单"],
@@ -278,7 +305,7 @@ class WorkOrderViewSet(BaseViewSet):
 
     queryset = WorkOrder.objects.all()
     permission_classes = [WorkOrderDataPermission]  # 使用细粒度数据权限
-    filterset_fields = ["status", "priority", "customer", "manager", "approval_status"]
+    filterset_class = WorkOrderFilterSet
     search_fields = [
         "order_number",
         "products__product__name",
