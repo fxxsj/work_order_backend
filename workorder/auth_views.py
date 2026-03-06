@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, logout
 from django.contrib.auth.models import User, Group, Permission
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
@@ -167,8 +167,6 @@ class LoginView(APIView):
         user = authenticate(request, username=username, password=password)
 
         if user is not None:
-            login(request, user)
-
             refresh = RefreshToken.for_user(user)
 
             # 获取用户所属的组
@@ -257,8 +255,7 @@ class TokenRefreshViewWithDocs(TokenRefreshView):
     },
 )
 @api_view(['GET'])
-@ensure_csrf_cookie
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_current_user(request):
     """获取当前登录用户信息"""
     if request.user.is_authenticated:
