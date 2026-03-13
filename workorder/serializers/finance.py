@@ -358,12 +358,18 @@ class StatementSerializer(serializers.ModelSerializer):
     credit_amount = serializers.DecimalField(
         source="total_credit", read_only=True, max_digits=12, decimal_places=2
     )
-    statement_date = serializers.DateField(source="created_at", read_only=True)
+    statement_date = serializers.SerializerMethodField()
 
     class Meta:
         model = Statement
         fields = "__all__"
         read_only_fields = ["statement_number", "closing_balance"]
+
+    def get_statement_date(self, obj):
+        """返回创建日期（避免 DateField 直接处理 datetime）"""
+        if not obj.created_at:
+            return None
+        return obj.created_at.date()
 
     def get_partner_name(self, obj) -> Optional[str]:
         """获取对方单位名称（兼容前端）"""
