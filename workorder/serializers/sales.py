@@ -21,7 +21,12 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesOrderItem
         fields = "__all__"
-        read_only_fields = ["created_at", "updated_at", "subtotal", "sales_order"]
+        read_only_fields = ["created_at", "updated_at", "subtotal"]
+
+    def update(self, instance, validated_data):
+        """禁止在更新时修改关联销售订单"""
+        validated_data.pop("sales_order", None)
+        return super().update(instance, validated_data)
 
 
 class SalesOrderListSerializer(serializers.ModelSerializer):
