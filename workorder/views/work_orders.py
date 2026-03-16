@@ -860,7 +860,7 @@ class WorkOrderViewSet(BaseViewSet):
             work_order, old_process_ids, new_process_ids
         )
 
-        return APIResponse.error("process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST, data={"preview": preview})
+        return APIResponse.success(data={"preview": preview})
 
     @action(detail=True, methods=["post"])
     @work_order_sync_execute_docs
