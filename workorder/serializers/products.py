@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from rest_framework import serializers
 
+from ..models.base import Process
 from ..models.products import Product, ProductGroup, ProductGroupItem, ProductMaterial
 
 
@@ -34,7 +35,9 @@ class ProductSerializer(serializers.ModelSerializer):
 
     default_materials = ProductMaterialSerializer(many=True, read_only=True)
     # 默认工序ID列表
-    default_processes = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    default_processes = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Process.objects.all(), required=False
+    )
 
     # 产品类型相关只读字段
     product_type_display = serializers.CharField(read_only=True)
