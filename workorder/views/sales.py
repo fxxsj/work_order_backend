@@ -6,7 +6,7 @@
 
 from decimal import Decimal
 
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
@@ -23,6 +23,7 @@ from workorder.docs.sales import (
     sales_order_update_payment_docs,
 )
 
+from ..models.inventory import ProductStock
 from ..models.products import Product
 from ..models.sales import SalesOrder, SalesOrderItem
 from ..serializers.sales import (
@@ -74,8 +75,10 @@ class SalesOrderViewSet(BaseViewSet):
     def submit(self, request, pk=None):
         """提交销售订单"""
         sales_order = self.get_object()
-        if sales_order.status != "draft":
-            return APIResponse.error("只有草稿状态的订单才能提交", code=status.HTTP_400_BAD_REQUEST)
+        if sales_order.status not in ["draft", "rejected"]:
+            return APIResponse.error(
+                "只有草稿或已拒绝状态的订单才能提交", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 验证订单数据完整性
         errors = sales_order.validate_before_approval()
@@ -86,6 +89,11 @@ class SalesOrderViewSet(BaseViewSet):
         sales_order.status = "submitted"
         sales_order.submitted_by = request.user
         sales_order.submitted_at = timezone.now()
+        # 清理上次审核信息
+        sales_order.approved_by = None
+        sales_order.approved_at = None
+        sales_order.approval_comment = ""
+        sales_order.rejection_reason = ""
         sales_order.save()
 
         serializer = self.get_serializer(sales_order)
@@ -110,9 +118,6 @@ class SalesOrderViewSet(BaseViewSet):
         sales_order.approved_at = timezone.now()
         sales_order.approval_comment = request.data.get("approval_comment", "")
         sales_order.save()
-
-        # 审核通过后，减少产品库存数量
-        self._reduce_product_stock(sales_order)
 
         serializer = self.get_serializer(sales_order)
         return APIResponse.success(data=serializer.data)
@@ -161,17 +166,40 @@ class SalesOrderViewSet(BaseViewSet):
             tuple: (is_available, error_messages)
         """
         errors = []
-        items = sales_order.items.all()
+        items = sales_order.items.select_related("product").all()
+        product_ids = {item.product_id for item in items if item.product_id}
+
+        available_map = {}
+        if product_ids:
+            stock_totals = (
+                ProductStock.objects.filter(product_id__in=product_ids, status="in_stock")
+                .values("product_id")
+                .annotate(
+                    available_quantity=Sum(F("quantity") - F("reserved_quantity"))
+                )
+            )
+            for item in stock_totals:
+                qty = item["available_quantity"] or 0
+                if qty < 0:
+                    qty = 0
+                available_map[item["product_id"]] = qty
 
         for item in items:
-            try:
-                product = item.product
-                if hasattr(product, "stock") and product.stock < item.quantity:
-                    errors.append(
-                        f"{product.name}库存不足（需要{item.quantity}，当前{product.stock}）"
-                    )
-            except Exception:
-                pass
+            product = item.product
+            if not product:
+                continue
+            available_qty = available_map.get(item.product_id)
+            if available_qty is None:
+                if hasattr(product, "get_available_group_stock"):
+                    available_qty = product.get_available_group_stock()
+                elif hasattr(product, "stock_quantity"):
+                    available_qty = product.stock_quantity
+                else:
+                    available_qty = 0
+            if available_qty < item.quantity:
+                errors.append(
+                    f"{product.name}库存不足（需要{item.quantity}，当前{available_qty}）"
+                )
 
         return len(errors) == 0, errors
 
@@ -206,9 +234,9 @@ class SalesOrderViewSet(BaseViewSet):
                             user=None,
                             reason=f"销售订单{sales_order.order_number}审核通过，出库{quantity}{product.unit}",
                         )
-                    elif hasattr(product, "stock"):
-                        product.stock = max(0, product.stock - quantity)
-                        product.save(update_fields=["stock"])
+                    elif hasattr(product, "stock_quantity"):
+                        product.stock_quantity = max(0, product.stock_quantity - quantity)
+                        product.save(update_fields=["stock_quantity"])
                 except Product.DoesNotExist:
                     pass
                 except ValueError as e:
@@ -251,9 +279,9 @@ class SalesOrderViewSet(BaseViewSet):
                             user=None,
                             reason=f"销售订单{sales_order.order_number}取消，库存回滚{quantity}{product.unit}",
                         )
-                    elif hasattr(product, "stock"):
-                        product.stock = product.stock + quantity
-                        product.save(update_fields=["stock"])
+                    elif hasattr(product, "stock_quantity"):
+                        product.stock_quantity = product.stock_quantity + quantity
+                        product.save(update_fields=["stock_quantity"])
                 except Product.DoesNotExist:
                     pass
                 except Exception as e:
@@ -267,10 +295,19 @@ class SalesOrderViewSet(BaseViewSet):
         """完成订单"""
         sales_order = self.get_object()
         if sales_order.status not in ["approved", "in_production"]:
-            return APIResponse.error("只有已审核或生产中的订单才能完成", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "只有已审核或生产中的订单才能完成", code=status.HTTP_400_BAD_REQUEST
+            )
+
+        is_available, errors = self._check_stock_availability(sales_order)
+        if not is_available:
+            return APIResponse.error(
+                "库存不足，无法完成订单",
+                code=status.HTTP_400_BAD_REQUEST,
+                errors=errors,
+            )
 
         sales_order.status = "completed"
-        sales_order.actual_delivery_date = timezone.now().date()
         sales_order.save()
 
         serializer = self.get_serializer(sales_order)
@@ -281,11 +318,8 @@ class SalesOrderViewSet(BaseViewSet):
     def cancel(self, request, pk=None):
         """取消订单"""
         sales_order = self.get_object()
-        if sales_order.status in ["completed", "cancelled", "rejected"]:
-            return APIResponse.error("已完成、已取消或已拒绝的订单不能再次取消", code=status.HTTP_400_BAD_REQUEST)
-
-        # 如果订单已审核或生产中，需要恢复库存
-        self._restore_product_stock(sales_order)
+        if sales_order.status in ["completed", "cancelled"]:
+            return APIResponse.error("已完成或已取消的订单不能再次取消", code=status.HTTP_400_BAD_REQUEST)
 
         reason = request.data.get("reason", "")
         sales_order.status = "cancelled"

@@ -337,6 +337,9 @@ class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"customer": "必须选择客户"})
         if not data.get("sales_order"):
             raise serializers.ValidationError({"sales_order": "必须选择销售订单"})
+        sales_order = data.get("sales_order")
+        if sales_order and sales_order.status != "completed":
+            raise serializers.ValidationError({"sales_order": "只有已完成的销售订单才能创建发货单"})
 
         # 收货人信息必填
         if not data.get("receiver_name"):

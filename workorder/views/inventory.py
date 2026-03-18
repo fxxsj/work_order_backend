@@ -613,10 +613,16 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         # 检查所有明细是否都已发货完成
         all_delivered = all(item.is_fully_delivered for item in sales_order.items.all())
 
-        if all_delivered and sales_order.status == "in_production":
-            sales_order.status = "completed"
-            sales_order.actual_delivery_date = timezone.now().date()
-            sales_order.save(update_fields=["status", "actual_delivery_date"])
+        if all_delivered:
+            update_fields = []
+            if sales_order.status in ["approved", "in_production"]:
+                sales_order.status = "completed"
+                update_fields.append("status")
+            if sales_order.actual_delivery_date is None:
+                sales_order.actual_delivery_date = timezone.now().date()
+                update_fields.append("actual_delivery_date")
+            if update_fields:
+                sales_order.save(update_fields=update_fields)
 
     @action(detail=True, methods=["post"])
     @delivery_receive_docs
