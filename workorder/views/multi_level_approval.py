@@ -272,6 +272,10 @@ class MultiLevelApprovalViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = EmptySerializer
 
+    def create(self, request, *args, **kwargs):
+        """兼容误用 POST /multi-level-approval/ 的场景"""
+        return self.submit_for_approval(request)
+
     @action(detail=False, methods=["post"])
     @multi_level_submit_docs
     def submit_for_approval(self, request):
@@ -310,7 +314,19 @@ class MultiLevelApprovalViewSet(viewsets.GenericViewSet):
     @multi_level_status_docs
     def get_approval_status(self, request):
         """获取施工单审核状态"""
-        serializer = ApprovalStatusSerializer(data=request.data)
+        order_id = (
+            request.query_params.get("order_id")
+            or request.data.get("order_id")
+            or request.query_params.get("work_order_id")
+            or request.data.get("work_order_id")
+            or request.query_params.get("workorder_id")
+            or request.data.get("workorder_id")
+            or request.query_params.get("orderId")
+            or request.data.get("orderId")
+            or request.query_params.get("id")
+            or request.data.get("id")
+        )
+        serializer = ApprovalStatusSerializer(data={"order_id": order_id})
 
         if not serializer.is_valid():
             return APIResponse.error('请求参数错误', code=status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
