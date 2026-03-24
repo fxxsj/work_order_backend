@@ -118,6 +118,7 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         """获取关联施工单摘要"""
         return [
             {
+                "id": work_order.id,
                 "number": work_order.order_number,
                 "status_display": work_order.get_status_display(),
                 "source_label": "生产执行",
@@ -131,6 +132,7 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         """获取关联发货单摘要"""
         return [
             {
+                "id": delivery.id,
                 "number": delivery.order_number,
                 "status_display": delivery.get_status_display(),
                 "source_label": "发货交付",
@@ -144,6 +146,7 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         """获取关联发票摘要"""
         return [
             {
+                "id": invoice.id,
                 "number": invoice.invoice_number,
                 "status_display": invoice.get_status_display(),
                 "source_label": "财务开票",

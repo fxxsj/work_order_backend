@@ -761,6 +761,7 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         """获取来源客户订单摘要"""
         return [
             {
+                "id": sales_order.id,
                 "number": sales_order.order_number,
                 "status_display": sales_order.get_status_display(),
                 "source_label": "客户订单",
@@ -774,6 +775,7 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         """获取关联质检单摘要"""
         return [
             {
+                "id": inspection.id,
                 "number": inspection.inspection_number,
                 "status_display": inspection.get_result_display(),
                 "source_label": inspection.get_inspection_type_display(),
@@ -787,6 +789,7 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         """获取关联发票摘要"""
         return [
             {
+                "id": invoice.id,
                 "number": invoice.invoice_number,
                 "status_display": invoice.get_status_display(),
                 "source_label": "财务开票",
