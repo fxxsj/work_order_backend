@@ -78,6 +78,9 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
     work_order_numbers = serializers.SerializerMethodField()
     delivery_order_numbers = serializers.SerializerMethodField()
     invoice_numbers = serializers.SerializerMethodField()
+    work_order_summaries = serializers.SerializerMethodField()
+    delivery_order_summaries = serializers.SerializerMethodField()
+    invoice_summaries = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesOrder
@@ -107,6 +110,45 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         """获取关联的发票号列表"""
         return [
             invoice.invoice_number
+            for invoice in obj.invoices.all()
+            if invoice.invoice_number
+        ]
+
+    def get_work_order_summaries(self, obj) -> List[dict]:
+        """获取关联施工单摘要"""
+        return [
+            {
+                "number": work_order.order_number,
+                "status_display": work_order.get_status_display(),
+                "source_label": "生产执行",
+                "batch_no": None,
+            }
+            for work_order in obj.work_orders.all()
+            if work_order.order_number
+        ]
+
+    def get_delivery_order_summaries(self, obj) -> List[dict]:
+        """获取关联发货单摘要"""
+        return [
+            {
+                "number": delivery.order_number,
+                "status_display": delivery.get_status_display(),
+                "source_label": "发货交付",
+                "batch_no": None,
+            }
+            for delivery in obj.delivery_orders.all()
+            if delivery.order_number
+        ]
+
+    def get_invoice_summaries(self, obj) -> List[dict]:
+        """获取关联发票摘要"""
+        return [
+            {
+                "number": invoice.invoice_number,
+                "status_display": invoice.get_status_display(),
+                "source_label": "财务开票",
+                "batch_no": None,
+            }
             for invoice in obj.invoices.all()
             if invoice.invoice_number
         ]

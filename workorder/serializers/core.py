@@ -669,6 +669,9 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     sales_order_numbers = serializers.SerializerMethodField()
     quality_inspection_numbers = serializers.SerializerMethodField()
     invoice_numbers = serializers.SerializerMethodField()
+    sales_order_summaries = serializers.SerializerMethodField()
+    quality_inspection_summaries = serializers.SerializerMethodField()
+    invoice_summaries = serializers.SerializerMethodField()
 
     progress_percentage = serializers.SerializerMethodField()
     # 多产品合并显示字段（用于基本信息显示）
@@ -750,6 +753,45 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         """获取关联发票号"""
         return [
             invoice.invoice_number
+            for invoice in obj.invoices.all()
+            if invoice.invoice_number
+        ]
+
+    def get_sales_order_summaries(self, obj) -> List[Dict[str, Any]]:
+        """获取来源客户订单摘要"""
+        return [
+            {
+                "number": sales_order.order_number,
+                "status_display": sales_order.get_status_display(),
+                "source_label": "客户订单",
+                "batch_no": None,
+            }
+            for sales_order in obj.salesorder_set.all()
+            if sales_order.order_number
+        ]
+
+    def get_quality_inspection_summaries(self, obj) -> List[Dict[str, Any]]:
+        """获取关联质检单摘要"""
+        return [
+            {
+                "number": inspection.inspection_number,
+                "status_display": inspection.get_result_display(),
+                "source_label": inspection.get_inspection_type_display(),
+                "batch_no": inspection.batch_no or None,
+            }
+            for inspection in obj.quality_inspections.all()
+            if inspection.inspection_number
+        ]
+
+    def get_invoice_summaries(self, obj) -> List[Dict[str, Any]]:
+        """获取关联发票摘要"""
+        return [
+            {
+                "number": invoice.invoice_number,
+                "status_display": invoice.get_status_display(),
+                "source_label": "财务开票",
+                "batch_no": None,
+            }
             for invoice in obj.invoices.all()
             if invoice.invoice_number
         ]
