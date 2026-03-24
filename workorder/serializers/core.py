@@ -666,6 +666,9 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     materials = WorkOrderMaterialSerializer(many=True, read_only=True)
     # 审核历史记录
     approval_logs = serializers.SerializerMethodField()
+    sales_order_numbers = serializers.SerializerMethodField()
+    quality_inspection_numbers = serializers.SerializerMethodField()
+    invoice_numbers = serializers.SerializerMethodField()
 
     progress_percentage = serializers.SerializerMethodField()
     # 多产品合并显示字段（用于基本信息显示）
@@ -726,6 +729,30 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         from ..models import WorkOrderTask
 
         return WorkOrderTask.objects.filter(work_order_process__work_order=obj).count()
+
+    def get_sales_order_numbers(self, obj) -> List[str]:
+        """获取来源客户订单号"""
+        return [
+            sales_order.order_number
+            for sales_order in obj.salesorder_set.all()
+            if sales_order.order_number
+        ]
+
+    def get_quality_inspection_numbers(self, obj) -> List[str]:
+        """获取关联质检单号"""
+        return [
+            inspection.inspection_number
+            for inspection in obj.quality_inspections.all()
+            if inspection.inspection_number
+        ]
+
+    def get_invoice_numbers(self, obj) -> List[str]:
+        """获取关联发票号"""
+        return [
+            invoice.invoice_number
+            for invoice in obj.invoices.all()
+            if invoice.invoice_number
+        ]
 
     def get_artwork_names(self, obj) -> List[str]:
         """获取所有图稿名称"""

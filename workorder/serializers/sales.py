@@ -76,6 +76,8 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
     )
     items = SalesOrderItemSerializer(many=True, required=False)
     work_order_numbers = serializers.SerializerMethodField()
+    delivery_order_numbers = serializers.SerializerMethodField()
+    invoice_numbers = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesOrder
@@ -92,6 +94,22 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
     def get_work_order_numbers(self, obj) -> List[str]:
         """获取关联的施工单号列表"""
         return [wo.order_number for wo in obj.work_orders.all()]
+
+    def get_delivery_order_numbers(self, obj) -> List[str]:
+        """获取关联的发货单号列表"""
+        return [
+            delivery.order_number
+            for delivery in obj.delivery_orders.all()
+            if delivery.order_number
+        ]
+
+    def get_invoice_numbers(self, obj) -> List[str]:
+        """获取关联的发票号列表"""
+        return [
+            invoice.invoice_number
+            for invoice in obj.invoices.all()
+            if invoice.invoice_number
+        ]
 
     def validate_delivery_date(self, value):
         """验证交货日期
