@@ -4,7 +4,9 @@
 包含统计查询和导出方法。
 """
 
+import hashlib
 import logging
+from datetime import timedelta
 
 from django.core.cache import cache
 from django.db.models import Avg, Count, F, Sum
@@ -41,8 +43,6 @@ class TaskStatsMixin:
 
     def _get_collaboration_stats_cache_key(self, start_date, end_date, department_id):
         """Generate cache key for collaboration stats"""
-        import hashlib
-
         # Create a hash of parameters for cache key
         params = f"{start_date or ''}:{end_date or ''}:{department_id or ''}"
         params_hash = hashlib.md5(params.encode()).hexdigest()[:8]  # nosec
@@ -520,6 +520,32 @@ class TaskStatsMixin:
         completed_tasks = status_counts["completed_tasks"] or 0
         cancelled_tasks = status_counts["cancelled_tasks"] or 0
 
+        today = timezone.now().date()
+        due_soon_end = today + timedelta(days=2)
+        execution_risk = tasks.aggregate(
+            overdue_tasks=Count(
+                "id",
+                filter=Q(
+                    work_order_process__work_order__delivery_date__lt=today
+                )
+                & ~Q(status__in=["completed", "cancelled"]),
+            ),
+            due_soon_tasks=Count(
+                "id",
+                filter=Q(
+                    work_order_process__work_order__delivery_date__gte=today,
+                    work_order_process__work_order__delivery_date__lte=due_soon_end,
+                )
+                & ~Q(status__in=["completed", "cancelled"]),
+            ),
+            unassigned_tasks=Count(
+                "id",
+                filter=Q(assigned_operator__isnull=True)
+                & ~Q(status__in=["completed", "cancelled"]),
+            ),
+            handoff_tasks=Count("id", filter=Q(status="completed")),
+        )
+
         # 计算完成率
         completion_rate = round(
             (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 2
@@ -601,6 +627,10 @@ class TaskStatsMixin:
                 "completed_tasks": completed_tasks,
                 "cancelled_tasks": cancelled_tasks,
                 "completion_rate": completion_rate,
+                "overdue_tasks": execution_risk["overdue_tasks"] or 0,
+                "due_soon_tasks": execution_risk["due_soon_tasks"] or 0,
+                "unassigned_tasks": execution_risk["unassigned_tasks"] or 0,
+                "handoff_tasks": execution_risk["handoff_tasks"] or 0,
             },
             "operators": operators_list,
             "priority_distribution": priority_distribution,

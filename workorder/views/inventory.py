@@ -67,6 +67,13 @@ from workorder.serializers.inventory import (
 )
 
 
+def _apply_department_scope(queryset, department_id, path):
+    if not department_id:
+        return queryset
+    filter_key = f"{path}__id"
+    return queryset.filter(**{filter_key: department_id}).distinct()
+
+
 @product_stock_docs
 class ProductStockViewSet(viewsets.ModelViewSet):
     """成品库存视图集"""
@@ -526,6 +533,12 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """支持过滤和搜索"""
         queryset = super().get_queryset()
+        department_id = self.request.query_params.get("department_id")
+        queryset = _apply_department_scope(
+            queryset,
+            department_id,
+            "sales_order__work_orders__order_processes__department",
+        )
 
         # 按状态过滤
         delivery_status = self.request.query_params.get("status")
@@ -771,7 +784,7 @@ class QualityInspectionViewSet(viewsets.ModelViewSet):
     """质量检验视图集"""
 
     queryset = QualityInspection.objects.select_related(
-        "work_order", "product", "inspector"
+        "work_order", "work_order__customer", "product", "inspector"
     ).all()
     serializer_class = QualityInspectionSerializer
 
@@ -786,6 +799,12 @@ class QualityInspectionViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """支持过滤和搜索"""
         queryset = super().get_queryset()
+        department_id = self.request.query_params.get("department_id")
+        queryset = _apply_department_scope(
+            queryset,
+            department_id,
+            "work_order__order_processes__department",
+        )
 
         # 按检验类型过滤
         inspection_type = self.request.query_params.get("type")
@@ -812,6 +831,8 @@ class QualityInspectionViewSet(viewsets.ModelViewSet):
                 Q(inspection_number__icontains=search)
                 | Q(batch_no__icontains=search)
                 | Q(product__name__icontains=search)
+                | Q(work_order__order_number__icontains=search)
+                | Q(work_order__customer__name__icontains=search)
             )
 
         return queryset
