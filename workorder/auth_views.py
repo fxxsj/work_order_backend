@@ -40,6 +40,7 @@ login_data_serializer = inline_serializer(
         "is_staff": serializers.BooleanField(),
         "is_superuser": serializers.BooleanField(),
         "groups": serializers.ListField(child=serializers.CharField()),
+        "departments": serializers.ListField(child=serializers.CharField()),
         "is_salesperson": serializers.BooleanField(),
         "permissions": serializers.ListField(child=serializers.CharField()),
         "access": serializers.CharField(),
@@ -80,6 +81,7 @@ current_user_data_serializer = inline_serializer(
         "is_staff": serializers.BooleanField(),
         "is_superuser": serializers.BooleanField(),
         "groups": serializers.ListField(child=serializers.CharField()),
+        "departments": serializers.ListField(child=serializers.CharField()),
         "is_salesperson": serializers.BooleanField(),
         "permissions": serializers.ListField(child=serializers.CharField()),
     },
@@ -114,6 +116,7 @@ update_profile_data_serializer = inline_serializer(
         "is_staff": serializers.BooleanField(),
         "is_superuser": serializers.BooleanField(),
         "groups": serializers.ListField(child=serializers.CharField()),
+        "departments": serializers.ListField(child=serializers.CharField()),
         "permissions": serializers.ListField(child=serializers.CharField()),
     },
 )
@@ -130,6 +133,12 @@ token_refresh_response_serializer = inline_serializer(
         "refresh": serializers.CharField(required=False),
     },
 )
+
+
+def _department_names(user):
+    if not hasattr(user, "profile"):
+        return []
+    return list(user.profile.departments.values_list("name", flat=True))
 
 
 class LoginView(APIView):
@@ -171,6 +180,7 @@ class LoginView(APIView):
 
             # 获取用户所属的组
             groups = list(user.groups.values_list('name', flat=True))
+            departments = _department_names(user)
 
             # 获取用户权限（用于前端权限控制）
             permissions = []
@@ -188,6 +198,7 @@ class LoginView(APIView):
                 'is_staff': user.is_staff,
                 'is_superuser': user.is_superuser,
                 'groups': groups,
+                'departments': departments,
                 'is_salesperson': '业务员' in groups,
                 'permissions': permissions,  # 添加权限列表
                 'access': str(refresh.access_token),
@@ -261,6 +272,7 @@ def get_current_user(request):
     if request.user.is_authenticated:
         # 获取用户所属的组
         groups = list(request.user.groups.values_list('name', flat=True))
+        departments = _department_names(request.user)
         
         # 获取用户权限（用于前端权限控制）
         permissions = []
@@ -281,6 +293,7 @@ def get_current_user(request):
             'is_staff': request.user.is_staff,
             'is_superuser': request.user.is_superuser,
             'groups': groups,
+            'departments': departments,
             'is_salesperson': '业务员' in groups,
             'permissions': permissions,  # 添加权限列表
         })
@@ -510,6 +523,7 @@ def update_profile(request):
 
         # 返回更新后的用户信息
         groups = list(request.user.groups.values_list('name', flat=True))
+        departments = _department_names(request.user)
         permissions = ['*'] if request.user.is_superuser else list(request.user.get_all_permissions())
 
         return APIResponse.success(
@@ -522,6 +536,7 @@ def update_profile(request):
                 'is_staff': request.user.is_staff,
                 'is_superuser': request.user.is_superuser,
                 'groups': groups,
+                'departments': departments,
                 'permissions': permissions,
             },
             message='个人信息更新成功',
