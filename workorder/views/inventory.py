@@ -71,7 +71,9 @@ from workorder.serializers.inventory import (
 class ProductStockViewSet(viewsets.ModelViewSet):
     """成品库存视图集"""
 
-    queryset = ProductStock.objects.select_related("product", "work_order").all()
+    queryset = ProductStock.objects.select_related(
+        "product", "work_order", "work_order__customer"
+    ).all()
     serializer_class = ProductStockSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
 
@@ -110,6 +112,8 @@ class ProductStockViewSet(viewsets.ModelViewSet):
                 | Q(location__icontains=search)
                 | Q(product__name__icontains=search)
                 | Q(product__code__icontains=search)
+                | Q(work_order__order_number__icontains=search)
+                | Q(work_order__customer__name__icontains=search)
             )
 
         return queryset
@@ -253,7 +257,11 @@ class StockInViewSet(viewsets.ModelViewSet):
     """入库单视图集"""
 
     queryset = StockIn.objects.select_related(
-        "work_order", "operator", "submitted_by", "approved_by"
+        "work_order",
+        "work_order__customer",
+        "operator",
+        "submitted_by",
+        "approved_by",
     ).all()
     serializer_class = StockInSerializer
 
@@ -279,6 +287,14 @@ class StockInViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(stock_in_date__gte=start_date)
         if end_date:
             queryset = queryset.filter(stock_in_date__lte=end_date)
+
+        search = self.request.query_params.get("search")
+        if search:
+            queryset = queryset.filter(
+                Q(order_number__icontains=search)
+                | Q(work_order__order_number__icontains=search)
+                | Q(work_order__customer__name__icontains=search)
+            )
 
         return queryset
 
@@ -341,7 +357,11 @@ class StockOutViewSet(viewsets.ModelViewSet):
     """出库单视图集"""
 
     queryset = StockOut.objects.select_related(
-        "delivery_order", "operator", "submitted_by", "approved_by"
+        "delivery_order",
+        "delivery_order__customer",
+        "operator",
+        "submitted_by",
+        "approved_by",
     ).all()
     serializer_class = StockOutSerializer
 
@@ -358,6 +378,14 @@ class StockOutViewSet(viewsets.ModelViewSet):
         out_type = self.request.query_params.get("out_type")
         if out_type:
             queryset = queryset.filter(out_type=out_type)
+
+        search = self.request.query_params.get("search")
+        if search:
+            queryset = queryset.filter(
+                Q(order_number__icontains=search)
+                | Q(delivery_order__order_number__icontains=search)
+                | Q(delivery_order__customer__name__icontains=search)
+            )
 
         return queryset
 

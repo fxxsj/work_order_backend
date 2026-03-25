@@ -32,6 +32,9 @@ class ProductStockSerializer(serializers.ModelSerializer):
 
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_code = serializers.CharField(source="product.code", read_only=True)
+    customer_name = serializers.CharField(
+        source="work_order.customer.name", read_only=True, allow_null=True
+    )
     work_order_number = serializers.CharField(
         source="work_order.order_number", read_only=True, allow_null=True
     )
@@ -203,6 +206,9 @@ class StockOutSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     delivery_order_number = serializers.CharField(
         source="delivery_order.order_number", read_only=True, allow_null=True
+    )
+    customer_name = serializers.CharField(
+        source="delivery_order.customer.name", read_only=True, allow_null=True
     )
     operator_name = serializers.CharField(
         source="operator.username", read_only=True, allow_null=True
