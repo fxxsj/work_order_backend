@@ -10,7 +10,7 @@
 - QualityInspection: 质量检验
 """
 
-from typing import Optional
+from typing import List, Optional
 
 from django.contrib.auth.models import User
 from rest_framework import serializers
@@ -251,6 +251,8 @@ class DeliveryOrderSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(
         source="created_by.username", read_only=True, allow_null=True
     )
+    invoice_count = serializers.SerializerMethodField()
+    invoice_numbers = serializers.SerializerMethodField()
 
     # 发货明细
     items = DeliveryItemSerializer(many=True, read_only=True)
@@ -264,6 +266,18 @@ class DeliveryOrderSerializer(serializers.ModelSerializer):
         """获取发货明细数量"""
         return obj.items.count()
 
+    def get_invoice_count(self, obj) -> int:
+        """获取关联发票数量"""
+        return obj.sales_order.invoices.count()
+
+    def get_invoice_numbers(self, obj) -> List[str]:
+        """获取关联发票号"""
+        return [
+            invoice.invoice_number
+            for invoice in obj.sales_order.invoices.all()
+            if invoice.invoice_number
+        ]
+
 
 class DeliveryOrderListSerializer(serializers.ModelSerializer):
     """发货单列表序列化器（精简版）"""
@@ -273,21 +287,27 @@ class DeliveryOrderListSerializer(serializers.ModelSerializer):
     sales_order_number = serializers.CharField(
         source="sales_order.order_number", read_only=True
     )
+    sales_order_id = serializers.IntegerField(source="sales_order.id", read_only=True)
+    customer_id = serializers.IntegerField(source="customer.id", read_only=True)
     items_count = serializers.SerializerMethodField()
     total_quantity = serializers.SerializerMethodField()
+    invoice_count = serializers.SerializerMethodField()
 
     class Meta:
         model = DeliveryOrder
         fields = [
             "id",
             "order_number",
+            "customer_id",
             "customer_name",
+            "sales_order_id",
             "sales_order_number",
             "delivery_date",
             "status",
             "status_display",
             "items_count",
             "total_quantity",
+            "invoice_count",
             "logistics_company",
             "tracking_number",
             "created_at",
@@ -300,6 +320,10 @@ class DeliveryOrderListSerializer(serializers.ModelSerializer):
     def get_total_quantity(self, obj) -> float:
         """获取总发货数量"""
         return sum(item.quantity for item in obj.items.all())
+
+    def get_invoice_count(self, obj) -> int:
+        """获取关联发票数量"""
+        return obj.sales_order.invoices.count()
 
 
 class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
