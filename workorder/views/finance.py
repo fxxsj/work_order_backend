@@ -15,6 +15,7 @@ from django.db.models import Count, DecimalField, F, Q, Sum
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from workorder.permission_utils import PermissionUtils
 from workorder.response import APIResponse
 from workorder.docs.finance import (
     cost_center_docs,
@@ -60,6 +61,35 @@ from workorder.serializers.finance import (
     StatementCreateSerializer,
     StatementSerializer,
 )
+
+
+def _scope_finance_queryset(
+    queryset,
+    user,
+    *,
+    customer_path=None,
+    sales_order_path=None,
+    work_order_path=None,
+    ownership_paths=(),
+):
+    if not user.is_authenticated:
+        return queryset.none()
+    if user.is_superuser or PermissionUtils.is_finance_user(user):
+        return queryset
+
+    scope = Q()
+    if customer_path:
+        scope |= PermissionUtils.build_customer_scope_q(user, customer_path)
+    if sales_order_path:
+        scope |= PermissionUtils.build_sales_order_scope_q(user, sales_order_path)
+    if work_order_path:
+        scope |= PermissionUtils.build_work_order_scope_q(user, work_order_path)
+    for ownership_path in ownership_paths:
+        scope |= Q(**{ownership_path: user})
+
+    if not scope.children:
+        return queryset.none()
+    return queryset.filter(scope).distinct()
 
 
 @cost_center_docs
@@ -127,6 +157,15 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
         "work_order", "calculated_by"
     ).all()
     serializer_class = ProductionCostSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return _scope_finance_queryset(
+            queryset,
+            self.request.user,
+            work_order_path="work_order",
+            ownership_paths=("calculated_by",),
+        )
 
     def get_serializer_class(self):
         """根据操作选择序列化器"""
@@ -216,6 +255,14 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """支持过滤和搜索"""
         queryset = super().get_queryset()
+        queryset = _scope_finance_queryset(
+            queryset,
+            self.request.user,
+            customer_path="customer",
+            sales_order_path="sales_order",
+            work_order_path="work_order",
+            ownership_paths=("created_by", "submitted_by", "approved_by"),
+        )
 
         # 按状态过滤
         invoice_status = self.request.query_params.get("status")
@@ -329,6 +376,13 @@ class PaymentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """支持过滤和搜索"""
         queryset = super().get_queryset()
+        queryset = _scope_finance_queryset(
+            queryset,
+            self.request.user,
+            customer_path="customer",
+            sales_order_path="sales_order",
+            ownership_paths=("recorded_by",),
+        )
 
         # 按客户过滤
         customer_id = self.request.query_params.get("customer")
@@ -392,6 +446,11 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """支持过滤"""
         queryset = super().get_queryset()
+        queryset = _scope_finance_queryset(
+            queryset,
+            self.request.user,
+            sales_order_path="sales_order",
+        )
 
         # 按状态过滤
         plan_status = self.request.query_params.get("status")
@@ -437,6 +496,12 @@ class StatementViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """支持过滤和搜索"""
         queryset = super().get_queryset()
+        queryset = _scope_finance_queryset(
+            queryset,
+            self.request.user,
+            customer_path="customer",
+            ownership_paths=("created_by", "confirmed_by"),
+        )
 
         # 按对账单类型过滤（兼容前端参数 statement_type 和后端参数 type）
         statement_type = self.request.query_params.get(

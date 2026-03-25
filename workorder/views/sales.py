@@ -11,6 +11,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
 from workorder.response import APIResponse
+from workorder.permission_utils import PermissionUtils
 from workorder.docs.sales import (
     sales_order_approve_docs,
     sales_order_cancel_docs,
@@ -32,6 +33,16 @@ from ..serializers.sales import (
     SalesOrderListSerializer,
 )
 from .base_viewsets import BaseViewSet
+
+
+def _scope_sales_orders(queryset, user):
+    if not user.is_authenticated:
+        return queryset.none()
+    if user.is_superuser or PermissionUtils.is_finance_user(user):
+        return queryset
+
+    scope = PermissionUtils.build_sales_order_scope_q(user, "")
+    return queryset.filter(scope).distinct()
 
 
 @sales_order_docs
@@ -56,9 +67,10 @@ class SalesOrderViewSet(BaseViewSet):
 
     def get_queryset(self):
         """优化查询"""
-        return SalesOrder.objects.select_related(
+        queryset = SalesOrder.objects.select_related(
             "customer", "submitted_by", "approved_by", "created_by"
         ).prefetch_related("items", "items__product", "work_orders")
+        return _scope_sales_orders(queryset, self.request.user)
 
     def get_serializer_class(self):
         """根据action选择序列化器"""
@@ -360,7 +372,18 @@ class SalesOrderItemViewSet(BaseViewSet):
 
     def get_queryset(self):
         """优化查询"""
-        return super().get_queryset().select_related("sales_order", "product")
+        queryset = super().get_queryset().select_related("sales_order", "product")
+        if not self.request.user.is_authenticated:
+            return queryset.none()
+        if self.request.user.is_superuser or PermissionUtils.is_finance_user(
+            self.request.user
+        ):
+            return queryset
+
+        scope = PermissionUtils.build_sales_order_scope_q(
+            self.request.user, "sales_order"
+        )
+        return queryset.filter(scope).distinct()
 
     def perform_create(self, serializer):
         """创建明细后更新销售订单总金额"""

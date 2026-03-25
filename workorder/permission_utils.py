@@ -5,6 +5,7 @@
 """
 from django.core.cache import cache
 from django.contrib.auth.models import Permission
+from django.db.models import Q
 
 
 class PermissionCache:
@@ -75,6 +76,19 @@ class PermissionCache:
 class PermissionUtils:
     """权限工具类"""
 
+    FINANCE_PERMISSION_CODES = (
+        "workorder.view_invoice",
+        "workorder.change_invoice",
+        "workorder.view_payment",
+        "workorder.change_payment",
+        "workorder.view_paymentplan",
+        "workorder.change_paymentplan",
+        "workorder.view_statement",
+        "workorder.change_statement",
+        "workorder.view_productioncost",
+        "workorder.change_productioncost",
+    )
+
     @staticmethod
     def has_permission(user, permission_codename):
         """检查用户是否有指定权限（支持缓存）
@@ -132,3 +146,62 @@ class PermissionUtils:
             return True
 
         return all(user.has_perm(perm) for perm in permission_codenames)
+
+    @staticmethod
+    def is_finance_user(user):
+        """判断用户是否属于财务视角账号。"""
+        return PermissionUtils.has_any_permission(
+            user, PermissionUtils.FINANCE_PERMISSION_CODES
+        )
+
+    @staticmethod
+    def build_customer_scope_q(user, customer_path="customer"):
+        """按客户业务员构建数据范围。"""
+        prefix = PermissionUtils._prefix(customer_path)
+        return Q(**{f"{prefix}salesperson": user})
+
+    @staticmethod
+    def build_sales_order_scope_q(user, sales_order_path="sales_order"):
+        """按客户订单归属构建数据范围。"""
+        prefix = PermissionUtils._prefix(sales_order_path)
+        scope = Q(**{f"{prefix}created_by": user}) | Q(
+            **{f"{prefix}customer__salesperson": user}
+        )
+        department_ids = PermissionCache.get_user_departments(user)
+        if department_ids:
+            scope |= Q(
+                **{
+                    f"{prefix}work_orders__order_processes__department_id__in": department_ids
+                }
+            )
+        return scope
+
+    @staticmethod
+    def build_work_order_scope_q(user, work_order_path="work_order"):
+        """按施工单归属构建数据范围。"""
+        prefix = PermissionUtils._prefix(work_order_path)
+        scope = Q(**{f"{prefix}created_by": user}) | Q(
+            **{f"{prefix}customer__salesperson": user}
+        )
+        department_ids = PermissionCache.get_user_departments(user)
+        if department_ids:
+            scope |= Q(
+                **{f"{prefix}order_processes__department_id__in": department_ids}
+            )
+        return scope
+
+    @staticmethod
+    def build_department_scope_q(user, relation_paths):
+        """按部门关系构建数据范围。"""
+        department_ids = PermissionCache.get_user_departments(user)
+        scope = Q()
+        if not department_ids:
+            return scope
+        for relation_path in relation_paths:
+            prefix = PermissionUtils._prefix(relation_path)
+            scope |= Q(**{f"{prefix}id__in": department_ids})
+        return scope
+
+    @staticmethod
+    def _prefix(path):
+        return f"{path}__" if path else ""
