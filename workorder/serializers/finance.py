@@ -11,6 +11,7 @@
 - Statement: 对账单
 """
 
+from decimal import Decimal
 from typing import Optional
 
 from django.contrib.auth.models import User
@@ -137,6 +138,10 @@ class InvoiceSerializer(serializers.ModelSerializer):
     approved_by_name = serializers.CharField(
         source="approved_by.username", read_only=True, allow_null=True
     )
+    payment_received_amount = serializers.SerializerMethodField()
+    payment_remaining_amount = serializers.SerializerMethodField()
+    pending_payment = serializers.SerializerMethodField()
+    follow_up_text = serializers.SerializerMethodField()
 
     class Meta:
         model = Invoice
@@ -158,6 +163,40 @@ class InvoiceSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"tax_rate": "税率必须在0-100之间"})
 
         return data
+
+    def get_payment_received_amount(self, obj):
+        received = getattr(obj, "received_payment_amount", None)
+        if received is not None:
+            return received
+        return obj.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+
+    def get_payment_remaining_amount(self, obj):
+        total_amount = obj.total_amount or Decimal("0")
+        received = self.get_payment_received_amount(obj) or Decimal("0")
+        remaining = total_amount - received
+        return remaining if remaining > 0 else Decimal("0")
+
+    def get_pending_payment(self, obj) -> bool:
+        if obj.status not in {"issued", "sent", "received"}:
+            return False
+        return self.get_payment_remaining_amount(obj) > 0
+
+    def get_follow_up_text(self, obj) -> str:
+        status = obj.status or ""
+        if status == "draft":
+            return "待提交开票"
+        if status in {"cancelled", "refunded"}:
+            return "已关闭"
+        if status in {"issued", "sent"}:
+            if not getattr(obj, "attachment", None):
+                return "待补发票附件"
+            return "待确认客户收票"
+        if status == "received":
+            remaining = self.get_payment_remaining_amount(obj)
+            if remaining > 0:
+                return f"待跟进收款 {remaining:.2f}"
+            return "已收齐待对账"
+        return "待跟进"
 
 
 class InvoiceCreateSerializer(serializers.ModelSerializer):
@@ -245,11 +284,24 @@ class PaymentSerializer(serializers.ModelSerializer):
     recorded_by_name = serializers.CharField(
         source="recorded_by.username", read_only=True, allow_null=True
     )
+    follow_up_text = serializers.SerializerMethodField()
+    needs_invoice_link = serializers.SerializerMethodField()
 
     class Meta:
         model = Payment
         fields = "__all__"
         read_only_fields = ["payment_number", "remaining_amount"]
+
+    def get_follow_up_text(self, obj) -> str:
+        remaining = obj.remaining_amount or Decimal("0")
+        if remaining > 0:
+            return f"待核销 {remaining:.2f}"
+        if self.get_needs_invoice_link(obj):
+            return "待关联发票"
+        return "已完成"
+
+    def get_needs_invoice_link(self, obj) -> bool:
+        return not obj.invoice_id and bool(obj.sales_order_id)
 
 
 class PaymentCreateSerializer(serializers.ModelSerializer):
@@ -311,6 +363,14 @@ class PaymentPlanSerializer(serializers.ModelSerializer):
     sales_order_number = serializers.CharField(
         source="sales_order.order_number", read_only=True
     )
+    customer_name = serializers.CharField(
+        source="sales_order.customer.name", read_only=True, allow_null=True
+    )
+    remaining_amount = serializers.SerializerMethodField()
+    progress_percentage = serializers.SerializerMethodField()
+    is_overdue = serializers.SerializerMethodField()
+    overdue_days = serializers.SerializerMethodField()
+    follow_up_text = serializers.SerializerMethodField()
 
     class Meta:
         model = PaymentPlan
@@ -321,6 +381,30 @@ class PaymentPlanSerializer(serializers.ModelSerializer):
         if obj.plan_amount > 0:
             return int((obj.paid_amount / obj.plan_amount) * 100)
         return 0
+
+    def get_remaining_amount(self, obj):
+        remaining = (obj.plan_amount or Decimal("0")) - (obj.paid_amount or Decimal("0"))
+        return remaining if remaining > 0 else Decimal("0")
+
+    def get_is_overdue(self, obj) -> bool:
+        return obj.status != "completed" and obj.plan_date < timezone.localdate()
+
+    def get_overdue_days(self, obj) -> int:
+        if not self.get_is_overdue(obj):
+            return 0
+        return (timezone.localdate() - obj.plan_date).days
+
+    def get_follow_up_text(self, obj) -> str:
+        remaining = self.get_remaining_amount(obj)
+        if obj.status == "completed":
+            return "已完成"
+        if self.get_is_overdue(obj):
+            return f"已逾期 {self.get_overdue_days(obj)} 天，待收 {remaining:.2f}"
+        if obj.status == "partial":
+            return f"已部分收款，待收 {remaining:.2f}"
+        if obj.plan_date == timezone.localdate():
+            return f"今日待收 {remaining:.2f}"
+        return f"按计划待收 {remaining:.2f}"
 
 
 # ==================== 对账管理序列化器 ====================
@@ -359,6 +443,7 @@ class StatementSerializer(serializers.ModelSerializer):
         source="total_credit", read_only=True, max_digits=12, decimal_places=2
     )
     statement_date = serializers.SerializerMethodField()
+    follow_up_text = serializers.SerializerMethodField()
 
     class Meta:
         model = Statement
@@ -378,6 +463,16 @@ class StatementSerializer(serializers.ModelSerializer):
         elif obj.statement_type == "supplier" and obj.supplier:
             return obj.supplier.name
         return None
+
+    def get_follow_up_text(self, obj) -> str:
+        status = obj.status or ""
+        if status in {"draft", "sent"}:
+            return "待对方确认"
+        if status == "disputed":
+            return "待财务处理异议"
+        if status == "confirmed":
+            return "已闭环"
+        return "待跟进"
 
 
 class StatementCreateSerializer(serializers.ModelSerializer):

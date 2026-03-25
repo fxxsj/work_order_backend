@@ -11,7 +11,10 @@
 - StatementViewSet: 对账单
 """
 
-from django.db.models import Count, DecimalField, F, Q, Sum
+from decimal import Decimal
+
+from django.db.models import Count, DecimalField, F, Q, Sum, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -234,14 +237,24 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
 class InvoiceViewSet(viewsets.ModelViewSet):
     """发票视图集"""
 
-    queryset = Invoice.objects.select_related(
-        "customer",
-        "sales_order",
-        "work_order",
-        "created_by",
-        "submitted_by",
-        "approved_by",
-    ).all()
+    queryset = (
+        Invoice.objects.select_related(
+            "customer",
+            "sales_order",
+            "work_order",
+            "created_by",
+            "submitted_by",
+            "approved_by",
+        )
+        .annotate(
+            received_payment_amount=Coalesce(
+                Sum("payments__amount"),
+                Value(Decimal("0")),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            )
+        )
+        .all()
+    )
     serializer_class = InvoiceSerializer
 
     def get_serializer_class(self):
@@ -340,13 +353,37 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     def summary(self, request):
         """发票汇总"""
         queryset = self.get_queryset()
+        actionable_statuses = ["issued", "sent", "received"]
+        pending_payment_queryset = queryset.filter(
+            status__in=actionable_statuses, received_payment_amount__lt=F("total_amount")
+        )
 
         # 统计数据
         summary = queryset.aggregate(
             total_count=Count("id"),
             total_amount=Sum("total_amount"),
             tax_amount=Sum("tax_amount"),
+            pending_issue_count=Count("id", filter=Q(status="draft")),
+            pending_attachment_count=Count(
+                "id",
+                filter=Q(status__in=actionable_statuses)
+                & (Q(attachment="") | Q(attachment__isnull=True)),
+            ),
+            pending_receipt_count=Count("id", filter=Q(status__in=["issued", "sent"])),
+            pending_payment_count=Count(
+                "id",
+                filter=Q(status__in=actionable_statuses)
+                & Q(received_payment_amount__lt=F("total_amount")),
+            ),
         )
+        pending_payment_amount = Decimal("0")
+        for total_amount, received_amount in pending_payment_queryset.values_list(
+            "total_amount", "received_payment_amount"
+        ):
+            gap = (total_amount or Decimal("0")) - (received_amount or Decimal("0"))
+            if gap > 0:
+                pending_payment_amount += gap
+        summary["pending_payment_amount"] = pending_payment_amount
 
         # 按状态统计
         status_stats = (
@@ -424,6 +461,16 @@ class PaymentViewSet(viewsets.ModelViewSet):
             total_amount=Sum("amount"),
             applied_amount=Sum("applied_amount"),
             remaining_amount=Sum("remaining_amount"),
+            pending_writeoff_count=Count("id", filter=Q(remaining_amount__gt=0)),
+            missing_invoice_link_count=Count(
+                "id", filter=Q(invoice__isnull=True) & Q(sales_order__isnull=False)
+            ),
+        )
+        summary["pending_writeoff_amount"] = (
+            queryset.filter(remaining_amount__gt=0).aggregate(total=Sum("remaining_amount"))[
+                "total"
+            ]
+            or Decimal("0")
         )
 
         # 按收款方式统计
@@ -476,6 +523,41 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(plan)
         return APIResponse.success(data=serializer.data, message="状态更新成功")
+
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        """收款计划汇总"""
+        queryset = self.get_queryset()
+        today = timezone.localdate()
+        summary = queryset.aggregate(
+            total_count=Count("id"),
+            planned_amount=Sum("plan_amount"),
+            paid_amount=Sum("paid_amount"),
+            pending_count=Count("id", filter=Q(status="pending")),
+            partial_count=Count("id", filter=Q(status="partial")),
+            completed_count=Count("id", filter=Q(status="completed")),
+            overdue_count=Count(
+                "id", filter=Q(plan_date__lt=today) & ~Q(status="completed")
+            ),
+            due_today_count=Count(
+                "id", filter=Q(plan_date=today) & ~Q(status="completed")
+            ),
+        )
+        remaining_amount = Decimal("0")
+        overdue_amount = Decimal("0")
+        for plan_amount, paid_amount, plan_date, plan_status in queryset.values_list(
+            "plan_amount", "paid_amount", "plan_date", "status"
+        ):
+            gap = (plan_amount or Decimal("0")) - (paid_amount or Decimal("0"))
+            if gap <= 0:
+                continue
+            remaining_amount += gap
+            if plan_status != "completed" and plan_date and plan_date < today:
+                overdue_amount += gap
+        summary["remaining_amount"] = remaining_amount
+        summary["overdue_amount"] = overdue_amount
+        by_status = queryset.values("status").annotate(count=Count("id")).order_by("status")
+        return APIResponse.success(data={"summary": summary, "by_status": list(by_status)})
 
 
 @statement_docs
@@ -572,6 +654,23 @@ class StatementViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(statement)
         return APIResponse.success(data=serializer.data, message="对账单确认成功")
+
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        """对账单汇总"""
+        queryset = self.get_queryset()
+        summary = queryset.aggregate(
+            total_count=Count("id"),
+            pending_confirm_count=Count(
+                "id", filter=Q(status__in=["draft", "sent"])
+            ),
+            disputed_count=Count("id", filter=Q(status="disputed")),
+            confirmed_count=Count("id", filter=Q(status="confirmed")),
+            total_amount=Sum("total_amount"),
+            closing_balance=Sum("closing_balance"),
+        )
+        by_status = queryset.values("status").annotate(count=Count("id")).order_by("status")
+        return APIResponse.success(data={"summary": summary, "by_status": list(by_status)})
 
     @action(detail=False, methods=["get"])
     @statement_generate_docs
