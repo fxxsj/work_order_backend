@@ -235,6 +235,17 @@ sales_order_update_payment_docs = extend_schema(
     },
 )
 
+sales_order_summary_docs = extend_schema(
+    tags=["销售"],
+    summary="销售订单汇总",
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response("SalesOrderSummaryResponse"),
+            description="销售订单汇总",
+        )
+    },
+)
+
 sales_order_item_docs = extend_schema_view(
     list=extend_schema(
         tags=["销售"],

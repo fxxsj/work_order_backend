@@ -191,6 +191,17 @@ work_order_statistics_docs = extend_schema(
     },
 )
 
+work_order_summary_docs = extend_schema(
+    tags=["施工单"],
+    summary="施工单汇总",
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response("WorkOrderSummaryResponse"),
+            description="汇总数据",
+        )
+    },
+)
+
 work_order_export_docs = extend_schema(
     tags=["施工单"],
     summary="导出施工单",

@@ -38,6 +38,7 @@ from workorder.docs.work_orders import (
     work_order_request_reapproval_docs,
     work_order_resubmit_docs,
     work_order_statistics_docs,
+    work_order_summary_docs,
     work_order_sync_check_docs,
     work_order_sync_execute_docs,
     work_order_sync_preview_docs,
@@ -798,6 +799,37 @@ class WorkOrderViewSet(BaseViewSet):
                     "product_statistics": product_statistics,
                 },
             })
+
+    @action(detail=False, methods=["get"])
+    @work_order_summary_docs
+    def summary(self, request):
+        """施工单汇总"""
+        queryset = self.filter_queryset(self.get_queryset())
+        summary = queryset.aggregate(
+            total_count=Count("id"),
+            pending_count=Count("id", filter=Q(status="pending")),
+            in_progress_count=Count("id", filter=Q(status="in_progress")),
+            completed_count=Count("id", filter=Q(status="completed")),
+            cancelled_count=Count("id", filter=Q(status="cancelled")),
+            pending_approval_count=Count("id", filter=Q(approval_status="pending")),
+            approved_count=Count("id", filter=Q(approval_status="approved")),
+            rejected_approval_count=Count("id", filter=Q(approval_status="rejected")),
+        )
+        status_stats = (
+            queryset.values("status").annotate(count=Count("id")).order_by("status")
+        )
+        approval_stats = (
+            queryset.values("approval_status")
+            .annotate(count=Count("id"))
+            .order_by("approval_status")
+        )
+        return APIResponse.success(
+            data={
+                "summary": summary,
+                "by_status": list(status_stats),
+                "by_approval_status": list(approval_stats),
+            }
+        )
 
     @action(detail=False, methods=["get"], throttle_classes=[ExportRateThrottle])
     @work_order_export_docs

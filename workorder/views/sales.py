@@ -21,6 +21,7 @@ from workorder.docs.sales import (
     sales_order_reject_docs,
     sales_order_start_docs,
     sales_order_submit_docs,
+    sales_order_summary_docs,
     sales_order_update_payment_docs,
 )
 
@@ -81,6 +82,26 @@ class SalesOrderViewSet(BaseViewSet):
     def perform_create(self, serializer):
         """创建销售订单时自动设置创建人"""
         serializer.save(created_by=self.request.user)
+
+    @action(detail=False, methods=["get"])
+    @sales_order_summary_docs
+    def summary(self, request):
+        """销售订单汇总"""
+        queryset = self.filter_queryset(self.get_queryset())
+        summary = queryset.aggregate(
+            total_count=Count("id"),
+            draft_count=Count("id", filter=Q(status="draft")),
+            submitted_count=Count("id", filter=Q(status="submitted")),
+            approved_count=Count("id", filter=Q(status="approved")),
+            rejected_count=Count("id", filter=Q(status="rejected")),
+            in_production_count=Count("id", filter=Q(status="in_production")),
+            completed_count=Count("id", filter=Q(status="completed")),
+            cancelled_count=Count("id", filter=Q(status="cancelled")),
+        )
+        status_stats = (
+            queryset.values("status").annotate(count=Count("id")).order_by("status")
+        )
+        return APIResponse.success(data={"summary": summary, "by_status": list(status_stats)})
 
     @action(detail=True, methods=["post"])
     @sales_order_submit_docs
