@@ -5,8 +5,10 @@
 """
 
 import logging
+from datetime import timedelta
 
-from django.db.models import Q
+from django.db.models import Count, Q
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
@@ -311,7 +313,56 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
                     work_order_process__work_order__created_by=user
                 )
 
+        todo_filter = (self.request.query_params.get("todo") or "").strip()
+        today = timezone.localdate()
+        due_soon_end = today + timedelta(days=2)
+        active_status = ~Q(status__in=["completed", "cancelled"])
+        if todo_filter == "overdue":
+            queryset = queryset.filter(
+                work_order_process__work_order__delivery_date__lt=today
+            ).filter(active_status)
+        elif todo_filter == "due_soon":
+            queryset = queryset.filter(
+                work_order_process__work_order__delivery_date__gte=today,
+                work_order_process__work_order__delivery_date__lte=due_soon_end,
+            ).filter(active_status)
+        elif todo_filter == "unassigned":
+            queryset = queryset.filter(assigned_operator__isnull=True).filter(
+                active_status
+            )
+
         return queryset
+
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        """任务汇总"""
+        queryset = self.filter_queryset(self.get_queryset())
+        today = timezone.localdate()
+        due_soon_end = today + timedelta(days=2)
+        summary = queryset.aggregate(
+            total_count=Count("id"),
+            overdue_count=Count(
+                "id",
+                filter=Q(work_order_process__work_order__delivery_date__lt=today)
+                & ~Q(status__in=["completed", "cancelled"]),
+            ),
+            due_soon_count=Count(
+                "id",
+                filter=Q(work_order_process__work_order__delivery_date__gte=today)
+                & Q(
+                    work_order_process__work_order__delivery_date__lte=due_soon_end
+                )
+                & ~Q(status__in=["completed", "cancelled"]),
+            ),
+            unassigned_count=Count(
+                "id",
+                filter=Q(assigned_operator__isnull=True)
+                & ~Q(status__in=["completed", "cancelled"]),
+            ),
+            completed_count=Count("id", filter=Q(status="completed")),
+        )
+        by_status = queryset.values("status").annotate(count=Count("id")).order_by("status")
+        return APIResponse.success(data={"summary": summary, "by_status": list(by_status)})
 
     def perform_update(self, serializer):
         """
