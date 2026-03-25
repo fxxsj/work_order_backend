@@ -65,6 +65,7 @@ from workorder.serializers.inventory import (
     StockInCreateSerializer,
     StockInSerializer,
     StockOutSerializer,
+    upsert_delivery_exception_resolution,
 )
 
 
@@ -791,6 +792,33 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(delivery_order)
         return APIResponse.success(data=serializer.data, message="拒收处理成功，库存已回退")
+
+    @action(detail=True, methods=["post"])
+    def resolve_exception(self, request, pk=None):
+        """登记拒收后的处理动作"""
+        delivery_order = self.get_object()
+
+        if delivery_order.status != "rejected":
+            return APIResponse.error("只有拒收状态的发货单可以登记处理", code=status.HTTP_400_BAD_REQUEST)
+
+        resolution = (request.data.get("resolution") or "").strip()
+        resolution_notes = (request.data.get("resolution_notes") or "").strip()
+        if resolution not in {"reship", "terminate"}:
+            return APIResponse.error("处理结论无效", code=status.HTTP_400_BAD_REQUEST)
+        if not resolution_notes:
+            return APIResponse.error("请填写处理说明", code=status.HTTP_400_BAD_REQUEST)
+
+        delivery_order.notes = upsert_delivery_exception_resolution(
+            delivery_order.notes,
+            resolution=resolution,
+            resolution_notes=resolution_notes.replace("|", "/"),
+            resolved_by=request.user.username or str(request.user.pk),
+            resolved_at=timezone.now().strftime("%Y-%m-%d %H:%M"),
+        )
+        delivery_order.save(update_fields=["notes", "updated_at"])
+
+        serializer = self.get_serializer(delivery_order)
+        return APIResponse.success(data=serializer.data, message="拒收处理已登记")
 
     @action(detail=False, methods=["get"])
     @delivery_summary_docs

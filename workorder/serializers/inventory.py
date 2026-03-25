@@ -24,6 +24,63 @@ from workorder.models import (
     StockOut,
 )
 
+_DELIVERY_EXCEPTION_PREFIX = "[delivery_exception_resolution]"
+_DELIVERY_EXCEPTION_LABELS = {
+    "reship": "安排补发",
+    "terminate": "终止交付",
+}
+
+
+def parse_delivery_exception_resolution(notes: Optional[str]) -> dict:
+    text = (notes or "").strip()
+    if not text:
+        return {}
+    marker_line = ""
+    for line in text.splitlines():
+        candidate = line.strip()
+        if candidate.startswith(_DELIVERY_EXCEPTION_PREFIX):
+            marker_line = candidate
+            break
+    if not marker_line:
+        return {}
+    payload = marker_line.replace(_DELIVERY_EXCEPTION_PREFIX, "", 1)
+    parts = payload.split("|", 3)
+    if len(parts) < 4:
+        return {}
+    resolution, resolution_notes, resolved_by, resolved_at = parts
+    return {
+        "resolution": resolution,
+        "resolution_display": _DELIVERY_EXCEPTION_LABELS.get(resolution, resolution),
+        "resolution_notes": resolution_notes,
+        "resolved_by": resolved_by,
+        "resolved_at": resolved_at,
+        "closed": True,
+    }
+
+
+def upsert_delivery_exception_resolution(
+    notes: Optional[str],
+    *,
+    resolution: str,
+    resolution_notes: str,
+    resolved_by: str,
+    resolved_at: str,
+) -> str:
+    marker = (
+        f"{_DELIVERY_EXCEPTION_PREFIX}"
+        f"{resolution}|{resolution_notes}|{resolved_by}|{resolved_at}"
+    )
+    lines = [line for line in (notes or "").splitlines() if line.strip()]
+    replaced = False
+    for index, line in enumerate(lines):
+        if line.strip().startswith(_DELIVERY_EXCEPTION_PREFIX):
+            lines[index] = marker
+            replaced = True
+            break
+    if not replaced:
+        lines.append(marker)
+    return "\n".join(lines)
+
 # ==================== 成品库存序列化器 ====================
 
 
@@ -262,6 +319,10 @@ class DeliveryOrderSerializer(serializers.ModelSerializer):
     )
     invoice_count = serializers.SerializerMethodField()
     invoice_numbers = serializers.SerializerMethodField()
+    exception_resolution = serializers.SerializerMethodField()
+    exception_resolution_display = serializers.SerializerMethodField()
+    exception_resolution_notes = serializers.SerializerMethodField()
+    exception_closed = serializers.SerializerMethodField()
 
     # 发货明细
     items = DeliveryItemSerializer(many=True, read_only=True)
@@ -287,6 +348,18 @@ class DeliveryOrderSerializer(serializers.ModelSerializer):
             if invoice.invoice_number
         ]
 
+    def get_exception_resolution(self, obj) -> Optional[str]:
+        return parse_delivery_exception_resolution(obj.notes).get("resolution")
+
+    def get_exception_resolution_display(self, obj) -> Optional[str]:
+        return parse_delivery_exception_resolution(obj.notes).get("resolution_display")
+
+    def get_exception_resolution_notes(self, obj) -> Optional[str]:
+        return parse_delivery_exception_resolution(obj.notes).get("resolution_notes")
+
+    def get_exception_closed(self, obj) -> bool:
+        return bool(parse_delivery_exception_resolution(obj.notes).get("closed"))
+
 
 class DeliveryOrderListSerializer(serializers.ModelSerializer):
     """发货单列表序列化器（精简版）"""
@@ -301,6 +374,10 @@ class DeliveryOrderListSerializer(serializers.ModelSerializer):
     items_count = serializers.SerializerMethodField()
     total_quantity = serializers.SerializerMethodField()
     invoice_count = serializers.SerializerMethodField()
+    exception_resolution = serializers.SerializerMethodField()
+    exception_resolution_display = serializers.SerializerMethodField()
+    exception_resolution_notes = serializers.SerializerMethodField()
+    exception_closed = serializers.SerializerMethodField()
 
     class Meta:
         model = DeliveryOrder
@@ -317,6 +394,10 @@ class DeliveryOrderListSerializer(serializers.ModelSerializer):
             "items_count",
             "total_quantity",
             "invoice_count",
+            "exception_resolution",
+            "exception_resolution_display",
+            "exception_resolution_notes",
+            "exception_closed",
             "logistics_company",
             "tracking_number",
             "created_at",
@@ -333,6 +414,18 @@ class DeliveryOrderListSerializer(serializers.ModelSerializer):
     def get_invoice_count(self, obj) -> int:
         """获取关联发票数量"""
         return obj.sales_order.invoices.count()
+
+    def get_exception_resolution(self, obj) -> Optional[str]:
+        return parse_delivery_exception_resolution(obj.notes).get("resolution")
+
+    def get_exception_resolution_display(self, obj) -> Optional[str]:
+        return parse_delivery_exception_resolution(obj.notes).get("resolution_display")
+
+    def get_exception_resolution_notes(self, obj) -> Optional[str]:
+        return parse_delivery_exception_resolution(obj.notes).get("resolution_notes")
+
+    def get_exception_closed(self, obj) -> bool:
+        return bool(parse_delivery_exception_resolution(obj.notes).get("closed"))
 
 
 class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
