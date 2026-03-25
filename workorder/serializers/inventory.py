@@ -157,6 +157,9 @@ class StockInSerializer(serializers.ModelSerializer):
     work_order_number = serializers.CharField(
         source="work_order.order_number", read_only=True
     )
+    customer_name = serializers.CharField(
+        source="work_order.customer.name", read_only=True, allow_null=True
+    )
     operator_name = serializers.CharField(
         source="operator.username", read_only=True, allow_null=True
     )
@@ -452,6 +455,9 @@ class QualityInspectionSerializer(serializers.ModelSerializer):
     # 关联信息
     work_order_number = serializers.CharField(
         source="work_order.order_number", read_only=True, allow_null=True
+    )
+    customer_name = serializers.CharField(
+        source="work_order.customer.name", read_only=True, allow_null=True
     )
     product_name = serializers.CharField(
         source="product.name", read_only=True, allow_null=True
