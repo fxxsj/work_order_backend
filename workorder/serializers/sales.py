@@ -81,6 +81,10 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
     work_order_summaries = serializers.SerializerMethodField()
     delivery_order_summaries = serializers.SerializerMethodField()
     invoice_summaries = serializers.SerializerMethodField()
+    payment_count = serializers.SerializerMethodField()
+    pending_payment_plan_count = serializers.SerializerMethodField()
+    pending_payment_plan_amount = serializers.SerializerMethodField()
+    unpaid_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesOrder
@@ -155,6 +159,25 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
             for invoice in obj.invoices.all()
             if invoice.invoice_number
         ]
+
+    def get_payment_count(self, obj) -> int:
+        """获取收款记录数量"""
+        return obj.payments.count()
+
+    def get_pending_payment_plan_count(self, obj) -> int:
+        """获取待收款计划数量"""
+        return obj.payment_plans.exclude(status="completed").count()
+
+    def get_pending_payment_plan_amount(self, obj) -> float:
+        """获取待收款计划金额"""
+        pending_amount = 0
+        for plan in obj.payment_plans.exclude(status="completed").all():
+            pending_amount += max(float(plan.plan_amount - plan.paid_amount), 0)
+        return pending_amount
+
+    def get_unpaid_amount(self, obj) -> float:
+        """获取未回款金额"""
+        return max(float(obj.total_amount - obj.paid_amount), 0)
 
     def validate_delivery_date(self, value):
         """验证交货日期

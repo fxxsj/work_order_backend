@@ -672,6 +672,12 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     sales_order_summaries = serializers.SerializerMethodField()
     quality_inspection_summaries = serializers.SerializerMethodField()
     invoice_summaries = serializers.SerializerMethodField()
+    sales_order_total_amount = serializers.SerializerMethodField()
+    sales_order_paid_amount = serializers.SerializerMethodField()
+    sales_order_unpaid_amount = serializers.SerializerMethodField()
+    settled_sales_order_count = serializers.SerializerMethodField()
+    unsettled_sales_order_count = serializers.SerializerMethodField()
+    invoice_count = serializers.SerializerMethodField()
 
     progress_percentage = serializers.SerializerMethodField()
     # 多产品合并显示字段（用于基本信息显示）
@@ -798,6 +804,32 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
             for invoice in obj.invoices.all()
             if invoice.invoice_number
         ]
+
+    def get_sales_order_total_amount(self, obj) -> float:
+        """获取来源客户订单金额合计"""
+        return sum(float(order.total_amount) for order in obj.salesorder_set.all())
+
+    def get_sales_order_paid_amount(self, obj) -> float:
+        """获取来源客户订单已回款合计"""
+        return sum(float(order.paid_amount) for order in obj.salesorder_set.all())
+
+    def get_sales_order_unpaid_amount(self, obj) -> float:
+        """获取来源客户订单未回款合计"""
+        total = self.get_sales_order_total_amount(obj)
+        paid = self.get_sales_order_paid_amount(obj)
+        return max(total - paid, 0)
+
+    def get_settled_sales_order_count(self, obj) -> int:
+        """获取已结清客户订单数量"""
+        return obj.salesorder_set.filter(payment_status="paid").count()
+
+    def get_unsettled_sales_order_count(self, obj) -> int:
+        """获取未结清客户订单数量"""
+        return obj.salesorder_set.exclude(payment_status="paid").count()
+
+    def get_invoice_count(self, obj) -> int:
+        """获取关联发票数量"""
+        return obj.invoices.count()
 
     def get_artwork_names(self, obj) -> List[str]:
         """获取所有图稿名称"""
