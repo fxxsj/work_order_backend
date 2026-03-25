@@ -583,6 +583,20 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         if delivery_status:
             queryset = queryset.filter(status=delivery_status)
 
+        todo_filter = (self.request.query_params.get("todo") or "").strip()
+        if todo_filter == "rejected_followup":
+            queryset = queryset.filter(status="rejected").exclude(
+                notes__contains="[delivery_exception_resolution]"
+            )
+        elif todo_filter == "pending_receive":
+            queryset = queryset.filter(status__in=["shipped", "in_transit"])
+        elif todo_filter == "pending_invoice":
+            queryset = queryset.filter(
+                status__in=["shipped", "in_transit", "received"],
+                sales_order__isnull=False,
+                sales_order__invoices__isnull=True,
+            ).distinct()
+
         # 按客户过滤
         customer_id = self.request.query_params.get("customer")
         if customer_id:
@@ -833,6 +847,21 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
             shipped_count=Count("id", filter=Q(status="shipped")),
             in_transit_count=Count("id", filter=Q(status="in_transit")),
             received_count=Count("id", filter=Q(status="received")),
+            rejected_followup_count=Count(
+                "id",
+                filter=Q(status="rejected")
+                & ~Q(notes__contains="[delivery_exception_resolution]"),
+            ),
+            pending_receive_count=Count(
+                "id", filter=Q(status__in=["shipped", "in_transit"])
+            ),
+            pending_invoice_count=Count(
+                "id",
+                filter=Q(status__in=["shipped", "in_transit", "received"])
+                & Q(sales_order__isnull=False)
+                & Q(sales_order__invoices__isnull=True),
+                distinct=True,
+            ),
             total_freight=Sum("freight"),
         )
 
@@ -886,6 +915,13 @@ class QualityInspectionViewSet(viewsets.ModelViewSet):
         result = self.request.query_params.get("result")
         if result:
             queryset = queryset.filter(result=result)
+
+        todo_filter = (self.request.query_params.get("todo") or "").strip()
+        if todo_filter == "exception_followup":
+            queryset = queryset.filter(result__in=["failed", "conditional"]).filter(
+                Q(disposition="") | Q(disposition__isnull=True),
+                Q(disposition_notes="") | Q(disposition_notes__isnull=True),
+            )
 
         # 按日期范围过滤
         start_date = self.request.query_params.get("start_date")
@@ -949,6 +985,13 @@ class QualityInspectionViewSet(viewsets.ModelViewSet):
             total_passed=Sum("passed_quantity"),
             total_failed=Sum("failed_quantity"),
             avg_defective_rate=Sum("defective_rate") / Count("id"),
+            pending_count=Count("id", filter=Q(result="pending")),
+            unresolved_exception_count=Count(
+                "id",
+                filter=Q(result__in=["failed", "conditional"])
+                & (Q(disposition="") | Q(disposition__isnull=True))
+                & (Q(disposition_notes="") | Q(disposition_notes__isnull=True)),
+            ),
         )
 
         # 按结果统计
