@@ -236,6 +236,17 @@ stock_in_approve_docs = extend_schema(
     },
 )
 
+stock_in_summary_docs = extend_schema(
+    tags=["库存"],
+    summary="入库单汇总",
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response("StockInSummaryResponse"),
+            description="入库单汇总",
+        )
+    },
+)
+
 
 stock_out_docs = extend_schema_view(
     list=extend_schema(
@@ -274,6 +285,17 @@ stock_out_approve_docs = extend_schema(
             response=standard_error_response("StockOutApproveBadRequest"),
             description="状态不允许",
         ),
+    },
+)
+
+stock_out_summary_docs = extend_schema(
+    tags=["库存"],
+    summary="出库单汇总",
+    responses={
+        200: OpenApiResponse(
+            response=standard_success_response("StockOutSummaryResponse"),
+            description="出库单汇总",
+        )
     },
 )
 

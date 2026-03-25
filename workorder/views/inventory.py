@@ -35,9 +35,11 @@ from workorder.docs.inventory import (
     quality_summary_docs,
     stock_in_approve_docs,
     stock_in_docs,
+    stock_in_summary_docs,
     stock_in_submit_docs,
     stock_out_approve_docs,
     stock_out_docs,
+    stock_out_summary_docs,
 )
 
 from workorder.models import (
@@ -244,6 +246,8 @@ class ProductStockViewSet(viewsets.ModelViewSet):
                 "total_products": stats["total_products"] or 0,
                 "low_stock_count": low_stock_count,
                 "expired_count": expired_count,
+                "reserved_count": queryset.filter(status="reserved").count(),
+                "quality_check_count": queryset.filter(status="quality_check").count(),
             })
 
     @action(detail=True, methods=["post"])
@@ -389,6 +393,22 @@ class StockInViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(stock_in)
         return APIResponse.success(data=serializer.data, message="入库单审核成功")
 
+    @action(detail=False, methods=["get"])
+    @stock_in_summary_docs
+    def summary(self, request):
+        """入库单汇总"""
+        queryset = self.get_queryset()
+        summary = queryset.aggregate(
+            total_count=Count("id"),
+            draft_count=Count("id", filter=Q(status="draft")),
+            submitted_count=Count("id", filter=Q(status="submitted")),
+            completed_count=Count("id", filter=Q(status="completed")),
+        )
+        status_stats = (
+            queryset.values("status").annotate(count=Count("id")).order_by("status")
+        )
+        return APIResponse.success(data={"summary": summary, "by_status": list(status_stats)})
+
 
 @stock_out_docs
 class StockOutViewSet(viewsets.ModelViewSet):
@@ -519,6 +539,22 @@ class StockOutViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(stock_out)
         return APIResponse.success(data=serializer.data, message="出库单审核成功")
+
+    @action(detail=False, methods=["get"])
+    @stock_out_summary_docs
+    def summary(self, request):
+        """出库单汇总"""
+        queryset = self.get_queryset()
+        summary = queryset.aggregate(
+            total_count=Count("id"),
+            draft_count=Count("id", filter=Q(status="draft")),
+            submitted_count=Count("id", filter=Q(status="submitted")),
+            completed_count=Count("id", filter=Q(status="completed")),
+        )
+        status_stats = (
+            queryset.values("status").annotate(count=Count("id")).order_by("status")
+        )
+        return APIResponse.success(data={"summary": summary, "by_status": list(status_stats)})
 
 
 @delivery_item_docs
