@@ -45,6 +45,7 @@ class SalesOrderListSerializer(serializers.ModelSerializer):
         source="approved_by.username", read_only=True, allow_null=True
     )
     items_count = serializers.SerializerMethodField()
+    work_order_count = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesOrder
@@ -53,6 +54,10 @@ class SalesOrderListSerializer(serializers.ModelSerializer):
     def get_items_count(self, obj) -> int:
         """获取订单明细数量"""
         return obj.items.count()
+
+    def get_work_order_count(self, obj) -> int:
+        """获取关联施工单数量"""
+        return len(obj.work_orders.all())
 
 
 class SalesOrderDetailSerializer(serializers.ModelSerializer):
