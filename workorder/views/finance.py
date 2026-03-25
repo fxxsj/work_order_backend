@@ -282,6 +282,19 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         if invoice_status:
             queryset = queryset.filter(status=invoice_status)
 
+        todo_filter = (self.request.query_params.get("todo") or "").strip()
+        if todo_filter == "pending_attachment":
+            queryset = queryset.filter(status__in=["issued", "sent", "received"]).filter(
+                Q(attachment="") | Q(attachment__isnull=True)
+            )
+        elif todo_filter == "pending_receipt":
+            queryset = queryset.filter(status__in=["issued", "sent"])
+        elif todo_filter == "pending_payment":
+            queryset = queryset.filter(
+                status__in=["issued", "sent", "received"],
+                received_payment_amount__lt=F("total_amount"),
+            )
+
         # 按客户过滤
         customer_id = self.request.query_params.get("customer")
         if customer_id:
@@ -426,6 +439,12 @@ class PaymentViewSet(viewsets.ModelViewSet):
         if customer_id:
             queryset = queryset.filter(customer_id=customer_id)
 
+        todo_filter = (self.request.query_params.get("todo") or "").strip()
+        if todo_filter == "pending_writeoff":
+            queryset = queryset.filter(remaining_amount__gt=0)
+        elif todo_filter == "missing_invoice_link":
+            queryset = queryset.filter(invoice__isnull=True, sales_order__isnull=False)
+
         # 按收款方式过滤
         payment_method = self.request.query_params.get("payment_method")
         if payment_method:
@@ -504,6 +523,13 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
         if plan_status:
             queryset = queryset.filter(status=plan_status)
 
+        todo_filter = (self.request.query_params.get("todo") or "").strip()
+        today = timezone.localdate()
+        if todo_filter == "overdue":
+            queryset = queryset.filter(plan_date__lt=today).exclude(status="completed")
+        elif todo_filter == "due_today":
+            queryset = queryset.filter(plan_date=today).exclude(status="completed")
+
         # 按日期范围过滤
         start_date = self.request.query_params.get("start_date")
         end_date = self.request.query_params.get("end_date")
@@ -511,6 +537,14 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(plan_date__gte=start_date)
         if end_date:
             queryset = queryset.filter(plan_date__lte=end_date)
+
+        search = (self.request.query_params.get("search") or "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(sales_order__order_number__icontains=search)
+                | Q(sales_order__customer__name__icontains=search)
+                | Q(plan_date__icontains=search)
+            )
 
         return queryset
 
@@ -597,6 +631,12 @@ class StatementViewSet(viewsets.ModelViewSet):
         if statement_status:
             queryset = queryset.filter(status=statement_status)
 
+        todo_filter = (self.request.query_params.get("todo") or "").strip()
+        if todo_filter == "pending_confirm":
+            queryset = queryset.filter(status__in=["draft", "sent"])
+        elif todo_filter == "disputed":
+            queryset = queryset.filter(status="disputed")
+
         # 按客户过滤（兼容前端参数 partner 和后端参数 customer）
         customer_id = self.request.query_params.get(
             "partner"
@@ -621,7 +661,10 @@ class StatementViewSet(viewsets.ModelViewSet):
         search = self.request.query_params.get("search")
         if search:
             queryset = queryset.filter(
-                Q(statement_number__icontains=search) | Q(period__icontains=search)
+                Q(statement_number__icontains=search)
+                | Q(period__icontains=search)
+                | Q(customer__name__icontains=search)
+                | Q(supplier__name__icontains=search)
             )
 
         return queryset
