@@ -44,6 +44,7 @@ from ..serializers.assets import (
     FoilingPlateProductSerializer,
     FoilingPlateSerializer,
 )
+from ..permissions import WorkOrderSupportingDataPermission
 from .base_viewsets import BaseViewSet
 
 
@@ -101,6 +102,7 @@ class ArtworkViewSet(PlateMakingConfirmMixin, BaseViewSet):
 
     queryset = Artwork.objects.all()
     serializer_class = ArtworkSerializer
+    permission_classes = [WorkOrderSupportingDataPermission]
     filterset_fields = ["base_code", "version"]
     search_fields = ["base_code", "name", "imposition_size"]
     ordering_fields = ["created_at", "base_code", "version", "name"]
@@ -183,6 +185,7 @@ class DieViewSet(PlateMakingConfirmMixin, BaseViewSet):
 
     queryset = Die.objects.all()
     serializer_class = DieSerializer
+    permission_classes = [WorkOrderSupportingDataPermission]
     filterset_fields = ["confirmed"]
     search_fields = ["code", "name", "size", "material"]
     ordering_fields = ["created_at", "code", "name"]
@@ -205,6 +208,7 @@ class FoilingPlateViewSet(PlateMakingConfirmMixin, BaseViewSet):
 
     queryset = FoilingPlate.objects.all()
     serializer_class = FoilingPlateSerializer
+    permission_classes = [WorkOrderSupportingDataPermission]
     filterset_fields = []
     search_fields = ["code", "name", "size", "material"]
     ordering_fields = ["created_at", "code", "name"]
@@ -227,6 +231,7 @@ class EmbossingPlateViewSet(PlateMakingConfirmMixin, BaseViewSet):
 
     queryset = EmbossingPlate.objects.all()
     serializer_class = EmbossingPlateSerializer
+    permission_classes = [WorkOrderSupportingDataPermission]
     filterset_fields = []
     search_fields = ["code", "name", "size", "material"]
     ordering_fields = ["created_at", "code", "name"]

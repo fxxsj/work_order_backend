@@ -5,7 +5,7 @@
 P1 优化：使用缓存减少权限检查的数据库查询
 """
 from rest_framework import permissions
-from .permission_utils import PermissionCache
+from .permission_utils import PermissionCache, PermissionUtils
 
 
 class SuperuserFriendlyModelPermissions(permissions.DjangoModelPermissions):
@@ -32,6 +32,109 @@ class SuperuserFriendlyModelPermissions(permissions.DjangoModelPermissions):
         # 它只在 queryset 被过滤时才检查对象权限
         # 所以对于全局 queryset，我们直接返回 True
         return True
+
+
+class CustomerDataPermission(permissions.BasePermission):
+    """
+    客户数据权限。
+
+    施工单新建/编辑页会读取客户列表，因此允许拥有施工单读写权限的用户
+    以只读方式访问客户数据；客户增删改仍沿用客户模型权限控制。
+    """
+
+    _customer_read_permissions = (
+        "workorder.view_customer",
+        "workorder.change_customer",
+    )
+    _work_order_read_permissions = (
+        "workorder.view_workorder",
+        "workorder.add_workorder",
+        "workorder.change_workorder",
+    )
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+
+        if request.user.is_superuser:
+            return True
+
+        if request.method in permissions.SAFE_METHODS:
+            return PermissionUtils.has_any_permission(
+                request.user,
+                self._customer_read_permissions + self._work_order_read_permissions,
+            )
+
+        if request.method == "POST":
+            return request.user.has_perm("workorder.add_customer")
+
+        if request.method in ("PUT", "PATCH"):
+            return request.user.has_perm("workorder.change_customer")
+
+        if request.method == "DELETE":
+            return request.user.has_perm("workorder.delete_customer")
+
+        return False
+
+    def has_object_permission(self, request, view, obj):
+        return self.has_permission(request, view)
+
+
+class WorkOrderSupportingDataPermission(permissions.BasePermission):
+    """
+    施工单依赖基础数据权限。
+
+    施工单表单需要读取图稿、刀模、烫金版、压凸版等基础资产，
+    因此允许拥有施工单读写权限的用户只读访问这些资源。
+    """
+
+    _work_order_permissions = (
+        "workorder.view_workorder",
+        "workorder.add_workorder",
+        "workorder.change_workorder",
+    )
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+
+        if request.user.is_superuser:
+            return True
+
+        model = getattr(getattr(view, "queryset", None), "model", None)
+        if model is None:
+            return False
+
+        app_label = model._meta.app_label
+        model_name = model._meta.model_name
+
+        if request.method in permissions.SAFE_METHODS:
+            if PermissionUtils.has_any_permission(
+                request.user,
+                (
+                    f"{app_label}.view_{model_name}",
+                    f"{app_label}.change_{model_name}",
+                ),
+            ):
+                return True
+            return PermissionUtils.has_any_permission(
+                request.user,
+                self._work_order_permissions,
+            )
+
+        method_to_action = {
+            "POST": "add",
+            "PUT": "change",
+            "PATCH": "change",
+            "DELETE": "delete",
+        }
+        action = method_to_action.get(request.method)
+        if action is None:
+            return False
+        return request.user.has_perm(f"{app_label}.{action}_{model_name}")
+
+    def has_object_permission(self, request, view, obj):
+        return self.has_permission(request, view)
 
 
 class IsStaffOrReadOnly(permissions.BasePermission):
@@ -328,4 +431,3 @@ class WorkOrderDataPermission(permissions.BasePermission):
             return True
         
         return False
-

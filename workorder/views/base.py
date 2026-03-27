@@ -19,8 +19,11 @@ from workorder.docs.base import (
     process_batch_update_active_docs,
     process_docs,
 )
+from workorder.permission_utils import PermissionUtils
 
 from ..models.base import Customer, Department, Process
+from ..models.core import WorkOrder
+from ..permissions import CustomerDataPermission
 from ..serializers.base import CustomerSerializer, DepartmentSerializer, ProcessSerializer
 from .base_viewsets import BaseViewSet
 
@@ -31,6 +34,7 @@ class CustomerViewSet(BaseViewSet):
 
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
+    permission_classes = [CustomerDataPermission]
     search_fields = ["name", "contact_person", "phone"]
     ordering_fields = ["created_at", "name"]
     ordering = ["-created_at"]
@@ -57,6 +61,22 @@ class CustomerViewSet(BaseViewSet):
         # 如果有查看客户权限，返回所有客户（只读）
         if self.request.user.has_perm("workorder.view_customer"):
             return queryset.select_related("salesperson")
+
+        # 拥有施工单权限但没有客户权限的用户，允许只读访问其可见施工单关联的客户。
+        if PermissionUtils.has_any_permission(
+            self.request.user,
+            (
+                "workorder.view_workorder",
+                "workorder.add_workorder",
+                "workorder.change_workorder",
+            ),
+        ):
+            visible_customer_ids = WorkOrder.objects.filter(
+                PermissionUtils.build_work_order_scope_q(self.request.user, "")
+            ).values_list("customer_id", flat=True)
+            return queryset.filter(id__in=visible_customer_ids).select_related(
+                "salesperson"
+            ).distinct()
 
         # 否则返回空查询集
         return queryset.none()

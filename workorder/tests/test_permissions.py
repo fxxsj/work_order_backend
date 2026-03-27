@@ -103,6 +103,74 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
         # TODO: 实现生产主管可以看到相关部门任务时的测试
         pass
 
+    def test_workorder_editor_can_read_related_customers_without_customer_permission(self):
+        """测试仅有施工单权限的用户也能读取关联客户列表，用于施工单表单。"""
+        from django.contrib.auth.models import Permission
+        from django.contrib.contenttypes.models import ContentType
+
+        supervisor = TestDataFactory.create_user(
+            username='wo_editor_only',
+            add_permissions=False,
+        )
+        workorder_ct = ContentType.objects.get_for_model(WorkOrder)
+        view_perm = Permission.objects.get(
+            content_type=workorder_ct,
+            codename='view_workorder',
+        )
+        change_perm = Permission.objects.get(
+            content_type=workorder_ct,
+            codename='change_workorder',
+        )
+        supervisor.user_permissions.add(view_perm, change_perm)
+
+        customer = TestDataFactory.create_customer(
+            name='关联客户',
+            salesperson=self.salesperson1,
+        )
+        TestDataFactory.create_workorder(customer=customer, creator=supervisor)
+
+        response = self.api_get('/api/v1/customers/', user=supervisor)
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data['data']['results']
+        customer_ids = [item['id'] for item in results]
+        self.assertIn(customer.id, customer_ids)
+
+    def test_workorder_editor_can_read_supporting_assets_without_asset_permissions(self):
+        """测试仅有施工单权限的用户可读取施工单依赖的资产列表。"""
+        from django.contrib.auth.models import Permission
+        from django.contrib.contenttypes.models import ContentType
+
+        from ..models import Artwork
+
+        supervisor = TestDataFactory.create_user(
+            username='wo_asset_reader',
+            add_permissions=False,
+        )
+        workorder_ct = ContentType.objects.get_for_model(WorkOrder)
+        view_perm = Permission.objects.get(
+            content_type=workorder_ct,
+            codename='view_workorder',
+        )
+        change_perm = Permission.objects.get(
+            content_type=workorder_ct,
+            codename='change_workorder',
+        )
+        supervisor.user_permissions.add(view_perm, change_perm)
+
+        artwork = Artwork.objects.create(
+            base_code='ART-TEST',
+            version=1,
+            name='测试图稿',
+        )
+
+        response = self.api_get('/api/v1/artworks/', user=supervisor)
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data['data']['results']
+        artwork_ids = [item['id'] for item in results]
+        self.assertIn(artwork.id, artwork_ids)
+
 
 class WorkOrderTaskPermissionTest(APITestCaseMixin, TestCase):
     """任务操作权限测试"""
