@@ -15,6 +15,7 @@ from decimal import Decimal
 from typing import Optional
 
 from django.contrib.auth.models import User
+from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import serializers
 
