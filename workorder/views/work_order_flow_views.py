@@ -50,6 +50,7 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             work_order = WorkOrderFlowService.create_from_sales_order(
                 sales_order_id=request.data.get("sales_order_id"),
                 production_quantity=request.data.get("production_quantity"),
+                selected_items=request.data.get("selected_items"),
                 delivery_date=request.data.get("delivery_date"),
                 priority=request.data.get("priority", "normal"),
                 notes=request.data.get("notes", ""),
@@ -100,6 +101,7 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
                 work_order = WorkOrderFlowService.create_from_sales_order(
                     sales_order_id=sales_order_id,
                     production_quantity=request.data.get("production_quantity"),
+                    selected_items=request.data.get("selected_items"),
                     delivery_date=request.data.get("delivery_date"),
                     priority=request.data.get("priority", "normal"),
                     notes=request.data.get("notes", ""),

@@ -130,6 +130,11 @@ class SalesOrder(models.Model):
     rejection_reason = models.TextField(
         "拒绝原因", blank=True, help_text="如果订单被拒绝，填写拒绝原因"
     )
+    completion_reason = models.TextField(
+        "人工完结原因",
+        blank=True,
+        help_text="订单未全部发货但需要人工完结时填写原因",
+    )
 
     created_by = models.ForeignKey(
         User,

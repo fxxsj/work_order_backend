@@ -33,6 +33,7 @@ from ..serializers.sales import (
     SalesOrderItemSerializer,
     SalesOrderListSerializer,
 )
+from ..services.sales_order_status_service import SalesOrderStatusService
 from .base_viewsets import BaseViewSet
 
 
@@ -150,6 +151,7 @@ class SalesOrderViewSet(BaseViewSet):
         sales_order.approved_by = request.user
         sales_order.approved_at = timezone.now()
         sales_order.approval_comment = request.data.get("approval_comment", "")
+        sales_order.completion_reason = ""
         sales_order.save()
 
         serializer = self.get_serializer(sales_order)
@@ -181,13 +183,14 @@ class SalesOrderViewSet(BaseViewSet):
     @action(detail=True, methods=["post"])
     @sales_order_start_docs
     def start_production(self, request, pk=None):
-        """开始生产（将订单状态改为生产中）"""
+        """根据关联施工单同步生产状态。"""
         sales_order = self.get_object()
-        if sales_order.status != "approved":
-            return APIResponse.error("只有已审核的订单才能开始生产", code=status.HTTP_400_BAD_REQUEST)
+        if sales_order.status not in ["approved", "in_production"]:
+            return APIResponse.error("只有已审核或生产中的订单才能同步生产状态", code=status.HTTP_400_BAD_REQUEST)
+        if not sales_order.work_orders.exists():
+            return APIResponse.error("请先创建施工单，系统会自动同步为生产中", code=status.HTTP_400_BAD_REQUEST)
 
-        sales_order.status = "in_production"
-        sales_order.save()
+        SalesOrderStatusService.sync_status(sales_order)
 
         serializer = self.get_serializer(sales_order)
         return APIResponse.success(data=serializer.data)
@@ -332,16 +335,20 @@ class SalesOrderViewSet(BaseViewSet):
                 "只有已审核或生产中的订单才能完成", code=status.HTTP_400_BAD_REQUEST
             )
 
-        is_available, errors = self._check_stock_availability(sales_order)
-        if not is_available:
+        all_delivered = SalesOrderStatusService.all_items_delivered(sales_order)
+        completion_reason = str(request.data.get("completion_reason", "")).strip()
+        if not all_delivered and not completion_reason:
             return APIResponse.error(
-                "库存不足，无法完成订单",
+                "订单未全部发货，人工完结必须填写原因",
                 code=status.HTTP_400_BAD_REQUEST,
-                errors=errors,
             )
-
         sales_order.status = "completed"
-        sales_order.save()
+        sales_order.completion_reason = "" if all_delivered else completion_reason
+        update_fields = ["status", "completion_reason"]
+        if all_delivered and sales_order.actual_delivery_date is None:
+            sales_order.actual_delivery_date = timezone.now().date()
+            update_fields.append("actual_delivery_date")
+        sales_order.save(update_fields=update_fields)
 
         serializer = self.get_serializer(sales_order)
         return APIResponse.success(data=serializer.data)

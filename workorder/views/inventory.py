@@ -69,6 +69,7 @@ from workorder.serializers.inventory import (
     StockOutSerializer,
     upsert_delivery_exception_resolution,
 )
+from workorder.services.sales_order_status_service import SalesOrderStatusService
 
 
 def _apply_department_scope(queryset, department_id, path):
@@ -738,20 +739,10 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         """更新销售订单发货状态"""
         if not sales_order:
             return
-
-        # 检查所有明细是否都已发货完成
-        all_delivered = all(item.is_fully_delivered for item in sales_order.items.all())
-
-        if all_delivered:
-            update_fields = []
-            if sales_order.status in ["approved", "in_production"]:
-                sales_order.status = "completed"
-                update_fields.append("status")
-            if sales_order.actual_delivery_date is None:
-                sales_order.actual_delivery_date = timezone.now().date()
-                update_fields.append("actual_delivery_date")
-            if update_fields:
-                sales_order.save(update_fields=update_fields)
+        SalesOrderStatusService.sync_status(
+            sales_order,
+            preserve_manual_completion=False,
+        )
 
     @action(detail=True, methods=["post"])
     @delivery_receive_docs
@@ -829,15 +820,11 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
             delivery_order.received_notes = f"拒收原因: {reject_reason}"
             delivery_order.save()
 
-            # 4. 更新销售订单状态（如果需要）
-            if (
-                delivery_order.sales_order
-                and delivery_order.sales_order.status == "completed"
-            ):
-                delivery_order.sales_order.status = "in_production"
-                delivery_order.sales_order.actual_delivery_date = None
-                delivery_order.sales_order.save(
-                    update_fields=["status", "actual_delivery_date"]
+            # 4. 更新销售订单状态
+            if delivery_order.sales_order:
+                SalesOrderStatusService.sync_status(
+                    delivery_order.sales_order,
+                    preserve_manual_completion=False,
                 )
 
         serializer = self.get_serializer(delivery_order)

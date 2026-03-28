@@ -67,7 +67,7 @@ class WorkOrderFlowServiceTest(TestCase):
             order_date=timezone.now().date(),
             delivery_date=timezone.now().date() + timedelta(days=7),
             total_amount=1000.0,
-            status="confirmed",
+            status="approved",
             created_by=self.salesperson,
         )
 
@@ -117,7 +117,7 @@ class WorkOrderFlowServiceTest(TestCase):
                 created_by=self.creator,
             )
 
-        self.assertIn("只有已确认/已审核的销售订单才能创建施工单", str(context.exception))
+        self.assertIn("只有已审核或生产中的销售订单才能创建施工单", str(context.exception))
 
     def test_create_from_sales_order_not_found(self):
         """测试销售订单不存在时创建失败"""
@@ -150,6 +150,28 @@ class WorkOrderFlowServiceTest(TestCase):
 
         # 验证状态变更
         self.assertEqual(updated_work_order.approval_status, "pending")
+
+    def test_create_from_sales_order_with_selected_items(self):
+        """测试按选定订单明细创建施工单，并同步销售订单状态"""
+        sales_item = self.sales_order.items.first()
+
+        work_order = WorkOrderFlowService.create_from_sales_order(
+            sales_order_id=self.sales_order.id,
+            production_quantity=None,
+            selected_items=[
+                {
+                    "sales_order_item_id": sales_item.id,
+                    "production_quantity": 60,
+                }
+            ],
+            created_by=self.creator,
+        )
+
+        self.assertEqual(work_order.production_quantity, 60)
+        self.assertEqual(work_order.products.count(), 1)
+        self.assertEqual(work_order.products.first().quantity, 60)
+        self.sales_order.refresh_from_db()
+        self.assertEqual(self.sales_order.status, "in_production")
 
     def test_submit_for_approval_invalid_transition(self):
         """测试无效的状态转换"""
@@ -358,7 +380,7 @@ class WorkOrderFlowIntegrationTest(TestCase):
             order_date=timezone.now().date(),
             delivery_date=timezone.now().date() + timedelta(days=10),
             total_amount=5000.0,
-            status="confirmed",
+            status="approved",
             created_by=self.user,
         )
         SalesOrderItem.objects.create(

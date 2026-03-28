@@ -464,8 +464,11 @@ class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
         if not data.get("sales_order"):
             raise serializers.ValidationError({"sales_order": "必须选择销售订单"})
         sales_order = data.get("sales_order")
-        if sales_order and sales_order.status != "completed":
-            raise serializers.ValidationError({"sales_order": "只有已完成的销售订单才能创建发货单"})
+        allowed_statuses = {"approved", "in_production", "completed"}
+        if sales_order and sales_order.status not in allowed_statuses:
+            raise serializers.ValidationError(
+                {"sales_order": "只有已审核、生产中或已完成的销售订单才能创建发货单"}
+            )
 
         # 收货人信息必填
         if not data.get("receiver_name"):
@@ -484,9 +487,22 @@ class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
 
         # 创建发货明细
         for item_data in items_data:
-            DeliveryItem.objects.create(delivery_order=delivery_order, **item_data)
+            DeliveryItem.objects.create(
+                delivery_order=delivery_order,
+                **self._normalize_item_data(item_data),
+            )
 
         return delivery_order
+
+    def _normalize_item_data(self, item_data):
+        normalized = dict(item_data)
+        product = normalized.pop("product", None)
+        sales_order_item = normalized.pop("sales_order_item", None)
+        if product is not None:
+            normalized["product_id"] = product
+        if sales_order_item is not None:
+            normalized["sales_order_item_id"] = sales_order_item
+        return normalized
 
 
 class DeliveryOrderUpdateSerializer(serializers.ModelSerializer):
@@ -535,9 +551,22 @@ class DeliveryOrderUpdateSerializer(serializers.ModelSerializer):
 
             # 创建新明细
             for item_data in items_data:
-                DeliveryItem.objects.create(delivery_order=instance, **item_data)
+                DeliveryItem.objects.create(
+                    delivery_order=instance,
+                    **self._normalize_item_data(item_data),
+                )
 
         return instance
+
+    def _normalize_item_data(self, item_data):
+        normalized = dict(item_data)
+        product = normalized.pop("product", None)
+        sales_order_item = normalized.pop("sales_order_item", None)
+        if product is not None:
+            normalized["product_id"] = product
+        if sales_order_item is not None:
+            normalized["sales_order_item_id"] = sales_order_item
+        return normalized
 
 
 # ==================== 质量检验序列化器 ====================

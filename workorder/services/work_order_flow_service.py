@@ -50,6 +50,7 @@ from .work_order_service import WorkOrderService
 from .task_generation import DraftTaskGenerationService
 from .dispatch_service import AutoDispatchService
 from .notification_triggers_flow import NotificationTriggers
+from .sales_order_status_service import SalesOrderStatusService
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,7 @@ class WorkOrderFlowService:
         *,
         sales_order_id: int,
         production_quantity: Optional[int],
+        selected_items: Optional[List[Dict[str, Any]]] = None,
         delivery_date: Optional[datetime] = None,
         priority: str = "normal",
         notes: str = "",
@@ -142,13 +144,18 @@ class WorkOrderFlowService:
                 "销售订单不存在", code=404
             ) from exc
 
-        if sales_order.status not in ["confirmed", "approved"]:
+        if sales_order.status not in ["approved", "in_production"]:
             raise ServiceError(
-                f"只有已确认/已审核的销售订单才能创建施工单，当前状态：{sales_order.status}",
+                f"只有已审核或生产中的销售订单才能创建施工单，当前状态：{sales_order.status}",
                 code=400,
             )
 
-        production_items = WorkOrderFlowService._build_production_items(sales_order)
+        production_items = WorkOrderFlowService._build_selected_production_items(
+            sales_order,
+            selected_items=selected_items,
+        )
+        if not production_items:
+            production_items = WorkOrderFlowService._build_production_items(sales_order)
         if not production_items:
             raise ServiceError("销售订单库存充足，无需生成施工单", code=400)
 
@@ -181,6 +188,7 @@ class WorkOrderFlowService:
         )
 
         sales_order.work_orders.add(work_order)
+        SalesOrderStatusService.sync_status(sales_order)
 
         logger.info(f"从销售订单 {sales_order.order_number} 创建施工单 {order_number}")
 
@@ -208,7 +216,7 @@ class WorkOrderFlowService:
             work_order=work_order,
             approval_status=work_order.approval_status,
             approved_by=created_by,
-            approval_comment=f"从销售订单 {sales_order.order_number} 自动创建",
+            approval_comment=f"从销售订单 {sales_order.order_number} 创建",
         )
 
         # 10. 发送通知
@@ -465,6 +473,9 @@ class WorkOrderFlowService:
             work_order.status = "completed"
             work_order.save()
 
+            for sales_order in SalesOrder.objects.filter(work_orders=work_order).distinct():
+                SalesOrderStatusService.sync_status(sales_order)
+
             # 记录日志
             WorkOrderApprovalLog.objects.create(
                 work_order=work_order,
@@ -509,7 +520,7 @@ class WorkOrderFlowService:
         sales_order: SalesOrder,
         production_items: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
-        """复制销售订单产品到施工单（按库存缺口生成）"""
+        """复制销售订单产品到施工单。"""
         if production_items is None:
             production_items = WorkOrderFlowService._build_production_items(sales_order)
 
@@ -526,6 +537,66 @@ class WorkOrderFlowService:
         logger.info(
             f"复制了 {created_count} 个销售订单产品到施工单 {work_order.order_number}"
         )
+
+    @staticmethod
+    def _build_selected_production_items(
+        sales_order: SalesOrder,
+        *,
+        selected_items: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
+        """根据用户选择的订单明细生成待生产产品。"""
+        if not selected_items:
+            return []
+
+        sales_items = {
+            item.id: item
+            for item in SalesOrderItem.objects.select_related("product").filter(
+                sales_order=sales_order
+            )
+        }
+
+        production_items = []
+        for index, item in enumerate(selected_items, start=1):
+            if not isinstance(item, dict):
+                raise ServiceError(f"第 {index} 个施工单产品配置无效", code=400)
+
+            sales_order_item_id = item.get("sales_order_item_id")
+            sales_item = sales_items.get(sales_order_item_id)
+            if sales_item is None:
+                raise ServiceError(f"第 {index} 个订单产品不存在或不属于当前订单", code=400)
+
+            try:
+                produce_quantity = int(item.get("production_quantity"))
+            except (TypeError, ValueError) as exc:
+                raise ServiceError(f"第 {index} 个订单产品生产数量无效", code=400) from exc
+
+            remaining_quantity = max(
+                int(sales_item.quantity) - int(sales_item.delivered_quantity or 0),
+                0,
+            )
+            if produce_quantity <= 0:
+                raise ServiceError(
+                    f"{sales_item.product.name} 的生产数量必须大于 0",
+                    code=400,
+                )
+            if produce_quantity > remaining_quantity:
+                raise ServiceError(
+                    f"{sales_item.product.name} 的生产数量不能超过待交付数量 {remaining_quantity}",
+                    code=400,
+                )
+
+            production_items.append(
+                {
+                    "sales_order_item": sales_item,
+                    "product": sales_item.product,
+                    "unit": sales_item.unit,
+                    "produce_quantity": produce_quantity,
+                    "sales_quantity": sales_item.quantity,
+                    "available_quantity": 0,
+                }
+            )
+
+        return production_items
 
     @staticmethod
     def _build_production_items(
