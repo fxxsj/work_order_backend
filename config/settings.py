@@ -18,7 +18,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # 安全配置 - 从环境变量读取
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("SECRET_KEY", "")
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = os.environ.get("DEBUG", "True") == "True"
+
+SECRET_KEY=os.environ.get("SECRET_KEY", "")
 if not SECRET_KEY:
     if DEBUG:
         import warnings
@@ -28,9 +31,6 @@ if not SECRET_KEY:
     else:
         from django.core.exceptions import ImproperlyConfigured
         raise ImproperlyConfigured("生产环境必须设置 SECRET_KEY 环境变量。")
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DEBUG", "True") == "True"
 
 # 允许的主机
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
