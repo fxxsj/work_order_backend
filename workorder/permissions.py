@@ -165,98 +165,53 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         return obj.created_by == request.user
 
 
-class WorkOrderProcessPermission(permissions.BasePermission):
+class WorkOrderAssetPermission(permissions.BasePermission):
     """
-    施工单工序权限：如果用户有编辑施工单的权限，就可以编辑其工序
-    工序是施工单的一部分，逻辑上应该与施工单权限一致
+    施工单关联资产（如工序、物料）的通用权限。
+
+    核心逻辑：
+    - 如果用户对施工单有读取权限，就能读取关联资产。
+    - 如果用户对施工单有修改权限，就能修改关联资产。
     """
+
     def has_permission(self, request, view):
-        # 检查用户是否已登录
         if not request.user.is_authenticated:
             return False
-
-        # 超级用户拥有所有权限
         if request.user.is_superuser:
             return True
-
-        # 读取操作：检查是否有查看施工单的权限
         if request.method in permissions.SAFE_METHODS:
-            return request.user.has_perm('workorder.view_workorder')
-
-        # 写入操作：检查是否有编辑施工单的权限
-        # 如果有编辑施工单的权限，就可以编辑其工序
-        return request.user.has_perm('workorder.change_workorder')
+            return request.user.has_perm("workorder.view_workorder")
+        return request.user.has_perm("workorder.change_workorder")
 
     def has_object_permission(self, request, view, obj):
-        """
-        对象级权限检查：确保用户有权限编辑该工序所属的施工单
-        """
-        # 检查用户是否已登录
         if not request.user.is_authenticated:
             return False
-
-        # 超级用户拥有所有权限
         if request.user.is_superuser:
             return True
-
-        # 读取操作：检查是否有查看施工单的权限
         if request.method in permissions.SAFE_METHODS:
-            return request.user.has_perm('workorder.view_workorder')
+            return request.user.has_perm("workorder.view_workorder")
 
-        # 写入操作：检查是否有编辑该工序所属施工单的权限
-        if hasattr(obj, 'work_order') and obj.work_order:
-            # 检查是否有编辑该施工单的权限
-            return request.user.has_perm('workorder.change_workorder')
-
-        # 如果没有关联的施工单，检查是否有编辑施工单的权限
-        return request.user.has_perm('workorder.change_workorder')
+        # 对于写入操作，只要用户有修改工单的通用权限即可。
+        # 对象级检查仅确认与工单的关联，权限判断是统一的。
+        return request.user.has_perm("workorder.change_workorder")
 
 
-class WorkOrderMaterialPermission(permissions.BasePermission):
+class WorkOrderProcessPermission(WorkOrderAssetPermission):
     """
-    施工单物料权限：如果用户有编辑施工单的权限，就可以编辑其物料
-    物料是施工单的一部分，逻辑上应该与施工单权限一致
+    施工单工序权限：如果用户有编辑施工单的权限，就可以编辑其工序。
+    工序是施工单的一部分，逻辑上应该与施工单权限一致，因此继承通用资产权限。
     """
-    def has_permission(self, request, view):
-        # 检查用户是否已登录
-        if not request.user.is_authenticated:
-            return False
 
-        # 超级用户拥有所有权限
-        if request.user.is_superuser:
-            return True
+    pass
 
-        # 读取操作：检查是否有查看施工单的权限
-        if request.method in permissions.SAFE_METHODS:
-            return request.user.has_perm('workorder.view_workorder')
 
-        # 写入操作：检查是否有编辑施工单的权限
-        # 如果有编辑施工单的权限，就可以编辑其物料
-        return request.user.has_perm('workorder.change_workorder')
+class WorkOrderMaterialPermission(WorkOrderAssetPermission):
+    """
+    施工单物料权限：如果用户有编辑施工单的权限，就可以编辑其物料。
+    物料是施工单的一部分，逻辑上应该与施工单权限一致，因此继承通用资产权限。
+    """
 
-    def has_object_permission(self, request, view, obj):
-        """
-        对象级权限检查：确保用户有权限编辑该物料所属的施工单
-        """
-        # 检查用户是否已登录
-        if not request.user.is_authenticated:
-            return False
-
-        # 超级用户拥有所有权限
-        if request.user.is_superuser:
-            return True
-
-        # 读取操作：检查是否有查看施工单的权限
-        if request.method in permissions.SAFE_METHODS:
-            return request.user.has_perm('workorder.view_workorder')
-
-        # 写入操作：检查是否有编辑该物料所属施工单的权限
-        if hasattr(obj, 'work_order') and obj.work_order:
-            # 检查是否有编辑该施工单的权限
-            return request.user.has_perm('workorder.change_workorder')
-
-        # 如果没有关联的施工单，检查是否有编辑施工单的权限
-        return request.user.has_perm('workorder.change_workorder')
+    pass
 
 
 class WorkOrderTaskPermission(permissions.BasePermission):
