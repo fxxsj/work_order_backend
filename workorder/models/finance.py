@@ -16,8 +16,10 @@ from django.db import models, transaction
 from django.db.models import Sum
 from django.utils import timezone
 
+from .base import TimeStampedModel
 
-class CostCenter(models.Model):
+
+class CostCenter(TimeStampedModel, models.Model):
     """成本中心"""
 
     TYPE_CHOICES = [
@@ -50,8 +52,6 @@ class CostCenter(models.Model):
         verbose_name="上级成本中心",
     )
     is_active = models.BooleanField("是否启用", default=True)
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
         verbose_name = "成本中心"
@@ -62,7 +62,7 @@ class CostCenter(models.Model):
         return f"{self.code} - {self.name}"
 
 
-class CostItem(models.Model):
+class CostItem(TimeStampedModel, models.Model):
     """成本项目"""
 
     TYPE_CHOICES = [
@@ -88,8 +88,6 @@ class CostItem(models.Model):
     )
     description = models.TextField("描述", blank=True)
     is_active = models.BooleanField("是否启用", default=True)
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
         verbose_name = "成本项目"
@@ -100,7 +98,7 @@ class CostItem(models.Model):
         return f"{self.code} - {self.name}"
 
 
-class ProductionCost(models.Model):
+class ProductionCost(TimeStampedModel, models.Model):
     """生产成本"""
 
     work_order = models.OneToOneField(
@@ -153,9 +151,6 @@ class ProductionCost(models.Model):
     )
     notes = models.TextField("备注", blank=True)
 
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
-
     class Meta:
         verbose_name = "生产成本"
         verbose_name_plural = "生产成本管理"
@@ -204,7 +199,7 @@ class ProductionCost(models.Model):
         pass
 
 
-class Invoice(models.Model):
+class Invoice(TimeStampedModel, models.Model):
     """发票"""
 
     TYPE_CHOICES = [
@@ -323,8 +318,6 @@ class Invoice(models.Model):
         related_name="created_invoices",
         verbose_name="创建人",
     )
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
         verbose_name = "发票"

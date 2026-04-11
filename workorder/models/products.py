@@ -12,9 +12,10 @@
 from django.contrib.auth.models import User
 from django.db import models, transaction
 from workorder.models.audit import AuditMixin
+from workorder.models.base import TimeStampedModel
 
 
-class Product(AuditMixin, models.Model):
+class Product(AuditMixin, TimeStampedModel, models.Model):
     """产品信息"""
 
     # 产品类型选项
@@ -323,7 +324,7 @@ class ProductMaterial(models.Model):
         return f"{self.product.name} - {self.material.name}"
 
 
-class ProductGroup(models.Model):
+class ProductGroup(TimeStampedModel, models.Model):
     """产品组（如：天地盒、套装等，一个产品组可能需要多个施工单完成）"""
 
     name = models.CharField("产品组名称", max_length=200)

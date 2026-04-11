@@ -13,9 +13,10 @@ from django.utils import timezone
 
 from .core import WorkOrder
 from .system import WorkOrderApprovalLog
+from .base import TimeStampedModel
 
 
-class ApprovalWorkflow(models.Model):
+class ApprovalWorkflow(TimeStampedModel, models.Model):
     """审核工作流模板"""
 
     WORKFLOW_TYPES = [
@@ -48,7 +49,7 @@ class ApprovalWorkflow(models.Model):
         return f"{self.name} ({self.get_workflow_type_display()})"
 
 
-class ApprovalStep(models.Model):
+class ApprovalStep(TimeStampedModel, models.Model):
     """审核步骤"""
 
     STATUS_CHOICES = [
@@ -106,7 +107,7 @@ class ApprovalStep(models.Model):
         return f"{self.work_order.order_number} - {self.step_name}"
 
 
-class ApprovalRule(models.Model):
+class ApprovalRule(TimeStampedModel, models.Model):
     """审核规则"""
 
     RULE_TYPES = [
@@ -145,7 +146,7 @@ class ApprovalRule(models.Model):
         return f"{self.name} ({self.get_rule_type_display()})"
 
 
-class ApprovalEscalation(models.Model):
+class ApprovalEscalation(TimeStampedModel, models.Model):
     """审核上报"""
 
     STATUS_CHOICES = [

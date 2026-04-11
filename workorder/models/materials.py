@@ -13,9 +13,10 @@ from django.contrib.auth.models import User
 from django.db import models, transaction
 from django.utils import timezone
 from workorder.models.audit import AuditMixin
+from workorder.models.base import TimeStampedModel
 
 
-class Material(AuditMixin, models.Model):
+class Material(AuditMixin, TimeStampedModel, models.Model):
     """物料信息"""
 
     name = models.CharField("物料名称", max_length=200)
@@ -57,8 +58,6 @@ class Material(AuditMixin, models.Model):
         "需要开料", default=False, help_text="该物料是否需要开料工序处理"
     )
     notes = models.TextField("备注", blank=True)
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
         verbose_name = "物料"
@@ -87,7 +86,7 @@ class Material(AuditMixin, models.Model):
         return max(0, required_quantity - available)
 
 
-class Supplier(models.Model):
+class Supplier(TimeStampedModel, models.Model):
     """供应商信息"""
 
     STATUS_CHOICES = [
@@ -105,8 +104,6 @@ class Supplier(models.Model):
         "状态", max_length=20, choices=STATUS_CHOICES, default="active"
     )
     notes = models.TextField("备注", blank=True)
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
         verbose_name = "供应商"
@@ -169,7 +166,7 @@ class MaterialSupplier(models.Model):
         return f"{self.material.name} - {self.supplier.name}"
 
 
-class PurchaseOrder(models.Model):
+class PurchaseOrder(TimeStampedModel, models.Model):
     """采购单"""
 
     STATUS_CHOICES = [
@@ -284,7 +281,7 @@ class PurchaseOrder(models.Model):
         self.save(update_fields=["total_amount"])
 
 
-class PurchaseOrderItem(models.Model):
+class PurchaseOrderItem(TimeStampedModel, models.Model):
     """采购单明细"""
 
     STATUS_CHOICES = [
@@ -323,8 +320,6 @@ class PurchaseOrderItem(models.Model):
         help_text="如果是为了某个施工单采购的物料，可关联",
     )
     notes = models.TextField("备注", blank=True)
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
         verbose_name = "采购单明细"
@@ -366,7 +361,7 @@ class PurchaseOrderItem(models.Model):
         )
 
 
-class PurchaseReceiveRecord(models.Model):
+class PurchaseReceiveRecord(TimeStampedModel, models.Model):
     """采购收货记录
 
     记录每次收货的详细信息，支持分批收货和质量检验流程。
@@ -473,8 +468,6 @@ class PurchaseReceiveRecord(models.Model):
 
     # 通用字段
     notes = models.TextField("备注", blank=True)
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
         verbose_name = "采购收货记录"

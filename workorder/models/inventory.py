@@ -14,8 +14,10 @@ from django.contrib.auth.models import User
 from django.db import models, transaction
 from django.utils import timezone
 
+from .base import TimeStampedModel
 
-class ProductStock(models.Model):
+
+class ProductStock(TimeStampedModel, models.Model):
     """成品库存"""
 
     product = models.ForeignKey(
@@ -66,8 +68,6 @@ class ProductStock(models.Model):
     )
 
     notes = models.TextField("备注", blank=True)
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     @property
     def available_quantity(self):
@@ -300,7 +300,7 @@ class StockOut(models.Model):
         return f"{self.order_number} - {self.get_out_type_display()}"
 
 
-class DeliveryOrder(models.Model):
+class DeliveryOrder(TimeStampedModel, models.Model):
     """发货单"""
 
     STATUS_CHOICES = [
@@ -380,8 +380,6 @@ class DeliveryOrder(models.Model):
         related_name="created_delivery_orders",
         verbose_name="创建人",
     )
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
         verbose_name = "发货单"

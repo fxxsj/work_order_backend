@@ -2,6 +2,7 @@
 基础数据模型
 
 包含系统的基础数据模型：
+- TimeStampedModel: 时间戳抽象基类
 - Customer: 客户信息
 - Department: 部门信息
 - Process: 工序定义
@@ -12,7 +13,21 @@ from django.db import models
 from workorder.models.audit import AuditMixin
 
 
-class Customer(AuditMixin, models.Model):
+class TimeStampedModel(models.Model):
+    """时间戳抽象基类
+
+    为模型提供自动管理的 created_at 和 updated_at 字段。
+    所有包含这两个时间戳字段的模型都应继承此类以消除重复。
+    """
+
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+class Customer(AuditMixin, TimeStampedModel, models.Model):
     """客户信息"""
 
     name = models.CharField("客户名称", max_length=200)
@@ -30,8 +45,6 @@ class Customer(AuditMixin, models.Model):
         help_text="负责该客户的业务员",
     )
     notes = models.TextField("备注", blank=True)
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
         verbose_name = "客户"
@@ -52,7 +65,7 @@ class Customer(AuditMixin, models.Model):
         return f"客户 {self.name}"
 
 
-class Department(models.Model):
+class Department(TimeStampedModel, models.Model):
     """部门
 
     部门信息管理，支持层级结构（最多3级）。
@@ -93,8 +106,6 @@ class Department(models.Model):
     processes = models.ManyToManyField(
         "Process", blank=True, verbose_name="工序", help_text="该部门负责的工序"
     )
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
         verbose_name = "部门"

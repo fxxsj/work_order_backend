@@ -10,8 +10,10 @@ from django.contrib.auth.models import User
 from django.db import models, transaction
 from django.utils import timezone
 
+from .base import TimeStampedModel
 
-class SalesOrder(models.Model):
+
+class SalesOrder(TimeStampedModel, models.Model):
     """销售订单"""
 
     STATUS_CHOICES = [
@@ -232,7 +234,7 @@ class SalesOrder(models.Model):
         return errors
 
 
-class SalesOrderItem(models.Model):
+class SalesOrderItem(TimeStampedModel, models.Model):
     """销售订单明细"""
 
     sales_order = models.ForeignKey(

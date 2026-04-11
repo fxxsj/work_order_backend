@@ -12,11 +12,11 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
 
-from .base import Department
+from .base import Department, TimeStampedModel
 from .core import WorkOrder
 
 
-class UserProfile(models.Model):
+class UserProfile(TimeStampedModel, models.Model):
     """用户扩展信息"""
 
     user = models.OneToOneField(
@@ -218,7 +218,7 @@ class Notification(models.Model):
         )
 
 
-class TaskAssignmentRule(models.Model):
+class TaskAssignmentRule(TimeStampedModel, models.Model):
     """任务分派规则配置"""
 
     OPERATOR_SELECTION_STRATEGY_CHOICES = [
@@ -256,8 +256,6 @@ class TaskAssignmentRule(models.Model):
         "是否启用", default=True, help_text="是否启用该规则"
     )
     notes = models.TextField("备注", blank=True, help_text="规则说明或备注")
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
         verbose_name = "任务分派规则"

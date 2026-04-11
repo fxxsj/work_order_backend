@@ -17,6 +17,8 @@ from django.db import models, transaction
 from django.db.models import Max
 from django.utils import timezone
 
+from .base import TimeStampedModel
+
 
 class _SignalSafeQuerySet(models.QuerySet):
     """禁止使用 update() 绕过 signals 的 QuerySet。"""
@@ -27,7 +29,7 @@ class _SignalSafeQuerySet(models.QuerySet):
         )
 
 
-class Artwork(models.Model):
+class Artwork(TimeStampedModel, models.Model):
     """图稿信息"""
 
     base_code = models.CharField(
@@ -91,8 +93,6 @@ class Artwork(models.Model):
     )
     confirmed_at = models.DateTimeField("确认时间", null=True, blank=True)
     notes = models.TextField("备注", blank=True)
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     objects = _SignalSafeQuerySet.as_manager()
 
@@ -343,7 +343,7 @@ class DieProduct(models.Model):
         return f"{self.die.name} - {self.product.name} ({self.quantity}个)"
 
 
-class FoilingPlate(models.Model):
+class FoilingPlate(TimeStampedModel, models.Model):
     """烫金版信息"""
 
     FOILING_TYPE_CHOICES = [
@@ -383,8 +383,6 @@ class FoilingPlate(models.Model):
     )
     confirmed_at = models.DateTimeField("确认时间", null=True, blank=True)
     notes = models.TextField("备注", blank=True)
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     objects = _SignalSafeQuerySet.as_manager()
 
@@ -464,7 +462,7 @@ class FoilingPlateProduct(models.Model):
         return f"{self.foiling_plate.name} - {self.product.name} ({self.quantity}个)"
 
 
-class EmbossingPlate(models.Model):
+class EmbossingPlate(TimeStampedModel, models.Model):
     """压凸版信息"""
 
     code = models.CharField("压凸版编码", max_length=50, unique=True, blank=True)
@@ -492,8 +490,6 @@ class EmbossingPlate(models.Model):
     )
     confirmed_at = models.DateTimeField("确认时间", null=True, blank=True)
     notes = models.TextField("备注", blank=True)
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     objects = _SignalSafeQuerySet.as_manager()
 

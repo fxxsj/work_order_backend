@@ -31,6 +31,7 @@ from django.db import models, transaction
 from django.db.models import Max
 from django.utils import timezone
 from workorder.models.audit import AuditMixin
+from workorder.models.base import TimeStampedModel
 
 # 配置日志记录器
 logger = logging.getLogger(__name__)
@@ -78,7 +79,7 @@ APPROVED_ORDER_EDITABLE_FIELDS = [
 ]
 
 
-class WorkOrder(AuditMixin, models.Model):
+class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
     """印刷施工单"""
 
     STATUS_CHOICES = [
@@ -260,8 +261,6 @@ class WorkOrder(AuditMixin, models.Model):
         related_name="created_orders",
         verbose_name="创建人",
     )
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
         verbose_name = "施工单"
@@ -514,7 +513,7 @@ class WorkOrder(AuditMixin, models.Model):
         super().save(*args, **kwargs)
 
 
-class WorkOrderProcess(AuditMixin, models.Model):
+class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
     """施工单工序记录"""
 
     STATUS_CHOICES = [
@@ -570,9 +569,6 @@ class WorkOrderProcess(AuditMixin, models.Model):
     quantity_defective = models.IntegerField("不良品数量", default=0)
 
     notes = models.TextField("备注", blank=True)
-
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
         verbose_name = "施工单工序"
@@ -1401,7 +1397,7 @@ class TaskLog(models.Model):
         return f"{self.task} - {self.get_log_type_display()}"
 
 
-class WorkOrderTask(AuditMixin, models.Model):
+class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
     """施工单任务（为工序生成的具体任务）"""
 
     TASK_TYPE_CHOICES = [
@@ -1543,8 +1539,6 @@ class WorkOrderTask(AuditMixin, models.Model):
         ],
         default="pending",
     )
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
         verbose_name = "施工单任务"
