@@ -13,10 +13,13 @@ from ..models.assets import (
     ArtworkImage,
     ArtworkProduct,
     Die,
+    DieImage,
     DieProduct,
     EmbossingPlate,
+    EmbossingPlateImage,
     EmbossingPlateProduct,
     FoilingPlate,
+    FoilingPlateImage,
     FoilingPlateProduct,
 )
 
@@ -37,6 +40,15 @@ class ArtworkImageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ArtworkImage
+        fields = ["id", "image", "sort_order", "description", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
+class DieImageSerializer(serializers.ModelSerializer):
+    """刀模图片序列化器"""
+
+    class Meta:
+        model = DieImage
         fields = ["id", "image", "sort_order", "description", "created_at"]
         read_only_fields = ["id", "created_at"]
 
@@ -246,6 +258,7 @@ class DieSerializer(serializers.ModelSerializer):
     """
 
     products = DieProductSerializer(many=True, read_only=True)
+    images = DieImageSerializer(many=True, read_only=True)
     products_data = serializers.ListField(
         child=serializers.DictField(),
         write_only=True,
@@ -375,6 +388,15 @@ class DieSerializer(serializers.ModelSerializer):
         return die
 
 
+class FoilingPlateImageSerializer(serializers.ModelSerializer):
+    """烫金版图片序列化器"""
+
+    class Meta:
+        model = FoilingPlateImage
+        fields = ["id", "image", "sort_order", "description", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
 class FoilingPlateProductSerializer(serializers.ModelSerializer):
     """烫金版产品序列化器"""
 
@@ -399,6 +421,7 @@ class FoilingPlateSerializer(serializers.ModelSerializer):
     """
 
     products = FoilingPlateProductSerializer(many=True, read_only=True)
+    images = FoilingPlateImageSerializer(many=True, read_only=True)
     products_data = serializers.ListField(
         child=serializers.DictField(),
         write_only=True,
@@ -516,6 +539,15 @@ class FoilingPlateSerializer(serializers.ModelSerializer):
         return foiling_plate
 
 
+class EmbossingPlateImageSerializer(serializers.ModelSerializer):
+    """压凸版图片序列化器"""
+
+    class Meta:
+        model = EmbossingPlateImage
+        fields = ["id", "image", "sort_order", "description", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
 class EmbossingPlateProductSerializer(serializers.ModelSerializer):
     """压凸版产品序列化器"""
 
@@ -540,6 +572,7 @@ class EmbossingPlateSerializer(serializers.ModelSerializer):
     """
 
     products = EmbossingPlateProductSerializer(many=True, read_only=True)
+    images = EmbossingPlateImageSerializer(many=True, read_only=True)
     products_data = serializers.ListField(
         child=serializers.DictField(),
         write_only=True,

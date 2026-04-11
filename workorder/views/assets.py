@@ -28,10 +28,13 @@ from ..models.assets import (
     ArtworkImage,
     ArtworkProduct,
     Die,
+    DieImage,
     DieProduct,
     EmbossingPlate,
+    EmbossingPlateImage,
     EmbossingPlateProduct,
     FoilingPlate,
+    FoilingPlateImage,
     FoilingPlateProduct,
 )
 from ..models.core import WorkOrder, WorkOrderProcess, WorkOrderTask
@@ -39,10 +42,13 @@ from ..serializers.assets import (
     ArtworkImageSerializer,
     ArtworkProductSerializer,
     ArtworkSerializer,
+    DieImageSerializer,
     DieProductSerializer,
     DieSerializer,
+    EmbossingPlateImageSerializer,
     EmbossingPlateProductSerializer,
     EmbossingPlateSerializer,
+    FoilingPlateImageSerializer,
     FoilingPlateProductSerializer,
     FoilingPlateSerializer,
 )
@@ -235,9 +241,48 @@ class DieViewSet(PlateMakingConfirmMixin, BaseViewSet):
     def get_queryset(self):
         """优化查询性能：预加载关联数据"""
         queryset = super().get_queryset()
-        return queryset.prefetch_related("products__product").select_related(
+        return queryset.prefetch_related("products__product", "images").select_related(
             "confirmed_by"
         )
+
+    @action(detail=True, methods=["get"])
+    def images(self, request, pk=None):
+        """获取刀模的所有图片，按排序返回"""
+        die = self.get_object()
+        images = die.images.all().order_by("sort_order")
+        serializer = DieImageSerializer(images, many=True)
+        return APIResponse.success(data=serializer.data)
+
+    @action(detail=True, methods=["post"])
+    def upload_image(self, request, pk=None):
+        """上传图片到指定刀模"""
+        die = self.get_object()
+        image_file = request.FILES.get("image")
+        if not image_file:
+            return APIResponse.error("请选择要上传的图片", code=status.HTTP_400_BAD_REQUEST)
+
+        sort_order = int(request.POST.get("sort_order", 0))
+        description = request.POST.get("description", "").strip()
+
+        img = DieImage.objects.create(
+            die=die,
+            image=image_file,
+            sort_order=sort_order,
+            description=description,
+        )
+        serializer = DieImageSerializer(img)
+        return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["delete"], url_path=r"images/(?P<image_id>\d+)")
+    def delete_image(self, request, pk=None, image_id=None):
+        """删除刀模的指定图片"""
+        try:
+            img = DieImage.objects.get(pk=image_id, die_id=pk)
+            img.image.delete(save=False)  # 删除物理文件
+            img.delete()
+            return APIResponse.success(message="图片已删除")
+        except DieImage.DoesNotExist:
+            return APIResponse.error("图片不存在", code=status.HTTP_404_NOT_FOUND)
 
 
 @foiling_plate_docs
@@ -258,9 +303,48 @@ class FoilingPlateViewSet(PlateMakingConfirmMixin, BaseViewSet):
     def get_queryset(self):
         """优化查询性能：预加载关联数据"""
         queryset = super().get_queryset()
-        return queryset.prefetch_related("products__product").select_related(
+        return queryset.prefetch_related("products__product", "images").select_related(
             "confirmed_by"
         )
+
+    @action(detail=True, methods=["get"])
+    def images(self, request, pk=None):
+        """获取烫金版的所有图片，按排序返回"""
+        plate = self.get_object()
+        images = plate.images.all().order_by("sort_order")
+        serializer = FoilingPlateImageSerializer(images, many=True)
+        return APIResponse.success(data=serializer.data)
+
+    @action(detail=True, methods=["post"])
+    def upload_image(self, request, pk=None):
+        """上传图片到指定烫金版"""
+        plate = self.get_object()
+        image_file = request.FILES.get("image")
+        if not image_file:
+            return APIResponse.error("请选择要上传的图片", code=status.HTTP_400_BAD_REQUEST)
+
+        sort_order = int(request.POST.get("sort_order", 0))
+        description = request.POST.get("description", "").strip()
+
+        img = FoilingPlateImage.objects.create(
+            foiling_plate=plate,
+            image=image_file,
+            sort_order=sort_order,
+            description=description,
+        )
+        serializer = FoilingPlateImageSerializer(img)
+        return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["delete"], url_path=r"images/(?P<image_id>\d+)")
+    def delete_image(self, request, pk=None, image_id=None):
+        """删除烫金版的指定图片"""
+        try:
+            img = FoilingPlateImage.objects.get(pk=image_id, foiling_plate_id=pk)
+            img.image.delete(save=False)  # 删除物理文件
+            img.delete()
+            return APIResponse.success(message="图片已删除")
+        except FoilingPlateImage.DoesNotExist:
+            return APIResponse.error("图片不存在", code=status.HTTP_404_NOT_FOUND)
 
 
 @embossing_plate_docs
@@ -281,9 +365,48 @@ class EmbossingPlateViewSet(PlateMakingConfirmMixin, BaseViewSet):
     def get_queryset(self):
         """优化查询性能：预加载关联数据"""
         queryset = super().get_queryset()
-        return queryset.prefetch_related("products__product").select_related(
+        return queryset.prefetch_related("products__product", "images").select_related(
             "confirmed_by"
         )
+
+    @action(detail=True, methods=["get"])
+    def images(self, request, pk=None):
+        """获取压凸版的所有图片，按排序返回"""
+        plate = self.get_object()
+        images = plate.images.all().order_by("sort_order")
+        serializer = EmbossingPlateImageSerializer(images, many=True)
+        return APIResponse.success(data=serializer.data)
+
+    @action(detail=True, methods=["post"])
+    def upload_image(self, request, pk=None):
+        """上传图片到指定压凸版"""
+        plate = self.get_object()
+        image_file = request.FILES.get("image")
+        if not image_file:
+            return APIResponse.error("请选择要上传的图片", code=status.HTTP_400_BAD_REQUEST)
+
+        sort_order = int(request.POST.get("sort_order", 0))
+        description = request.POST.get("description", "").strip()
+
+        img = EmbossingPlateImage.objects.create(
+            embossing_plate=plate,
+            image=image_file,
+            sort_order=sort_order,
+            description=description,
+        )
+        serializer = EmbossingPlateImageSerializer(img)
+        return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["delete"], url_path=r"images/(?P<image_id>\d+)")
+    def delete_image(self, request, pk=None, image_id=None):
+        """删除压凸版的指定图片"""
+        try:
+            img = EmbossingPlateImage.objects.get(pk=image_id, embossing_plate_id=pk)
+            img.image.delete(save=False)  # 删除物理文件
+            img.delete()
+            return APIResponse.success(message="图片已删除")
+        except EmbossingPlateImage.DoesNotExist:
+            return APIResponse.error("图片不存在", code=status.HTTP_404_NOT_FOUND)
 
 
 @artwork_product_docs

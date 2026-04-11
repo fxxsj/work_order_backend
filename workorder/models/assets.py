@@ -341,6 +341,41 @@ class Die(models.Model):
         super().save(*args, **kwargs)
 
 
+class DieImage(TimeStampedModel, models.Model):
+    """刀模图片"""
+
+    die = models.ForeignKey(
+        Die,
+        on_delete=models.CASCADE,
+        related_name="images",
+        verbose_name="刀模",
+    )
+    image = models.ImageField(
+        "图片文件",
+        upload_to="die_images/",
+        help_text="支持 JPG、PNG、WebP 等常见图片格式",
+    )
+    sort_order = models.IntegerField(
+        "排序", default=0, help_text="数值越小排越前"
+    )
+    description = models.CharField(
+        "描述", max_length=200, blank=True,
+        help_text="如：正面、背面、线刀图等",
+    )
+
+    class Meta:
+        verbose_name = "刀模图片"
+        verbose_name_plural = "刀模图片"
+        ordering = ["die", "sort_order"]
+        indexes = [
+            models.Index(fields=["die"], name="die_image_die_idx"),
+        ]
+
+    def __str__(self):
+        desc = self.description or "图片"
+        return f"{self.die.code} - {desc}"
+
+
 class DieProduct(models.Model):
     """刀模产品关联"""
 
@@ -469,6 +504,41 @@ class FoilingPlate(TimeStampedModel, models.Model):
         super().save(*args, **kwargs)
 
 
+class FoilingPlateImage(TimeStampedModel, models.Model):
+    """烫金版图片"""
+
+    foiling_plate = models.ForeignKey(
+        FoilingPlate,
+        on_delete=models.CASCADE,
+        related_name="images",
+        verbose_name="烫金版",
+    )
+    image = models.ImageField(
+        "图片文件",
+        upload_to="foiling_plate_images/",
+        help_text="支持 JPG、PNG、WebP 等常见图片格式",
+    )
+    sort_order = models.IntegerField(
+        "排序", default=0, help_text="数值越小排越前"
+    )
+    description = models.CharField(
+        "描述", max_length=200, blank=True,
+        help_text="如：正面、背面、烫金效果等",
+    )
+
+    class Meta:
+        verbose_name = "烫金版图片"
+        verbose_name_plural = "烫金版图片"
+        ordering = ["foiling_plate", "sort_order"]
+        indexes = [
+            models.Index(fields=["foiling_plate"], name="foiling_plate_image_idx"),
+        ]
+
+    def __str__(self):
+        desc = self.description or "图片"
+        return f"{self.foiling_plate.code} - {desc}"
+
+
 class FoilingPlateProduct(models.Model):
     """烫金版产品关联"""
 
@@ -574,6 +644,41 @@ class EmbossingPlate(TimeStampedModel, models.Model):
         if not self.code:
             self.code = self.generate_code()
         super().save(*args, **kwargs)
+
+
+class EmbossingPlateImage(TimeStampedModel, models.Model):
+    """压凸版图片"""
+
+    embossing_plate = models.ForeignKey(
+        EmbossingPlate,
+        on_delete=models.CASCADE,
+        related_name="images",
+        verbose_name="压凸版",
+    )
+    image = models.ImageField(
+        "图片文件",
+        upload_to="embossing_plate_images/",
+        help_text="支持 JPG、PNG、WebP 等常见图片格式",
+    )
+    sort_order = models.IntegerField(
+        "排序", default=0, help_text="数值越小排越前"
+    )
+    description = models.CharField(
+        "描述", max_length=200, blank=True,
+        help_text="如：正面、背面、压凸效果等",
+    )
+
+    class Meta:
+        verbose_name = "压凸版图片"
+        verbose_name_plural = "压凸版图片"
+        ordering = ["embossing_plate", "sort_order"]
+        indexes = [
+            models.Index(fields=["embossing_plate"], name="embossing_plate_image_idx"),
+        ]
+
+    def __str__(self):
+        desc = self.description or "图片"
+        return f"{self.embossing_plate.code} - {desc}"
 
 
 class EmbossingPlateProduct(models.Model):
