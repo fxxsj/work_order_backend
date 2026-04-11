@@ -55,111 +55,75 @@ def update_cutting_task_on_material_status_change(sender, instance, created, **k
                 # )
 
 
-@receiver(pre_save, sender=Artwork)
-def cache_artwork_confirmation(sender, instance, **kwargs):
-    """保存前缓存图稿确认状态"""
-    if instance.pk:
-        try:
-            old_instance = Artwork.objects.get(pk=instance.pk)
-            instance._previous_confirmed = old_instance.confirmed
-        except Artwork.DoesNotExist:
-            pass
+def register_asset_confirmation_handlers(model_class, asset_kwarg_name):
+    """
+    通用函数，为指定的资产模型注册确认信号处理程序。
+
+    此函数在内部定义并连接信号处理器，以确保每个模型都有唯一的处理器函数，
+    避免在循环中注册时发生函数覆盖。
+
+    Args:
+        model_class: 资产的模型类 (e.g., Artwork).
+        asset_kwarg_name (str): 在调用 _complete_plate_tasks 时用作关键字参数的名称
+                               (e.g., 'artwork').
+    """
+
+    def cache_confirmation_status(sender, instance, **kwargs):
+        """(通用) 保存前缓存资产的 'confirmed' 状态。"""
+        if instance.pk:
+            try:
+                # 从数据库获取旧实例以比较状态
+                old_instance = sender.objects.get(pk=instance.pk)
+                instance._previous_confirmed = old_instance.confirmed
+            except sender.DoesNotExist:
+                # 如果对象不存在（例如，在一个事务中被删除后又重新创建），则没有旧状态
+                instance._previous_confirmed = False
+        else:
+            # 新建实例没有旧状态
+            instance._previous_confirmed = False
+
+    def update_tasks_on_confirmation(sender, instance, created, **kwargs):
+        """(通用) 当 'confirmed' 状态从 False 变为 True 时，自动更新相关任务。"""
+        if created:
+            return
+
+        old_confirmed = getattr(instance, "_previous_confirmed", False)
+
+        # 只有当状态从 '未确认' (False) 变为 '已确认' (True) 时才执行
+        if instance.confirmed and not old_confirmed:
+            transaction.on_commit(
+                lambda: _complete_plate_tasks(**{asset_kwarg_name: instance})
+            )
+
+    # 使用唯一的 dispatch_uid 连接信号，以防止重复注册或信号处理函数被覆盖
+    pre_save.connect(
+        cache_confirmation_status,
+        sender=model_class,
+        weak=False,
+        dispatch_uid=f"cache_confirmation_status_for_{model_class.__name__}",
+    )
+    post_save.connect(
+        update_tasks_on_confirmation,
+        sender=model_class,
+        weak=False,
+        dispatch_uid=f"update_tasks_on_confirmation_for_{model_class.__name__}",
+    )
 
 
-@receiver(post_save, sender=Artwork)
-def update_plate_making_task_on_artwork_confirmation(sender, instance, created, **kwargs):
-    """图稿确认时，自动更新相关制版任务的完成数量"""
-    # 只处理确认状态变化
-    if created:
-        return
-    
-    # 检查确认状态是否真的变化了（从False变为True）
-    old_confirmed = getattr(instance, "_previous_confirmed", False)
-    if old_confirmed == instance.confirmed:
-        # 状态未变化，不处理
-        return
-    
-    # 检查图稿是否已确认
-    if instance.confirmed:
-        transaction.on_commit(lambda: _complete_plate_tasks(artwork=instance))
+# --- 信号注册 ---
 
+# 定义需要应用此逻辑的资产模型及其在 _complete_plate_tasks 中的关键字参数名
+ASSET_MODELS_TO_REGISTER = {
+    Artwork: "artwork",
+    Die: "die",
+    FoilingPlate: "foiling_plate",
+    EmbossingPlate: "embossing_plate",
+}
 
-@receiver(pre_save, sender=Die)
-def cache_die_confirmation(sender, instance, **kwargs):
-    """保存前缓存刀模确认状态"""
-    if instance.pk:
-        try:
-            old_instance = Die.objects.get(pk=instance.pk)
-            instance._previous_confirmed = old_instance.confirmed
-        except Die.DoesNotExist:
-            pass
+# 循环为每个资产模型注册信号处理器
+for model, kwarg_name in ASSET_MODELS_TO_REGISTER.items():
+    register_asset_confirmation_handlers(model, kwarg_name)
 
-
-@receiver(post_save, sender=Die)
-def update_plate_making_task_on_die_confirmation(sender, instance, created, **kwargs):
-    """刀模确认时，自动更新相关制版任务的完成数量"""
-    if created:
-        return
-    
-    # 检查确认状态是否真的变化了
-    old_confirmed = getattr(instance, "_previous_confirmed", False)
-    if old_confirmed == instance.confirmed:
-        return
-    
-    if instance.confirmed:
-        transaction.on_commit(lambda: _complete_plate_tasks(die=instance))
-
-
-@receiver(pre_save, sender=FoilingPlate)
-def cache_foiling_plate_confirmation(sender, instance, **kwargs):
-    """保存前缓存烫金版确认状态"""
-    if instance.pk:
-        try:
-            old_instance = FoilingPlate.objects.get(pk=instance.pk)
-            instance._previous_confirmed = old_instance.confirmed
-        except FoilingPlate.DoesNotExist:
-            pass
-
-
-@receiver(post_save, sender=FoilingPlate)
-def update_plate_making_task_on_foiling_plate_confirmation(sender, instance, created, **kwargs):
-    """烫金版确认时，自动更新相关制版任务的完成数量"""
-    if created:
-        return
-    
-    # 检查确认状态是否真的变化了
-    old_confirmed = getattr(instance, "_previous_confirmed", False)
-    if old_confirmed == instance.confirmed:
-        return
-    
-    if instance.confirmed:
-        transaction.on_commit(lambda: _complete_plate_tasks(foiling_plate=instance))
-
-
-@receiver(pre_save, sender=EmbossingPlate)
-def cache_embossing_plate_confirmation(sender, instance, **kwargs):
-    """保存前缓存压凸版确认状态"""
-    if instance.pk:
-        try:
-            old_instance = EmbossingPlate.objects.get(pk=instance.pk)
-            instance._previous_confirmed = old_instance.confirmed
-        except EmbossingPlate.DoesNotExist:
-            pass
-
-
-@receiver(post_save, sender=EmbossingPlate)
-def update_plate_making_task_on_embossing_plate_confirmation(sender, instance, created, **kwargs):
-    """压凸版确认时，自动更新相关制版任务的完成数量"""
-    if created:
-        return
-    
-    # 检查确认状态是否真的变化了
-    old_confirmed = getattr(instance, "_previous_confirmed", False)
-    if old_confirmed == instance.confirmed:
-        return
-    
-    if instance.confirmed:
-        transaction.on_commit(lambda: _complete_plate_tasks(embossing_plate=instance))
 
 
 def _update_cutting_tasks(instance):
