@@ -165,6 +165,41 @@ class Artwork(TimeStampedModel, models.Model):
         super().save(*args, **kwargs)
 
 
+class ArtworkImage(TimeStampedModel, models.Model):
+    """图稿图片"""
+
+    artwork = models.ForeignKey(
+        Artwork,
+        on_delete=models.CASCADE,
+        related_name="images",
+        verbose_name="图稿",
+    )
+    image = models.ImageField(
+        "图片文件",
+        upload_to="artwork_images/",
+        help_text="支持 JPG、PNG、WebP 等常见图片格式",
+    )
+    sort_order = models.IntegerField(
+        "排序", default=0, help_text="数值越小排越前"
+    )
+    description = models.CharField(
+        "描述", max_length=200, blank=True,
+        help_text="如：正面、背面、拼版效果等",
+    )
+
+    class Meta:
+        verbose_name = "图稿图片"
+        verbose_name_plural = "图稿图片"
+        ordering = ["artwork", "sort_order"]
+        indexes = [
+            models.Index(fields=["artwork"], name="artwork_image_artwork_idx"),
+        ]
+
+    def __str__(self):
+        desc = self.description or "图片"
+        return f"{self.artwork.get_full_code()} - {desc}"
+
+
 class ArtworkProduct(models.Model):
     """图稿产品关联（包含拼版数量）"""
 

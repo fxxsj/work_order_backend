@@ -10,6 +10,7 @@ from rest_framework import serializers
 
 from ..models.assets import (
     Artwork,
+    ArtworkImage,
     ArtworkProduct,
     Die,
     DieProduct,
@@ -31,6 +32,15 @@ class ArtworkProductSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class ArtworkImageSerializer(serializers.ModelSerializer):
+    """图稿图片序列化器"""
+
+    class Meta:
+        model = ArtworkImage
+        fields = ["id", "image", "sort_order", "description", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
 class ArtworkSerializer(serializers.ModelSerializer):
     """图稿序列化器
 
@@ -38,6 +48,8 @@ class ArtworkSerializer(serializers.ModelSerializer):
     """
 
     products = ArtworkProductSerializer(many=True, read_only=True)
+    # 新增 - 图稿图片列表
+    images = ArtworkImageSerializer(many=True, read_only=True)
     products_data = serializers.ListField(
         child=serializers.DictField(),
         write_only=True,

@@ -25,6 +25,7 @@ from workorder.docs.assets import (
 
 from ..models.assets import (
     Artwork,
+    ArtworkImage,
     ArtworkProduct,
     Die,
     DieProduct,
@@ -35,6 +36,7 @@ from ..models.assets import (
 )
 from ..models.core import WorkOrder, WorkOrderProcess, WorkOrderTask
 from ..serializers.assets import (
+    ArtworkImageSerializer,
     ArtworkProductSerializer,
     ArtworkSerializer,
     DieProductSerializer,
@@ -168,11 +170,50 @@ class ArtworkViewSet(PlateMakingConfirmMixin, BaseViewSet):
         serializer = self.get_serializer(new_artwork)
         return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=["get"])
+    def images(self, request, pk=None):
+        """获取图稿的所有图片，按排序返回"""
+        artwork = self.get_object()
+        images = artwork.images.all().order_by("sort_order")
+        serializer = ArtworkImageSerializer(images, many=True)
+        return APIResponse.success(data=serializer.data)
+
+    @action(detail=True, methods=["post"])
+    def upload_image(self, request, pk=None):
+        """上传图片到指定图稿"""
+        artwork = self.get_object()
+        image_file = request.FILES.get("image")
+        if not image_file:
+            return APIResponse.error("请选择要上传的图片", code=status.HTTP_400_BAD_REQUEST)
+
+        sort_order = int(request.POST.get("sort_order", 0))
+        description = request.POST.get("description", "").strip()
+
+        img = ArtworkImage.objects.create(
+            artwork=artwork,
+            image=image_file,
+            sort_order=sort_order,
+            description=description,
+        )
+        serializer = ArtworkImageSerializer(img)
+        return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["delete"], url_path=r"images/(?P<image_id>\d+)")
+    def delete_image(self, request, pk=None, image_id=None):
+        """删除图稿的指定图片"""
+        try:
+            img = ArtworkImage.objects.get(pk=image_id, artwork_id=pk)
+            img.image.delete(save=False)  # 删除物理文件
+            img.delete()
+            return APIResponse.success(message="图片已删除")
+        except ArtworkImage.DoesNotExist:
+            return APIResponse.error("图片不存在", code=status.HTTP_404_NOT_FOUND)
+
     def get_queryset(self):
         """优化查询性能：预加载关联数据"""
         queryset = super().get_queryset()
         return queryset.prefetch_related(
-            "products__product", "dies", "foiling_plates", "embossing_plates"
+            "products__product", "dies", "foiling_plates", "embossing_plates", "images"
         ).select_related("confirmed_by")
 
 
