@@ -47,8 +47,6 @@ def get_request_context():
     return {}
 
 
-def get_client_ip(request):
-    return middleware_get_client_ip(request)
 
 
 def capture_changes(instance, created=False):

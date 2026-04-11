@@ -736,7 +736,7 @@ class StatementViewSet(viewsets.ModelViewSet):
             start_date = date(int(year), int(month), 1)
             last_day = monthrange(int(year), int(month))[1]
             end_date = date(int(year), int(month), last_day)
-        except:
+        except Exception:
             return APIResponse.error("周期格式错误，应为 YYYY-MM", code=status.HTTP_400_BAD_REQUEST)
 
         statement_type = None

@@ -474,7 +474,7 @@ class WorkOrderProductSerializer(serializers.ModelSerializer):
                 ).first()
                 if artwork_product:
                     return artwork_product.imposition_quantity
-            except:
+            except Exception:
                 continue
 
         # 如果找不到，返回默认值1

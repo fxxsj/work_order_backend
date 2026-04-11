@@ -84,7 +84,7 @@ class TestDataFactory:
                     codename='add_workorder'
                 )
                 user.user_permissions.add(view_perm, change_perm, add_perm)
-            except:
+            except Exception:
                 # 如果权限不存在（例如在测试环境中），忽略
                 pass
 

@@ -54,7 +54,7 @@ class RequestCaptureMiddleware(MiddlewareMixin):
         _thread_locals.request = request
 
         # 存储客户端IP
-        request.audit_log_ip = self.get_client_ip(request)
+        request.audit_log_ip = get_client_ip(request)
 
         # 存储用户代理
         request.audit_log_user_agent = request.META.get('HTTP_USER_AGENT', '')
@@ -66,24 +66,6 @@ class RequestCaptureMiddleware(MiddlewareMixin):
         if hasattr(_thread_locals, 'request'):
             delattr(_thread_locals, 'request')
         return response
-
-    @staticmethod
-    def get_client_ip(request):
-        """
-        获取客户端IP地址
-
-        Args:
-            request: HttpRequest 对象
-
-        Returns:
-            str: IP地址
-        """
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
 
 
 def get_current_request():
