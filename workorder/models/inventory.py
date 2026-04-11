@@ -106,9 +106,10 @@ class ProductStock(models.Model):
 
     def reserve(self, quantity):
         """预留库存"""
-        if self.quantity >= quantity:
-            self.quantity -= quantity
-            self.status = "reserved"
+        if self.available_quantity >= quantity:
+            self.reserved_quantity += quantity
+            if self.reserved_quantity >= self.quantity:
+                self.status = "reserved"
             self.save()
             return True
         return False

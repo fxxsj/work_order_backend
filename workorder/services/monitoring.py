@@ -296,7 +296,7 @@ class BusinessMetrics:
             with connection.cursor() as cursor:
                 cursor.execute("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")
                 db_connections = cursor.fetchone()[0]
-        except:
+        except Exception:
             db_connections = 0
         
         # 系统资源使用情况
@@ -323,7 +323,7 @@ class BusinessMetrics:
                 'hits': info.get('keyspace_hits', 0),
                 'misses': info.get('keyspace_misses', 0)
             })
-        except:
+        except Exception:
             pass
         
         return {

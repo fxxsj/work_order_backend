@@ -287,7 +287,7 @@ class SystemMonitoringViewSet(viewsets.GenericViewSet):
                 "packets_sent": network.packets_sent,
                 "packets_recv": network.packets_recv,
             }
-        except:
+        except Exception:
             network_stats = {}
 
         resource_data = {

@@ -18,14 +18,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # 安全配置 - 从环境变量读取
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("SECRET_KEY")
+SECRET_KEY = os.environ.get("SECRET_KEY", "")
 if not SECRET_KEY:
-    import warnings
-
-    warnings.warn(
-        "SECRET_KEY 环境变量未设置，使用不安全的默认值。请在 .env 文件中配置。"
-    )
-    SECRET_KEY = "django-insecure-fallback-key-for-development-only"
+    if DEBUG:
+        import warnings
+        warnings.warn("SECRET_KEY 未设置，使用临时随机值。请在 .env 文件中配置。")
+        import os
+        SECRET_KEY = os.urandom(32).hex()
+    else:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured("生产环境必须设置 SECRET_KEY 环境变量。")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "True") == "True"
