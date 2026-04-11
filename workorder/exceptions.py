@@ -32,6 +32,16 @@ class BusinessLogicError(APIException):
     default_code = 'business_logic_error'
 
 
+class InsufficientStockError(BusinessLogicError):
+    """
+    库存不足错误
+    """
+    default_detail = _('库存不足')
+    default_code = 'insufficient_stock'
+
+
+
+
 class PermissionDeniedError(APIException):
     """
     权限错误
