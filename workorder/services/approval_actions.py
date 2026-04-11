@@ -13,9 +13,8 @@ from ..models.multi_level_approval import (
     ApprovalEscalation,
     ApprovalStep,
     ApprovalWorkflow,
-    MultiLevelApprovalService,
-    UrgentOrderService,
 )
+from ..services import MultiLevelApprovalService, UrgentOrderService
 from ..services.smart_assignment import SmartAssignmentService
 
 

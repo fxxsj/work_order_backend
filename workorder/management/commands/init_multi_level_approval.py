@@ -60,7 +60,8 @@ class Command(BaseCommand):
 
     def _create_default_workflows(self):
         """创建默认审核工作流"""
-        from ..models.multi_level_approval import ApprovalWorkflow, MultiLevelApprovalService
+        from ..models.multi_level_approval import ApprovalWorkflow
+from ..services import MultiLevelApprovalService
         
         self.stdout.write("📋 创建默认审核工作流...")
         

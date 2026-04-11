@@ -68,8 +68,6 @@ from .multi_level_approval import (
     ApprovalRule,
     ApprovalStep,
     ApprovalWorkflow,
-    MultiLevelApprovalService,
-    UrgentOrderService,
 )
 from .products import (
     Product,
@@ -131,8 +129,6 @@ __all__ = [
     "ApprovalStep",
     "ApprovalRule",
     "ApprovalEscalation",
-    "MultiLevelApprovalService",
-    "UrgentOrderService",
     # 财务模型
     "CostCenter",
     "CostItem",

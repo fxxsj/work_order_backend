@@ -13,9 +13,8 @@ from ..models.multi_level_approval import (
     ApprovalRule,
     ApprovalStep,
     ApprovalWorkflow,
-    MultiLevelApprovalService,
-    UrgentOrderService,
 )
+from ..services import MultiLevelApprovalService, UrgentOrderService
 
 
 class ApprovalWorkflowSerializer(serializers.ModelSerializer):
