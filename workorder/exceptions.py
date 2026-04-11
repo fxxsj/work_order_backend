@@ -1,7 +1,12 @@
 """
-自定义异常类
+自定义异常类（视图层）
 
-定义应用程序特定的异常类型，提供更清晰的错误处理。
+这些异常继承自 rest_framework.exceptions.APIException，
+由 DRF 的全局异常处理器（custom_exception_handler）自动转换为 HTTP 响应。
+
+注意：本模块中的异常仅用于视图层（views/）直接抛出的场景。
+服务层（services/、policies/）应统一使用 ServiceError
+（参见 services/service_errors.py），不要在服务层混用两套异常体系。
 """
 
 from rest_framework.exceptions import APIException

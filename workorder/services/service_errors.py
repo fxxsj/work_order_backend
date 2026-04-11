@@ -1,8 +1,18 @@
 """
 服务层异常
 
-用于在 services 层向 views 层传递可控的错误信息与 HTTP 状态码，
-以保持 API 响应结构不变，同时将业务逻辑下沉到服务层。
+ServiceError 是服务层的标准异常，所有 services/ 和 policies/ 层的错误
+均应使用 ServiceError 抛出，由视图层统一捕获并转换为 HTTP 响应。
+
+用法::
+
+    raise ServiceError("操作员不存在", code=404)
+    raise ServiceError("库存不足", code=422, data={"current": 10, "required": 20})
+
+注意事项：
+- 服务层（services/、policies/）应统一使用 ServiceError
+- exceptions.py 中的 APIException 子类仅用于视图层（views/）直接抛出的场景
+- 不要在服务层混用两套异常体系，以保持代码风格一致
 """
 
 from __future__ import annotations

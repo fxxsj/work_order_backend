@@ -13,7 +13,7 @@ import logging
 from ..models.core import WorkOrderTask
 from ..models.base import Department
 from ..models.system import Notification
-from ..exceptions import BusinessLogicError, PermissionDeniedError, TaskConflictError
+from ..services.service_errors import ServiceError
 from ..permission_utils import PermissionCache
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class TaskAssignmentService:
             bool: 未达上限返回True
 
         Raises:
-            BusinessLogicError: 已达上限时抛出
+            ServiceError: 已达上限时抛出（code=422）
         """
         if max_tasks is None:
             max_tasks = TaskAssignmentService.DEFAULT_MAX_TASKS_PER_OPERATOR
@@ -54,9 +54,10 @@ class TaskAssignmentService:
         ).count()
 
         if active_task_count >= max_tasks:
-            raise BusinessLogicError(
+            raise ServiceError(
                 f"该操作员已有 {active_task_count} 个进行中任务，已达上限，"
-                f"请先完成部分任务后再分配。"
+                f"请先完成部分任务后再分配。",
+                code=422,
             )
 
         return True
@@ -78,7 +79,7 @@ class TaskAssignmentService:
             bool: 有权限返回True
 
         Raises:
-            PermissionDeniedError: 无权限时抛出
+            ServiceError: 无权限时抛出（code=403）
         """
         # 超级管理员
         if user.is_superuser:
@@ -96,8 +97,9 @@ class TaskAssignmentService:
                 if user.has_perm('workorder.change_workorder'):
                     return True
 
-        raise PermissionDeniedError(
-            "您没有权限分配此任务。只有任务所属部门的主管或施工单创建人可以分配。"
+        raise ServiceError(
+            "您没有权限分配此任务。只有任务所属部门的主管或施工单创建人可以分配。",
+            code=403,
         )
 
     @staticmethod
@@ -112,15 +114,16 @@ class TaskAssignmentService:
             bool: 属于部门返回True
 
         Raises:
-            BusinessLogicError: 不属于部门时抛出
+            ServiceError: 不属于部门时抛出（code=422）
         """
         if not operator or not operator.is_active:
-            raise BusinessLogicError("指定的操作员不存在或未激活")
+            raise ServiceError("指定的操作员不存在或未激活", code=422)
 
         if not PermissionCache.is_user_in_department(operator, department.id):
-            raise BusinessLogicError(
+            raise ServiceError(
                 f"操作员 {operator.username} 不属于部门 {department.name}，"
-                f"无法分配该部门的任务"
+                f"无法分配该部门的任务",
+                code=422,
             )
 
         return True
@@ -141,27 +144,31 @@ class TaskAssignmentService:
             bool: 可以分配返回True
 
         Raises:
-            BusinessLogicError: 不可分配时抛出
+            ServiceError: 不可分配时抛出（code=422）
         """
         if task.status == 'draft':
-            raise BusinessLogicError(
-                "草稿状态的任务不能分配，请先等待施工单审核通过"
+            raise ServiceError(
+                "草稿状态的任务不能分配，请先等待施工单审核通过",
+                code=422,
             )
 
         if task.status == 'completed':
-            raise BusinessLogicError(
-                "已完成的任务不能重新分配"
+            raise ServiceError(
+                "已完成的任务不能重新分配",
+                code=422,
             )
 
         if task.status == 'cancelled':
-            raise BusinessLogicError(
-                "已取消的任务不能分配"
+            raise ServiceError(
+                "已取消的任务不能分配",
+                code=422,
             )
 
         # 任务必须有分配的部门
         if not task.assigned_department:
-            raise BusinessLogicError(
-                "任务尚未分配到部门，无法分配操作员"
+            raise ServiceError(
+                "任务尚未分配到部门，无法分配操作员",
+                code=422,
             )
 
         return True
@@ -191,8 +198,7 @@ class TaskAssignmentService:
             Dict: 包含更新后任务信息的字典
 
         Raises:
-            PermissionDeniedError: 权限不足
-            BusinessLogicError: 业务规则不满足
+            ServiceError: 权限不足（code=403）、业务规则不满足（code=422）
             WorkOrderTask.DoesNotExist: 任务不存在
         """
         from django.contrib.auth.models import User
@@ -201,13 +207,13 @@ class TaskAssignmentService:
         try:
             task = WorkOrderTask.objects.select_for_update().get(id=task_id)
         except WorkOrderTask.DoesNotExist:
-            raise BusinessLogicError(f"任务ID {task_id} 不存在")
+            raise ServiceError(f"任务ID {task_id} 不存在", code=422)
 
         # 加载操作员
         try:
             operator = User.objects.get(id=operator_id)
         except User.DoesNotExist:
-            raise BusinessLogicError(f"操作员ID {operator_id} 不存在")
+            raise ServiceError(f"操作员ID {operator_id} 不存在", code=422)
 
         # 验证分配权限
         TaskAssignmentService.validate_supervisor_permission(assigned_by, task)
@@ -345,7 +351,7 @@ class TaskAssignmentService:
             Dict: 包含更新后任务信息的字典
 
         Raises:
-            BusinessLogicError: 业务规则不满足
+            ServiceError: 业务规则不满足（code=422 或 code=409）
             WorkOrderTask.DoesNotExist: 任务不存在
         """
         from django.contrib.auth.models import User
@@ -354,17 +360,19 @@ class TaskAssignmentService:
         try:
             task = WorkOrderTask.objects.select_for_update().get(id=task_id)
         except WorkOrderTask.DoesNotExist:
-            raise BusinessLogicError(f"任务ID {task_id} 不存在")
+            raise ServiceError(f"任务ID {task_id} 不存在", code=422)
 
         # 验证操作员属于任务部门
         if not task.assigned_department:
-            raise BusinessLogicError(
-                "该任务尚未分配到部门，无法认领"
+            raise ServiceError(
+                "该任务尚未分配到部门，无法认领",
+                code=422,
             )
 
         if not PermissionCache.is_user_in_department(operator, task.assigned_department.id):
-            raise BusinessLogicError(
-                f"您不属于部门 {task.assigned_department.name}，无法认领该任务"
+            raise ServiceError(
+                f"您不属于部门 {task.assigned_department.name}，无法认领该任务",
+                code=422,
             )
 
         # 验证操作员任务容量（复用分配服务的验证方法）
@@ -372,18 +380,21 @@ class TaskAssignmentService:
 
         # 验证任务可认领性
         if task.status == 'draft':
-            raise BusinessLogicError(
-                "草稿状态的任务不能认领，请先等待施工单审核通过"
+            raise ServiceError(
+                "草稿状态的任务不能认领，请先等待施工单审核通过",
+                code=422,
             )
 
         if task.status == 'completed':
-            raise BusinessLogicError(
-                "已完成的任务不能认领"
+            raise ServiceError(
+                "已完成的任务不能认领",
+                code=422,
             )
 
         if task.status == 'cancelled':
-            raise BusinessLogicError(
-                "已取消的任务不能认领"
+            raise ServiceError(
+                "已取消的任务不能认领",
+                code=422,
             )
 
         # 检查任务是否已被其他操作员认领
@@ -403,10 +414,13 @@ class TaskAssignmentService:
                 }
 
             # 被其他人认领 - 使用特定的冲突错误
-            raise TaskConflictError(
-                detail=f"该任务已被 {task.assigned_operator.username} 认领，无法重复认领",
-                current_owner=task.assigned_operator.username,
-                task_id=task.id
+            raise ServiceError(
+                f"该任务已被 {task.assigned_operator.username} 认领，无法重复认领",
+                code=409,
+                data={
+                    'current_owner': task.assigned_operator.username,
+                    'task_id': task.id,
+                },
             )
 
         # 执行认领
@@ -484,22 +498,20 @@ class TaskAssignmentService:
         Returns:
             Dict: 包含重试建议的字典
         """
-        if isinstance(error, TaskConflictError):
-            return {
-                'can_retry': True,
-                'suggestion': '刷新页面后重试',
-                'current_owner': getattr(error, 'current_owner', None),
-                'action_text': '刷新页面'
-            }
-
-        if isinstance(error, PermissionDeniedError):
-            return {
-                'can_retry': False,
-                'suggestion': '您没有权限执行此操作',
-                'action_text': '联系管理员'
-            }
-
-        if isinstance(error, BusinessLogicError):
+        if isinstance(error, ServiceError):
+            if error.code == 409:
+                return {
+                    'can_retry': True,
+                    'suggestion': '刷新页面后重试',
+                    'current_owner': (error.data or {}).get('current_owner'),
+                    'action_text': '刷新页面'
+                }
+            if error.code == 403:
+                return {
+                    'can_retry': False,
+                    'suggestion': '您没有权限执行此操作',
+                    'action_text': '联系管理员'
+                }
             return {
                 'can_retry': False,
                 'suggestion': str(error),

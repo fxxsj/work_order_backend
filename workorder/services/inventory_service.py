@@ -5,7 +5,7 @@
 """
 
 from django.db import transaction
-from workorder.exceptions import InsufficientStockError, BusinessLogicError
+from workorder.services.service_errors import ServiceError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class InventoryService:
             bool: 操作是否成功
 
         Raises:
-            BusinessLogicError: 库存更新失败
+            ServiceError: 库存更新失败（code=422）
         """
         try:
             if quantity <= 0:
@@ -54,7 +54,7 @@ class InventoryService:
                 f"库存增加失败: {item.__class__.__name__} - {item.name}, "
                 f"数量: {quantity}, 错误: {str(e)}"
             )
-            raise BusinessLogicError(f"库存增加失败: {str(e)}")
+            raise ServiceError(f"库存增加失败: {str(e)}", code=422)
 
     @staticmethod
     @transaction.atomic
@@ -72,8 +72,7 @@ class InventoryService:
             bool: 操作是否成功
 
         Raises:
-            InsufficientStockError: 库存不足
-            BusinessLogicError: 其他业务错误
+            ServiceError: 库存不足或其他业务错误（code=422）
         """
         try:
             if quantity <= 0:
@@ -81,9 +80,10 @@ class InventoryService:
 
             # 检查库存是否充足
             if item.current_stock < quantity:
-                raise InsufficientStockError(
+                raise ServiceError(
                     f"{item.name} 库存不足。"
-                    f"当前库存: {item.current_stock}, 需要: {quantity}"
+                    f"当前库存: {item.current_stock}, 需要: {quantity}",
+                    code=422,
                 )
 
             # 更新库存
@@ -99,7 +99,7 @@ class InventoryService:
 
             return True
 
-        except InsufficientStockError:
+        except ServiceError:
             # 重新抛出业务异常
             raise
         except Exception as e:
@@ -107,7 +107,7 @@ class InventoryService:
                 f"库存减少失败: {item.__class__.__name__} - {item.name}, "
                 f"数量: {quantity}, 错误: {str(e)}"
             )
-            raise BusinessLogicError(f"库存减少失败: {str(e)}")
+            raise ServiceError(f"库存减少失败: {str(e)}", code=422)
 
     @staticmethod
     def get_stock_status(item):
