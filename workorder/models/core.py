@@ -446,65 +446,15 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
 
     @classmethod
     def generate_order_number(cls):
-        """生成施工单号：格式 yyyymm + 3位自增序号
-
-        使用数据库事务和行锁确保并发安全，避免生成重复单号
-        """
-        from django.core.cache import cache
-        from django.db import DatabaseError
-
-        now = datetime.now()
-        prefix = now.strftime("%Y%m")
-        cache_key = f"order_number_{prefix}"
-
-        # 使用数据库事务和行锁确保并发安全
-        # 每次都从数据库获取最新序号，确保在高并发情况下也不会生成重复单号
-        max_retries = 3  # 最大重试次数
-        retry_count = 0
-
-        while retry_count < max_retries:
-            try:
-                with transaction.atomic():
-                    # 使用 select_for_update() 锁定查询结果，防止并发读取
-                    last_order = (
-                        cls.objects.filter(order_number__startswith=prefix)
-                        .order_by("-order_number")
-                        .select_for_update()
-                        .first()
-                    )
-
-                    if last_order:
-                        # 提取序号部分
-                        last_number = int(last_order.order_number[6:])
-                    else:
-                        # 当月第一单
-                        last_number = 0
-
-                    # 生成新序号
-                    new_number = last_number + 1
-                    order_number = f"{prefix}{new_number:03d}"
-
-                    # 更新缓存以减少数据库查询（缓存仅作为优化，不依赖它保证并发安全）
-                    cache.set(cache_key, new_number, 1800)
-
-                    return order_number
-
-            except DatabaseError as e:
-                # 数据库错误（如死锁），进行重试
-                retry_count += 1
-                if retry_count >= max_retries:
-                    logger.error(f"生成施工单号失败，已重试{max_retries}次: {str(e)}")
-                    raise
-                logger.warning(
-                    f"生成施工单号时发生数据库错误，正在重试 ({retry_count}/{max_retries}): {str(e)}"
-                )
-                continue
-            except Exception as e:
-                logger.error(f"生成施工单号时发生未知错误: {str(e)}")
-                raise
-
-        # 理论上不会到达这里
-        raise Exception("生成施工单号失败：超过最大重试次数")
+        """生成施工单号：格式 yyyymm + 3位自增序号"""
+        from workorder.utils import generate_order_number
+        return generate_order_number(
+            model_class=cls,
+            field_name="order_number",
+            prefix="",
+            date_format="%Y%m",
+            sequence_length=3,
+        )
 
     def save(self, *args, **kwargs):
         """保存时自动生成施工单号"""

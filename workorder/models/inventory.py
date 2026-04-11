@@ -126,24 +126,15 @@ class StockIn(models.Model):
         ("cancelled", "已取消"),
     ]
 
-    @staticmethod
-    def generate_order_number():
+    @classmethod
+    def generate_order_number(cls):
         """生成入库单号：RK + yyyymmdd + 4位序号"""
-        today = timezone.now().strftime("%Y%m%d")
-        prefix = f"RK{today}"
-        with transaction.atomic():
-            latest = (
-                StockIn.objects.filter(order_number__startswith=prefix)
-                .select_for_update()
-                .order_by("-order_number")
-                .first()
-            )
-            if latest:
-                last_number = int(latest.order_number[-4:])
-                new_number = last_number + 1
-            else:
-                new_number = 1
-            return f"{prefix}{new_number:04d}"
+        from workorder.utils import generate_order_number
+        return generate_order_number(
+            model_class=cls,
+            field_name="order_number",
+            prefix="RK",
+        )
 
     order_number = models.CharField(
         "入库单号", max_length=50, unique=True, editable=False
@@ -222,24 +213,15 @@ class StockOut(models.Model):
         ("cancelled", "已取消"),
     ]
 
-    @staticmethod
-    def generate_order_number():
+    @classmethod
+    def generate_order_number(cls):
         """生成出库单号：CK + yyyymmdd + 4位序号"""
-        today = timezone.now().strftime("%Y%m%d")
-        prefix = f"CK{today}"
-        with transaction.atomic():
-            latest = (
-                StockOut.objects.filter(order_number__startswith=prefix)
-                .select_for_update()
-                .order_by("-order_number")
-                .first()
-            )
-            if latest:
-                last_number = int(latest.order_number[-4:])
-                new_number = last_number + 1
-            else:
-                new_number = 1
-            return f"{prefix}{new_number:04d}"
+        from workorder.utils import generate_order_number
+        return generate_order_number(
+            model_class=cls,
+            field_name="order_number",
+            prefix="CK",
+        )
 
     order_number = models.CharField(
         "出库单号", max_length=50, unique=True, editable=False
@@ -312,24 +294,15 @@ class DeliveryOrder(TimeStampedModel, models.Model):
         ("returned", "已退货"),
     ]
 
-    @staticmethod
-    def generate_order_number():
+    @classmethod
+    def generate_order_number(cls):
         """生成发货单号：FH + yyyymmdd + 4位序号"""
-        today = timezone.now().strftime("%Y%m%d")
-        prefix = f"FH{today}"
-        with transaction.atomic():
-            latest = (
-                DeliveryOrder.objects.filter(order_number__startswith=prefix)
-                .select_for_update()
-                .order_by("-order_number")
-                .first()
-            )
-            if latest:
-                last_number = int(latest.order_number[-4:])
-                new_number = last_number + 1
-            else:
-                new_number = 1
-            return f"{prefix}{new_number:04d}"
+        from workorder.utils import generate_order_number
+        return generate_order_number(
+            model_class=cls,
+            field_name="order_number",
+            prefix="FH",
+        )
 
     order_number = models.CharField(
         "发货单号", max_length=50, unique=True, editable=False
@@ -462,24 +435,15 @@ class QualityInspection(models.Model):
         ("conditional", "条件接收"),
     ]
 
-    @staticmethod
-    def generate_inspection_number():
+    @classmethod
+    def generate_inspection_number(cls):
         """生成质检单号：ZJ + yyyymmdd + 4位序号"""
-        today = timezone.now().strftime("%Y%m%d")
-        prefix = f"ZJ{today}"
-        with transaction.atomic():
-            latest = (
-                QualityInspection.objects.filter(inspection_number__startswith=prefix)
-                .select_for_update()
-                .order_by("-inspection_number")
-                .first()
-            )
-            if latest:
-                last_number = int(latest.inspection_number[-4:])
-                new_number = last_number + 1
-            else:
-                new_number = 1
-            return f"{prefix}{new_number:04d}"
+        from workorder.utils import generate_order_number
+        return generate_order_number(
+            model_class=cls,
+            field_name="inspection_number",
+            prefix="ZJ",
+        )
 
     inspection_number = models.CharField(
         "质检单号", max_length=50, unique=True, editable=False

@@ -32,27 +32,15 @@ class SalesOrder(TimeStampedModel, models.Model):
         ("paid", "已付款"),
     ]
 
-    @staticmethod
-    def generate_order_number():
-        """生成销售订单号：SO + yyyymmdd + 4位序号
-
-        使用事务和行级锁确保并发安全
-        """
-        today = timezone.now().strftime("%Y%m%d")
-        prefix = f"SO{today}"
-        with transaction.atomic():
-            latest = (
-                SalesOrder.objects.filter(order_number__startswith=prefix)
-                .select_for_update()
-                .order_by("-order_number")
-                .first()
-            )
-            if latest:
-                last_number = int(latest.order_number[-4:])
-                new_number = last_number + 1
-            else:
-                new_number = 1
-            return f"{prefix}{new_number:04d}"
+    @classmethod
+    def generate_order_number(cls):
+        """生成销售订单号：SO + yyyymmdd + 4位序号"""
+        from workorder.utils import generate_order_number
+        return generate_order_number(
+            model_class=cls,
+            field_name="order_number",
+            prefix="SO",
+        )
 
     order_number = models.CharField("销售订单号", max_length=50, unique=True)
     customer = models.ForeignKey(

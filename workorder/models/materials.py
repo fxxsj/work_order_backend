@@ -178,24 +178,15 @@ class PurchaseOrder(TimeStampedModel, models.Model):
         ("cancelled", "已取消"),
     ]
 
-    @staticmethod
-    def generate_order_number():
+    @classmethod
+    def generate_order_number(cls):
         """生成采购单号：PO + yyyymmdd + 4位序号"""
-        today = timezone.now().strftime("%Y%m%d")
-        prefix = f"PO{today}"
-        with transaction.atomic():
-            latest = (
-                PurchaseOrder.objects.filter(order_number__startswith=prefix)
-                .select_for_update()
-                .order_by("-order_number")
-                .first()
-            )
-            if latest:
-                last_number = int(latest.order_number[-4:])
-                new_number = last_number + 1
-            else:
-                new_number = 1
-            return f"{prefix}{new_number:04d}"
+        from workorder.utils import generate_order_number
+        return generate_order_number(
+            model_class=cls,
+            field_name="order_number",
+            prefix="PO",
+        )
 
     order_number = models.CharField("采购单号", max_length=50, unique=True)
     supplier = models.ForeignKey(

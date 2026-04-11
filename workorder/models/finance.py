@@ -217,24 +217,15 @@ class Invoice(TimeStampedModel, models.Model):
         ("refunded", "已红冲"),
     ]
 
-    @staticmethod
-    def generate_invoice_number():
+    @classmethod
+    def generate_invoice_number(cls):
         """生成发票号码：FP + yyyymmdd + 4位序号"""
-        today = timezone.now().strftime("%Y%m%d")
-        prefix = f"FP{today}"
-        with transaction.atomic():
-            latest = (
-                Invoice.objects.filter(invoice_number__startswith=prefix)
-                .select_for_update()
-                .order_by("-invoice_number")
-                .first()
-            )
-            if latest:
-                last_number = int(latest.invoice_number[-4:])
-                new_number = last_number + 1
-            else:
-                new_number = 1
-            return f"{prefix}{new_number:04d}"
+        from workorder.utils import generate_order_number
+        return generate_order_number(
+            model_class=cls,
+            field_name="invoice_number",
+            prefix="FP",
+        )
 
     invoice_number = models.CharField(
         "发票号码", max_length=50, unique=True, editable=False
@@ -353,24 +344,15 @@ class Payment(models.Model):
         ("acceptance", "承兑汇票"),
     ]
 
-    @staticmethod
-    def generate_payment_number():
+    @classmethod
+    def generate_payment_number(cls):
         """生成收款单号：SK + yyyymmdd + 4位序号"""
-        today = timezone.now().strftime("%Y%m%d")
-        prefix = f"SK{today}"
-        with transaction.atomic():
-            latest = (
-                Payment.objects.filter(payment_number__startswith=prefix)
-                .select_for_update()
-                .order_by("-payment_number")
-                .first()
-            )
-            if latest:
-                last_number = int(latest.payment_number[-4:])
-                new_number = last_number + 1
-            else:
-                new_number = 1
-            return f"{prefix}{new_number:04d}"
+        from workorder.utils import generate_order_number
+        return generate_order_number(
+            model_class=cls,
+            field_name="payment_number",
+            prefix="SK",
+        )
 
     payment_number = models.CharField(
         "收款单号", max_length=50, unique=True, editable=False
@@ -505,24 +487,15 @@ class Statement(models.Model):
         ("disputed", "有异议"),
     ]
 
-    @staticmethod
-    def generate_statement_number():
+    @classmethod
+    def generate_statement_number(cls):
         """生成对账单号：DZ + yyyymmdd + 4位序号"""
-        today = timezone.now().strftime("%Y%m%d")
-        prefix = f"DZ{today}"
-        with transaction.atomic():
-            latest = (
-                Statement.objects.filter(statement_number__startswith=prefix)
-                .select_for_update()
-                .order_by("-statement_number")
-                .first()
-            )
-            if latest:
-                last_number = int(latest.statement_number[-4:])
-                new_number = last_number + 1
-            else:
-                new_number = 1
-            return f"{prefix}{new_number:04d}"
+        from workorder.utils import generate_order_number
+        return generate_order_number(
+            model_class=cls,
+            field_name="statement_number",
+            prefix="DZ",
+        )
 
     statement_number = models.CharField(
         "对账单号", max_length=50, unique=True, editable=False
