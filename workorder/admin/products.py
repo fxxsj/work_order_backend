@@ -11,7 +11,13 @@
 
 from django.contrib import admin
 
-from ..models import Product, ProductGroup, ProductGroupItem, ProductMaterial
+from ..models import (
+    Product,
+    ProductGroup,
+    ProductGroupItem,
+    ProductImage,
+    ProductMaterial,
+)
 from .mixins import FixedInlineModelAdminMixin
 
 # ==================== Inline 类 ====================
@@ -30,6 +36,14 @@ class ProductMaterialInline(FixedInlineModelAdminMixin, admin.TabularInline):
         "notes",
         "sort_order",
     ]
+
+
+class ProductImageInline(FixedInlineModelAdminMixin, admin.TabularInline):
+    """产品图片内联"""
+
+    model = ProductImage
+    extra = 1
+    fields = ["image", "description", "sort_order"]
 
 
 # ==================== Admin 类 ====================
@@ -55,7 +69,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_editable = ["unit_price", "stock_quantity", "min_stock_quantity", "is_active"]
     ordering = ["code"]
     filter_horizontal = ["default_processes"]
-    inlines = [ProductMaterialInline]
+    inlines = [ProductMaterialInline, ProductImageInline]
 
     fieldsets = (
         (

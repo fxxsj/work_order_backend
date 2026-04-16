@@ -10,7 +10,13 @@ from typing import Any, Dict, List, Optional
 from rest_framework import serializers
 
 from ..models.base import Process
-from ..models.products import Product, ProductGroup, ProductGroupItem, ProductMaterial
+from ..models.products import (
+    Product,
+    ProductGroup,
+    ProductGroupItem,
+    ProductImage,
+    ProductMaterial,
+)
 
 
 class ProductMaterialSerializer(serializers.ModelSerializer):
@@ -30,10 +36,20 @@ class ProductMaterialSerializer(serializers.ModelSerializer):
         return obj.material.code if obj.material else None
 
 
+class ProductImageSerializer(serializers.ModelSerializer):
+    """产品图片序列化器"""
+
+    class Meta:
+        model = ProductImage
+        fields = ["id", "image", "sort_order", "description", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
 class ProductSerializer(serializers.ModelSerializer):
     """产品序列化器"""
 
     default_materials = ProductMaterialSerializer(many=True, read_only=True)
+    images = ProductImageSerializer(many=True, read_only=True)
     # 默认工序ID列表
     default_processes = serializers.PrimaryKeyRelatedField(
         many=True, queryset=Process.objects.all(), required=False

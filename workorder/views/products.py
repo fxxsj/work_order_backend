@@ -4,13 +4,21 @@
 包含产品、产品物料、产品组等视图集。
 """
 
-from ..models.products import Product, ProductGroup, ProductGroupItem, ProductMaterial
+from ..models.products import (
+    Product,
+    ProductGroup,
+    ProductGroupItem,
+    ProductImage,
+    ProductMaterial,
+)
 from ..serializers.products import (
     ProductGroupItemSerializer,
     ProductGroupSerializer,
+    ProductImageSerializer,
     ProductMaterialSerializer,
     ProductSerializer,
 )
+from .assets import ImageAssetActionsMixin
 from .base_viewsets import BaseViewSet
 from workorder.docs.products import (
     product_docs,
@@ -21,11 +29,14 @@ from workorder.docs.products import (
 
 
 @product_docs
-class ProductViewSet(BaseViewSet):
+class ProductViewSet(ImageAssetActionsMixin, BaseViewSet):
     """产品视图集"""
 
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
+    image_model = ProductImage
+    image_serializer_class = ProductImageSerializer
+    image_parent_field = "product"
     filterset_fields = ["is_active"]
     search_fields = ["name", "code", "specification"]
     ordering_fields = ["code", "created_at"]
@@ -34,7 +45,7 @@ class ProductViewSet(BaseViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         return queryset.prefetch_related(
-            "default_materials__material", "default_processes"
+            "default_materials__material", "default_processes", "images"
         )
 
 

@@ -71,6 +71,7 @@ from .multi_level_approval import (
 )
 from .products import (
     Product,
+    ProductImage,
     ProductGroup,
     ProductGroupItem,
     ProductMaterial,
@@ -88,6 +89,7 @@ __all__ = [
     "APPROVED_ORDER_EDITABLE_FIELDS",
     # 产品模型
     "Product",
+    "ProductImage",
     "ProductGroup",
     "ProductGroupItem",
     "ProductMaterial",
