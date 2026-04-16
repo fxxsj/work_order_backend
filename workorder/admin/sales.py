@@ -65,7 +65,12 @@ class SalesOrderAdmin(admin.ModelAdmin):
         "created_at",
     ]
     list_select_related = ["customer", "submitted_by", "approved_by", "created_by"]
-    search_fields = ["order_number", "customer__name", "work_orders__order_number"]
+    search_fields = [
+        "order_number",
+        "contract_number",
+        "customer__name",
+        "work_orders__order_number",
+    ]
     autocomplete_fields = [
         "customer",
         "submitted_by",
@@ -87,7 +92,15 @@ class SalesOrderAdmin(admin.ModelAdmin):
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("order_number", "customer", "status", "payment_status")},
+            {
+                "fields": (
+                    "order_number",
+                    "contract_number",
+                    "customer",
+                    "status",
+                    "payment_status",
+                )
+            },
         ),
         (
             "金额信息",

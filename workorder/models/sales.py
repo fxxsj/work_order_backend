@@ -113,6 +113,7 @@ class SalesOrder(TimeStampedModel, models.Model):
     )
 
     # 其他信息
+    contract_number = models.CharField("合同号", max_length=100, blank=True)
     contact_person = models.CharField("联系人", max_length=100, blank=True)
     contact_phone = models.CharField("联系电话", max_length=50, blank=True)
     shipping_address = models.TextField("送货地址", blank=True)
