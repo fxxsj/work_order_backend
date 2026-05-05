@@ -392,12 +392,18 @@ class TaskBulkMixin:
                     Notification.create_notification(
                         recipient=task.assigned_operator,
                         notification_type="task_cancelled",
-                        title=f"任务已取消：{task.work_content}",
-                        content=f'任务"{task.work_content}"已被取消。取消原因：{cancellation_reason}',
+                        title="任务已取消",
+                        content=f'任务 "{task.work_content}" 已被取消',
                         priority="normal",
                         work_order=task.work_order_process.work_order,
                         work_order_process=task.work_order_process,
                         task=task,
+                        template_key="task_cancelled",
+                        template_variables={
+                            "task_name": task.work_content,
+                            "workorder_number": task.work_order_process.work_order.order_number,
+                            "cancellation_reason": cancellation_reason,
+                        },
                     )
 
                 cancelled_tasks.append(task.id)
@@ -530,12 +536,18 @@ class TaskBulkMixin:
                         Notification.create_notification(
                             recipient=operator,
                             notification_type="task_assigned",
-                            title=f"新任务分派：{task.work_content}",
-                            content=f"您有一个新任务：{task.work_content}（施工单：{task.work_order_process.work_order.order_number}）",
+                            title="新任务分配",
+                            content=f"您有新的任务：{task.work_content}",
                             priority="normal",
                             work_order=task.work_order_process.work_order,
                             work_order_process=task.work_order_process,
                             task=task,
+                            template_key="task_assigned",
+                            template_variables={
+                                "task_name": task.work_content,
+                                "workorder_number": task.work_order_process.work_order.order_number,
+                                "assigned_by": request.user.username if request.user else "系统",
+                            },
                         )
 
                 assigned_tasks.append(task.id)

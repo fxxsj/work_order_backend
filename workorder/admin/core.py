@@ -19,6 +19,7 @@ from django.utils.html import format_html
 
 from ..models import (
     ProcessLog,
+    TaskLog,
     WorkOrder,
     WorkOrderMaterial,
     WorkOrderProcess,
@@ -571,6 +572,32 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
 
     # 任务状态徽章
     status_badge = create_status_badge_method(TASK_STATUS_COLORS)
+
+
+@admin.register(TaskLog)
+class TaskLogAdmin(admin.ModelAdmin):
+    """任务操作日志管理"""
+
+    list_display = [
+        "task",
+        "log_type",
+        "operator",
+        "quantity_before",
+        "quantity_after",
+        "status_before",
+        "status_after",
+        "created_at",
+    ]
+    list_filter = ["log_type", "created_at", "operator"]
+    search_fields = [
+        "task__id",
+        "task__work_order_process__work_order__order_number",
+        "content",
+        "operator__username",
+    ]
+    autocomplete_fields = ["task", "operator"]
+    readonly_fields = ["created_at"]
+    ordering = ["-created_at"]
 
     def get_queryset(self, request):
         """优化查询"""

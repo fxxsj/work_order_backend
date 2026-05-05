@@ -8,12 +8,124 @@
 - TaskAssignmentRule: 任务分派规则配置
 """
 
+from datetime import timedelta
+
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
 
 from .base import Department, TimeStampedModel
 from .core import WorkOrder
+
+
+def default_user_notification_preferences():
+    return {
+        "email_notifications": True,
+        "websocket_notifications": True,
+        "task_assignments": True,
+        "process_completions": True,
+        "deadline_warnings": True,
+        "system_announcements": True,
+        "urgency_threshold": "normal",
+        "quiet_hours_enabled": False,
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "08:00",
+    }
+
+
+def default_notification_template_definitions():
+    return {
+        "workorder_created": {
+            "title": "施工单已创建",
+            "message": "施工单 {workorder_number} 已成功创建",
+            "variables": ["workorder_number", "customer", "total_amount"],
+        },
+        "workorder_updated": {
+            "title": "施工单信息更新",
+            "message": "施工单 {workorder_number} 的信息已更新",
+            "variables": ["workorder_number", "updated_fields", "updated_by"],
+        },
+        "workorder_completed": {
+            "title": "施工单已完成",
+            "message": "施工单 {workorder_number} 已完成",
+            "variables": ["workorder_number", "customer"],
+        },
+        "task_assigned": {
+            "title": "新任务分配",
+            "message": "您有新的任务: {task_name}",
+            "variables": ["task_name", "workorder_number", "assigned_by"],
+        },
+        "task_started": {
+            "title": "任务开始执行",
+            "message": "任务 {task_name} 已开始执行",
+            "variables": ["task_name", "workorder_number", "assigned_to"],
+        },
+        "task_completed": {
+            "title": "任务完成",
+            "message": "任务 \"{task_name}\" 已完成",
+            "variables": ["task_name", "workorder_number", "completed_by"],
+        },
+        "task_overdue": {
+            "title": "任务逾期警告",
+            "message": "任务 {task_name} 已逾期",
+            "variables": ["task_name", "workorder_number", "deadline", "assigned_to"],
+        },
+        "task_cancelled": {
+            "title": "任务已取消",
+            "message": "任务 \"{task_name}\" 已被取消",
+            "variables": ["task_name", "workorder_number", "cancellation_reason"],
+        },
+        "process_completed": {
+            "title": "工序完成",
+            "message": "工序 {process_name} 已完成",
+            "variables": ["process_name", "workorder_number", "completed_by"],
+        },
+        "approval_requested": {
+            "title": "施工单待审核",
+            "message": "施工单 {workorder_number} 待审核",
+            "variables": ["workorder_number", "customer", "total_amount", "comment"],
+        },
+        "approval_passed": {
+            "title": "施工单已审核通过",
+            "message": "施工单 {workorder_number} 已审核通过",
+            "variables": ["workorder_number", "dispatched_count", "approved_by"],
+        },
+        "approval_rejected": {
+            "title": "施工单审核被拒绝",
+            "message": "施工单 {workorder_number} 审核被拒绝",
+            "variables": ["workorder_number", "reason", "approved_by"],
+        },
+        "reapproval_requested": {
+            "title": "施工单请求重新审核",
+            "message": "施工单 {workorder_number} 已请求重新审核",
+            "variables": ["workorder_number", "reason", "requested_by", "recipient_role"],
+        },
+        "workorder_approved": {
+            "title": "施工单审核通过",
+            "message": "您的施工单 {workorder_number} 已审核通过",
+            "variables": ["workorder_number", "approved_by"],
+        },
+        "workorder_rejected": {
+            "title": "施工单审核拒绝",
+            "message": "您的施工单 {workorder_number} 已被拒绝",
+            "variables": ["workorder_number", "approved_by"],
+        },
+        "deadline_warning": {
+            "title": "交货期预警",
+            "message": "施工单 {workorder_number} 将在 {days_remaining} 天后到期",
+            "variables": ["workorder_number", "deadline", "days_remaining"],
+        },
+        "urgent_order": {
+            "title": "紧急订单警报",
+            "message": "紧急订单 {workorder_number} 需要立即处理",
+            "variables": ["workorder_number"],
+        },
+        "system_announcement": {
+            "title": "{title}",
+            "message": "{message}",
+            "variables": ["title", "message"],
+        },
+    }
 
 
 class UserProfile(TimeStampedModel, models.Model):
@@ -28,6 +140,12 @@ class UserProfile(TimeStampedModel, models.Model):
         verbose_name="所属部门",
         help_text="用户所属的部门（可多选）",
     )
+    notification_preferences = models.JSONField(
+        "通知偏好设置",
+        default=default_user_notification_preferences,
+        blank=True,
+        help_text="用户级通知开关、紧急阈值和免打扰时间段配置",
+    )
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
 
@@ -40,6 +158,117 @@ class UserProfile(TimeStampedModel, models.Model):
             dept_names = ", ".join([dept.name for dept in self.departments.all()])
             return f"{self.user.username} - {dept_names}"
         return f"{self.user.username} - 未分配部门"
+
+
+class SystemNotificationSettings(TimeStampedModel, models.Model):
+    """系统级通知设置"""
+
+    EMAIL_THRESHOLD_CHOICES = [
+        ("low", "低"),
+        ("normal", "普通"),
+        ("high", "高"),
+        ("urgent", "紧急"),
+    ]
+
+    singleton_key = models.CharField(
+        "单例键",
+        max_length=32,
+        default="default",
+        unique=True,
+        editable=False,
+    )
+    websocket_enabled = models.BooleanField("启用 WebSocket 通知", default=True)
+    email_enabled = models.BooleanField("启用邮件通知", default=True)
+    sms_enabled = models.BooleanField("启用短信通知", default=False)
+    email_threshold = models.CharField(
+        "邮件发送阈值",
+        max_length=10,
+        choices=EMAIL_THRESHOLD_CHOICES,
+        default="high",
+    )
+    notification_retention_days = models.PositiveIntegerField(
+        "通知保留天数",
+        default=30,
+    )
+    auto_cleanup_enabled = models.BooleanField("自动清理过期通知", default=True)
+    max_notifications_per_user = models.PositiveIntegerField(
+        "单用户通知上限",
+        default=1000,
+    )
+
+    class Meta:
+        verbose_name = "系统通知设置"
+        verbose_name_plural = "系统通知设置"
+
+    def __str__(self):
+        return "系统通知设置"
+
+    @classmethod
+    def get_solo(cls):
+        settings, _ = cls.objects.get_or_create(singleton_key="default")
+        return settings
+
+
+class NotificationTemplate(TimeStampedModel, models.Model):
+    """通知模板"""
+
+    key = models.CharField("模板键", max_length=50, unique=True)
+    title = models.CharField("标题模板", max_length=200)
+    message = models.TextField("内容模板")
+    variables = models.JSONField("模板变量", default=list, blank=True)
+    is_active = models.BooleanField("是否启用", default=True)
+
+    class Meta:
+        verbose_name = "通知模板"
+        verbose_name_plural = "通知模板"
+        ordering = ["key"]
+
+    def __str__(self):
+        return self.key
+
+    @classmethod
+    def seed_defaults(cls):
+        for key, config in default_notification_template_definitions().items():
+            cls.objects.get_or_create(
+                key=key,
+                defaults={
+                    "title": config["title"],
+                    "message": config["message"],
+                    "variables": config["variables"],
+                    "is_active": True,
+                },
+            )
+        return cls.objects.order_by("key")
+
+    @classmethod
+    def render(cls, key, variables=None):
+        variables = variables or {}
+        cls.seed_defaults()
+        template = cls.objects.filter(key=key, is_active=True).first()
+        if template is None:
+            return None
+
+        safe_variables = {
+            field: "" if value is None else str(value) for field, value in variables.items()
+        }
+
+        class _SafeDict(dict):
+            def __missing__(self, field):
+                return "{" + field + "}"
+
+        return {
+            "key": template.key,
+            "title": template.title.format_map(_SafeDict(safe_variables)),
+            "message": template.message.format_map(_SafeDict(safe_variables)),
+            "variables": template.variables,
+        }
+
+    @classmethod
+    def render_with_fallback(cls, key, variables=None, title="", message=""):
+        rendered = cls.render(key, variables)
+        if rendered:
+            return rendered["title"], rendered["message"]
+        return title, message
 
 
 class WorkOrderApprovalLog(models.Model):
@@ -87,10 +316,15 @@ class Notification(models.Model):
     """系统通知"""
 
     NOTIFICATION_TYPE_CHOICES = [
+        ("workorder_created", "施工单创建"),
+        ("workorder_updated", "施工单更新"),
         ("approval_passed", "审核通过"),
         ("approval_rejected", "审核拒绝"),
+        ("approval_requested", "请求审核"),
         ("reapproval_requested", "请求重新审核"),
         ("task_assigned", "任务分派"),
+        ("task_started", "任务开始"),
+        ("task_overdue", "任务逾期"),
         ("task_due_soon", "任务即将到期"),
         ("process_completed", "工序完成"),
         ("workorder_completed", "施工单完成"),
@@ -203,8 +437,18 @@ class Notification(models.Model):
         work_order_process=None,
         task=None,
         expires_at=None,
+        template_key=None,
+        template_variables=None,
+        purchase_order=None,
     ):
         """创建通知的便捷方法"""
+        if template_key:
+            title, content = NotificationTemplate.render_with_fallback(
+                template_key,
+                template_variables,
+                title=title,
+                message=content,
+            )
         return cls.objects.create(
             recipient=recipient,
             notification_type=notification_type,
@@ -215,7 +459,31 @@ class Notification(models.Model):
             work_order_process=work_order_process,
             task=task,
             expires_at=expires_at,
+            purchase_order=purchase_order,
         )
+
+    @classmethod
+    def apply_retention_policy(cls, user_ids=None):
+        settings = SystemNotificationSettings.get_solo()
+        queryset = cls.objects.all()
+        if user_ids:
+            queryset = queryset.filter(recipient_id__in=user_ids)
+
+        if settings.auto_cleanup_enabled:
+            expiry_cutoff = timezone.now() - timedelta(days=settings.notification_retention_days)
+            queryset.filter(created_at__lt=expiry_cutoff).delete()
+            queryset.filter(expires_at__isnull=False, expires_at__lt=timezone.now()).delete()
+
+        max_count = settings.max_notifications_per_user
+        recipient_ids = user_ids or queryset.values_list("recipient_id", flat=True).distinct()
+        for recipient_id in recipient_ids:
+            stale_ids = list(
+                cls.objects.filter(recipient_id=recipient_id)
+                .order_by("-created_at")
+                .values_list("id", flat=True)[max_count:]
+            )
+            if stale_ids:
+                cls.objects.filter(id__in=stale_ids).delete()
 
 
 class TaskAssignmentRule(TimeStampedModel, models.Model):

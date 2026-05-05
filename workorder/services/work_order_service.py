@@ -188,25 +188,38 @@ class WorkOrderService:
                 )
 
         if approval_status == "approved":
-            task_info = f"，已转换 {converted_count} 个任务" if converted_count > 0 else ""
             Notification.create_notification(
                 recipient=work_order.created_by,
                 notification_type="approval_passed",
-                title=f"施工单 {work_order.order_number} 审核通过",
-                content=f'施工单 {work_order.order_number} 已通过审核，状态已变更为"进行中"{task_info}。'
-                + (f"审核意见：{approval_comment}" if approval_comment else ""),
+                title="施工单已审核通过",
+                content=f"施工单 {work_order.order_number} 已审核通过",
                 priority="high",
                 work_order=work_order,
+                template_key="approval_passed",
+                template_variables={
+                    "workorder_number": work_order.order_number,
+                    "dispatched_count": converted_count,
+                    "approved_by": user.username if user else "系统",
+                },
             )
         else:
-            task_info = f"，已删除 {deleted_count} 个草稿任务" if deleted_count > 0 else ""
+            rejection_detail = rejection_reason or ""
+            if deleted_count > 0:
+                cleanup_note = f"已删除 {deleted_count} 个草稿任务"
+                rejection_detail = f"{rejection_detail}；{cleanup_note}".strip("；") if rejection_detail else cleanup_note
             Notification.create_notification(
                 recipient=work_order.created_by,
                 notification_type="approval_rejected",
-                title=f"施工单 {work_order.order_number} 审核拒绝",
-                content=f"施工单 {work_order.order_number} 审核被拒绝{task_info}。拒绝原因：{rejection_reason}",
+                title="施工单审核被拒绝",
+                content=f"施工单 {work_order.order_number} 审核被拒绝",
                 priority="high",
                 work_order=work_order,
+                template_key="approval_rejected",
+                template_variables={
+                    "workorder_number": work_order.order_number,
+                    "reason": rejection_detail,
+                    "approved_by": user.username if user else "系统",
+                },
             )
 
         return work_order
@@ -257,27 +270,37 @@ class WorkOrderService:
         work_order.save()
 
         if original_approver:
-            notification_content = f"施工单 {work_order.order_number} 已修改，请求重新审核。"
-            if reason:
-                notification_content += f" 请求原因：{reason}"
-
             Notification.create_notification(
                 recipient=original_approver,
                 notification_type="reapproval_requested",
-                title=f"施工单 {work_order.order_number} 请求重新审核",
-                content=notification_content,
+                title="施工单请求重新审核",
+                content=f"施工单 {work_order.order_number} 已请求重新审核",
                 priority="high",
                 work_order=work_order,
+                template_key="reapproval_requested",
+                template_variables={
+                    "workorder_number": work_order.order_number,
+                    "reason": reason,
+                    "requested_by": user.username if user else "系统",
+                    "recipient_role": "approver",
+                },
             )
 
         if work_order.created_by and work_order.created_by != user:
             Notification.create_notification(
                 recipient=work_order.created_by,
                 notification_type="reapproval_requested",
-                title=f"施工单 {work_order.order_number} 已提交重新审核请求",
-                content=f"施工单 {work_order.order_number} 已提交重新审核请求，等待业务员审核。",
+                title="施工单请求重新审核",
+                content=f"施工单 {work_order.order_number} 已提交重新审核请求",
                 priority="normal",
                 work_order=work_order,
+                template_key="reapproval_requested",
+                template_variables={
+                    "workorder_number": work_order.order_number,
+                    "reason": reason,
+                    "requested_by": user.username if user else "系统",
+                    "recipient_role": "creator",
+                },
             )
 
         return original_approver

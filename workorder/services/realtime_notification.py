@@ -94,26 +94,164 @@ class RealtimeNotificationService:
         """
         if channels is None:
             channels = [NotificationChannel.WEBSOCKET, NotificationChannel.IN_APP]
-        
+
+        recipients = list({recipient.id: recipient for recipient in recipients if recipient}.values())
+        channel_plan = self._build_channel_plan(event_type, recipients, channels, priority)
+        filtered_recipients = channel_plan["all"]
+        if not filtered_recipients:
+            return
+
+        payload = self._render_notification_payload(event_type, data)
         notification_data = {
             'event_type': event_type,
             'priority': priority,
-            'data': data,
+            'data': payload,
             'timestamp': timezone.now().isoformat(),
             'channels': channels
         }
         
         # 保存到数据库
-        self._save_notification_to_db(recipients, notification_data)
+        self._save_notification_to_db(filtered_recipients, notification_data)
         
         # 发送WebSocket通知
-        if NotificationChannel.WEBSOCKET in channels:
-            self._send_websocket_notification(recipients, notification_data)
+        if channel_plan[NotificationChannel.WEBSOCKET]:
+            self._send_websocket_notification(
+                channel_plan[NotificationChannel.WEBSOCKET], notification_data
+            )
         
         # 发送邮件通知（如果是高优先级或紧急）
-        if (NotificationChannel.EMAIL in channels and 
-            priority in [NotificationPriority.HIGH, NotificationPriority.URGENT]):
-            self._send_email_notification(recipients, notification_data)
+        if channel_plan[NotificationChannel.EMAIL]:
+            self._send_email_notification(
+                channel_plan[NotificationChannel.EMAIL], notification_data
+            )
+
+    def _build_channel_plan(
+        self,
+        event_type: str,
+        recipients: List[User],
+        channels: List[str],
+        priority: str,
+    ):
+        from ..models.system import (
+            SystemNotificationSettings,
+            UserProfile,
+            default_user_notification_preferences,
+        )
+
+        settings = SystemNotificationSettings.get_solo()
+        preference_key = self._event_preference_key(event_type)
+        now_local = timezone.localtime()
+        plan = {
+            "all": [],
+            NotificationChannel.WEBSOCKET: [],
+            NotificationChannel.EMAIL: [],
+            NotificationChannel.SMS: [],
+            NotificationChannel.IN_APP: [],
+        }
+
+        for recipient in recipients:
+            prefs = default_user_notification_preferences()
+            try:
+                profile = UserProfile.objects.filter(user=recipient).first()
+                if profile and profile.notification_preferences:
+                    prefs.update(profile.notification_preferences)
+            except Exception:
+                pass
+
+            if preference_key and prefs.get(preference_key) is False:
+                continue
+
+            plan["all"].append(recipient)
+            quiet_hours_active = self._is_quiet_hours(now_local, prefs)
+            for channel in channels:
+                if not self._is_channel_enabled_globally(channel, settings):
+                    continue
+                if not self._is_channel_enabled_for_user(channel, prefs, priority):
+                    continue
+                if quiet_hours_active and channel in {
+                    NotificationChannel.WEBSOCKET,
+                    NotificationChannel.EMAIL,
+                    NotificationChannel.SMS,
+                }:
+                    continue
+                plan[channel].append(recipient)
+
+        return plan
+
+    def _render_notification_payload(self, event_type: str, data: Dict[str, Any]):
+        from ..models.system import NotificationTemplate
+
+        payload = dict(data or {})
+        variables = {
+            key: value
+            for key, value in payload.items()
+            if value is not None and not isinstance(value, (dict, list, tuple, set))
+        }
+        if "task_name" not in variables and payload.get("work_content"):
+            variables["task_name"] = payload["work_content"]
+        rendered = NotificationTemplate.render(event_type, variables) if event_type else None
+        if rendered:
+            payload["title"] = rendered["title"]
+            payload["message"] = rendered["message"]
+        return payload
+
+    def _event_preference_key(self, event_type: str):
+        mapping = {
+            NotificationEvent.TASK_ASSIGNED: "task_assignments",
+            NotificationEvent.PROCESS_COMPLETED: "process_completions",
+            NotificationEvent.DEADLINE_WARNING: "deadline_warnings",
+            NotificationEvent.SYSTEM_ANNOUNCEMENT: "system_announcements",
+            NotificationEvent.WORKORDER_APPROVED: "system_announcements",
+            NotificationEvent.WORKORDER_REJECTED: "system_announcements",
+        }
+        return mapping.get(event_type)
+
+    def _is_channel_enabled_globally(self, channel: str, settings):
+        mapping = {
+            NotificationChannel.WEBSOCKET: settings.websocket_enabled,
+            NotificationChannel.EMAIL: settings.email_enabled,
+            NotificationChannel.SMS: settings.sms_enabled,
+            NotificationChannel.IN_APP: True,
+        }
+        return mapping.get(channel, True)
+
+    def _is_channel_enabled_for_user(self, channel: str, prefs: Dict[str, Any], priority: str):
+        if channel == NotificationChannel.WEBSOCKET:
+            return prefs.get("websocket_notifications", True)
+        if channel == NotificationChannel.EMAIL:
+            if not prefs.get("email_notifications", True):
+                return False
+            threshold = prefs.get("urgency_threshold", "normal")
+            rank = {
+                NotificationPriority.LOW: 0,
+                NotificationPriority.NORMAL: 1,
+                NotificationPriority.HIGH: 2,
+                NotificationPriority.URGENT: 3,
+            }
+            return rank.get(priority, 1) >= rank.get(str(threshold), 1)
+        return True
+
+    def _is_quiet_hours(self, current_time, prefs: Dict[str, Any]):
+        if not prefs.get("quiet_hours_enabled", False):
+            return False
+
+        start = prefs.get("quiet_hours_start", "22:00")
+        end = prefs.get("quiet_hours_end", "08:00")
+        try:
+            start_hour, start_minute = [int(part) for part in start.split(":")]
+            end_hour, end_minute = [int(part) for part in end.split(":")]
+        except Exception:
+            return False
+
+        current_minutes = current_time.hour * 60 + current_time.minute
+        start_minutes = start_hour * 60 + start_minute
+        end_minutes = end_hour * 60 + end_minute
+
+        if start_minutes == end_minutes:
+            return False
+        if start_minutes < end_minutes:
+            return start_minutes <= current_minutes < end_minutes
+        return current_minutes >= start_minutes or current_minutes < end_minutes
     
     def _save_notification_to_db(self, recipients: List[User], data: Dict[str, Any]):
         """保存通知到数据库"""
@@ -136,19 +274,21 @@ class RealtimeNotificationService:
 
             notifications = []
             for recipient in recipients:
+                payload = data.get("data", {})
                 notifications.append(
                     Notification(
                         recipient=recipient,
                         notification_type=notification_type,
                         priority=data.get("priority", NotificationPriority.NORMAL),
-                        title=data.get("data", {}).get("title", ""),
-                        content=data.get("data", {}).get("message", ""),
+                        title=payload.get("title", ""),
+                        content=payload.get("message", ""),
                         data=data,
                         is_read=False,
                     )
                 )
 
             Notification.objects.bulk_create(notifications)
+            Notification.apply_retention_policy([recipient.id for recipient in recipients])
 
         except Exception as e:
             logger.error(f"保存通知到数据库失败: {e}")
@@ -215,9 +355,8 @@ class RealtimeNotificationService:
             event_type=NotificationEvent.TASK_ASSIGNED,
             recipients=recipients,
             data={
-                'title': '新任务分配',
-                'message': f'您有新的任务: {task.work_content}',
                 'task_id': task.id,
+                'task_name': task.work_content,
                 'workorder_id': task.work_order_process.work_order.id if task.work_order_process else None,
                 'workorder_number': task.work_order_process.work_order.order_number if task.work_order_process else '',
                 'process_code': task.process_code,
@@ -234,16 +373,6 @@ class RealtimeNotificationService:
             priority=self._map_priority(task.work_order_process.work_order.priority if task.work_order_process else 'normal'),
             channels=[NotificationChannel.WEBSOCKET, NotificationChannel.IN_APP]
         )
-
-        # WebSocket broadcast to connected users
-        self._send_websocket_notification(recipients, {
-            'type': 'task_assigned',
-            'title': '新任务分配',
-            'message': f'您有新的任务: {task.work_content}',
-            'task_id': task.id,
-            'workorder_number': task.work_order_process.work_order.order_number if task.work_order_process else '',
-            'priority': task.work_order_process.work_order.priority if task.work_order_process else 'normal',
-        })
 
     def notify_task_completed(self, task, completed_by):
         """通知任务完成 - 发送给主管和施工单创建者"""
@@ -267,9 +396,8 @@ class RealtimeNotificationService:
             event_type=NotificationEvent.TASK_COMPLETED,
             recipients=recipients,
             data={
-                'title': '任务完成',
-                'message': f'任务 "{task.work_content}" 已完成',
                 'task_id': task.id,
+                'task_name': task.work_content,
                 'workorder_id': work_order.id if work_order else None,
                 'workorder_number': work_order.order_number if work_order else '',
                 'completed_by': completed_by.username if completed_by else '系统',
@@ -280,16 +408,6 @@ class RealtimeNotificationService:
             priority=NotificationPriority.NORMAL,
             channels=[NotificationChannel.WEBSOCKET, NotificationChannel.IN_APP]
         )
-
-        # WebSocket broadcast
-        self._send_websocket_notification(recipients, {
-            'type': 'task_completed',
-            'title': '任务完成',
-            'message': f'任务 "{task.work_content}" 已完成',
-            'task_id': task.id,
-            'workorder_number': work_order.order_number if work_order else '',
-            'completed_by': completed_by.username if completed_by else '系统',
-        })
 
     def _get_department_members(self, department):
         """获取部门成员"""
@@ -337,21 +455,15 @@ class RealtimeNotificationService:
         
         if status == 'approved':
             event_type = NotificationEvent.WORKORDER_APPROVED
-            title = '施工单审核通过'
-            message = f'您的施工单 {workorder.order_number} 已审核通过'
             priority = NotificationPriority.HIGH
         else:
             event_type = NotificationEvent.WORKORDER_REJECTED
-            title = '施工单审核拒绝'
-            message = f'您的施工单 {workorder.order_number} 已被拒绝'
             priority = NotificationPriority.URGENT
         
         self.send_notification(
             event_type=event_type,
             recipients=recipients,
             data={
-                'title': title,
-                'message': message,
                 'workorder_id': workorder.id,
                 'workorder_number': workorder.order_number,
                 'approved_by': approved_by.username if approved_by else '系统',
@@ -382,8 +494,6 @@ class RealtimeNotificationService:
             event_type=NotificationEvent.PROCESS_COMPLETED,
             recipients=list(set(recipients)),  # 去重
             data={
-                'title': '工序完成',
-                'message': f'工序 {process.name} 已完成',
                 'process_id': process.id,
                 'process_name': process.name,
                 'workorder_id': workorder.id,
@@ -413,8 +523,6 @@ class RealtimeNotificationService:
             event_type=NotificationEvent.DEADLINE_WARNING,
             recipients=list(set(recipients)),
             data={
-                'title': '交货期预警',
-                'message': f'施工单 {workorder.order_number} 将在 {days_remaining} 天后到期',
                 'workorder_id': workorder.id,
                 'workorder_number': workorder.order_number,
                 'deadline': workorder.delivery_date.strftime('%Y-%m-%d'),
@@ -624,8 +732,6 @@ class NotificationManager:
                 event_type=NotificationEvent.URGENT_ORDER,
                 recipients=recipients,
                 data={
-                    'title': '紧急订单警报',
-                    'message': f'紧急订单 {workorder.order_number} 需要立即处理',
                     'workorder_id': workorder.id,
                     'workorder_number': workorder.order_number,
                     'type': 'urgent_order'

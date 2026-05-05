@@ -21,6 +21,7 @@ from ..models import (
     MaterialSupplier,
     PurchaseOrder,
     PurchaseOrderItem,
+    PurchaseReceiveRecord,
     Supplier,
 )
 from .mixins import FixedInlineModelAdminMixin
@@ -324,3 +325,109 @@ class PurchaseOrderItemAdmin(admin.ModelAdmin):
             "received": "#67C23A",
         }
     )
+
+
+@admin.register(PurchaseReceiveRecord)
+class PurchaseReceiveRecordAdmin(admin.ModelAdmin):
+    """采购收货记录管理"""
+
+    list_display = [
+        "purchase_order_number",
+        "material_name",
+        "received_quantity",
+        "received_date",
+        "inspection_status",
+        "is_stocked",
+        "is_returned",
+        "received_by",
+    ]
+    list_filter = [
+        "inspection_status",
+        "is_stocked",
+        "is_returned",
+        "received_date",
+        "created_at",
+    ]
+    search_fields = [
+        "purchase_order_item__purchase_order__order_number",
+        "purchase_order_item__material__name",
+        "purchase_order_item__material__code",
+        "delivery_note_number",
+    ]
+    autocomplete_fields = [
+        "purchase_order_item",
+        "received_by",
+        "inspected_by",
+        "stocked_by",
+        "returned_by",
+    ]
+    list_select_related = [
+        "purchase_order_item__purchase_order",
+        "purchase_order_item__material",
+        "received_by",
+        "inspected_by",
+    ]
+    readonly_fields = [
+        "created_at",
+        "updated_at",
+        "inspected_at",
+        "stocked_at",
+        "returned_at",
+    ]
+    ordering = ["-received_date", "-created_at"]
+
+    fieldsets = (
+        (
+            "收货信息",
+            {
+                "fields": (
+                    "purchase_order_item",
+                    "received_quantity",
+                    "received_date",
+                    "received_by",
+                    "delivery_note_number",
+                )
+            },
+        ),
+        (
+            "质检信息",
+            {
+                "fields": (
+                    "inspection_status",
+                    "qualified_quantity",
+                    "unqualified_quantity",
+                    "unqualified_reason",
+                    "inspected_by",
+                    "inspected_at",
+                )
+            },
+        ),
+        (
+            "入库与退货",
+            {
+                "fields": (
+                    "is_stocked",
+                    "stocked_at",
+                    "stocked_by",
+                    "is_returned",
+                    "returned_quantity",
+                    "returned_at",
+                    "returned_by",
+                    "return_note",
+                )
+            },
+        ),
+        ("备注", {"fields": ("notes",)}),
+        (
+            "系统信息",
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
+
+    @admin.display(description="采购单号")
+    def purchase_order_number(self, obj):
+        return obj.purchase_order.order_number
+
+    @admin.display(description="物料")
+    def material_name(self, obj):
+        return obj.material.name

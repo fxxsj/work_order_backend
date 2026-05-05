@@ -41,11 +41,16 @@ class NotificationTriggers:
         Notification.create_notification(
             recipient=recipient,
             notification_type="workorder_created",
-            title=f"施工单 {work_order.order_number} 已创建",
-            content=f"施工单 {work_order.order_number} 已成功创建，客户：{work_order.customer.name}，"
-            f"金额：¥{work_order.total_amount:.2f}",
+            title="施工单已创建",
+            content=f"施工单 {work_order.order_number} 已成功创建",
             priority="normal",
             work_order=work_order,
+            template_key="workorder_created",
+            template_variables={
+                "workorder_number": work_order.order_number,
+                "customer": work_order.customer.name if work_order.customer else "",
+                "total_amount": f"{work_order.total_amount:.2f}",
+            },
         )
 
         # 实时推送
@@ -53,11 +58,9 @@ class NotificationTriggers:
             event_type=NotificationEvent.WORKORDER_CREATED,
             recipients=[recipient],
             data={
-                "title": "施工单已创建",
-                "message": f"施工单 {work_order.order_number} 已创建",
                 "workorder_id": work_order.id,
                 "workorder_number": work_order.order_number,
-                "customer": work_order.customer.name,
+                "customer": work_order.customer.name if work_order.customer else "",
                 "total_amount": float(work_order.total_amount),
                 "priority": work_order.priority,
             },
@@ -88,10 +91,17 @@ class NotificationTriggers:
         Notification.create_notification(
             recipient=recipient,
             notification_type="approval_requested",
-            title=f"待审核：施工单 {work_order.order_number}",
+            title="施工单待审核",
             content=content,
             priority="high",
             work_order=work_order,
+            template_key="approval_requested",
+            template_variables={
+                "workorder_number": work_order.order_number,
+                "customer": work_order.customer.name if work_order.customer else "",
+                "total_amount": f"{work_order.total_amount:.2f}",
+                "comment": comment,
+            },
         )
 
         # 实时推送
@@ -99,13 +109,12 @@ class NotificationTriggers:
             event_type=NotificationEvent.APPROVAL_REQUESTED,
             recipients=[recipient],
             data={
-                "title": "施工单待审核",
-                "message": f"施工单 {work_order.order_number} 待审核",
                 "workorder_id": work_order.id,
                 "workorder_number": work_order.order_number,
-                "customer": work_order.customer.name,
+                "customer": work_order.customer.name if work_order.customer else "",
                 "total_amount": float(work_order.total_amount),
                 "priority": work_order.priority,
+                "comment": comment,
             },
             priority=NotificationPriority.HIGH,
         )
@@ -128,11 +137,15 @@ class NotificationTriggers:
         Notification.create_notification(
             recipient=work_order.created_by,
             notification_type="approval_passed",
-            title=f"施工单 {work_order.order_number} 已审核通过",
-            content=f"施工单 {work_order.order_number} 已通过审核，"
-            f"已自动分派 {dispatch_result['dispatched_count']} 个任务。",
+            title="施工单已审核通过",
+            content=f"施工单 {work_order.order_number} 已审核通过",
             priority="high",
             work_order=work_order,
+            template_key="approval_passed",
+            template_variables={
+                "workorder_number": work_order.order_number,
+                "dispatched_count": dispatch_result["dispatched_count"],
+            },
         )
 
         # 2. 通知所有被分派任务的操作员
@@ -142,11 +155,16 @@ class NotificationTriggers:
                 Notification.create_notification(
                     recipient=operator,
                     notification_type="task_assigned",
-                    title=f"新任务分派：施工单 {work_order.order_number}",
-                    content=f"您有 {dispatch_result['operator_tasks'].get(operator_id, 0)} 个新任务，"
-                    f"来自施工单 {work_order.order_number}，请及时处理。",
+                    title="新任务分配",
+                    content=f"您有新的任务，来自施工单 {work_order.order_number}",
                     priority="high",
                     work_order=work_order,
+                    template_key="task_assigned",
+                    template_variables={
+                        "task_name": f"{dispatch_result['operator_tasks'].get(operator_id, 0)} 个新任务",
+                        "workorder_number": work_order.order_number,
+                        "assigned_by": "系统",
+                    },
                 )
             except User.DoesNotExist:
                 logger.warning(f"用户 ID {operator_id} 不存在，跳过通知")
@@ -156,8 +174,6 @@ class NotificationTriggers:
             event_type=NotificationEvent.APPROVAL_PASSED,
             recipients=[work_order.created_by],
             data={
-                "title": "施工单已审核通过",
-                "message": f"施工单 {work_order.order_number} 已审核通过",
                 "workorder_id": work_order.id,
                 "workorder_number": work_order.order_number,
                 "dispatched_count": dispatch_result["dispatched_count"],
@@ -184,11 +200,15 @@ class NotificationTriggers:
         Notification.create_notification(
             recipient=recipient,
             notification_type="approval_rejected",
-            title=f"施工单 {work_order.order_number} 审核被拒绝",
-            content=f"施工单 {work_order.order_number} 审核被拒绝。\n"
-            f"拒绝原因：{reason}",
+            title="施工单审核被拒绝",
+            content=f"施工单 {work_order.order_number} 审核被拒绝",
             priority="high",
             work_order=work_order,
+            template_key="approval_rejected",
+            template_variables={
+                "workorder_number": work_order.order_number,
+                "reason": reason,
+            },
         )
 
         # 实时推送
@@ -196,8 +216,6 @@ class NotificationTriggers:
             event_type=NotificationEvent.APPROVAL_REJECTED,
             recipients=[recipient],
             data={
-                "title": "施工单审核被拒绝",
-                "message": f"施工单 {work_order.order_number} 审核被拒绝",
                 "workorder_id": work_order.id,
                 "workorder_number": work_order.order_number,
                 "reason": reason,
@@ -219,10 +237,15 @@ class NotificationTriggers:
         Notification.create_notification(
             recipient=work_order.created_by,
             notification_type="workorder_completed",
-            title=f"施工单 {work_order.order_number} 已完成",
-            content=f"施工单 {work_order.order_number} 的所有任务已完成，施工单状态已变更为「已完成」。",
+            title="施工单已完成",
+            content=f"施工单 {work_order.order_number} 已完成",
             priority="normal",
             work_order=work_order,
+            template_key="workorder_completed",
+            template_variables={
+                "workorder_number": work_order.order_number,
+                "customer": work_order.customer.name if work_order.customer else "",
+            },
         )
 
         # 实时推送
@@ -230,11 +253,9 @@ class NotificationTriggers:
             event_type=NotificationEvent.WORKORDER_COMPLETED,
             recipients=[work_order.created_by],
             data={
-                "title": "施工单已完成",
-                "message": f"施工单 {work_order.order_number} 已完成",
                 "workorder_id": work_order.id,
                 "workorder_number": work_order.order_number,
-                "customer": work_order.customer.name,
+                "customer": work_order.customer.name if work_order.customer else "",
             },
             priority=NotificationPriority.NORMAL,
         )

@@ -5,6 +5,7 @@
 """
 
 import secrets
+import re
 from datetime import timedelta
 
 from django.contrib.auth.models import User
@@ -24,7 +25,13 @@ from workorder.docs.notification_extra import (
     user_notification_settings_docs,
 )
 
-from ..models.system import Notification
+from ..models.system import (
+    Notification,
+    NotificationTemplate,
+    SystemNotificationSettings,
+    UserProfile,
+    default_user_notification_preferences,
+)
 
 # 暂时注释掉可能导致阻塞的导入
 # from ..services.realtime_notification import (
@@ -93,6 +100,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
         """获取当前用户的通知查询集"""
         if getattr(self, "swagger_fake_view", False):
             return Notification.objects.none()
+        Notification.apply_retention_policy([self.request.user.id])
         return Notification.objects.filter(recipient=self.request.user).order_by(
             "-created_at"
         )
@@ -268,6 +276,17 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAdminUser]
     serializer_class = EmptySerializer
 
+    def _serialize_settings(self, settings):
+        return {
+            "websocket_enabled": settings.websocket_enabled,
+            "email_enabled": settings.email_enabled,
+            "sms_enabled": settings.sms_enabled,
+            "email_threshold": settings.email_threshold,
+            "notification_retention_days": settings.notification_retention_days,
+            "auto_cleanup_enabled": settings.auto_cleanup_enabled,
+            "max_notifications_per_user": settings.max_notifications_per_user,
+        }
+
     @action(detail=False, methods=["post"])
     def create_announcement(self, request):
         """创建系统公告"""
@@ -311,6 +330,7 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
         ]
 
         Notification.objects.bulk_create(notifications, batch_size=1000)
+        Notification.apply_retention_policy([recipient.id for recipient in recipients])
 
         return APIResponse.success(
             data={"count": len(notifications)},
@@ -349,6 +369,7 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
             for recipient in recipients.iterator()
         ]
         Notification.objects.bulk_create(notifications, batch_size=1000)
+        Notification.apply_retention_policy([recipient.id for recipient in recipients])
 
         return APIResponse.success(
             data={"count": len(notifications)},
@@ -359,22 +380,69 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=["get"])
     def notification_settings(self, request):
         """获取通知设置"""
-        settings_data = {
-            "websocket_enabled": True,
-            "email_enabled": True,
-            "sms_enabled": False,
-            "email_threshold": "high",
-            "notification_retention_days": 30,
-            "auto_cleanup_enabled": True,
-            "max_notifications_per_user": 1000,
-        }
-
-        return APIResponse.success(data=settings_data)
+        settings = SystemNotificationSettings.get_solo()
+        return APIResponse.success(data=self._serialize_settings(settings))
 
     @action(detail=False, methods=["post"])
     def update_notification_settings(self, request):
         """更新通知设置"""
-        return APIResponse.success(message="通知设置已更新")
+        settings = SystemNotificationSettings.get_solo()
+        payload = request.data
+
+        threshold = payload.get("email_threshold", settings.email_threshold)
+        valid_thresholds = {
+            choice[0] for choice in SystemNotificationSettings.EMAIL_THRESHOLD_CHOICES
+        }
+        if threshold not in valid_thresholds:
+            return APIResponse.error(
+                "email_threshold 不合法",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            retention_days = int(
+                payload.get(
+                    "notification_retention_days",
+                    settings.notification_retention_days,
+                )
+            )
+            max_notifications = int(
+                payload.get(
+                    "max_notifications_per_user",
+                    settings.max_notifications_per_user,
+                )
+            )
+        except (TypeError, ValueError):
+            return APIResponse.error(
+                "通知设置中的数值字段必须为整数",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if retention_days <= 0 or max_notifications <= 0:
+            return APIResponse.error(
+                "通知保留天数和单用户通知上限必须大于 0",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        settings.websocket_enabled = bool(
+            payload.get("websocket_enabled", settings.websocket_enabled)
+        )
+        settings.email_enabled = bool(
+            payload.get("email_enabled", settings.email_enabled)
+        )
+        settings.sms_enabled = bool(payload.get("sms_enabled", settings.sms_enabled))
+        settings.email_threshold = threshold
+        settings.notification_retention_days = retention_days
+        settings.auto_cleanup_enabled = bool(
+            payload.get("auto_cleanup_enabled", settings.auto_cleanup_enabled)
+        )
+        settings.max_notifications_per_user = max_notifications
+        settings.save()
+
+        return APIResponse.success(
+            data=self._serialize_settings(settings),
+            message="通知设置已更新",
+        )
 
     @action(detail=False, methods=["get"])
     def system_status(self, request):
@@ -419,39 +487,97 @@ class UserNotificationSettingsViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = EmptySerializer
 
+    def _get_profile(self, user):
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        if not profile.notification_preferences:
+            profile.notification_preferences = default_user_notification_preferences()
+            profile.save(update_fields=["notification_preferences", "updated_at"])
+        return profile
+
+    def _serialize_preferences(self, profile):
+        prefs = default_user_notification_preferences()
+        prefs.update(profile.notification_preferences or {})
+        prefs["user_id"] = profile.user_id
+        return prefs
+
+    def _validate_time_text(self, value, field_name):
+        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value):
+            return APIResponse.error(
+                f"{field_name} 必须为 HH:MM 格式",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        return None
+
     @action(detail=False, methods=["get"])
     def get_settings(self, request):
         """获取用户通知设置"""
-        user = request.user
-
-        # 这里可以从用户配置中获取个性化设置
-        settings_data = {
-            "user_id": user.id,
-            "email_notifications": True,
-            "websocket_notifications": True,
-            "task_assignments": True,
-            "process_completions": True,
-            "deadline_warnings": True,
-            "system_announcements": True,
-            "urgency_threshold": "normal",
-            "quiet_hours_enabled": False,
-            "quiet_hours_start": "22:00",
-            "quiet_hours_end": "08:00",
-        }
-
-        return APIResponse.success(data=settings_data)
+        profile = self._get_profile(request.user)
+        return APIResponse.success(data=self._serialize_preferences(profile))
 
     @action(detail=False, methods=["post"])
     def update_settings(self, request):
         """更新用户通知设置"""
-        user = request.user
-        settings_data = request.data
+        profile = self._get_profile(request.user)
+        payload = request.data
+        current = default_user_notification_preferences()
+        current.update(profile.notification_preferences or {})
 
-        # 这里可以实现用户个性化设置的保存逻辑
-        # 为了简化，暂时返回成功响应
+        urgency_threshold = (
+            payload.get("urgency_threshold", current["urgency_threshold"]) or "normal"
+        ).strip()
+        if urgency_threshold not in {"low", "normal", "high", "urgent"}:
+            return APIResponse.error(
+                "urgency_threshold 不合法",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        quiet_start = (
+            payload.get("quiet_hours_start", current["quiet_hours_start"]) or "22:00"
+        ).strip()
+        quiet_end = (
+            payload.get("quiet_hours_end", current["quiet_hours_end"]) or "08:00"
+        ).strip()
+        invalid = self._validate_time_text(quiet_start, "quiet_hours_start")
+        if invalid is not None:
+            return invalid
+        invalid = self._validate_time_text(quiet_end, "quiet_hours_end")
+        if invalid is not None:
+            return invalid
+
+        settings_data = {
+            "email_notifications": bool(
+                payload.get("email_notifications", current["email_notifications"])
+            ),
+            "websocket_notifications": bool(
+                payload.get(
+                    "websocket_notifications", current["websocket_notifications"]
+                )
+            ),
+            "task_assignments": bool(
+                payload.get("task_assignments", current["task_assignments"])
+            ),
+            "process_completions": bool(
+                payload.get("process_completions", current["process_completions"])
+            ),
+            "deadline_warnings": bool(
+                payload.get("deadline_warnings", current["deadline_warnings"])
+            ),
+            "system_announcements": bool(
+                payload.get("system_announcements", current["system_announcements"])
+            ),
+            "urgency_threshold": urgency_threshold,
+            "quiet_hours_enabled": bool(
+                payload.get("quiet_hours_enabled", current["quiet_hours_enabled"])
+            ),
+            "quiet_hours_start": quiet_start,
+            "quiet_hours_end": quiet_end,
+        }
+
+        profile.notification_preferences = settings_data
+        profile.save(update_fields=["notification_preferences", "updated_at"])
 
         return APIResponse.success(
-            data={"user_id": user.id, "settings": settings_data},
+            data=self._serialize_preferences(profile),
             message="通知设置已更新",
         )
 
@@ -501,73 +627,83 @@ class NotificationTemplateViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAdminUser]
     serializer_class = EmptySerializer
 
+    def _serialize_templates(self):
+        NotificationTemplate.seed_defaults()
+        return {
+            item.key: {
+                "title": item.title,
+                "message": item.message,
+                "variables": item.variables,
+                "is_active": item.is_active,
+            }
+            for item in NotificationTemplate.objects.order_by("key")
+        }
+
     @action(detail=False, methods=["get"])
     def get_templates(self, request):
         """获取通知模板"""
-        templates = {
-            "task_assigned": {
-                "title": "新任务分配",
-                "message": "您有新的任务: {task_name}",
-                "variables": ["task_name", "workorder_number", "assigned_by"],
-            },
-            "process_completed": {
-                "title": "工序完成",
-                "message": "工序 {process_name} 已完成",
-                "variables": ["process_name", "workorder_number", "completed_by"],
-            },
-            "workorder_approved": {
-                "title": "施工单审核通过",
-                "message": "您的施工单 {workorder_number} 已审核通过",
-                "variables": ["workorder_number", "approved_by"],
-            },
-            "workorder_rejected": {
-                "title": "施工单审核拒绝",
-                "message": "您的施工单 {workorder_number} 已被拒绝",
-                "variables": ["workorder_number", "rejected_by"],
-            },
-            "deadline_warning": {
-                "title": "交货期预警",
-                "message": "施工单 {workorder_number} 将在 {days_remaining} 天后到期",
-                "variables": ["workorder_number", "days_remaining", "deadline"],
-            },
-            "urgent_order": {
-                "title": "紧急订单警报",
-                "message": "紧急订单 {workorder_number} 需要立即处理",
-                "variables": ["workorder_number", "priority"],
-            },
-        }
+        return APIResponse.success(data=self._serialize_templates())
 
-        return APIResponse.success(data=templates)
+    @action(detail=False, methods=["post"])
+    def update_template(self, request):
+        """更新通知模板"""
+        template_name = (request.data.get("template_name") or "").strip()
+        if not template_name:
+            return APIResponse.error("缺少 template_name", code=status.HTTP_400_BAD_REQUEST)
+
+        NotificationTemplate.seed_defaults()
+        template = NotificationTemplate.objects.filter(key=template_name).first()
+        if template is None:
+            return APIResponse.error("模板不存在", code=status.HTTP_404_NOT_FOUND)
+
+        title = request.data.get("title")
+        message = request.data.get("message")
+        variables = request.data.get("variables")
+        is_active = request.data.get("is_active")
+
+        if title is not None:
+            template.title = str(title).strip()
+        if message is not None:
+            template.message = str(message).strip()
+        if variables is not None:
+            if not isinstance(variables, list):
+                return APIResponse.error("variables 必须为数组", code=status.HTTP_400_BAD_REQUEST)
+            template.variables = [str(item) for item in variables]
+        if is_active is not None:
+            template.is_active = bool(is_active)
+
+        if not template.title or not template.message:
+            return APIResponse.error("标题和内容不能为空", code=status.HTTP_400_BAD_REQUEST)
+
+        template.save()
+        return APIResponse.success(
+            data={
+                "template_name": template.key,
+                "title": template.title,
+                "message": template.message,
+                "variables": template.variables,
+                "is_active": template.is_active,
+            },
+            message="模板已更新",
+        )
 
     @action(detail=False, methods=["post"])
     def preview_template(self, request):
         """预览通知模板"""
         template_name = request.data.get("template_name")
         variables = request.data.get("variables", {})
+        if not isinstance(variables, dict):
+            return APIResponse.error("variables 必须为对象", code=status.HTTP_400_BAD_REQUEST)
 
-        templates = {
-            "task_assigned": {
-                "title": "新任务分配",
-                "message": "您有新的任务: {task_name}",
-            },
-            "process_completed": {
-                "title": "工序完成",
-                "message": "工序 {process_name} 已完成",
-            },
-        }
-
-        if template_name not in templates:
+        rendered = NotificationTemplate.render(template_name, variables)
+        if not rendered:
             return APIResponse.error("模板不存在", code=status.HTTP_404_NOT_FOUND)
-
-        template = templates[template_name]
-        title = template["title"].format(**variables)
-        message = template["message"].format(**variables)
 
         return APIResponse.success(
             data={
                 "template_name": template_name,
-                "title": title,
-                "message": message,
+                "title": rendered["title"],
+                "message": rendered["message"],
                 "variables": variables,
             }
         )

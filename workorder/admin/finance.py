@@ -208,32 +208,29 @@ class InvoiceAdmin(admin.ModelAdmin):
     )
 
 
-# @admin.register(Payment)
+@admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    """收款记录管理（已注释，暂不注册）"""
+    """收款记录管理"""
 
     list_display = [
         "payment_number",
-        "customer_name",
+        "customer",
+        "sales_order",
+        "invoice",
         "payment_date",
-        "payment_method_display",
+        "get_payment_method_display",
         "amount",
         "applied_amount",
         "remaining_amount",
-        "created_by_name",
+        "recorded_by",
         "created_at",
     ]
-    search_fields = [
-        "payment_number",
-        "customer__name",
-        "transaction_number",
-        "bank_account",
-    ]
+    search_fields = ["payment_number", "customer__name", "transaction_number", "bank_account"]
     list_filter = ["payment_method", "payment_date", "created_at"]
-    autocomplete_fields = ["customer", "created_by"]
-    readonly_fields = ["payment_number", "created_at", "updated_at"]
-    ordering = ["-created_at"]
-    list_select_related = ["customer", "created_by"]
+    autocomplete_fields = ["customer", "sales_order", "invoice", "recorded_by"]
+    readonly_fields = ["payment_number", "remaining_amount", "created_at"]
+    ordering = ["-payment_date", "-created_at"]
+    list_select_related = ["customer", "sales_order", "invoice", "recorded_by"]
 
     fieldsets = (
         (
@@ -242,6 +239,8 @@ class PaymentAdmin(admin.ModelAdmin):
                 "fields": (
                     "payment_number",
                     "customer",
+                    "sales_order",
+                    "invoice",
                     "payment_date",
                     "payment_method",
                 )
@@ -249,61 +248,46 @@ class PaymentAdmin(admin.ModelAdmin):
         ),
         ("金额信息", {"fields": ("amount", "applied_amount", "remaining_amount")}),
         ("支付信息", {"fields": ("bank_account", "transaction_number")}),
-        ("其他信息", {"fields": ("notes", "attachment")}),
+        ("其他信息", {"fields": ("notes",)}),
         (
             "系统信息",
             {
-                "fields": ("created_by", "created_at", "updated_at"),
+                "fields": ("recorded_by", "created_at"),
                 "classes": ("collapse",),
             },
         ),
     )
 
-    @admin.display(description="客户")
-    def customer_name(self, obj):
-        """显示客户名称"""
-        return obj.customer.name
 
-    @admin.display(description="创建人")
-    def created_by_name(self, obj):
-        """显示创建人"""
-        return obj.created_by.username if obj.created_by else "-"
-
-
-# @admin.register(PaymentPlan)
+@admin.register(PaymentPlan)
 class PaymentPlanAdmin(admin.ModelAdmin):
-    """收款计划管理（已注释，暂不注册）"""
+    """收款计划管理"""
 
     list_display = [
         "sales_order_number",
         "customer_name",
-        "plan_name",
-        "amount",
-        "planned_date",
-        "status_display",
+        "plan_amount",
+        "plan_date",
+        "status",
         "paid_amount",
         "remaining_amount",
         "created_at",
     ]
-    search_fields = ["sales_order__order_number", "customer__name", "plan_name"]
-    list_filter = ["status", "planned_date", "actual_payment_date", "created_at"]
-    autocomplete_fields = ["sales_order", "customer", "payment"]
-    readonly_fields = ["created_at", "updated_at"]
-    ordering = ["planned_date"]
-    list_select_related = ["sales_order", "customer", "payment"]
+    search_fields = ["sales_order__order_number", "sales_order__customer__name", "notes"]
+    list_filter = ["status", "plan_date", "created_at"]
+    autocomplete_fields = ["sales_order"]
+    readonly_fields = ["created_at", "remaining_amount"]
+    ordering = ["plan_date", "sales_order"]
+    list_select_related = ["sales_order"]
 
     fieldsets = (
-        ("基本信息", {"fields": ("sales_order", "customer", "plan_name", "status")}),
-        (
-            "金额信息",
-            {"fields": ("amount", "payment_ratio", "paid_amount", "remaining_amount")},
-        ),
-        ("日期信息", {"fields": ("planned_date", "actual_payment_date")}),
-        ("关联收款", {"fields": ("payment",)}),
+        ("基本信息", {"fields": ("sales_order", "status")}),
+        ("金额信息", {"fields": ("plan_amount", "paid_amount", "remaining_amount")}),
+        ("日期信息", {"fields": ("plan_date",)}),
         ("其他信息", {"fields": ("notes",)}),
         (
             "系统信息",
-            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+            {"fields": ("created_at",), "classes": ("collapse",)},
         ),
     )
 
@@ -315,64 +299,77 @@ class PaymentPlanAdmin(admin.ModelAdmin):
     @admin.display(description="客户")
     def customer_name(self, obj):
         """显示客户名称"""
-        return obj.customer.name
+        return obj.sales_order.customer.name if obj.sales_order_id else "-"
+
+    @admin.display(description="剩余金额")
+    def remaining_amount(self, obj):
+        return obj.plan_amount - obj.paid_amount
 
 
-# @admin.register(Statement)
+@admin.register(Statement)
 class StatementAdmin(admin.ModelAdmin):
-    """对账单管理（已注释，暂不注册）"""
+    """对账单管理"""
 
     list_display = [
         "statement_number",
-        "statement_type_display",
+        "get_statement_type_display",
         "partner_name",
-        "period_start",
-        "period_end",
+        "period",
+        "start_date",
+        "end_date",
         "opening_balance",
-        "debit_amount",
-        "credit_amount",
+        "total_debit",
+        "total_credit",
         "closing_balance",
         "status_badge",
         "confirmed_at",
         "created_at",
     ]
-    search_fields = ["statement_number", "partner__name"]
+    search_fields = ["statement_number", "customer__name", "supplier__name", "period"]
     list_filter = [
         "statement_type",
         "status",
-        "period_start",
-        "period_end",
+        "start_date",
+        "end_date",
         "confirmed_at",
         "created_at",
     ]
-    autocomplete_fields = ["partner", "confirmed_by", "created_by"]
-    readonly_fields = ["statement_number", "created_at", "updated_at"]
+    autocomplete_fields = ["customer", "supplier", "confirmed_by", "created_by"]
+    readonly_fields = ["statement_number", "closing_balance", "created_at"]
     ordering = ["-created_at"]
-    list_select_related = ["partner", "confirmed_by", "created_by"]
+    list_select_related = ["customer", "supplier", "confirmed_by", "created_by"]
 
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("statement_number", "statement_type", "partner", "status")},
+            {
+                "fields": (
+                    "statement_number",
+                    "statement_type",
+                    "customer",
+                    "supplier",
+                    "status",
+                )
+            },
         ),
-        ("对账期间", {"fields": ("period_start", "period_end", "statement_date")}),
+        ("对账期间", {"fields": ("period", "start_date", "end_date")}),
         (
             "余额信息",
             {
                 "fields": (
                     "opening_balance",
-                    "debit_amount",
-                    "credit_amount",
+                    "total_debit",
+                    "total_credit",
                     "closing_balance",
                 )
             },
         ),
-        ("确认信息", {"fields": ("confirmed_by", "confirmed_at", "confirm_notes")}),
-        ("其他信息", {"fields": ("notes", "attachment")}),
+        ("确认信息", {"fields": ("confirmed_by", "confirmed_at", "confirmation_notes")}),
+        ("其他信息", {"fields": ("notes",)}),
         (
             "系统信息",
             {
-                "fields": ("created_by", "created_at", "updated_at"),
+                "fields": ("created_by", "created_at"),
                 "classes": ("collapse",),
             },
         ),
@@ -380,8 +377,11 @@ class StatementAdmin(admin.ModelAdmin):
 
     @admin.display(description="对方单位")
     def partner_name(self, obj):
-        """显示对方单位名称"""
-        return obj.partner.name if hasattr(obj.partner, "name") else str(obj.partner)
+        if obj.customer_id:
+            return obj.customer.name
+        if obj.supplier_id:
+            return obj.supplier.name
+        return "-"
 
     # 发票状态徽章
     status_badge = create_status_badge_method(

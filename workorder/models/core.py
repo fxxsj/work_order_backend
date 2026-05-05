@@ -668,11 +668,17 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
             Notification.create_notification(
                 recipient=work_order.created_by,
                 notification_type="process_completed",
-                title=f"工序完成：{self.process.name}",
-                content=f'施工单 {work_order.order_number} 的工序"{self.process.name}"已完成',
+                title="工序完成",
+                content=f"工序 {self.process.name} 已完成",
                 priority="normal",
                 work_order=work_order,
                 work_order_process=self,
+                template_key="process_completed",
+                template_variables={
+                    "process_name": self.process.name,
+                    "workorder_number": work_order.order_number,
+                    "completed_by": "系统",
+                },
             )
 
         # 检查是否所有工序都完成，如果是则自动标记施工单为完成
@@ -690,10 +696,15 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
                 Notification.create_notification(
                     recipient=work_order.created_by,
                     notification_type="workorder_completed",
-                    title=f"施工单完成：{work_order.order_number}",
-                    content=f"施工单 {work_order.order_number} 所有工序已完成，施工单已标记为完成",
+                    title="施工单已完成",
+                    content=f"施工单 {work_order.order_number} 已完成",
                     priority="high",
                     work_order=work_order,
+                    template_key="workorder_completed",
+                    template_variables={
+                        "workorder_number": work_order.order_number,
+                        "customer": work_order.customer.name if work_order.customer else "",
+                    },
                 )
 
         return True
@@ -763,12 +774,18 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
             Notification.create_notification(
                 recipient=task.assigned_operator,
                 notification_type="task_assigned",
-                title=f"新任务分派：{task.work_content}",
-                content=f"您有一个新任务：{task.work_content}（施工单：{self.work_order.order_number}）",
+                title="新任务分配",
+                content=f"您有新的任务：{task.work_content}",
                 priority="normal",
                 work_order=self.work_order,
                 work_order_process=self,
                 task=task,
+                template_key="task_assigned",
+                template_variables={
+                    "task_name": task.work_content,
+                    "workorder_number": self.work_order.order_number,
+                    "assigned_by": "系统",
+                },
             )
 
     def _update_product_stock_on_packaging(self):

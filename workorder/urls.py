@@ -34,7 +34,8 @@ from .views.notification import (
 )
 from .auth_views import (
     LoginView, LogoutView, TokenRefreshViewWithDocs, get_current_user, register_view,
-    get_salespersons, get_users_by_department, change_password, update_profile
+    get_salespersons, get_users_by_department, change_password, update_profile,
+    AdminSessionView,
 )
 
 router = DefaultRouter()
@@ -105,6 +106,7 @@ urlpatterns = [
     path('auth/login/', LoginView.as_view(), name='login'),
     path('auth/refresh/', TokenRefreshViewWithDocs.as_view(), name='token-refresh'),
     path('auth/logout/', LogoutView.as_view(), name='logout'),
+    path('auth/admin-session/', AdminSessionView.as_view(), name='admin-session'),
     path('auth/user/', get_current_user, name='current-user'),
     path('auth/register/', register_view, name='register'),
     path('auth/salespersons/', get_salespersons, name='salespersons'),

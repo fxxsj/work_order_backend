@@ -239,15 +239,18 @@ class TaskAssignmentService:
         Notification.create_notification(
             recipient=operator,
             notification_type='task_assigned',
-            title=f'新任务分配：{task.work_content}',
-            content=f'{assigned_by.username} 将任务 "{task.work_content}" 分配给您。'
-                    f'施工单：{work_order.order_number if work_order else "N/A"}'
-                    f'{f"（原操作员：{previous_operator.username}）" if previous_operator else ""}'
-                    f'{f" 备注：{notes}" if notes else ""}',
+            title='新任务分配',
+            content=f'您有新的任务：{task.work_content}',
             priority='normal',
             work_order=work_order,
             work_order_process=task.work_order_process,
-            task=task
+            task=task,
+            template_key='task_assigned',
+            template_variables={
+                'task_name': task.work_content,
+                'workorder_number': work_order.order_number if work_order else 'N/A',
+                'assigned_by': assigned_by.username,
+            },
         )
 
         logger.info(
@@ -432,14 +435,18 @@ class TaskAssignmentService:
         Notification.create_notification(
             recipient=operator,
             notification_type='task_assigned',
-            title=f'任务认领成功：{task.work_content}',
-            content=f'您已成功认领任务 "{task.work_content}"。'
-                    f'施工单：{work_order.order_number if work_order else "N/A"}'
-                    f'{f" 备注：{notes}" if notes else ""}',
+            title='新任务分配',
+            content=f'您有新的任务：{task.work_content}',
             priority='normal',
             work_order=work_order,
             work_order_process=task.work_order_process,
-            task=task
+            task=task,
+            template_key='task_assigned',
+            template_variables={
+                'task_name': task.work_content,
+                'workorder_number': work_order.order_number if work_order else 'N/A',
+                'assigned_by': operator.username,
+            },
         )
 
         logger.info(

@@ -46,14 +46,14 @@ class DeliveryItemInline(FixedInlineModelAdminMixin, admin.TabularInline):
 # ==================== Admin 类 ====================
 
 
-# @admin.register(ProductStock)
+@admin.register(ProductStock)
 class ProductStockAdmin(admin.ModelAdmin):
-    """成品库存管理（已注释，暂不注册）"""
+    """成品库存管理"""
 
     list_display = [
         "product_code",
         "product_name",
-        "batch_number",
+        "batch_no",
         "quantity",
         "reserved_quantity",
         "available_quantity",
@@ -61,18 +61,17 @@ class ProductStockAdmin(admin.ModelAdmin):
         "status_badge",
         "production_date",
         "expiry_date",
-        "days_until_expiry",
         "created_at",
     ]
-    search_fields = ["product__name", "product__code", "batch_number", "location"]
+    search_fields = ["product__name", "product__code", "batch_no", "location"]
     list_filter = ["status", "production_date", "expiry_date", "created_at"]
-    list_select_related = ["product"]
-    autocomplete_fields = ["product"]
-    readonly_fields = ["created_at", "updated_at", "days_until_expiry", "total_value"]
+    list_select_related = ["product", "work_order"]
+    autocomplete_fields = ["product", "work_order"]
+    readonly_fields = ["created_at", "updated_at", "available_quantity", "total_value"]
     ordering = ["-created_at"]
 
     fieldsets = (
-        ("基本信息", {"fields": ("product", "batch_number", "status")}),
+        ("基本信息", {"fields": ("product", "batch_no", "work_order", "status")}),
         (
             "数量信息",
             {
@@ -84,7 +83,7 @@ class ProductStockAdmin(admin.ModelAdmin):
                 )
             },
         ),
-        ("位置信息", {"fields": ("location", "warehouse_area")}),
+        ("位置信息", {"fields": ("location",)}),
         ("日期信息", {"fields": ("production_date", "expiry_date")}),
         ("成本信息", {"fields": ("unit_cost", "total_value")}),
         ("其他信息", {"fields": ("notes",)}),
@@ -113,49 +112,39 @@ class ProductStockAdmin(admin.ModelAdmin):
     status_badge = create_status_badge_method(STOCK_STATUS_COLORS)
 
 
-# @admin.register(StockIn)
+@admin.register(StockIn)
 class StockInAdmin(admin.ModelAdmin):
-    """入库单管理（已注释，暂不注册）"""
+    """入库单管理"""
 
     list_display = [
         "order_number",
-        "product_name",
-        "batch_number",
-        "quantity",
-        "unit",
         "status_badge",
+        "work_order",
         "stock_in_date",
+        "submitted_by",
         "approved_by_name",
+        "operator",
         "created_at",
     ]
-    search_fields = ["order_number", "product__name", "batch_number"]
+    search_fields = ["order_number", "work_order__order_number", "notes"]
     list_filter = ["status", "stock_in_date", "approved_at", "created_at"]
-    list_select_related = ["product", "work_order", "approved_by", "created_by"]
-    autocomplete_fields = ["product", "work_order", "approved_by", "created_by"]
-    readonly_fields = ["order_number", "created_at", "updated_at"]
+    list_select_related = ["work_order", "approved_by", "submitted_by", "operator"]
+    autocomplete_fields = ["work_order", "approved_by", "submitted_by", "operator"]
+    readonly_fields = ["order_number", "created_at"]
     ordering = ["-created_at"]
 
     fieldsets = (
-        ("基本信息", {"fields": ("order_number", "product", "work_order", "status")}),
-        ("数量信息", {"fields": ("quantity", "unit", "batch_number")}),
-        ("位置信息", {"fields": ("location", "warehouse_area")}),
-        ("日期信息", {"fields": ("production_date", "expiry_date", "stock_in_date")}),
-        ("质量信息", {"fields": ("quality_inspection", "inspection_result")}),
-        ("审核信息", {"fields": ("approved_by", "approved_at", "approval_notes")}),
-        ("其他信息", {"fields": ("notes", "attachment")}),
+        ("基本信息", {"fields": ("order_number", "work_order", "status", "stock_in_date")}),
+        ("审核信息", {"fields": ("submitted_by", "submitted_at", "approved_by", "approved_at")}),
+        ("其他信息", {"fields": ("operator", "notes")}),
         (
             "系统信息",
             {
-                "fields": ("created_by", "created_at", "updated_at"),
+                "fields": ("created_at",),
                 "classes": ("collapse",),
             },
         ),
     )
-
-    @admin.display(description="产品")
-    def product_name(self, obj):
-        """显示产品名称"""
-        return obj.product.name
 
     # 入库单状态徽章
     status_badge = create_status_badge_method(
@@ -163,7 +152,8 @@ class StockInAdmin(admin.ModelAdmin):
             "draft": "#909399",
             "submitted": "#E6A23C",
             "approved": "#67C23A",
-            "rejected": "#F56C6C",
+            "completed": "#409EFF",
+            "cancelled": "#F56C6C",
         }
     )
 
@@ -173,55 +163,52 @@ class StockInAdmin(admin.ModelAdmin):
         return obj.approved_by.username if obj.approved_by else "-"
 
 
-# @admin.register(StockOut)
+@admin.register(StockOut)
 class StockOutAdmin(admin.ModelAdmin):
-    """出库单管理（已注释，暂不注册）"""
+    """出库单管理"""
 
     list_display = [
         "order_number",
-        "product_name",
-        "outbound_type_display",
-        "quantity",
-        "unit",
+        "get_out_type_display",
         "status_badge",
-        "outbound_date",
+        "delivery_order",
+        "stock_out_date",
+        "submitted_by",
+        "approved_by",
+        "operator",
         "created_at",
     ]
-    search_fields = ["order_number", "product__name"]
-    list_filter = ["outbound_type", "status", "outbound_date", "created_at"]
-    list_select_related = ["product", "delivery_order", "created_by"]
-    autocomplete_fields = ["product", "delivery_order", "created_by"]
-    readonly_fields = ["order_number", "created_at", "updated_at"]
+    search_fields = ["order_number", "delivery_order__order_number", "notes"]
+    list_filter = ["out_type", "status", "stock_out_date", "created_at"]
+    list_select_related = ["delivery_order", "submitted_by", "approved_by", "operator"]
+    autocomplete_fields = ["delivery_order", "submitted_by", "approved_by", "operator"]
+    readonly_fields = ["order_number", "created_at"]
     ordering = ["-created_at"]
 
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("order_number", "product", "outbound_type", "status")},
+            {"fields": ("order_number", "out_type", "delivery_order", "status")},
         ),
-        ("数量信息", {"fields": ("quantity", "unit", "batch_number")}),
-        ("关联信息", {"fields": ("delivery_order", "related_order")}),
-        ("日期信息", {"fields": ("outbound_date",)}),
+        ("日期信息", {"fields": ("stock_out_date",)}),
+        ("审核信息", {"fields": ("submitted_by", "submitted_at", "approved_by", "approved_at")}),
         ("其他信息", {"fields": ("notes",)}),
         (
             "系统信息",
             {
-                "fields": ("created_by", "created_at", "updated_at"),
+                "fields": ("operator", "created_at"),
                 "classes": ("collapse",),
             },
         ),
     )
 
-    @admin.display(description="产品")
-    def product_name(self, obj):
-        """显示产品名称"""
-        return obj.product.name
-
     # 出库单状态徽章
     status_badge = create_status_badge_method(
         {
-            "pending": "#909399",
-            "completed": "#67C23A",
+            "draft": "#909399",
+            "submitted": "#E6A23C",
+            "approved": "#67C23A",
+            "completed": "#409EFF",
             "cancelled": "#F56C6C",
         }
     )
@@ -347,61 +334,50 @@ class DeliveryItemAdmin(admin.ModelAdmin):
         return obj.product.name
 
 
-# @admin.register(QualityInspection)
+@admin.register(QualityInspection)
 class QualityInspectionAdmin(admin.ModelAdmin):
-    """质量检验管理（已注释，暂不注册）"""
+    """质量检验管理"""
 
     list_display = [
         "inspection_number",
         "product_name",
-        "batch_number",
-        "inspection_type_display",
+        "batch_no",
+        "get_inspection_type_display",
         "result_badge",
-        "status_badge",
         "inspection_date",
         "inspector_name",
         "defective_rate",
         "created_at",
     ]
-    search_fields = ["inspection_number", "product__name", "batch_number"]
+    search_fields = ["inspection_number", "product__name", "batch_no"]
     list_filter = [
         "inspection_type",
         "result",
-        "status",
         "inspection_date",
         "created_at",
     ]
-    list_select_related = ["product", "work_order", "stock_in", "inspector", "created_by"]
-    autocomplete_fields = [
-        "product",
-        "work_order",
-        "stock_in",
-        "inspector",
-        "created_by",
-    ]
+    list_select_related = ["product", "work_order", "inspector"]
+    autocomplete_fields = ["product", "work_order", "inspector"]
     readonly_fields = [
         "inspection_number",
         "defective_rate",
-        "qualified_rate",
         "created_at",
-        "updated_at",
     ]
-    ordering = ["-created_at"]
+    ordering = ["-inspection_date", "-created_at"]
 
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("inspection_number", "product", "work_order", "stock_in")},
+            {"fields": ("inspection_number", "product", "work_order", "batch_no")},
         ),
         (
             "检验信息",
             {
                 "fields": (
                     "inspection_type",
-                    "status",
                     "inspection_date",
                     "inspector",
-                    "standard",
+                    "inspection_standard",
                 )
             },
         ),
@@ -410,31 +386,20 @@ class QualityInspectionAdmin(admin.ModelAdmin):
             {
                 "fields": (
                     "inspection_quantity",
-                    "sample_quantity",
-                    "qualified_quantity",
-                    "defective_quantity",
+                    "passed_quantity",
+                    "failed_quantity",
                 )
             },
         ),
-        ("质量指标", {"fields": ("defective_rate", "qualified_rate")}),
-        ("结果信息", {"fields": ("result", "disposition", "inspection_notes")}),
-        (
-            "处理信息",
-            {
-                "fields": (
-                    "rework_quantity",
-                    "scrap_quantity",
-                    "return_quantity",
-                    "special_use_quantity",
-                ),
-                "classes": ("collapse",),
-            },
-        ),
-        ("附件", {"fields": ("attachment",), "classes": ("collapse",)}),
+        ("质量指标", {"fields": ("defective_rate",)}),
+        ("结果信息", {"fields": ("result", "disposition", "disposition_notes")}),
+        ("检验项目", {"fields": ("inspection_items", "defects", "defect_description")}),
+        ("附件", {"fields": ("attachment",)}),
+        ("备注", {"fields": ("notes",)}),
         (
             "系统信息",
             {
-                "fields": ("created_by", "created_at", "updated_at"),
+                "fields": ("created_at",),
                 "classes": ("collapse",),
             },
         ),
@@ -464,12 +429,3 @@ class QualityInspectionAdmin(admin.ModelAdmin):
             colors.get(obj.result, "#909399"),
             obj.get_result_display(),
         )
-
-    # 质检状态徽章
-    status_badge = create_status_badge_method(
-        {
-            "pending": "#909399",
-            "in_progress": "#E6A23C",
-            "completed": "#67C23A",
-        }
-    )

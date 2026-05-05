@@ -14,14 +14,21 @@ from django.contrib import admin
 from django.utils import timezone
 from django.utils.html import format_html
 
-from ..models import Notification, TaskAssignmentRule, UserProfile, WorkOrderApprovalLog
+from ..models import (
+    Notification,
+    NotificationTemplate,
+    SystemNotificationSettings,
+    TaskAssignmentRule,
+    UserProfile,
+    WorkOrderApprovalLog,
+)
 
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     """用户扩展信息管理"""
 
-    list_display = ["user", "get_departments_display", "created_at"]
+    list_display = ["user", "get_departments_display", "notification_preference_count", "created_at"]
     list_filter = ["departments", "created_at"]
     search_fields = [
         "user__username",
@@ -35,6 +42,7 @@ class UserProfileAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ("基本信息", {"fields": ("user", "departments")}),
+        ("通知偏好", {"fields": ("notification_preferences",), "classes": ("collapse",)}),
         (
             "系统信息",
             {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
@@ -51,6 +59,72 @@ class UserProfileAdmin(admin.ModelAdmin):
             if departments.exists():
                 return ", ".join([dept.name for dept in departments])
         return "-"
+
+    @admin.display(description="通知项数")
+    def notification_preference_count(self, obj):
+        return len(obj.notification_preferences or {})
+
+
+@admin.register(SystemNotificationSettings)
+class SystemNotificationSettingsAdmin(admin.ModelAdmin):
+    """系统通知设置管理"""
+
+    list_display = [
+        "singleton_key",
+        "websocket_enabled",
+        "email_enabled",
+        "sms_enabled",
+        "email_threshold",
+        "notification_retention_days",
+        "max_notifications_per_user",
+        "updated_at",
+    ]
+    readonly_fields = ["singleton_key", "created_at", "updated_at"]
+
+    fieldsets = (
+        (
+            "通知通道",
+            {
+                "fields": (
+                    "singleton_key",
+                    "websocket_enabled",
+                    "email_enabled",
+                    "sms_enabled",
+                    "email_threshold",
+                )
+            },
+        ),
+        (
+            "系统策略",
+            {
+                "fields": (
+                    "notification_retention_days",
+                    "auto_cleanup_enabled",
+                    "max_notifications_per_user",
+                )
+            },
+        ),
+        (
+            "系统信息",
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
+
+    def has_add_permission(self, request):
+        if SystemNotificationSettings.objects.exists():
+            return False
+        return super().has_add_permission(request)
+
+
+@admin.register(NotificationTemplate)
+class NotificationTemplateAdmin(admin.ModelAdmin):
+    """通知模板管理"""
+
+    list_display = ["key", "title", "is_active", "updated_at"]
+    list_filter = ["is_active", "created_at", "updated_at"]
+    search_fields = ["key", "title", "message"]
+    readonly_fields = ["created_at", "updated_at"]
+    ordering = ["key"]
 
 
 @admin.register(WorkOrderApprovalLog)

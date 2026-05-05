@@ -26,8 +26,6 @@ def workorder_created_handler(sender, instance, created, **kwargs):
             event_type=NotificationEvent.WORKORDER_CREATED,
             recipients=_get_supervisors(),
             data={
-                'title': '新施工单创建',
-                'message': f'新施工单 {instance.order_number} 已创建',
                 'workorder_id': instance.id,
                 'workorder_number': instance.order_number,
                 'customer': instance.customer.name if instance.customer else '',
@@ -66,8 +64,6 @@ def task_status_change_handler(sender, instance, **kwargs):
                         event_type=NotificationEvent.TASK_STARTED,
                         recipients=[instance.assigned_operator, instance.work_order_process.work_order.created_by] if instance.assigned_operator else [instance.work_order_process.work_order.created_by],
                         data={
-                            'title': '任务开始执行',
-                            'message': f'任务 {instance.work_content} 已开始执行',
                             'task_id': instance.id,
                             'task_name': instance.work_content,
                             'workorder_id': instance.work_order_process.work_order.id,
@@ -170,8 +166,6 @@ class DeadlineWarningService:
                 event_type=NotificationEvent.TASK_OVERDUE,
                 recipients=recipients,
                 data={
-                    'title': '任务逾期警告',
-                    'message': f'任务 {task.work_content} 已逾期',
                     'task_id': task.id,
                     'task_name': task.work_content,
                     'workorder_id': task.work_order_process.work_order.id,
@@ -208,8 +202,6 @@ class DeadlineWarningService:
                 event_type=NotificationEvent.WORKORDER_UPDATED,
                 recipients=list(set(recipients)),
                 data={
-                    'title': '施工单信息更新',
-                    'message': f'施工单 {workorder.order_number} 的信息已更新',
                     'workorder_id': workorder.id,
                     'workorder_number': workorder.order_number,
                     'updated_fields': notified_fields,

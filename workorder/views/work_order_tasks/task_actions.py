@@ -755,12 +755,18 @@ class TaskActionsMixin:
             Notification.create_notification(
                 recipient=task.assigned_operator,
                 notification_type="task_cancelled",
-                title=f"任务已取消：{task.work_content}",
-                content=f'任务"{task.work_content}"已被取消。取消原因：{cancellation_reason}',
+                title="任务已取消",
+                content=f'任务 "{task.work_content}" 已被取消',
                 priority="normal",
                 work_order=work_order_process.work_order,
                 work_order_process=work_order_process,
                 task=task,
+                template_key="task_cancelled",
+                template_variables={
+                    "task_name": task.work_content,
+                    "workorder_number": work_order_process.work_order.order_number,
+                    "cancellation_reason": cancellation_reason,
+                },
             )
 
         # 检查工序状态：如果所有任务都取消或完成，需要更新工序状态

@@ -14,6 +14,8 @@ Django Admin 管理界面按业务领域拆分。
 - sales: 销售管理 (SalesOrder, SalesOrderItem)
 - finance: 财务管理 (Invoice, Payment, Statement)
 - inventory: 库存管理 (ProductStock, StockIn, StockOut, DeliveryOrder)
+- approvals: 多级审批管理
+- audit: 审计日志管理
 """
 
 # 应用 Django admin 检查器补丁
@@ -24,12 +26,20 @@ from .mixins import FixedInlineModelAdminMixin, _patched_check_inlines
 
 ModelAdmin.checks_class._check_inlines = _patched_check_inlines
 
+from .approvals import (
+    ApprovalEscalationAdmin,
+    ApprovalRuleAdmin,
+    ApprovalStepAdmin,
+    ApprovalWorkflowAdmin,
+)
+from .audit import AuditLogAdmin, AuditLogExportAdmin, AuditLogSettingsAdmin
 from .assets import ArtworkAdmin, DieAdmin, EmbossingPlateAdmin, FoilingPlateAdmin
 
 # 导入各模块的 Admin 类
 from .base import CustomerAdmin, DepartmentAdmin, ProcessAdmin
 from .core import (
     ProcessLogAdmin,
+    TaskLogAdmin,
     WorkOrderAdmin,
     WorkOrderMaterialAdmin,
     WorkOrderProcessAdmin,
@@ -57,12 +67,20 @@ from .materials import (
     MaterialSupplierAdmin,
     PurchaseOrderAdmin,
     PurchaseOrderItemAdmin,
+    PurchaseReceiveRecordAdmin,
     SupplierAdmin,
 )
-from .products import ProductAdmin, ProductGroupAdmin, ProductGroupItemAdmin
+from .products import (
+    ProductAdmin,
+    ProductGroupAdmin,
+    ProductGroupItemAdmin,
+    ProductStockLogAdmin,
+)
 from .sales import SalesOrderAdmin, SalesOrderItemAdmin
 from .system import (
     NotificationAdmin,
+    NotificationTemplateAdmin,
+    SystemNotificationSettingsAdmin,
     TaskAssignmentRuleAdmin,
     UserProfileAdmin,
     WorkOrderApprovalLogAdmin,
@@ -80,12 +98,14 @@ __all__ = [
     "ProductAdmin",
     "ProductGroupAdmin",
     "ProductGroupItemAdmin",
+    "ProductStockLogAdmin",
     # Material Admins
     "MaterialAdmin",
     "SupplierAdmin",
     "MaterialSupplierAdmin",
     "PurchaseOrderAdmin",
     "PurchaseOrderItemAdmin",
+    "PurchaseReceiveRecordAdmin",
     # Asset Admins
     "ArtworkAdmin",
     "DieAdmin",
@@ -97,11 +117,14 @@ __all__ = [
     "WorkOrderMaterialAdmin",
     "ProcessLogAdmin",
     "WorkOrderTaskAdmin",
+    "TaskLogAdmin",
     # System Admins
     "UserProfileAdmin",
     "WorkOrderApprovalLogAdmin",
     "TaskAssignmentRuleAdmin",
     "NotificationAdmin",
+    "NotificationTemplateAdmin",
+    "SystemNotificationSettingsAdmin",
     # Sales Admins
     "SalesOrderAdmin",
     "SalesOrderItemAdmin",
@@ -120,4 +143,13 @@ __all__ = [
     "DeliveryOrderAdmin",
     "DeliveryItemAdmin",
     "QualityInspectionAdmin",
+    # Approval Admins
+    "ApprovalWorkflowAdmin",
+    "ApprovalStepAdmin",
+    "ApprovalRuleAdmin",
+    "ApprovalEscalationAdmin",
+    # Audit Admins
+    "AuditLogAdmin",
+    "AuditLogExportAdmin",
+    "AuditLogSettingsAdmin",
 ]

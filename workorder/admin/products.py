@@ -17,6 +17,7 @@ from ..models import (
     ProductGroupItem,
     ProductImage,
     ProductMaterial,
+    ProductStockLog,
 )
 from .mixins import FixedInlineModelAdminMixin
 
@@ -138,3 +139,23 @@ class ProductGroupItemAdmin(admin.ModelAdmin):
         ),
         ("系统信息", {"fields": ("created_at",), "classes": ("collapse",)}),
     )
+
+
+@admin.register(ProductStockLog)
+class ProductStockLogAdmin(admin.ModelAdmin):
+    """产品库存日志管理"""
+
+    list_display = [
+        "product",
+        "change_type",
+        "quantity",
+        "old_quantity",
+        "new_quantity",
+        "created_by",
+        "created_at",
+    ]
+    list_filter = ["change_type", "created_at"]
+    search_fields = ["product__name", "product__code", "reason", "created_by__username"]
+    autocomplete_fields = ["product", "created_by"]
+    readonly_fields = ["created_at"]
+    ordering = ["-created_at"]

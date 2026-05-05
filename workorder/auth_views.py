@@ -230,6 +230,32 @@ class LogoutView(APIView):
         return APIResponse.success(message='已成功登出')
 
 
+class AdminSessionView(APIView):
+    """为 Django Admin 建立会话"""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = EmptySerializer
+
+    @extend_schema(
+        tags=["用户"],
+        summary="创建 Django Admin 会话",
+        responses={
+            200: OpenApiResponse(description="会话创建成功"),
+            403: OpenApiResponse(description="当前用户无后台权限"),
+        },
+    )
+    def post(self, request):
+        user = request.user
+        if not user.is_staff:
+            return APIResponse.error("当前用户无管理后台权限", code=status.HTTP_403_FORBIDDEN)
+
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        return APIResponse.success(
+            data={"admin_url": "/admin/"},
+            message="管理后台会话已创建",
+        )
+
+
 class TokenRefreshViewWithDocs(TokenRefreshView):
     """刷新访问令牌视图"""
 

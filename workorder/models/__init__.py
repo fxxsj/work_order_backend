@@ -78,7 +78,14 @@ from .products import (
     ProductStockLog,
 )
 from .sales import SalesOrder, SalesOrderItem
-from .system import Notification, TaskAssignmentRule, UserProfile, WorkOrderApprovalLog
+from .system import (
+    Notification,
+    NotificationTemplate,
+    SystemNotificationSettings,
+    TaskAssignmentRule,
+    UserProfile,
+    WorkOrderApprovalLog,
+)
 
 __all__ = [
     # 基础模型
@@ -122,6 +129,8 @@ __all__ = [
     "UserProfile",
     "WorkOrderApprovalLog",
     "Notification",
+    "NotificationTemplate",
+    "SystemNotificationSettings",
     "TaskAssignmentRule",
     # 销售模型
     "SalesOrder",
