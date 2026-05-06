@@ -235,12 +235,12 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("税率必须在0-100之间")
         return value
 
-    def to_internal_value(self, data):
-        """移除客户端传入的 order_number（系统自动生成）"""
+    def get_value(self, data):
+        """移除客户端传入的 order_number（系统自动生成），避免 required 验证报错"""
         if isinstance(data, dict):
             data = data.copy()
             data.pop("order_number", None)
-        return super().to_internal_value(data)
+        return super().get_value(data)
 
     def validate_discount_amount(self, value):
         """验证折扣金额"""
