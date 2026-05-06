@@ -7,6 +7,7 @@ from django.contrib.auth.models import User
 from rest_framework.test import APIClient
 from .conftest import TestDataFactory, APITestCaseMixin
 from ..models import WorkOrder, Customer, Product, Process
+from ..models.sales import SalesOrder, SalesOrderItem
 import json
 
 
@@ -21,6 +22,20 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         self.customer = TestDataFactory.create_customer(salesperson=self.user)
         self.product = TestDataFactory.create_product()
         self.process = Process.objects.create(name='测试工序', code='TEST')
+        self.sales_order = SalesOrder.objects.create(
+            customer=self.customer,
+            order_date='2026-01-01',
+            delivery_date='2026-12-31',
+            status='approved',
+            created_by=self.user,
+        )
+        self.sales_order_item = SalesOrderItem.objects.create(
+            sales_order=self.sales_order,
+            product=self.product,
+            quantity=100,
+            unit='件',
+            unit_price=10,
+        )
 
     def test_list_workorders(self):
         """测试获取施工单列表"""
@@ -58,6 +73,116 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         # 应该成功创建
         self.assertEqual(response.status_code, 201)
         self.assertIn('order_number', response.data['data'])
+
+    def test_create_workorder_with_split_sales_order_item_quantity(self):
+        """测试手工创建施工单时允许同一订单明细拆量开单。"""
+        first_payload = {
+            'customer': self.customer.id,
+            'sales_order': self.sales_order.id,
+            'production_quantity': 60,
+            'delivery_date': '2026-12-31',
+            'products_data': [
+                {
+                    'product': self.product.id,
+                    'quantity': 60,
+                    'unit': '件',
+                    'source_type': 'sales_order',
+                    'sales_order_item': self.sales_order_item.id,
+                }
+            ],
+            'processes': [self.process.id],
+        }
+        second_payload = {
+            'customer': self.customer.id,
+            'sales_order': self.sales_order.id,
+            'production_quantity': 40,
+            'delivery_date': '2026-12-31',
+            'products_data': [
+                {
+                    'product': self.product.id,
+                    'quantity': 40,
+                    'unit': '件',
+                    'source_type': 'sales_order',
+                    'sales_order_item': self.sales_order_item.id,
+                }
+            ],
+            'processes': [self.process.id],
+        }
+
+        first_response = self.api_post('/api/v1/workorders/', first_payload, user=self.user)
+        second_response = self.api_post('/api/v1/workorders/', second_payload, user=self.user)
+
+        self.assertEqual(first_response.status_code, 201)
+        self.assertEqual(second_response.status_code, 201)
+
+    def test_create_workorder_rejects_over_allocated_sales_order_item_quantity(self):
+        """测试手工创建施工单时超出订单明细剩余可开数量会被拒绝。"""
+        first_payload = {
+            'customer': self.customer.id,
+            'sales_order': self.sales_order.id,
+            'production_quantity': 60,
+            'delivery_date': '2026-12-31',
+            'products_data': [
+                {
+                    'product': self.product.id,
+                    'quantity': 60,
+                    'unit': '件',
+                    'source_type': 'sales_order',
+                    'sales_order_item': self.sales_order_item.id,
+                }
+            ],
+            'processes': [self.process.id],
+        }
+        over_payload = {
+            'customer': self.customer.id,
+            'sales_order': self.sales_order.id,
+            'production_quantity': 50,
+            'delivery_date': '2026-12-31',
+            'products_data': [
+                {
+                    'product': self.product.id,
+                    'quantity': 50,
+                    'unit': '件',
+                    'source_type': 'sales_order',
+                    'sales_order_item': self.sales_order_item.id,
+                }
+            ],
+            'processes': [self.process.id],
+        }
+
+        first_response = self.api_post('/api/v1/workorders/', first_payload, user=self.user)
+        over_response = self.api_post('/api/v1/workorders/', over_payload, user=self.user)
+
+        self.assertEqual(first_response.status_code, 201)
+        self.assertEqual(over_response.status_code, 400)
+        self.assertIn('products_data', over_response.data['errors'])
+
+    def test_sales_order_candidates_include_remaining_quantity(self):
+        """测试施工单来源订单候选接口返回剩余可开数量。"""
+        WorkOrder.objects.create(
+            customer=self.customer,
+            sales_order=self.sales_order,
+            production_quantity=60,
+            delivery_date='2026-12-31',
+            created_by=self.user,
+            manager=self.user,
+        ).products.create(
+            product=self.product,
+            quantity=60,
+            unit='件',
+            source_type='sales_order',
+            sales_order_item=self.sales_order_item,
+        )
+
+        response = self.api_get('/api/v1/workorders/sales_order_candidates/', user=self.user)
+
+        self.assertEqual(response.status_code, 200)
+        candidates = response.data['data']
+        self.assertEqual(len(candidates), 1)
+        available_products = candidates[0]['available_products']
+        self.assertEqual(len(available_products), 1)
+        self.assertEqual(available_products[0]['allocated_quantity'], 60)
+        self.assertEqual(available_products[0]['remaining_quantity'], 40)
 
     def test_get_workorder_detail(self):
         """测试获取施工单详情"""

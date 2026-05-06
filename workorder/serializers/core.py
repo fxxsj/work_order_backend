@@ -6,6 +6,7 @@
 
 from typing import Any, Dict, List, Optional
 
+from django.db.models import Sum
 from rest_framework import serializers
 
 from ..models.assets import ArtworkProduct
@@ -21,6 +22,7 @@ from ..models.core import (
     WorkOrderTask,
 )
 from ..models.products import Product
+from ..models.sales import SalesOrderItem
 
 
 class ProcessLogSerializer(serializers.ModelSerializer):
@@ -441,6 +443,18 @@ class WorkOrderProductSerializer(serializers.ModelSerializer):
 
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_code = serializers.CharField(source="product.code", read_only=True)
+    source_type_display = serializers.CharField(
+        source="get_source_type_display", read_only=True
+    )
+    source_sales_order_id = serializers.IntegerField(
+        source="sales_order_item.sales_order_id", read_only=True, allow_null=True
+    )
+    source_sales_order_number = serializers.CharField(
+        source="sales_order_item.sales_order.order_number",
+        read_only=True,
+        allow_null=True,
+        default=None,
+    )
     product_detail = serializers.SerializerMethodField()
     imposition_quantity = serializers.SerializerMethodField()
 
@@ -1037,6 +1051,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             "id",
             "order_number",
             "customer",
+            "sales_order",
             "status",
             "priority",
             "order_date",
@@ -1062,6 +1077,8 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """验证数据，根据工序验证版的选择"""
+        instance = getattr(self, "instance", None)
+        sales_order = data.get("sales_order", getattr(instance, "sales_order", None))
         products_data = data.get("products_data", [])
         artworks = data.get("artworks")  # 不设置默认值，以便区分是否发送
         dies = data.get("dies")  # 不设置默认值，以便区分是否发送
@@ -1072,13 +1089,143 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         printing_type = data.get("printing_type")
         process_ids = data.get("processes", [])
 
+        if sales_order is not None:
+            customer = data.get("customer")
+            if customer is None:
+                data["customer"] = sales_order.customer
+            elif customer.id != sales_order.customer_id:
+                raise serializers.ValidationError(
+                    {"customer": "所选客户订单与当前客户不一致，请重新选择"}
+                )
+
+            if not data.get("order_date"):
+                data["order_date"] = sales_order.order_date
+            if not data.get("delivery_date"):
+                data["delivery_date"] = sales_order.delivery_date
+            if not products_data and not data.get("total_amount"):
+                data["total_amount"] = sales_order.total_amount
+
+        existing_allocated_quantities = {}
+        if instance is not None:
+            existing_allocated_quantities = {
+                item.sales_order_item_id: item.quantity or 0
+                for item in instance.products.filter(
+                    sales_order_item__isnull=False, source_type="sales_order"
+                )
+            }
+
+        validated_products_data = []
+        requested_quantities_by_sales_item = {}
+        for index, item in enumerate(products_data, start=1):
+            if not isinstance(item, dict):
+                raise serializers.ValidationError(
+                    {"products_data": f"第 {index} 个产品配置无效"}
+                )
+
+            normalized_item = dict(item)
+            source_type = normalized_item.get("source_type") or "stock"
+            normalized_item["source_type"] = source_type
+            sales_order_item_id = normalized_item.get("sales_order_item")
+
+            if source_type == "sales_order":
+                if not sales_order_item_id:
+                    raise serializers.ValidationError(
+                        {
+                            "products_data": f"第 {index} 个产品来源为客户订单时，必须选择来源订单明细"
+                        }
+                    )
+
+                try:
+                    sales_order_item = SalesOrderItem.objects.select_related(
+                        "sales_order", "product"
+                    ).get(id=sales_order_item_id)
+                except SalesOrderItem.DoesNotExist as exc:
+                    raise serializers.ValidationError(
+                        {"products_data": f"第 {index} 个来源订单明细不存在"}
+                    ) from exc
+
+                product_id = normalized_item.get("product")
+                if not product_id:
+                    normalized_item["product"] = sales_order_item.product_id
+                elif int(product_id) != sales_order_item.product_id:
+                    raise serializers.ValidationError(
+                        {
+                            "products_data": f"第 {index} 个产品与来源订单明细中的产品不一致"
+                        }
+                    )
+
+                if not normalized_item.get("unit"):
+                    normalized_item["unit"] = sales_order_item.unit or "件"
+
+                try:
+                    quantity = int(normalized_item.get("quantity") or 0)
+                except (TypeError, ValueError) as exc:
+                    raise serializers.ValidationError(
+                        {"products_data": f"第 {index} 个产品数量无效"}
+                    ) from exc
+                if quantity <= 0:
+                    raise serializers.ValidationError(
+                        {"products_data": f"第 {index} 个产品数量必须大于 0"}
+                    )
+
+                requested_quantities_by_sales_item[sales_order_item.id] = (
+                    requested_quantities_by_sales_item.get(sales_order_item.id, 0)
+                    + quantity
+                )
+            else:
+                normalized_item["sales_order_item"] = None
+
+            validated_products_data.append(normalized_item)
+
+        if requested_quantities_by_sales_item:
+            sales_order_item_ids = list(requested_quantities_by_sales_item.keys())
+            allocated_queryset = WorkOrderProduct.objects.filter(
+                sales_order_item_id__in=sales_order_item_ids,
+                source_type="sales_order",
+            )
+            if instance is not None:
+                allocated_queryset = allocated_queryset.exclude(work_order=instance)
+
+            allocated_totals = {
+                item["sales_order_item_id"]: item["total_quantity"] or 0
+                for item in allocated_queryset.values("sales_order_item_id").annotate(
+                    total_quantity=Sum("quantity")
+                )
+            }
+
+            sales_order_items = {
+                item.id: item
+                for item in SalesOrderItem.objects.filter(id__in=sales_order_item_ids)
+            }
+            for sales_order_item_id, requested_quantity in requested_quantities_by_sales_item.items():
+                sales_order_item = sales_order_items.get(sales_order_item_id)
+                if sales_order_item is None:
+                    raise serializers.ValidationError(
+                        {"products_data": "来源订单明细不存在"}
+                    )
+                allocated_quantity = int(allocated_totals.get(sales_order_item_id, 0) or 0)
+                remaining_quantity = max(
+                    int(sales_order_item.quantity) - allocated_quantity,
+                    0,
+                )
+                if requested_quantity > remaining_quantity:
+                    raise serializers.ValidationError(
+                        {
+                            "products_data": (
+                                f"{sales_order_item.product.name} 来源订单明细剩余可开数量为 "
+                                f"{remaining_quantity}，当前提交了 {requested_quantity}"
+                            )
+                        }
+                    )
+
+        if validated_products_data:
+            data["products_data"] = validated_products_data
+            products_data = validated_products_data
+
         # process_ids 已经在 validate_processes 方法中过滤了 null 值
         # 根据选中的工序验证版的选择（只验证发送的字段）
         if process_ids:
             processes = Process.objects.filter(id__in=process_ids, is_active=True)
-
-            # 如果是更新操作，需要检查数据库中已有的版选择
-            instance = getattr(self, "instance", None)
 
             # 检查是否有工序需要图稿
             processes_requiring_artwork = processes.filter(requires_artwork=True)
@@ -1270,6 +1417,8 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                     quantity=item.get("quantity", 1),
                     unit=item.get("unit", "件"),
                     specification=item.get("specification", ""),
+                    source_type=item.get("source_type", "stock"),
+                    sales_order_item_id=item.get("sales_order_item"),
                     sort_order=item.get("sort_order", 0),
                 )
 
@@ -1441,6 +1590,8 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                     quantity=item.get("quantity", 1),
                     unit=item.get("unit", "件"),
                     specification=item.get("specification", ""),
+                    source_type=item.get("source_type", "stock"),
+                    sales_order_item_id=item.get("sales_order_item"),
                     sort_order=item.get("sort_order", 0),
                 )
 

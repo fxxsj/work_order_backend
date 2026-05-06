@@ -61,6 +61,7 @@ from ..models.core import (
 )
 from ..models.materials import Material
 from ..models.products import Product, ProductMaterial
+from ..models.sales import SalesOrder
 from ..permissions import (
     SuperuserFriendlyModelPermissions,
     WorkOrderDataPermission,
@@ -89,6 +90,7 @@ from ..services.work_order_service import WorkOrderService
 # P1 优化: 导入自定义速率限制
 from ..throttling import ApprovalRateThrottle, CreateRateThrottle, ExportRateThrottle
 from .base_viewsets import BaseViewSet
+from .sales import _scope_sales_orders
 
 
 class WorkOrderFilterSet(FilterSet):
@@ -847,6 +849,110 @@ class WorkOrderViewSet(BaseViewSet):
                     "product_statistics": product_statistics,
                 },
             })
+
+    @action(detail=False, methods=["get"])
+    def sales_order_candidates(self, request):
+        """返回可关联到施工单的客户订单候选及其可用产品。"""
+        exclude_work_order_id = request.query_params.get("exclude_work_order_id")
+        include_sales_order_id = None
+        excluded_work_order_id = None
+        if exclude_work_order_id:
+            try:
+                excluded_work_order_id = int(exclude_work_order_id)
+            except (TypeError, ValueError):
+                return APIResponse.error(
+                    "exclude_work_order_id 参数无效",
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            existing_work_order = WorkOrder.objects.filter(
+                pk=excluded_work_order_id
+            ).only("sales_order_id").first()
+            if existing_work_order is not None:
+                include_sales_order_id = existing_work_order.sales_order_id
+
+        queryset = SalesOrder.objects.select_related("customer").prefetch_related(
+            "items__product",
+            "source_work_orders__products__product",
+        )
+        queryset = _scope_sales_orders(queryset, request.user).filter(
+            Q(status__in=["approved", "in_production"])
+            | Q(pk=include_sales_order_id)
+        )
+
+        candidates = []
+        for sales_order in queryset.order_by("-order_date", "-id"):
+            allocated_quantities_by_item = {}
+            legacy_allocated_quantities_by_product = {}
+            for work_order in sales_order.source_work_orders.all():
+                if excluded_work_order_id and work_order.id == excluded_work_order_id:
+                    continue
+                for product_item in work_order.products.all():
+                    if product_item.sales_order_item_id:
+                        allocated_quantities_by_item[product_item.sales_order_item_id] = (
+                            allocated_quantities_by_item.get(
+                                product_item.sales_order_item_id, 0
+                            )
+                            + int(product_item.quantity or 0)
+                        )
+                    else:
+                        legacy_allocated_quantities_by_product[product_item.product_id] = (
+                            legacy_allocated_quantities_by_product.get(
+                                product_item.product_id, 0
+                            )
+                            + int(product_item.quantity or 0)
+                        )
+
+            available_products = []
+            for item in sales_order.items.all():
+                if not item.product_id:
+                    continue
+                allocated_quantity = int(allocated_quantities_by_item.get(item.id, 0) or 0)
+                legacy_allocated_quantity = int(
+                    legacy_allocated_quantities_by_product.get(item.product_id, 0) or 0
+                )
+                remaining_quantity = max(
+                    int(item.quantity) - allocated_quantity - legacy_allocated_quantity,
+                    0,
+                )
+                if legacy_allocated_quantity > 0:
+                    legacy_allocated_quantities_by_product[item.product_id] = max(
+                        legacy_allocated_quantity - int(item.quantity),
+                        0,
+                    )
+                if remaining_quantity <= 0:
+                    continue
+                available_products.append(
+                    {
+                        "sales_order_item_id": item.id,
+                        "product_id": item.product_id,
+                        "product_name": item.product.name if item.product_id else "",
+                        "product_code": item.product.code if item.product_id else "",
+                        "quantity": item.quantity,
+                        "allocated_quantity": allocated_quantity,
+                        "remaining_quantity": remaining_quantity,
+                        "unit": item.unit,
+                    }
+                )
+
+            if not available_products and sales_order.id != include_sales_order_id:
+                continue
+
+            candidates.append(
+                {
+                    "id": sales_order.id,
+                    "order_number": sales_order.order_number,
+                    "customer": sales_order.customer_id,
+                    "customer_name": sales_order.customer.name,
+                    "status": sales_order.status,
+                    "status_display": sales_order.get_status_display(),
+                    "order_date": sales_order.order_date,
+                    "delivery_date": sales_order.delivery_date,
+                    "available_products": available_products,
+                }
+            )
+
+        return APIResponse.success(data=candidates)
 
     @action(detail=False, methods=["get"])
     @work_order_summary_docs

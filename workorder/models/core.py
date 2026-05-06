@@ -55,6 +55,7 @@ except ImportError:
 # 审核通过后禁止编辑的核心字段列表
 APPROVED_ORDER_PROTECTED_FIELDS = [
     "customer",  # 客户
+    "sales_order",  # 来源客户订单
     "products_data",  # 产品列表
     "processes",  # 工序列表
     "artworks",  # 图稿
@@ -113,7 +114,7 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
         blank=True,
         related_name="source_work_orders",
         verbose_name="来源客户订单",
-        help_text="施工单来源的客户订单。过渡期保留，与原关联施工单多对多并存。",
+        help_text="施工单来源的客户订单，选择后会自动同步客户、下单日期、交货日期和金额快照。",
     )
 
     # 产品组关联（支持一个产品需要多个施工单的场景）
@@ -1221,6 +1222,13 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
 class WorkOrderProduct(models.Model):
     """施工单产品关联（支持一个施工单包含多个产品，如一套图稿中拼版了多个产品）"""
 
+    SOURCE_TYPE_CHOICES = [
+        ("sales_order", "客户订单"),
+        ("stock", "库存生产"),
+        ("reprint", "补印"),
+        ("sample", "打样"),
+    ]
+
     work_order = models.ForeignKey(
         "WorkOrder",
         on_delete=models.CASCADE,
@@ -1233,6 +1241,22 @@ class WorkOrderProduct(models.Model):
     quantity = models.IntegerField("数量", default=1)
     unit = models.CharField("单位", max_length=20, default="件")
     specification = models.TextField("产品规格", blank=True)
+    source_type = models.CharField(
+        "来源类型",
+        max_length=20,
+        choices=SOURCE_TYPE_CHOICES,
+        default="stock",
+        help_text="该产品行来自客户订单、库存生产、补印或打样",
+    )
+    sales_order_item = models.ForeignKey(
+        "workorder.SalesOrderItem",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="work_order_products",
+        verbose_name="来源订单明细",
+        help_text="如果来源是客户订单，关联到具体订单明细，便于拼版追溯",
+    )
     sort_order = models.IntegerField("排序", default=0)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
 

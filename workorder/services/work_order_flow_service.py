@@ -527,6 +527,8 @@ class WorkOrderFlowService:
                 product=item["product"],
                 quantity=item["produce_quantity"],
                 unit=item["unit"],
+                source_type="sales_order",
+                sales_order_item=item.get("sales_order_item"),
             )
             created_count += 1
 
@@ -550,6 +552,15 @@ class WorkOrderFlowService:
                 sales_order=sales_order
             )
         }
+        allocated_quantities = {
+            item["sales_order_item_id"]: item["total_quantity"] or 0
+            for item in WorkOrderProduct.objects.filter(
+                sales_order_item_id__in=sales_items.keys(),
+                source_type="sales_order",
+            )
+            .values("sales_order_item_id")
+            .annotate(total_quantity=Sum("quantity"))
+        }
 
         production_items = []
         for index, item in enumerate(selected_items, start=1):
@@ -567,7 +578,8 @@ class WorkOrderFlowService:
                 raise ServiceError(f"第 {index} 个订单产品生产数量无效", code=400) from exc
 
             remaining_quantity = max(
-                int(sales_item.quantity) - int(sales_item.delivered_quantity or 0),
+                int(sales_item.quantity)
+                - int(allocated_quantities.get(sales_item.id, 0) or 0),
                 0,
             )
             if produce_quantity <= 0:
@@ -577,7 +589,7 @@ class WorkOrderFlowService:
                 )
             if produce_quantity > remaining_quantity:
                 raise ServiceError(
-                    f"{sales_item.product.name} 的生产数量不能超过待交付数量 {remaining_quantity}",
+                    f"{sales_item.product.name} 的生产数量不能超过剩余可开数量 {remaining_quantity}",
                     code=400,
                 )
 
@@ -607,6 +619,16 @@ class WorkOrderFlowService:
         if not sales_items:
             return []
 
+        allocated_quantities = {
+            item["sales_order_item_id"]: item["total_quantity"] or 0
+            for item in WorkOrderProduct.objects.filter(
+                sales_order_item_id__in=[item.id for item in sales_items],
+                source_type="sales_order",
+            )
+            .values("sales_order_item_id")
+            .annotate(total_quantity=Sum("quantity"))
+        }
+
         product_ids = {item.product_id for item in sales_items if item.product_id}
 
         stock_totals = (
@@ -625,12 +647,19 @@ class WorkOrderFlowService:
 
         production_items = []
         for item in sales_items:
+            unallocated_quantity = max(
+                int(item.quantity) - int(allocated_quantities.get(item.id, 0) or 0),
+                0,
+            )
+            if unallocated_quantity <= 0:
+                continue
             available_qty = available_map.get(item.product_id, 0)
-            needed_qty = max(int(item.quantity) - int(available_qty), 0)
+            needed_qty = max(unallocated_quantity - int(available_qty), 0)
             if needed_qty <= 0:
                 continue
             production_items.append(
                 {
+                    "sales_order_item": item,
                     "product": item.product,
                     "unit": item.unit,
                     "produce_quantity": needed_qty,

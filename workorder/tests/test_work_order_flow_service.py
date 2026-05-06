@@ -102,6 +102,12 @@ class WorkOrderFlowServiceTest(TestCase):
         self.assertEqual(work_order.total_amount, self.sales_order.total_amount)
         self.assertEqual(work_order.status, "pending")
         self.assertEqual(work_order.approval_status, "pending")
+        self.assertEqual(work_order.products.count(), 1)
+        self.assertEqual(work_order.products.first().source_type, "sales_order")
+        self.assertEqual(
+            work_order.products.first().sales_order_item_id,
+            self.sales_order.items.first().id,
+        )
 
         # 验证施工单号格式
         self.assertTrue(work_order.order_number.startswith("WO"))
@@ -174,8 +180,71 @@ class WorkOrderFlowServiceTest(TestCase):
         self.assertEqual(work_order.production_quantity, 60)
         self.assertEqual(work_order.products.count(), 1)
         self.assertEqual(work_order.products.first().quantity, 60)
+        self.assertEqual(work_order.products.first().source_type, "sales_order")
+        self.assertEqual(work_order.products.first().sales_order_item_id, sales_item.id)
         self.sales_order.refresh_from_db()
         self.assertEqual(self.sales_order.status, "in_production")
+
+    def test_create_from_sales_order_allows_split_quantities(self):
+        """同一订单明细可按数量拆成多张施工单。"""
+        sales_item = self.sales_order.items.first()
+
+        first_work_order = WorkOrderFlowService.create_from_sales_order(
+            sales_order_id=self.sales_order.id,
+            production_quantity=None,
+            selected_items=[
+                {
+                    "sales_order_item_id": sales_item.id,
+                    "production_quantity": 60,
+                }
+            ],
+            created_by=self.creator,
+        )
+        second_work_order = WorkOrderFlowService.create_from_sales_order(
+            sales_order_id=self.sales_order.id,
+            production_quantity=None,
+            selected_items=[
+                {
+                    "sales_order_item_id": sales_item.id,
+                    "production_quantity": 40,
+                }
+            ],
+            created_by=self.creator,
+        )
+
+        self.assertEqual(first_work_order.products.first().quantity, 60)
+        self.assertEqual(second_work_order.products.first().quantity, 40)
+
+    def test_create_from_sales_order_rejects_over_allocated_quantity(self):
+        """同一订单明细累计开单数量不能超过订单数量。"""
+        sales_item = self.sales_order.items.first()
+
+        WorkOrderFlowService.create_from_sales_order(
+            sales_order_id=self.sales_order.id,
+            production_quantity=None,
+            selected_items=[
+                {
+                    "sales_order_item_id": sales_item.id,
+                    "production_quantity": 60,
+                }
+            ],
+            created_by=self.creator,
+        )
+
+        with self.assertRaises(ServiceError) as context:
+            WorkOrderFlowService.create_from_sales_order(
+                sales_order_id=self.sales_order.id,
+                production_quantity=None,
+                selected_items=[
+                    {
+                        "sales_order_item_id": sales_item.id,
+                        "production_quantity": 50,
+                    }
+                ],
+                created_by=self.creator,
+            )
+
+        self.assertIn("生产数量不能超过剩余可开数量", str(context.exception))
 
     def test_submit_for_approval_invalid_transition(self):
         """测试无效的状态转换"""
