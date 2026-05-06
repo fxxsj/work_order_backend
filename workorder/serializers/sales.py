@@ -126,11 +126,6 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         always_read_only = getattr(self.Meta, "always_read_only_fields", [])
         if always_read_only:
             extra_kwargs["read_only_fields"] = list(always_read_only)
-            # 必填字段（系统自动生成）需要显式 required=False
-            extra = extra_kwargs.get("extra_kwargs", {})
-            for field in always_read_only:
-                extra.setdefault(field, {})["required"] = False
-            extra_kwargs["extra_kwargs"] = extra
         return extra_kwargs
 
     def get_work_order_numbers(self, obj) -> List[str]:
@@ -239,6 +234,13 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         if value < 0 or value > 100:
             raise serializers.ValidationError("税率必须在0-100之间")
         return value
+
+    def to_internal_value(self, data):
+        """移除客户端传入的 order_number（系统自动生成）"""
+        if isinstance(data, dict):
+            data = data.copy()
+            data.pop("order_number", None)
+        return super().to_internal_value(data)
 
     def validate_discount_amount(self, value):
         """验证折扣金额"""
