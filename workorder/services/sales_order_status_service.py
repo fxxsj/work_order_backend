@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from django.utils import timezone
 
 from ..models.sales import SalesOrder
@@ -15,6 +17,16 @@ class SalesOrderStatusService:
     UNFINISHED_WORK_ORDER_STATUSES = {"pending", "in_progress", "paused"}
 
     @staticmethod
+    def get_work_orders_queryset(sales_order: SalesOrder):
+        """获取与销售订单关联的施工单。"""
+        return sales_order.get_related_work_orders_queryset()
+
+    @staticmethod
+    def get_sales_orders_for_work_order(work_order) -> list[SalesOrder]:
+        """获取与施工单关联的销售订单，兼容 FK 和过渡期 M2M。"""
+        return work_order.get_related_sales_orders()
+
+    @staticmethod
     def all_items_delivered(sales_order: SalesOrder) -> bool:
         """是否全部发货完成。"""
         items = list(sales_order.items.all())
@@ -25,9 +37,27 @@ class SalesOrderStatusService:
     @staticmethod
     def has_unfinished_work_orders(sales_order: SalesOrder) -> bool:
         """是否存在未完成的关联施工单。"""
-        return sales_order.work_orders.filter(
+        return SalesOrderStatusService.get_work_orders_queryset(sales_order).filter(
             status__in=SalesOrderStatusService.UNFINISHED_WORK_ORDER_STATUSES
         ).exists()
+
+    @staticmethod
+    def sync_status_for_work_order(work_order) -> list[str]:
+        """同步某个施工单关联的所有销售订单状态。"""
+        statuses = []
+        for sales_order in SalesOrderStatusService.get_sales_orders_for_work_order(
+            work_order
+        ):
+            statuses.append(SalesOrderStatusService.sync_status(sales_order))
+        return statuses
+
+    @staticmethod
+    def sync_status_for_sales_orders(sales_orders: Iterable[SalesOrder]) -> list[str]:
+        """批量同步销售订单状态。"""
+        statuses = []
+        for sales_order in sales_orders:
+            statuses.append(SalesOrderStatusService.sync_status(sales_order))
+        return statuses
 
     @staticmethod
     def sync_status(

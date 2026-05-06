@@ -50,7 +50,6 @@ from .work_order_service import WorkOrderService
 from .task_generation import DraftTaskGenerationService
 from .dispatch_service import AutoDispatchService
 from .notification_triggers_flow import NotificationTriggers
-from .sales_order_status_service import SalesOrderStatusService
 
 logger = logging.getLogger(__name__)
 
@@ -178,17 +177,17 @@ class WorkOrderFlowService:
         work_order = WorkOrder.objects.create(
             order_number=order_number,
             customer=sales_order.customer,
+            sales_order=sales_order,
+            order_date=sales_order.order_date,
             production_quantity=production_quantity,
             delivery_date=delivery_date or sales_order.delivery_date,
+            total_amount=sales_order.total_amount,
             priority=priority,
             notes=notes,
             created_by=created_by,
             status="pending",  # 初始状态
             approval_status="pending",  # 待审核
         )
-
-        sales_order.work_orders.add(work_order)
-        SalesOrderStatusService.sync_status(sales_order)
 
         logger.info(f"从销售订单 {sales_order.order_number} 创建施工单 {order_number}")
 
@@ -472,9 +471,6 @@ class WorkOrderFlowService:
         if total_tasks == completed_tasks and total_tasks > 0:
             work_order.status = "completed"
             work_order.save()
-
-            for sales_order in SalesOrder.objects.filter(work_orders=work_order).distinct():
-                SalesOrderStatusService.sync_status(sales_order)
 
             # 记录日志
             WorkOrderApprovalLog.objects.create(

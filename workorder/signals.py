@@ -8,12 +8,68 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
 from .models import (
-    WorkOrderMaterial, WorkOrderTask, Artwork, Die, 
-    FoilingPlate, EmbossingPlate
+    WorkOrder,
+    WorkOrderMaterial,
+    WorkOrderTask,
+    Artwork,
+    Die,
+    FoilingPlate,
+    EmbossingPlate,
+    SalesOrder,
 )
+from .services.sales_order_status_service import SalesOrderStatusService
 
 # 使用实例属性缓存保存前的状态，避免全局缓存带来的并发问题
 
+
+@receiver(pre_save, sender=WorkOrder)
+def cache_work_order_status(sender, instance, **kwargs):
+    """保存前缓存施工单状态，供 post_save 比较使用。"""
+    if not instance.pk:
+        instance._previous_status = None
+        instance._previous_approval_status = None
+        instance._previous_sales_order_id = None
+        return
+
+    try:
+        previous = WorkOrder.objects.only(
+            "status",
+            "approval_status",
+            "sales_order_id",
+        ).get(pk=instance.pk)
+        instance._previous_status = previous.status
+        instance._previous_approval_status = previous.approval_status
+        instance._previous_sales_order_id = previous.sales_order_id
+    except WorkOrder.DoesNotExist:
+        instance._previous_status = None
+        instance._previous_approval_status = None
+        instance._previous_sales_order_id = None
+
+
+@receiver(post_save, sender=WorkOrder)
+def sync_sales_order_status_on_work_order_change(sender, instance, created, **kwargs):
+    """施工单状态或审核状态变化后，自动同步关联销售订单状态。"""
+    previous_status = getattr(instance, "_previous_status", None)
+    previous_approval_status = getattr(instance, "_previous_approval_status", None)
+    previous_sales_order_id = getattr(instance, "_previous_sales_order_id", None)
+    status_changed = instance.status != previous_status
+    approval_status_changed = instance.approval_status != previous_approval_status
+    sales_order_changed = instance.sales_order_id != previous_sales_order_id
+
+    if created:
+        if instance.sales_order_id:
+            SalesOrderStatusService.sync_status_for_work_order(instance)
+        return
+
+    if not status_changed and not approval_status_changed and not sales_order_changed:
+        return
+
+    if sales_order_changed and previous_sales_order_id:
+        old_sales_order = SalesOrder.objects.filter(pk=previous_sales_order_id).first()
+        if old_sales_order is not None:
+            SalesOrderStatusService.sync_status_for_sales_orders([old_sales_order])
+
+    SalesOrderStatusService.sync_status_for_work_order(instance)
 
 @receiver(pre_save, sender=WorkOrderMaterial)
 def cache_material_status(sender, instance, **kwargs):

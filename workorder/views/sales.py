@@ -71,7 +71,7 @@ class SalesOrderViewSet(BaseViewSet):
         """优化查询"""
         queryset = SalesOrder.objects.select_related(
             "customer", "submitted_by", "approved_by", "created_by"
-        ).prefetch_related("items", "items__product", "work_orders")
+        ).prefetch_related("items", "items__product", "source_work_orders")
         return _scope_sales_orders(queryset, self.request.user)
 
     def get_serializer_class(self):
@@ -187,7 +187,7 @@ class SalesOrderViewSet(BaseViewSet):
         sales_order = self.get_object()
         if sales_order.status not in ["approved", "in_production"]:
             return APIResponse.error("只有已审核或生产中的订单才能同步生产状态", code=status.HTTP_400_BAD_REQUEST)
-        if not sales_order.work_orders.exists():
+        if not sales_order.get_related_work_orders_queryset().exists():
             return APIResponse.error("请先创建施工单，系统会自动同步为生产中", code=status.HTTP_400_BAD_REQUEST)
 
         SalesOrderStatusService.sync_status(sales_order)

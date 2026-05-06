@@ -83,6 +83,7 @@ from ..serializers.core import (
 )
 from ..services.task_sync_service import TaskSyncService
 from ..services.service_errors import ServiceError
+from ..services.work_order_flow_service import WorkOrderFlowService
 from ..services.work_order_service import WorkOrderService
 
 # P1 优化: 导入自定义速率限制
@@ -499,24 +500,71 @@ class WorkOrderViewSet(BaseViewSet):
     @action(detail=True, methods=["post"], throttle_classes=[ApprovalRateThrottle])
     @work_order_approve_docs
     def approve(self, request, pk=None):
-        """业务员审核施工单（完善版 - P1 优化：添加速率限制和输入验证）"""
+        """业务员审核施工单。
+
+        Deprecated:
+            请改用 /workorders-flow/{id}/approve/ 或 /workorders-flow/{id}/reject/。
+            此兼容端点保留旧请求结构，内部统一转发到 FlowService。
+        """
         work_order = self.get_object()
         approval_status = request.data.get("approval_status")
         approval_comment = request.data.get("approval_comment", "")
         rejection_reason = request.data.get("rejection_reason", "")
         try:
-            work_order = WorkOrderService.approve(
-                work_order=work_order,
-                user=request.user,
-                approval_status=approval_status,
-                approval_comment=approval_comment,
-                rejection_reason=rejection_reason,
-            )
+            if approval_status not in {"approved", "rejected"}:
+                raise ServiceError(
+                    "审核状态无效，必须是 approved 或 rejected",
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
+            if not request.user.groups.filter(name="业务员").exists():
+                raise ServiceError(
+                    "只有业务员可以审核施工单",
+                    code=status.HTTP_403_FORBIDDEN,
+                )
+            if work_order.customer.salesperson != request.user:
+                raise ServiceError(
+                    "只能审核自己负责的施工单",
+                    code=status.HTTP_403_FORBIDDEN,
+                )
+            if work_order.approval_status != "pending":
+                raise ServiceError(
+                    '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。',
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if approval_status == "approved":
+                validation_errors = work_order.validate_before_approval()
+                if validation_errors:
+                    raise ServiceError(
+                        "施工单数据不完整，无法审核",
+                        code=status.HTTP_400_BAD_REQUEST,
+                        data={"details": validation_errors},
+                    )
+                work_order = WorkOrderFlowService.handle_approval_passed(
+                    work_order=work_order,
+                    approved_by=request.user,
+                    comment=approval_comment,
+                )
+            else:
+                reason = rejection_reason.strip() or approval_comment.strip()
+                if not reason:
+                    raise ServiceError(
+                        "审核拒绝时，必须填写拒绝原因",
+                        code=status.HTTP_400_BAD_REQUEST,
+                    )
+                work_order = WorkOrderFlowService.handle_approval_rejected(
+                    work_order=work_order,
+                    rejected_by=request.user,
+                    reason=reason,
+                )
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
         serializer = self.get_serializer(work_order)
-        return APIResponse.success(data=serializer.data)
+        return APIResponse.success(
+            data=serializer.data,
+            message="施工单审核成功（兼容旧端点，建议切换到 /workorders-flow/）",
+        )
 
     @action(detail=True, methods=["post"])
     @work_order_resubmit_docs

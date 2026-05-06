@@ -746,9 +746,10 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
 
     def get_sales_order_numbers(self, obj) -> List[str]:
         """获取来源客户订单号"""
+        sales_orders = self._get_sales_orders(obj)
         return [
             sales_order.order_number
-            for sales_order in obj.salesorder_set.all()
+            for sales_order in sales_orders
             if sales_order.order_number
         ]
 
@@ -770,6 +771,7 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
 
     def get_sales_order_summaries(self, obj) -> List[Dict[str, Any]]:
         """获取来源客户订单摘要"""
+        sales_orders = self._get_sales_orders(obj)
         return [
             {
                 "id": sales_order.id,
@@ -778,7 +780,7 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
                 "source_label": "客户订单",
                 "batch_no": None,
             }
-            for sales_order in obj.salesorder_set.all()
+            for sales_order in sales_orders
             if sales_order.order_number
         ]
 
@@ -812,11 +814,11 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
 
     def get_sales_order_total_amount(self, obj) -> float:
         """获取来源客户订单金额合计"""
-        return sum(float(order.total_amount) for order in obj.salesorder_set.all())
+        return sum(float(order.total_amount) for order in self._get_sales_orders(obj))
 
     def get_sales_order_paid_amount(self, obj) -> float:
         """获取来源客户订单已回款合计"""
-        return sum(float(order.paid_amount) for order in obj.salesorder_set.all())
+        return sum(float(order.paid_amount) for order in self._get_sales_orders(obj))
 
     def get_sales_order_unpaid_amount(self, obj) -> float:
         """获取来源客户订单未回款合计"""
@@ -826,11 +828,18 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
 
     def get_settled_sales_order_count(self, obj) -> int:
         """获取已结清客户订单数量"""
-        return obj.salesorder_set.filter(payment_status="paid").count()
+        return sum(
+            1 for order in self._get_sales_orders(obj) if order.payment_status == "paid"
+        )
 
     def get_unsettled_sales_order_count(self, obj) -> int:
         """获取未结清客户订单数量"""
-        return obj.salesorder_set.exclude(payment_status="paid").count()
+        return sum(
+            1 for order in self._get_sales_orders(obj) if order.payment_status != "paid"
+        )
+
+    def _get_sales_orders(self, obj):
+        return obj.get_related_sales_orders()
 
     def get_invoice_count(self, obj) -> int:
         """获取关联发票数量"""

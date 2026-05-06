@@ -27,6 +27,18 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
     queryset = WorkOrder.objects.all()
     serializer_class = WorkOrderDetailSerializer
 
+    @staticmethod
+    def _validate_approval_permissions(*, work_order: WorkOrder, user) -> None:
+        if not user.groups.filter(name="业务员").exists():
+            raise ServiceError("只有业务员可以审核施工单", code=403)
+        if work_order.customer.salesperson != user:
+            raise ServiceError("只能审核自己负责的施工单", code=403)
+        if work_order.approval_status != "pending":
+            raise ServiceError(
+                '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。',
+                code=400,
+            )
+
     # ========== 流程 1: 从销售订单创建施工单 ==========
     @action(detail=False, methods=["post"])
     def create_from_sales_order(self, request):
@@ -186,6 +198,17 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
         """
         try:
             work_order = self.get_object()
+            self._validate_approval_permissions(
+                work_order=work_order,
+                user=request.user,
+            )
+            validation_errors = work_order.validate_before_approval()
+            if validation_errors:
+                raise ServiceError(
+                    "施工单数据不完整，无法审核",
+                    code=400,
+                    data={"details": validation_errors},
+                )
 
             # 调用审核通过流程（自动分派任务）
             updated_work_order = WorkOrderFlowService.handle_approval_passed(
@@ -219,6 +242,10 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
         try:
             work_order = self.get_object()
             reason = request.data.get("reason", "")
+            self._validate_approval_permissions(
+                work_order=work_order,
+                user=request.user,
+            )
 
             if not reason:
                 return APIResponse.error(message="拒绝原因不能为空", code=400)

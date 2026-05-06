@@ -95,7 +95,11 @@ class WorkOrderFlowServiceTest(TestCase):
         # 验证施工单创建成功
         self.assertIsNotNone(work_order)
         self.assertEqual(work_order.customer, self.customer)
+        self.assertEqual(work_order.sales_order, self.sales_order)
+        self.assertEqual(work_order.order_date, self.sales_order.order_date)
+        self.assertEqual(work_order.delivery_date, self.sales_order.delivery_date)
         self.assertEqual(work_order.production_quantity, 100)
+        self.assertEqual(work_order.total_amount, self.sales_order.total_amount)
         self.assertEqual(work_order.status, "pending")
         self.assertEqual(work_order.approval_status, "pending")
 
@@ -194,6 +198,71 @@ class WorkOrderFlowServiceTest(TestCase):
             )
 
         self.assertIn("不允许的状态转换", str(context.exception))
+
+    def test_work_order_signal_syncs_sales_order_status(self):
+        """测试施工单状态变化通过 signal 自动同步销售订单状态"""
+        work_order = WorkOrder.objects.create(
+            order_number="WO20260303099",
+            customer=self.customer,
+            sales_order=self.sales_order,
+            production_quantity=100,
+            delivery_date=timezone.now().date() + timedelta(days=7),
+            priority="normal",
+            created_by=self.creator,
+            status="pending",
+            approval_status="pending",
+        )
+
+        self.sales_order.refresh_from_db()
+        self.assertEqual(self.sales_order.status, "in_production")
+
+        work_order.status = "completed"
+        work_order.save()
+
+        self.sales_order.refresh_from_db()
+        self.assertEqual(self.sales_order.status, "approved")
+
+    def test_work_order_fk_relation_syncs_sales_order_status(self):
+        """测试仅通过 sales_order FK 关联时也能同步销售订单状态"""
+        work_order = WorkOrder.objects.create(
+            order_number="WO20260303100",
+            customer=self.customer,
+            sales_order=self.sales_order,
+            production_quantity=100,
+            delivery_date=timezone.now().date() + timedelta(days=7),
+            priority="normal",
+            created_by=self.creator,
+            status="pending",
+            approval_status="pending",
+        )
+
+        self.sales_order.refresh_from_db()
+        self.assertEqual(self.sales_order.status, "in_production")
+
+        work_order.status = "completed"
+        work_order.save()
+
+        self.sales_order.refresh_from_db()
+        self.assertEqual(self.sales_order.status, "approved")
+
+    def test_sales_order_related_work_orders_deduplicates_fk_and_m2m(self):
+        """测试销售订单读取关联施工单时基于 FK 返回结果。"""
+        work_order = WorkOrder.objects.create(
+            order_number="WO20260303101",
+            customer=self.customer,
+            sales_order=self.sales_order,
+            production_quantity=100,
+            delivery_date=timezone.now().date() + timedelta(days=7),
+            priority="normal",
+            created_by=self.creator,
+            status="pending",
+            approval_status="pending",
+        )
+
+        related_ids = {
+            item.id for item in self.sales_order.get_related_work_orders_queryset()
+        }
+        self.assertEqual(related_ids, {work_order.id})
 
     # ========== 测试流程 3: 审核通过 ==========
 

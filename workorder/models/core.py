@@ -101,7 +101,19 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
         "施工单号", max_length=50, unique=True, editable=False
     )
     customer = models.ForeignKey(
-        "workorder.Customer", on_delete=models.PROTECT, verbose_name="客户"
+        "workorder.Customer",
+        on_delete=models.PROTECT,
+        verbose_name="客户",
+        help_text="销售订单客户快照，创建施工单时自动复制，请勿手动修改",
+    )
+    sales_order = models.ForeignKey(
+        "workorder.SalesOrder",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="source_work_orders",
+        verbose_name="来源客户订单",
+        help_text="施工单来源的客户订单。过渡期保留，与原关联施工单多对多并存。",
     )
 
     # 产品组关联（支持一个产品需要多个施工单的场景）
@@ -182,8 +194,15 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
         "优先级", max_length=20, choices=PRIORITY_CHOICES, default="normal"
     )
 
-    order_date = models.DateField("下单日期", default=date.today)
-    delivery_date = models.DateField("交货日期")
+    order_date = models.DateField(
+        "下单日期",
+        default=date.today,
+        help_text="销售订单日期快照，创建施工单时自动复制，请勿手动修改",
+    )
+    delivery_date = models.DateField(
+        "交货日期",
+        help_text="销售订单交期快照，创建施工单时自动复制，请勿手动修改",
+    )
     actual_delivery_date = models.DateField("实际交货日期", null=True, blank=True)
 
     production_quantity = models.IntegerField(
@@ -194,7 +213,11 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
     )
 
     total_amount = models.DecimalField(
-        "总金额", max_digits=12, decimal_places=2, default=0
+        "总金额",
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="销售订单金额快照，创建施工单时自动复制，请勿手动修改",
     )
 
     # 文件附件
@@ -294,6 +317,12 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
                 return f"{self.order_number} - {first_product.product.name} 等{products.count()}款"
             return f"{self.order_number} - {first_product.product.name}"
         return f"{self.order_number}"
+
+    def get_related_sales_orders(self):
+        """获取来源销售订单。"""
+        if not self.sales_order_id:
+            return []
+        return [self.sales_order]
 
     def get_audit_log_repr(self):
         return f"施工单 {self.order_number}"

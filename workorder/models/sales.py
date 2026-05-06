@@ -107,11 +107,6 @@ class SalesOrder(TimeStampedModel, models.Model):
     approved_at = models.DateTimeField("审核时间", null=True, blank=True)
     approval_comment = models.TextField("审核意见", blank=True)
 
-    # 关联施工单（一个销售订单可能需要多个施工单）
-    work_orders = models.ManyToManyField(
-        "workorder.WorkOrder", blank=True, verbose_name="关联施工单"
-    )
-
     # 其他信息
     contract_number = models.CharField("合同号", max_length=100, blank=True)
     contact_person = models.CharField("联系人", max_length=100, blank=True)
@@ -148,6 +143,14 @@ class SalesOrder(TimeStampedModel, models.Model):
 
     def __str__(self):
         return f"{self.order_number} - {self.customer.name}"
+
+    def get_related_work_orders_queryset(self):
+        """获取关联施工单。"""
+        return self.source_work_orders.all()
+
+    def get_related_work_orders(self):
+        """返回关联施工单列表。"""
+        return list(self.get_related_work_orders_queryset())
 
     def save(self, *args, **kwargs):
         """保存销售订单，自动生成订单号和计算金额"""

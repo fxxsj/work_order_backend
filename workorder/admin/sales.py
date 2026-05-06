@@ -69,14 +69,13 @@ class SalesOrderAdmin(admin.ModelAdmin):
         "order_number",
         "contract_number",
         "customer__name",
-        "work_orders__order_number",
+        "source_work_orders__order_number",
     ]
     autocomplete_fields = [
         "customer",
         "submitted_by",
         "approved_by",
         "created_by",
-        "work_orders",
     ]
     readonly_fields = [
         "order_number",
@@ -135,7 +134,7 @@ class SalesOrderAdmin(admin.ModelAdmin):
             "联系与收货",
             {"fields": ("contact_person", "contact_phone", "shipping_address")},
         ),
-        ("其他信息", {"fields": ("work_orders", "notes", "rejection_reason")}),
+        ("其他信息", {"fields": ("notes", "rejection_reason")}),
         (
             "系统信息",
             {

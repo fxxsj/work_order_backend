@@ -61,7 +61,7 @@ class SalesOrderListSerializer(serializers.ModelSerializer):
 
     def get_work_order_count(self, obj) -> int:
         """获取关联施工单数量"""
-        return len(obj.work_orders.all())
+        return obj.get_related_work_orders_queryset().count()
 
 
 class SalesOrderDetailSerializer(serializers.ModelSerializer):
@@ -113,7 +113,6 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
             "approval_comment",
             "rejection_reason",
             "completion_reason",
-            "work_orders",
             "created_by",
             "created_at",
             "updated_at",
@@ -121,7 +120,11 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
 
     def get_work_order_numbers(self, obj) -> List[str]:
         """获取关联的施工单号列表"""
-        return [wo.order_number for wo in obj.work_orders.all()]
+        return [
+            work_order.order_number
+            for work_order in obj.get_related_work_orders()
+            if work_order.order_number
+        ]
 
     def get_delivery_order_numbers(self, obj) -> List[str]:
         """获取关联的发货单号列表"""
@@ -149,7 +152,7 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
                 "source_label": "生产执行",
                 "batch_no": None,
             }
-            for work_order in obj.work_orders.all()
+            for work_order in obj.get_related_work_orders()
             if work_order.order_number
         ]
 
