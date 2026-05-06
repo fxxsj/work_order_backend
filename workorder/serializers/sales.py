@@ -126,6 +126,11 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         always_read_only = getattr(self.Meta, "always_read_only_fields", [])
         if always_read_only:
             extra_kwargs["read_only_fields"] = list(always_read_only)
+            # 必填字段（系统自动生成）需要显式 required=False
+            extra = extra_kwargs.get("extra_kwargs", {})
+            for field in always_read_only:
+                extra.setdefault(field, {})["required"] = False
+            extra_kwargs["extra_kwargs"] = extra
         return extra_kwargs
 
     def get_work_order_numbers(self, obj) -> List[str]:
