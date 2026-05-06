@@ -171,7 +171,7 @@ class PermissionUtils:
         if department_ids:
             scope |= Q(
                 **{
-                    f"{prefix}work_orders__order_processes__department_id__in": department_ids
+                    f"{prefix}source_work_orders__order_processes__department_id__in": department_ids
                 }
             )
         return scope

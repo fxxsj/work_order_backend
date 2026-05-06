@@ -612,7 +612,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         queryset = _apply_department_scope(
             queryset,
             department_id,
-            "sales_order__work_orders__order_processes__department",
+            "sales_order__source_work_orders__order_processes__department",
         )
 
         # 按状态过滤

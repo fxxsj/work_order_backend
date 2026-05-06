@@ -378,8 +378,11 @@ class SalesOrderViewSet(BaseViewSet):
         payment_date = request.data.get("payment_date")
 
         if paid_amount is not None:
+            if not payment_date:
+                return APIResponse.error(
+                    "更新已付金额时必须提供付款日期", code=status.HTTP_400_BAD_REQUEST
+                )
             sales_order.paid_amount = Decimal(str(paid_amount))
-        if payment_date:
             sales_order.payment_date = payment_date
 
         sales_order.save()  # save方法会自动更新payment_status

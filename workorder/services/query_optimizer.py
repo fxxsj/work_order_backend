@@ -46,7 +46,8 @@ class QueryOptimizer:
             'customer__salesperson',
             'manager', 
             'created_by',
-            'approved_by'
+            'approved_by',
+            'sales_order',
         )
         
         if include_details:

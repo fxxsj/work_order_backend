@@ -98,7 +98,8 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesOrder
         fields = "__all__"
-        read_only_fields = [
+        # 以下字段在任意模式下均只读（系统自动管理）
+        always_read_only_fields = [
             "order_number",
             "status",
             "payment_status",
@@ -117,6 +118,15 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_extra_kwargs(self):
+        """动态控制字段只读：创建时放开大部分字段，编辑时全部锁定"""
+        extra_kwargs = super().get_extra_kwargs()
+        # 始终只读的字段
+        always_read_only = getattr(self.Meta, "always_read_only_fields", [])
+        if always_read_only:
+            extra_kwargs["read_only_fields"] = list(always_read_only)
+        return extra_kwargs
 
     def get_work_order_numbers(self, obj) -> List[str]:
         """获取关联的施工单号列表"""

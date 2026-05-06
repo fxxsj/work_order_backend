@@ -542,6 +542,12 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
     draft_task_count = serializers.SerializerMethodField()
     total_task_count = serializers.SerializerMethodField()
 
+    # 来源客户订单
+    sales_order_id = serializers.IntegerField(read_only=True, allow_null=True)
+    sales_order_number = serializers.CharField(
+        source="sales_order.order_number", read_only=True, default=None
+    )
+
     class Meta:
         model = WorkOrder
         fields = [
@@ -572,6 +578,8 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
             "approval_comment",
             "draft_task_count",
             "total_task_count",
+            "sales_order_id",
+            "sales_order_number",
             "created_at",
         ]
 
