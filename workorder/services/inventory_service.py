@@ -7,6 +7,7 @@
 from django.db import transaction
 from workorder.services.service_errors import ServiceError
 import logging
+from rest_framework import status
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class InventoryService:
             bool: 操作是否成功
 
         Raises:
-            ServiceError: 库存更新失败（code=422）
+            ServiceError: 库存更新失败（code=status.HTTP_422_UNPROCESSABLE_ENTITY）
         """
         try:
             if quantity <= 0:
@@ -54,7 +55,7 @@ class InventoryService:
                 f"库存增加失败: {item.__class__.__name__} - {item.name}, "
                 f"数量: {quantity}, 错误: {str(e)}"
             )
-            raise ServiceError(f"库存增加失败: {str(e)}", code=422)
+            raise ServiceError(f"库存增加失败: {str(e)}", code=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     @staticmethod
     @transaction.atomic
@@ -72,7 +73,7 @@ class InventoryService:
             bool: 操作是否成功
 
         Raises:
-            ServiceError: 库存不足或其他业务错误（code=422）
+            ServiceError: 库存不足或其他业务错误（code=status.HTTP_422_UNPROCESSABLE_ENTITY）
         """
         try:
             if quantity <= 0:
@@ -83,7 +84,7 @@ class InventoryService:
                 raise ServiceError(
                     f"{item.name} 库存不足。"
                     f"当前库存: {item.current_stock}, 需要: {quantity}",
-                    code=422,
+                    code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 )
 
             # 更新库存
@@ -107,7 +108,7 @@ class InventoryService:
                 f"库存减少失败: {item.__class__.__name__} - {item.name}, "
                 f"数量: {quantity}, 错误: {str(e)}"
             )
-            raise ServiceError(f"库存减少失败: {str(e)}", code=422)
+            raise ServiceError(f"库存减少失败: {str(e)}", code=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     @staticmethod
     def get_stock_status(item):

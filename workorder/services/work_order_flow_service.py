@@ -28,6 +28,7 @@ from django.db.models import Sum, F
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from rest_framework import status
 
 from ..models.core import (
     WorkOrder,
@@ -88,7 +89,7 @@ class WorkOrderFlowService:
         if new_status not in allowed_transitions:
             raise ServiceError(
                 f"不允许的状态转换：{current_status} → {new_status}",
-                code=400,  # HTTP 400 Bad Request
+                code=status.HTTP_400_BAD_REQUEST,  # HTTP 400 Bad Request
             )
 
     # ========== 流程 1: 从销售订单创建施工单 ==========
@@ -140,13 +141,13 @@ class WorkOrderFlowService:
             )
         except SalesOrder.DoesNotExist as exc:
             raise ServiceError(
-                "销售订单不存在", code=404
+                "销售订单不存在", code=status.HTTP_404_NOT_FOUND
             ) from exc
 
         if sales_order.status not in ["approved", "in_production"]:
             raise ServiceError(
                 f"只有已审核或生产中的销售订单才能创建施工单，当前状态：{sales_order.status}",
-                code=400,
+                code=status.HTTP_400_BAD_REQUEST,
             )
 
         production_items = WorkOrderFlowService._build_selected_production_items(
@@ -156,19 +157,19 @@ class WorkOrderFlowService:
         if not production_items:
             production_items = WorkOrderFlowService._build_production_items(sales_order)
         if not production_items:
-            raise ServiceError("销售订单库存充足，无需生成施工单", code=400)
+            raise ServiceError("销售订单库存充足，无需生成施工单", code=status.HTTP_400_BAD_REQUEST)
 
         if production_quantity is not None:
             try:
                 production_quantity = int(production_quantity)
             except (TypeError, ValueError) as exc:
-                raise ServiceError("生产数量无效", code=400) from exc
+                raise ServiceError("生产数量无效", code=status.HTTP_400_BAD_REQUEST) from exc
 
         if production_quantity is None:
             production_quantity = sum(item["produce_quantity"] for item in production_items)
 
         if production_quantity <= 0:
-            raise ServiceError("销售订单没有可生产数量", code=400)
+            raise ServiceError("销售订单没有可生产数量", code=status.HTTP_400_BAD_REQUEST)
 
         # 2. 生成施工单号
         order_number = WorkOrderFlowService._generate_order_number()
@@ -264,7 +265,7 @@ class WorkOrderFlowService:
                 id=work_order_id
             )
         except WorkOrder.DoesNotExist as exc:
-            raise ServiceError("施工订单不存在", code=404) from exc
+            raise ServiceError("施工订单不存在", code=status.HTTP_404_NOT_FOUND) from exc
 
         # 2. 验证状态
         WorkOrderFlowService._validate_status_transition(
@@ -276,7 +277,7 @@ class WorkOrderFlowService:
         if validation_errors:
             raise ServiceError(
                 "施工单数据不完整，无法提交审核",
-                code=400,
+                code=status.HTTP_400_BAD_REQUEST,
                 data={"details": validation_errors},
             )
 
@@ -565,17 +566,17 @@ class WorkOrderFlowService:
         production_items = []
         for index, item in enumerate(selected_items, start=1):
             if not isinstance(item, dict):
-                raise ServiceError(f"第 {index} 个施工单产品配置无效", code=400)
+                raise ServiceError(f"第 {index} 个施工单产品配置无效", code=status.HTTP_400_BAD_REQUEST)
 
             sales_order_item_id = item.get("sales_order_item_id")
             sales_item = sales_items.get(sales_order_item_id)
             if sales_item is None:
-                raise ServiceError(f"第 {index} 个订单产品不存在或不属于当前订单", code=400)
+                raise ServiceError(f"第 {index} 个订单产品不存在或不属于当前订单", code=status.HTTP_400_BAD_REQUEST)
 
             try:
                 produce_quantity = int(item.get("production_quantity"))
             except (TypeError, ValueError) as exc:
-                raise ServiceError(f"第 {index} 个订单产品生产数量无效", code=400) from exc
+                raise ServiceError(f"第 {index} 个订单产品生产数量无效", code=status.HTTP_400_BAD_REQUEST) from exc
 
             remaining_quantity = max(
                 int(sales_item.quantity)
@@ -585,12 +586,12 @@ class WorkOrderFlowService:
             if produce_quantity <= 0:
                 raise ServiceError(
                     f"{sales_item.product.name} 的生产数量必须大于 0",
-                    code=400,
+                    code=status.HTTP_400_BAD_REQUEST,
                 )
             if produce_quantity > remaining_quantity:
                 raise ServiceError(
                     f"{sales_item.product.name} 的生产数量不能超过剩余可开数量 {remaining_quantity}",
-                    code=400,
+                    code=status.HTTP_400_BAD_REQUEST,
                 )
 
             production_items.append(

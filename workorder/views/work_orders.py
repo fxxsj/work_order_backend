@@ -512,36 +512,16 @@ class WorkOrderViewSet(BaseViewSet):
         approval_status = request.data.get("approval_status")
         approval_comment = request.data.get("approval_comment", "")
         rejection_reason = request.data.get("rejection_reason", "")
+
+        # 直接转发到 FlowService，移除重复验证（已由 service 层处理）
         try:
             if approval_status not in {"approved", "rejected"}:
                 raise ServiceError(
                     "审核状态无效，必须是 approved 或 rejected",
                     code=status.HTTP_400_BAD_REQUEST,
                 )
-            if not request.user.groups.filter(name="业务员").exists():
-                raise ServiceError(
-                    "只有业务员可以审核施工单",
-                    code=status.HTTP_403_FORBIDDEN,
-                )
-            if work_order.customer.salesperson != request.user:
-                raise ServiceError(
-                    "只能审核自己负责的施工单",
-                    code=status.HTTP_403_FORBIDDEN,
-                )
-            if work_order.approval_status != "pending":
-                raise ServiceError(
-                    '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。',
-                    code=status.HTTP_400_BAD_REQUEST,
-                )
 
             if approval_status == "approved":
-                validation_errors = work_order.validate_before_approval()
-                if validation_errors:
-                    raise ServiceError(
-                        "施工单数据不完整，无法审核",
-                        code=status.HTTP_400_BAD_REQUEST,
-                        data={"details": validation_errors},
-                    )
                 work_order = WorkOrderFlowService.handle_approval_passed(
                     work_order=work_order,
                     approved_by=request.user,

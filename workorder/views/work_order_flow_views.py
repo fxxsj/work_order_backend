@@ -30,9 +30,9 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
     @staticmethod
     def _validate_approval_permissions(*, work_order: WorkOrder, user) -> None:
         if not user.groups.filter(name="业务员").exists():
-            raise ServiceError("只有业务员可以审核施工单", code=403)
+            raise ServiceError("只有业务员可以审核施工单", code=status.HTTP_403_FORBIDDEN)
         if work_order.customer.salesperson != user:
-            raise ServiceError("只能审核自己负责的施工单", code=403)
+            raise ServiceError("只能审核自己负责的施工单", code=status.HTTP_403_FORBIDDEN)
         if work_order.approval_status != "pending":
             raise ServiceError(
                 '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。',

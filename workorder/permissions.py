@@ -367,10 +367,8 @@ class WorkOrderDataPermission(permissions.BasePermission):
                     if has_department_task:
                         return True
             
-            # 有 view_workorder 权限的用户可以查看所有施工单（管理员等）
-            if request.user.has_perm('workorder.view_workorder'):
-                return True
-            
+            # 注意：不再有 view_workorder 全局 fallback
+            # 数据可见性完全由创建人/业务员/部门作用域决定
             return False
         
         # 写入操作：更严格的权限控制

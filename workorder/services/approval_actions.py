@@ -16,6 +16,7 @@ from ..models.multi_level_approval import (
 )
 from ..services import MultiLevelApprovalService, UrgentOrderService
 from ..services.smart_assignment import SmartAssignmentService
+from rest_framework import status
 
 
 def activate_workflow(workflow: ApprovalWorkflow) -> ApprovalWorkflow:
@@ -43,12 +44,12 @@ def create_default_workflows(user):
 
 def duplicate_workflow(*, source_id: str, new_name: str, user) -> ApprovalWorkflow:
     if not source_id or not new_name:
-        raise ServiceError(message="请提供源工作流ID和新名称", code=400)
+        raise ServiceError(message="请提供源工作流ID和新名称", code=status.HTTP_400_BAD_REQUEST)
 
     try:
         source_workflow = ApprovalWorkflow.objects.get(id=source_id)
     except ApprovalWorkflow.DoesNotExist as exc:
-        raise ServiceError(message="源工作流不存在", code=404) from exc
+        raise ServiceError(message="源工作流不存在", code=status.HTTP_404_NOT_FOUND) from exc
 
     return ApprovalWorkflow.objects.create(
         name=new_name,
@@ -62,7 +63,7 @@ def duplicate_workflow(*, source_id: str, new_name: str, user) -> ApprovalWorkfl
 
 def start_step(step: ApprovalStep) -> ApprovalStep:
     if step.status != "pending":
-        raise ServiceError(message="只能开始待执行的步骤", code=400)
+        raise ServiceError(message="只能开始待执行的步骤", code=status.HTTP_400_BAD_REQUEST)
 
     step.status = "in_progress"
     step.started_at = timezone.now()
@@ -75,7 +76,7 @@ def complete_step(step: ApprovalStep, decision: str, comments: str, user) -> Non
         step, decision, comments, user
     )
     if not success:
-        raise ServiceError(message="步骤完成失败", code=400)
+        raise ServiceError(message="步骤完成失败", code=status.HTTP_400_BAD_REQUEST)
 
 
 def escalate_step(
@@ -103,15 +104,15 @@ def escalate_step(
 
 def submit_for_approval(*, order_id: str, user):
     if not order_id:
-        raise ServiceError(message="请提供施工单ID", code=400)
+        raise ServiceError(message="请提供施工单ID", code=status.HTTP_400_BAD_REQUEST)
 
     try:
         work_order = WorkOrder.objects.get(id=order_id)
     except WorkOrder.DoesNotExist as exc:
-        raise ServiceError(message="施工单不存在", code=404) from exc
+        raise ServiceError(message="施工单不存在", code=status.HTTP_404_NOT_FOUND) from exc
 
     if work_order.approval_status != "pending":
-        raise ServiceError(message="只有待审核的订单可以提交审核", code=400)
+        raise ServiceError(message="只有待审核的订单可以提交审核", code=status.HTTP_400_BAD_REQUEST)
 
     approval_steps = MultiLevelApprovalService.start_approval_process(
         work_order, user
@@ -122,18 +123,18 @@ def submit_for_approval(*, order_id: str, user):
 
 def mark_urgent(*, order_id: str, reason: str, user):
     if not order_id:
-        raise ServiceError(message="请提供施工单ID", code=400)
+        raise ServiceError(message="请提供施工单ID", code=status.HTTP_400_BAD_REQUEST)
 
     try:
         work_order = WorkOrder.objects.get(id=order_id)
     except WorkOrder.DoesNotExist as exc:
-        raise ServiceError(message="施工单不存在", code=404) from exc
+        raise ServiceError(message="施工单不存在", code=status.HTTP_404_NOT_FOUND) from exc
 
     success = UrgentOrderService.mark_as_urgent(
         work_order, reason or "", user
     )
     if not success:
-        raise ServiceError(message="标记失败", code=400)
+        raise ServiceError(message="标记失败", code=status.HTTP_400_BAD_REQUEST)
 
     urgency_level = UrgentOrderService.calculate_urgency_level(work_order)
     return work_order, urgency_level

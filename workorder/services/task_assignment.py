@@ -15,6 +15,7 @@ from ..models.base import Department
 from ..models.system import Notification
 from ..services.service_errors import ServiceError
 from ..permission_utils import PermissionCache
+from rest_framework import status
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class TaskAssignmentService:
             bool: 未达上限返回True
 
         Raises:
-            ServiceError: 已达上限时抛出（code=422）
+            ServiceError: 已达上限时抛出（code=status.HTTP_422_UNPROCESSABLE_ENTITY）
         """
         if max_tasks is None:
             max_tasks = TaskAssignmentService.DEFAULT_MAX_TASKS_PER_OPERATOR
@@ -57,7 +58,7 @@ class TaskAssignmentService:
             raise ServiceError(
                 f"该操作员已有 {active_task_count} 个进行中任务，已达上限，"
                 f"请先完成部分任务后再分配。",
-                code=422,
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
         return True
@@ -79,7 +80,7 @@ class TaskAssignmentService:
             bool: 有权限返回True
 
         Raises:
-            ServiceError: 无权限时抛出（code=403）
+            ServiceError: 无权限时抛出（code=status.HTTP_403_FORBIDDEN）
         """
         # 超级管理员
         if user.is_superuser:
@@ -99,7 +100,7 @@ class TaskAssignmentService:
 
         raise ServiceError(
             "您没有权限分配此任务。只有任务所属部门的主管或施工单创建人可以分配。",
-            code=403,
+            code=status.HTTP_403_FORBIDDEN,
         )
 
     @staticmethod
@@ -114,16 +115,16 @@ class TaskAssignmentService:
             bool: 属于部门返回True
 
         Raises:
-            ServiceError: 不属于部门时抛出（code=422）
+            ServiceError: 不属于部门时抛出（code=status.HTTP_422_UNPROCESSABLE_ENTITY）
         """
         if not operator or not operator.is_active:
-            raise ServiceError("指定的操作员不存在或未激活", code=422)
+            raise ServiceError("指定的操作员不存在或未激活", code=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         if not PermissionCache.is_user_in_department(operator, department.id):
             raise ServiceError(
                 f"操作员 {operator.username} 不属于部门 {department.name}，"
                 f"无法分配该部门的任务",
-                code=422,
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
         return True
@@ -144,31 +145,31 @@ class TaskAssignmentService:
             bool: 可以分配返回True
 
         Raises:
-            ServiceError: 不可分配时抛出（code=422）
+            ServiceError: 不可分配时抛出（code=status.HTTP_422_UNPROCESSABLE_ENTITY）
         """
         if task.status == 'draft':
             raise ServiceError(
                 "草稿状态的任务不能分配，请先等待施工单审核通过",
-                code=422,
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
         if task.status == 'completed':
             raise ServiceError(
                 "已完成的任务不能重新分配",
-                code=422,
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
         if task.status == 'cancelled':
             raise ServiceError(
                 "已取消的任务不能分配",
-                code=422,
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
         # 任务必须有分配的部门
         if not task.assigned_department:
             raise ServiceError(
                 "任务尚未分配到部门，无法分配操作员",
-                code=422,
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
         return True
@@ -198,7 +199,7 @@ class TaskAssignmentService:
             Dict: 包含更新后任务信息的字典
 
         Raises:
-            ServiceError: 权限不足（code=403）、业务规则不满足（code=422）
+            ServiceError: 权限不足（code=status.HTTP_403_FORBIDDEN）、业务规则不满足（code=status.HTTP_422_UNPROCESSABLE_ENTITY）
             WorkOrderTask.DoesNotExist: 任务不存在
         """
         from django.contrib.auth.models import User
@@ -207,13 +208,13 @@ class TaskAssignmentService:
         try:
             task = WorkOrderTask.objects.select_for_update().get(id=task_id)
         except WorkOrderTask.DoesNotExist:
-            raise ServiceError(f"任务ID {task_id} 不存在", code=422)
+            raise ServiceError(f"任务ID {task_id} 不存在", code=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         # 加载操作员
         try:
             operator = User.objects.get(id=operator_id)
         except User.DoesNotExist:
-            raise ServiceError(f"操作员ID {operator_id} 不存在", code=422)
+            raise ServiceError(f"操作员ID {operator_id} 不存在", code=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         # 验证分配权限
         TaskAssignmentService.validate_supervisor_permission(assigned_by, task)
@@ -354,7 +355,7 @@ class TaskAssignmentService:
             Dict: 包含更新后任务信息的字典
 
         Raises:
-            ServiceError: 业务规则不满足（code=422 或 code=409）
+            ServiceError: 业务规则不满足（code=status.HTTP_422_UNPROCESSABLE_ENTITY 或 code=409）
             WorkOrderTask.DoesNotExist: 任务不存在
         """
         from django.contrib.auth.models import User
@@ -363,19 +364,19 @@ class TaskAssignmentService:
         try:
             task = WorkOrderTask.objects.select_for_update().get(id=task_id)
         except WorkOrderTask.DoesNotExist:
-            raise ServiceError(f"任务ID {task_id} 不存在", code=422)
+            raise ServiceError(f"任务ID {task_id} 不存在", code=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         # 验证操作员属于任务部门
         if not task.assigned_department:
             raise ServiceError(
                 "该任务尚未分配到部门，无法认领",
-                code=422,
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
         if not PermissionCache.is_user_in_department(operator, task.assigned_department.id):
             raise ServiceError(
                 f"您不属于部门 {task.assigned_department.name}，无法认领该任务",
-                code=422,
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
         # 验证操作员任务容量（复用分配服务的验证方法）
@@ -385,19 +386,19 @@ class TaskAssignmentService:
         if task.status == 'draft':
             raise ServiceError(
                 "草稿状态的任务不能认领，请先等待施工单审核通过",
-                code=422,
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
         if task.status == 'completed':
             raise ServiceError(
                 "已完成的任务不能认领",
-                code=422,
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
         if task.status == 'cancelled':
             raise ServiceError(
                 "已取消的任务不能认领",
-                code=422,
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
         # 检查任务是否已被其他操作员认领
@@ -419,7 +420,7 @@ class TaskAssignmentService:
             # 被其他人认领 - 使用特定的冲突错误
             raise ServiceError(
                 f"该任务已被 {task.assigned_operator.username} 认领，无法重复认领",
-                code=409,
+                code=status.HTTP_409_CONFLICT,
                 data={
                     'current_owner': task.assigned_operator.username,
                     'task_id': task.id,
