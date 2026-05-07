@@ -14,6 +14,7 @@ NC='\033[0m' # No Color
 PROFILE="dev"
 SKIP_MIGRATE=false
 VENV_NAME="venv"
+USE_WS=false  # 是否启用 WebSocket 支持
 
 # 帮助信息
 show_help() {
@@ -23,6 +24,7 @@ show_help() {
     echo "  dev          开发环境 (默认)"
     echo "  prod         生产环境"
     echo "  --skip-migrate  跳过数据库迁移"
+    echo "  --ws         启用 WebSocket 支持 (使用 Daphne ASGI 服务器)"
     echo "  --no-venv    不使用虚拟环境 (使用系统 Python)"
     echo "  -h, --help   显示帮助信息"
     echo ""
@@ -30,11 +32,16 @@ show_help() {
     echo "  ./start.sh              # 开发环境完整启动"
     echo "  ./start.sh dev          # 开发环境"
     echo "  ./start.sh prod         # 生产环境"
+    echo "  ./start.sh --ws         # 开发环境 + WebSocket"
     echo "  ./start.sh --skip-migrate  # 跳过迁移快速启动"
     echo ""
     echo "环境配置:"
     echo "  dev:  SQLite本地数据库, DEBUG=True"
     echo "  prod: 使用环境变量或 .env.production"
+    echo ""
+    echo "注意:"
+    echo "  --ws 使用 Daphne ASGI 服务器，支持 WebSocket 通知"
+    echo "  不带 --ws 使用 Django runserver，不支持 WebSocket"
 }
 
 # 检查 Python 安装
@@ -178,13 +185,22 @@ launch_server() {
     echo "  环境:   $PROFILE"
     echo "  DEBUG:  $DEBUG"
     echo "  Python: $($VENV_PYTHON --version)"
+    echo "  WebSocket: $([ "$USE_WS" = true ] && echo "启用 (Daphne)" || echo "禁用 (runserver)")"
     echo -e "${GREEN}=======================================${NC}"
     echo ""
-    echo -e "${BLUE}启动 Django 开发服务器...${NC}"
-    echo -e "${YELLOW}访问 http://127.0.0.1:8000/api/ 查看 API${NC}"
-    echo ""
 
-    $VENV_PYTHON manage.py runserver --skip-checks 0.0.0.0:8000
+    if [ "$USE_WS" = true ]; then
+        echo -e "${BLUE}启动 Daphne ASGI 服务器 (支持 WebSocket)...${NC}"
+        echo -e "${YELLOW}访问 http://127.0.0.1:8000/api/ 查看 API${NC}"
+        echo -e "${YELLOW}WebSocket: ws://127.0.0.1:8000/ws/notifications/${NC}"
+        echo ""
+        $VENV_PYTHON -m daphne -b 0.0.0.0 -p 8000 config.asgi:application
+    else
+        echo -e "${BLUE}启动 Django 开发服务器...${NC}"
+        echo -e "${YELLOW}注意: 不支持 WebSocket (如需 WebSocket 请使用 --ws)${NC}"
+        echo ""
+        $VENV_PYTHON manage.py runserver --skip-checks 0.0.0.0:8000
+    fi
 }
 
 # 解析参数
@@ -197,6 +213,9 @@ parse_args() {
                 ;;
             --skip-migrate)
                 SKIP_MIGRATE=true
+                ;;
+            --ws)
+                USE_WS=true
                 ;;
             --no-venv)
                 # handled in setup_venv
