@@ -478,9 +478,7 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
 
         try:
             operators = TaskAssignmentService.get_department_operators(department_id)
-            return APIResponse.success(
-                data={"department_id": int(department_id), "operators": operators}
-            )
+            return APIResponse.success(data=operators)
         except Department.DoesNotExist:
             return APIResponse.error(
                 f"部门ID {department_id} 不存在",
