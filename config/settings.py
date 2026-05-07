@@ -236,7 +236,13 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_DIRS = [BASE_DIR / "static"]
+
+# 开发环境从 staticfiles 提供静态文件（collectstatic 的目标目录）
+# 生产环境应该通过 Web 服务器提供静态文件
+if DEBUG:
+    STATICFILES_DIRS = [BASE_DIR / "staticfiles"]
+else:
+    STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
