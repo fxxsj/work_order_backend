@@ -410,176 +410,6 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
         validator = WorkOrderValidator(self)
         return validator.validate_all()
 
-    def convert_draft_tasks(self):
-        """Convert all draft tasks to formal tasks (pending status)
-
-        Called when work order is approved. Validates data integrity
-        before conversion to ensure all required fields are populated.
-        After conversion, automatically dispatches tasks to departments
-        based on configured priority rules.
-
-        Returns:
-            int: Number of tasks converted
-
-        Raises:
-            ValidationError: If draft tasks have missing required data
-        """
-        from django.core.exceptions import ValidationError
-
-        with transaction.atomic():
-            # Query all draft tasks for this work order
-            draft_tasks = WorkOrderTask.objects.filter(
-                work_order_process__work_order=self, status="draft"
-            )
-
-            # Data integrity validation before conversion
-            errors = []
-            for task in draft_tasks:
-                # Check name field (work_content)
-                if not task.work_content or not task.work_content.strip():
-                    errors.append(f"任务ID {task.id} 缺少施工内容")
-
-                # Verify work_order_process foreign key
-                if not task.work_order_process:
-                    errors.append(f"任务ID {task.id} 未关联工序")
-
-                # Verify process_code is set through work_order_process
-                if task.work_order_process and not task.work_order_process.process:
-                    errors.append(f"任务ID {task.id} 的工序未设置流程代码")
-
-                # Check for orphaned tasks (all must belong to a process)
-                if (
-                    not task.work_order_process
-                    or not task.work_order_process.work_order
-                ):
-                    errors.append(f"任务ID {task.id} 为孤立任务，未正确关联")
-
-            if errors:
-                raise ValidationError(
-                    {
-                        "detail": "草稿任务数据不完整，无法转换为正式任务",
-                        "errors": errors,
-                    }
-                )
-
-            # Count tasks for return
-            converted_count = draft_tasks.count()
-
-            if converted_count == 0:
-                return 0
-
-            # Convert status from 'draft' to 'pending'
-            for task in draft_tasks:
-                task.status = "pending"
-
-            # Auto-dispatch tasks to departments based on priority rules
-            for task in draft_tasks:
-                work_order_process = task.work_order_process
-                if work_order_process:
-                    work_order_process._auto_assign_task(task)
-
-            # Bulk update for performance (status, assigned_department, assigned_operator)
-            # Note: _auto_assign_task already calls task.save(), so bulk_update is redundant
-            # We keep it to ensure all fields are persisted even if save() failed
-            WorkOrderTask.objects.bulk_update(
-                draft_tasks,
-                ["status", "assigned_department", "assigned_operator"],
-                batch_size=100,
-            )
-
-            logger.info(
-                f"施工单 {self.order_number} 转换了 {converted_count} 个草稿任务为正式任务"
-            )
-
-            return converted_count
-
-    def archive_draft_tasks(self, rejection_log=None, archived_by=None):
-        """归档所有草稿任务用于追溯（审核拒绝时调用）
-
-        将草稿任务的数据快照存储到 DraftTaskArchive 表，
-        然后删除草稿任务。保留归档数据用于追溯。
-
-        Args:
-            rejection_log: 关联的拒绝日志（可选）
-            archived_by: 归档操作人（可选）
-
-        Returns:
-            tuple: (archived_count, archived_data)
-        """
-        with transaction.atomic():
-            draft_tasks = WorkOrderTask.objects.filter(
-                work_order_process__work_order=self, status="draft"
-            ).select_related(
-                'work_order_process', 'work_order_process__process',
-                'artwork', 'die', 'product', 'material',
-                'foiling_plate', 'embossing_plate'
-            )
-
-            archived_count = draft_tasks.count()
-
-            if archived_count == 0:
-                return 0, []
-
-            archived_data = []
-            for task in draft_tasks:
-                task_data = {
-                    "task_id": task.id,
-                    "task_type": task.task_type,
-                    "work_content": task.work_content,
-                    "production_quantity": task.production_quantity,
-                    "quantity_completed": task.quantity_completed,
-                    "auto_calculate_quantity": task.auto_calculate_quantity,
-                    "process_name": task.work_order_process.process.name if task.work_order_process and task.work_order_process.process else None,
-                    "process_code": task.work_order_process.process.code if task.work_order_process and task.work_order_process.process else None,
-                    "artwork_id": task.artwork_id,
-                    "die_id": task.die_id,
-                    "product_id": task.product_id,
-                    "material_id": task.material_id,
-                    "foiling_plate_id": task.foiling_plate_id,
-                    "embossing_plate_id": task.embossing_plate_id,
-                    "production_requirements": task.production_requirements,
-                    "created_at": task.created_at.isoformat() if task.created_at else None,
-                }
-                archived_data.append(task_data)
-
-            DraftTaskArchive.objects.create(
-                work_order=self,
-                archived_tasks_data=archived_data,
-                archive_reason="approval_rejected",
-                rejection_log=rejection_log,
-                archived_by=archived_by,
-            )
-
-            draft_tasks.delete()
-
-            logger.info(
-                f"施工单 {self.order_number} 归档并删除了 {archived_count} 个草稿任务"
-            )
-
-            return archived_count, archived_data
-
-    def delete_draft_tasks(self):
-        """Delete all draft tasks for this work order (保留归档)
-
-        Returns:
-            int: Number of tasks deleted
-        """
-        with transaction.atomic():
-            draft_tasks = WorkOrderTask.objects.filter(
-                work_order_process__work_order=self, status="draft"
-            )
-
-            deleted_count = draft_tasks.count()
-
-            if deleted_count == 0:
-                return 0
-
-            draft_tasks.delete()
-
-            logger.info(f"施工单 {self.order_number} 删除了 {deleted_count} 个草稿任务")
-
-            return deleted_count
-
     @classmethod
     def generate_order_number(cls):
         """生成施工单号：格式 yyyymm + 3位自增序号"""
@@ -1456,37 +1286,6 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
             )
             self._auto_assign_task(task)
 
-    def generate_draft_tasks(self):
-        """生成草稿任务（用于施工单创建时）
-
-        与 generate_tasks 的区别：
-        - 草稿任务使用 status='draft' 而不是 'pending'
-        - 草稿任务不分配部门和操作员
-        - 草稿任务允许在施工单审核前编辑和删除
-        - 使用 bulk_create 优化性能
-
-        Returns:
-            list: 创建的 WorkOrderTask 对象列表
-        """
-        # 如果已经有草稿任务，不再生成
-        if self.tasks.filter(status="draft").exists():
-            return []
-
-        # 使用草稿任务生成服务
-        from ..services.task_generation import DraftTaskGenerationService
-
-        # 构建草稿任务对象
-        task_objects = DraftTaskGenerationService.build_task_objects(self)
-
-        # 批量创建任务
-        if task_objects:
-            created_tasks = WorkOrderTask.objects.bulk_create(
-                task_objects, batch_size=100, ignore_conflicts=False
-            )
-            return list(created_tasks)
-
-        return []
-
     def _parse_material_usage(self, usage_str):
         """解析物料用量字符串，提取数字部分"""
         if not usage_str:
@@ -1843,7 +1642,6 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
         "状态",
         max_length=20,
         choices=[
-            ("draft", "草稿"),
             ("pending", "待开始"),
             ("in_progress", "进行中"),
             ("completed", "已完成"),
@@ -1986,63 +1784,11 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
         return True
 
     def clean(self):
-        """验证草稿任务状态变更
+        """验证任务数据一致性
 
-        确保草稿任务只能通过审批工作流转换为正式任务，
-        不能直接编辑状态绕过审批流程。
+        由于草稿状态已移除，此方法仅保留用于数据验证。
         """
-        from django.core.exceptions import ValidationError
-
-        # 检查是否正在从 draft 状态变更为其他状态
-        if self.pk:
-            try:
-                old_instance = WorkOrderTask.objects.get(pk=self.pk)
-                old_status = old_instance.status
-                new_status = self.status
-
-                # 如果从 draft 状态变更为其他状态
-                if old_status == "draft" and new_status != "draft":
-                    # 检查是否是通过审批工作流进行的转换
-                    work_order = (
-                        self.work_order_process.work_order
-                        if self.work_order_process
-                        else None
-                    )
-
-                    if not work_order:
-                        raise ValidationError(
-                            {"status": "草稿任务必须关联到有效的施工单工序才能转换状态"}
-                        )
-
-                    # 只有审批通过才能转换草稿任务
-                    if work_order.approval_status != "approved":
-                        raise ValidationError(
-                            {
-                                "status": "草稿任务只能在施工单审批通过后转换为正式任务，"
-                                "当前施工单审批状态为：{}".format(
-                                    work_order.get_approval_status_display()
-                                )
-                            }
-                        )
-
-                # 草稿任务不应该有分派的部门或操作员
-                if self.status == "draft":
-                    if self.assigned_department:
-                        raise ValidationError(
-                            {
-                                "assigned_department": "草稿任务不能分派给部门，请先审批通过后再分派"
-                            }
-                        )
-                    if self.assigned_operator:
-                        raise ValidationError(
-                            {
-                                "assigned_operator": "草稿任务不能分派给操作员，请先审批通过后再分派"
-                            }
-                        )
-
-            except WorkOrderTask.DoesNotExist:
-                # 新创建的任务，不进行状态变更验证
-                pass
+        pass
 
     def save(self, *args, **kwargs):
         """保存时实现乐观锁机制
@@ -2103,12 +1849,6 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
         if user.is_superuser:
             return True
 
-        # 草稿任务只能由创建人或管理员编辑
-        if self.status == "draft":
-            if self.created_by_id == user.id:
-                return True
-            return False
-
         # 正式任务可以由被分派的操作员或部门负责人编辑
         if self.status in ["pending", "in_progress"]:
             if self.assigned_operator_id == user.id:
@@ -2140,7 +1880,6 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
 
         # 状态转换规则
         allowed_transitions = {
-            "draft": ["pending"],
             "pending": ["in_progress", "completed", "cancelled"],
             "in_progress": ["completed", "cancelled"],
             "completed": [],

@@ -207,11 +207,7 @@ class WorkOrderFlowService:
         if additional_data:
             WorkOrderFlowService._link_assets(work_order, additional_data)
 
-        # 8. 生成草稿任务（不立即分派）
-        draft_task_count = DraftTaskGenerationService.generate_draft_tasks(work_order)
-        logger.info(f"施工单 {order_number} 生成了 {draft_task_count} 个草稿任务")
-
-        # 9. 记录操作日志
+        # 8. 记录操作日志
         WorkOrderApprovalLog.objects.create(
             work_order=work_order,
             approval_status=work_order.approval_status,
@@ -219,7 +215,7 @@ class WorkOrderFlowService:
             approval_comment=f"从销售订单 {sales_order.order_number} 创建",
         )
 
-        # 10. 发送通知
+        # 9. 发送通知
         NotificationTriggers.notify_workorder_created(
             work_order=work_order,
             recipient=created_by,
@@ -241,12 +237,12 @@ class WorkOrderFlowService:
         提交施工单审核（完整流程）
 
         流程步骤：
-        1. 验证施工单状态（必须是待审核）
+        1. 验证施工单状态（必须是待审核或已拒绝）
         2. 验证施工单数据完整性（图稿、工序等）
-        3. 状态转换：pending → pending（提交审核）
-        4. 记录提交日志
-        5. 发送审核通知给业务员
-        6. 创建审核任务
+        3. 如果是重新提交（之前审核通过过），删除旧任务
+        4. 状态转换
+        5. 记录提交日志
+        6. 发送审核通知给业务员
 
         Args:
             work_order_id: 施工单ID
@@ -281,13 +277,26 @@ class WorkOrderFlowService:
                 data={"details": validation_errors},
             )
 
-        # 4. 状态转换
+        # 4. 如果是重新提交审核（之前审核通过过），删除旧任务
+        # 因为审核通过后用户可能修改了施工单内容，需要重新生成任务
+        from ..models.core import WorkOrderTask
+        existing_tasks = WorkOrderTask.objects.filter(
+            work_order_process__work_order=work_order
+        )
+        if existing_tasks.exists():
+            deleted_count = existing_tasks.count()
+            existing_tasks.delete()
+            logger.info(
+                f"施工单 {work_order.order_number} 重新提交审核，删除了 {deleted_count} 个旧任务"
+            )
+
+        # 5. 状态转换
         work_order.approval_status = "pending"
         work_order.save()
 
         logger.info(f"施工单 {work_order.order_number} 提交审核")
 
-        # 5. 记录操作日志
+        # 6. 记录操作日志
         WorkOrderApprovalLog.objects.create(
             work_order=work_order,
             approval_status=work_order.approval_status,
@@ -295,7 +304,7 @@ class WorkOrderFlowService:
             approval_comment=comment or "提交审核",
         )
 
-        # 6. 发送通知给业务员
+        # 7. 发送通知给业务员
         salesperson = work_order.customer.salesperson
         if salesperson:
             NotificationTriggers.notify_approval_requested(
@@ -303,9 +312,6 @@ class WorkOrderFlowService:
                 recipient=salesperson,
                 comment=comment,
             )
-
-        # 7. 创建审核任务（如果有多级审核）
-        # WorkOrderFlowService._create_approval_tasks(work_order)
 
         return work_order
 
@@ -323,13 +329,10 @@ class WorkOrderFlowService:
         处理审核通过（完整自动化流程）
 
         流程步骤：
-        1. 验证并转换审核状态
-        2. 转换草稿任务为正式任务
-        3. 自动分派任务到部门和操作员
-        4. 状态转换：pending_approval → approved → in_progress
-        5. 记录审核日志
-        6. 发送通知给相关部门和操作员
-        7. 触发库存预留（如有需要）
+        1. 生成正式任务并自动分派
+        2. 状态转换：pending → approved → in_progress
+        3. 记录审核日志
+        4. 发送通知给相关部门和操作员
 
         Args:
             work_order: 施工单对象
@@ -344,19 +347,15 @@ class WorkOrderFlowService:
         """
         logger.info(f"开始处理施工单 {work_order.order_number} 的审核通过流程")
 
-        # 1. 转换草稿任务为正式任务
-        converted_count = work_order.convert_draft_tasks()
+        # 1. 生成正式任务并自动分派
+        from workorder.services.task_generation import TaskGenerationService
+        task_result = TaskGenerationService.generate_tasks_and_dispatch(work_order)
         logger.info(
-            f"施工单 {work_order.order_number} 转换了 {converted_count} 个草稿任务"
+            f"施工单 {work_order.order_number} 生成了 {task_result['created_count']} 个任务，"
+            f"分派了 {task_result['dispatched_count']} 个"
         )
 
-        # 2. 自动分派任务
-        dispatch_result = WorkOrderFlowService._auto_dispatch_tasks(work_order)
-        logger.info(
-            f"施工单 {work_order.order_number} 自动分派了 {dispatch_result['dispatched_count']} 个任务"
-        )
-
-        # 3. 状态转换
+        # 2. 状态转换
         work_order.approval_status = "approved"
         work_order.approved_by = approved_by
         work_order.approved_at = timezone.now()
@@ -364,7 +363,7 @@ class WorkOrderFlowService:
         work_order.status = "in_progress"
         work_order.save()
 
-        # 4. 记录审核日志
+        # 3. 记录审核日志
         WorkOrderApprovalLog.objects.create(
             work_order=work_order,
             approval_status=work_order.approval_status,
@@ -372,14 +371,11 @@ class WorkOrderFlowService:
             approval_comment=comment,
         )
 
-        # 5. 发送通知
+        # 4. 发送通知
         NotificationTriggers.notify_approval_passed(
             work_order=work_order,
-            dispatch_result=dispatch_result,
+            dispatch_result=task_result,
         )
-
-        # 6. 触发库存预留
-        # WorkOrderFlowService._reserve_materials(work_order)
 
         logger.info(f"施工单 {work_order.order_number} 审核通过流程完成")
         return work_order
@@ -398,10 +394,12 @@ class WorkOrderFlowService:
         处理审核拒绝（完整流程）
 
         流程步骤：
-        1. 归档所有草稿任务（保留快照用于追溯）
-        2. 状态转换：pending → rejected
-        3. 记录拒绝日志
-        4. 发送通知给创建人
+        1. 状态转换：pending → rejected
+        2. 记录拒绝日志
+        3. 发送通知给创建人
+
+        注意：审核拒绝时，已生成的任务保留在数据库中。
+        如果施工单重新提交审核并通过，之前的任务会被删除并重新生成。
 
         Args:
             work_order: 施工单对象
@@ -414,8 +412,16 @@ class WorkOrderFlowService:
         Raises:
             ServiceError: 业务逻辑错误
         """
-        # 1. 先记录拒绝日志（归档需要关联）
-        rejection_log = WorkOrderApprovalLog.objects.create(
+        # 1. 状态转换
+        work_order.approval_status = "rejected"
+        work_order.approved_by = rejected_by
+        work_order.approved_at = timezone.now()
+        work_order.approval_comment = reason
+        work_order.status = "pending"  # 状态回到待开始
+        work_order.save()
+
+        # 2. 记录拒绝日志
+        WorkOrderApprovalLog.objects.create(
             work_order=work_order,
             approval_status="rejected",
             approved_by=rejected_by,
@@ -423,23 +429,7 @@ class WorkOrderFlowService:
             rejection_reason=reason,
         )
 
-        # 2. 归档草稿任务（保留快照用于追溯）
-        archived_count, archived_data = work_order.archive_draft_tasks(
-            rejection_log=rejection_log,
-            archived_by=rejected_by,
-        )
-        logger.info(
-            f"施工单 {work_order.order_number} 归档了 {archived_count} 个草稿任务"
-        )
-
-        # 3. 状态转换
-        work_order.approval_status = "rejected"
-        work_order.approved_by = rejected_by
-        work_order.approved_at = timezone.now()
-        work_order.approval_comment = reason
-        work_order.save()
-
-        # 4. 发送通知
+        # 3. 发送通知
         NotificationTriggers.notify_approval_rejected(
             work_order=work_order,
             recipient=work_order.created_by,
