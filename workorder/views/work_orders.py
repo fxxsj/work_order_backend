@@ -390,15 +390,9 @@ class WorkOrderViewSet(BaseViewSet):
 
     def perform_create(self, serializer):
         # 自动设置创建人和制表人为当前用户
-        work_order = serializer.save(created_by=self.request.user, manager=self.request.user)
-        try:
-            from ..services.task_generation import DraftTaskGenerationService
-
-            DraftTaskGenerationService.generate_draft_tasks(work_order)
-        except Exception as e:
-            logger.warning(
-                f"施工单 {work_order.order_number} 自动生成草稿任务失败：{str(e)}"
-            )
+        # 注意：草稿任务已在 WorkOrderCreateUpdateSerializer.create() 的
+        # _create_work_order_processes() 中为新工序自动生成，无需重复调用
+        serializer.save(created_by=self.request.user, manager=self.request.user)
 
     def destroy(self, request, *args, **kwargs):
         """删除施工单时处理级联删除验证和日志记录
