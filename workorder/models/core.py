@@ -244,6 +244,53 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
         ("approved", "已通过"),
         ("rejected", "已拒绝"),
     ]
+
+    # 审核状态转换规则 - 集中管理状态转换
+    APPROVAL_STATUS_TRANSITIONS = {
+        "pending": ["pending", "approved", "rejected"],
+        "rejected": ["pending"],
+        "approved": [],
+    }
+
+    def can_transition_to_approval_status(self, new_status: str) -> bool:
+        """检查是否可以转换到目标审核状态"""
+        allowed = self.APPROVAL_STATUS_TRANSITIONS.get(
+            self.approval_status, []
+        )
+        return new_status in allowed
+
+    def validate_approval_status_transition(self, new_status: str) -> None:
+        """验证审核状态转换是否合法，不合法则抛出异常"""
+        if not self.can_transition_to_approval_status(new_status):
+            from workorder.exceptions import ServiceError
+            raise ServiceError(
+                f"不允许的审核状态转换：{self.approval_status} → {new_status}",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+    def is_approved(self) -> bool:
+        """检查施工单是否已审核通过"""
+        return self.approval_status == "approved"
+
+    def get_protected_fields(self) -> list:
+        """获取当前状态下受保护的字段列表"""
+        if self.is_approved():
+            return APPROVED_ORDER_PROTECTED_FIELDS + APPROVED_ORDER_EDITABLE_FIELDS
+        return []
+
+    def validate_editable_fields(self, fields: list) -> None:
+        """验证要编辑的字段是否在受保护列表中"""
+        if not self.is_approved():
+            return
+        protected = APPROVED_ORDER_PROTECTED_FIELDS
+        protected_fields_in_request = [f for f in fields if f in protected]
+        if protected_fields_in_request:
+            from workorder.exceptions import ServiceError
+            raise ServiceError(
+                f"该施工单已审核通过，以下字段禁止编辑：{', '.join(protected_fields_in_request)}",
+                code=status.HTTP_403_FORBIDDEN,
+            )
+
     approval_status = models.CharField(
         "审核状态", max_length=20, choices=APPROVAL_STATUS_CHOICES, default="pending"
     )
@@ -446,28 +493,87 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
 
             return converted_count
 
-    def delete_draft_tasks(self):
-        """Delete all draft tasks for this work order
+    def archive_draft_tasks(self, rejection_log=None, archived_by=None):
+        """归档所有草稿任务用于追溯（审核拒绝时调用）
 
-        Called when work order is rejected. Draft tasks are not needed
-        and should be removed to keep database clean.
+        将草稿任务的数据快照存储到 DraftTaskArchive 表，
+        然后删除草稿任务。保留归档数据用于追溯。
+
+        Args:
+            rejection_log: 关联的拒绝日志（可选）
+            archived_by: 归档操作人（可选）
+
+        Returns:
+            tuple: (archived_count, archived_data)
+        """
+        with transaction.atomic():
+            draft_tasks = WorkOrderTask.objects.filter(
+                work_order_process__work_order=self, status="draft"
+            ).select_related(
+                'work_order_process', 'work_order_process__process',
+                'artwork', 'die', 'product', 'material',
+                'foiling_plate', 'embossing_plate'
+            )
+
+            archived_count = draft_tasks.count()
+
+            if archived_count == 0:
+                return 0, []
+
+            archived_data = []
+            for task in draft_tasks:
+                task_data = {
+                    "task_id": task.id,
+                    "task_type": task.task_type,
+                    "work_content": task.work_content,
+                    "production_quantity": task.production_quantity,
+                    "quantity_completed": task.quantity_completed,
+                    "auto_calculate_quantity": task.auto_calculate_quantity,
+                    "process_name": task.work_order_process.process.name if task.work_order_process and task.work_order_process.process else None,
+                    "process_code": task.work_order_process.process.code if task.work_order_process and task.work_order_process.process else None,
+                    "artwork_id": task.artwork_id,
+                    "die_id": task.die_id,
+                    "product_id": task.product_id,
+                    "material_id": task.material_id,
+                    "foiling_plate_id": task.foiling_plate_id,
+                    "embossing_plate_id": task.embossing_plate_id,
+                    "production_requirements": task.production_requirements,
+                    "created_at": task.created_at.isoformat() if task.created_at else None,
+                }
+                archived_data.append(task_data)
+
+            DraftTaskArchive.objects.create(
+                work_order=self,
+                archived_tasks_data=archived_data,
+                archive_reason="approval_rejected",
+                rejection_log=rejection_log,
+                archived_by=archived_by,
+            )
+
+            draft_tasks.delete()
+
+            logger.info(
+                f"施工单 {self.order_number} 归档并删除了 {archived_count} 个草稿任务"
+            )
+
+            return archived_count, archived_data
+
+    def delete_draft_tasks(self):
+        """Delete all draft tasks for this work order (保留归档)
 
         Returns:
             int: Number of tasks deleted
         """
         with transaction.atomic():
-            # Query all draft tasks for this work order
             draft_tasks = WorkOrderTask.objects.filter(
                 work_order_process__work_order=self, status="draft"
             )
 
-            # Count before deletion
             deleted_count = draft_tasks.count()
 
             if deleted_count == 0:
                 return 0
 
-            # Delete using queryset.delete() (cascades properly)
             draft_tasks.delete()
 
             logger.info(f"施工单 {self.order_number} 删除了 {deleted_count} 个草稿任务")
@@ -491,6 +597,56 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
         if not self.order_number:
             self.order_number = self.generate_order_number()
         super().save(*args, **kwargs)
+
+
+class DraftTaskArchive(models.Model):
+    """草稿任务归档表 - 用于存储审核拒绝前的草稿任务快照"""
+
+    work_order = models.ForeignKey(
+        "WorkOrder",
+        on_delete=models.CASCADE,
+        related_name="draft_task_archives",
+        verbose_name="施工单",
+    )
+    archived_tasks_data = models.JSONField(
+        "归档任务数据",
+        help_text="存储草稿任务的完整数据快照，用于追溯和恢复",
+    )
+    archive_reason = models.CharField(
+        "归档原因",
+        max_length=50,
+        default="approval_rejected",
+        help_text="归档原因，如：approval_rejected, manual_archive 等",
+    )
+    rejection_log = models.ForeignKey(
+        "WorkOrderApprovalLog",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="archived_draft_tasks",
+        verbose_name="拒绝日志",
+    )
+    archived_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="archived_draft_tasks",
+        verbose_name="归档操作人",
+    )
+    created_at = models.DateTimeField("归档时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "草稿任务归档"
+        verbose_name_plural = "草稿任务归档"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["work_order", "created_at"]),
+            models.Index(fields=["archive_reason"]),
+        ]
+
+    def __str__(self):
+        return f"{self.work_order.order_number} - 草稿任务归档 ({self.created_at})"
 
 
 class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
@@ -549,6 +705,27 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
     quantity_defective = models.IntegerField("不良品数量", default=0)
 
     notes = models.TextField("备注", blank=True)
+
+    # 版本快照字段 - 用于追溯创建时的工序配置
+    source_product_process_id = models.IntegerField(
+        "来源产品工序配置ID",
+        null=True,
+        blank=True,
+        help_text="如果工序来源于产品的默认工序配置，记录来源配置ID",
+    )
+    process_snapshot = models.JSONField(
+        "工序快照",
+        null=True,
+        blank=True,
+        help_text="工序的完整快照数据，包括名称、编码、部门等，用于追溯创建时的配置",
+    )
+    source_version = models.CharField(
+        "来源版本",
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="来源产品工序配置的版本号",
+    )
 
     class Meta:
         verbose_name = "施工单工序"
@@ -689,6 +866,10 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
         # 如果是包装任务，更新产品库存
         if self.process.code == "PACK":
             self._update_product_stock_on_packaging()
+
+        # 如果是开料任务，更新物料库存
+        if self.process.code == "CUT":
+            self._update_material_stock_on_cutting()
 
         # 创建工序完成通知
         from .system import Notification
@@ -923,6 +1104,117 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
                 for product, _, new_quantity, _ in stock_updates:
                     if product.is_low_stock():
                         product._send_low_stock_warning()
+
+    def _update_material_stock_on_cutting(self):
+        """开料工序完成时，更新物料库存数量
+
+        开料任务完成时，需要从物料库存中扣减对应的用量。
+
+        优化规则：
+        - 使用事务确保库存更新的原子性
+        - 批量锁定物料记录，避免并发冲突
+        - 记录详细的库存变更日志
+        """
+        from .materials import Material, MaterialStockLog
+
+        with transaction.atomic():
+            # 获取所有开料任务，使用 select_related 优化查询
+            cutting_tasks = (
+                self.tasks.filter(task_type="cutting", status="completed")
+                .select_related("material")
+                .all()
+            )
+
+            # 按物料分组汇总需要扣减的数量
+            material_quantities = {}
+            material_updates = []
+
+            for task in cutting_tasks:
+                if not task.material:
+                    continue
+
+                material_id = task.material.id
+                # 计算实际需要扣减的库存数量
+                # 扣减数量 = 开料任务完成数量
+                cutting_quantity = task.quantity_completed or 0
+
+                if cutting_quantity > 0:
+                    if material_id not in material_quantities:
+                        material_quantities[material_id] = 0
+                    material_quantities[material_id] += cutting_quantity
+
+                    # 更新关联的施工单物料状态为已开料
+                    work_order_material = self.work_order.materials.filter(
+                        material=task.material
+                    ).first()
+                    if work_order_material and work_order_material.purchase_status != "cut":
+                        work_order_material.purchase_status = "cut"
+                        work_order_material.cut_date = timezone.now().date()
+                        material_updates.append(work_order_material)
+
+            # 批量更新施工单物料状态
+            if material_updates:
+                from .core import WorkOrderMaterial
+                WorkOrderMaterial.objects.bulk_update(
+                    material_updates, ["purchase_status", "cut_date"]
+                )
+
+            # 批量更新物料库存 - 使用 select_for_update() 批量锁定所有相关物料
+            stock_updates = []
+            if material_quantities:
+                materials = Material.objects.select_for_update().filter(
+                    id__in=material_quantities.keys()
+                )
+
+                material_map = {p.id: p for p in materials}
+
+                for material_id, quantity in material_quantities.items():
+                    if material_id not in material_map:
+                        logger.warning(f"物料ID {material_id} 不存在，跳过库存更新")
+                        continue
+
+                    material = material_map[material_id]
+                    old_quantity = material.stock_quantity
+                    new_quantity = old_quantity - quantity
+
+                    # 库存不能为负数
+                    if new_quantity < 0:
+                        logger.warning(
+                            f"物料 {material.name} 库存不足（当前: {old_quantity}，需扣减: {quantity}）"
+                        )
+                        new_quantity = 0
+
+                    material.stock_quantity = new_quantity
+                    stock_updates.append(
+                        (material, old_quantity, new_quantity, quantity)
+                    )
+
+            # 批量保存物料库存
+            if stock_updates:
+                materials_to_update = [item[0] for item in stock_updates]
+                Material.objects.bulk_update(materials_to_update, ["stock_quantity"])
+
+                # 创建库存变更日志
+                log_entries = []
+                for material, old_quantity, new_quantity, quantity in stock_updates:
+                    log_entries.append(
+                        MaterialStockLog(
+                            material=material,
+                            change_type="cut_consume",
+                            quantity=-quantity,  # 扣减为负数
+                            old_quantity=old_quantity,
+                            new_quantity=new_quantity,
+                            reason=f"施工单 {self.work_order.order_number} 开料工序完成，扣减库存{quantity}{material.unit}",
+                            created_by=None,
+                        )
+                    )
+
+                MaterialStockLog.objects.bulk_create(log_entries)
+
+                logger.info(
+                    f"施工单 {self.work_order.order_number} 开料工序完成，"
+                    f"更新了 {len(stock_updates)} 种物料的库存"
+                )
 
     def _select_operator_by_strategy(self, department, strategy):
         """根据策略从部门中选择操作员"""
@@ -1794,3 +2086,87 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
             self.version += 1
 
         super().save(*args, **kwargs)
+
+    def can_edit(self, user) -> bool:
+        """检查用户是否有权限编辑此任务
+
+        Args:
+            user: 用户对象
+
+        Returns:
+            bool: 如果可以编辑返回 True
+        """
+        if not user:
+            return False
+
+        # 管理员可以编辑所有任务
+        if user.is_superuser:
+            return True
+
+        # 草稿任务只能由创建人或管理员编辑
+        if self.status == "draft":
+            if self.created_by_id == user.id:
+                return True
+            return False
+
+        # 正式任务可以由被分派的操作员或部门负责人编辑
+        if self.status in ["pending", "in_progress"]:
+            if self.assigned_operator_id == user.id:
+                return True
+            # 检查用户是否属于 assigned_department
+            if self.assigned_department_id and hasattr(user, 'profile'):
+                if user.profile.departments.filter(id=self.assigned_department_id).exists():
+                    return True
+            return False
+
+        # 已完成或已取消的任务只有管理员可以编辑
+        if self.status in ["completed", "cancelled"]:
+            return False
+
+        return False
+
+    def can_change_status(self, new_status: str, user) -> tuple[bool, str]:
+        """检查用户是否有权限将任务状态变更为 new_status
+
+        Args:
+            new_status: 目标状态
+            user: 用户对象
+
+        Returns:
+            tuple: (can_change, reason)
+        """
+        if not self.can_edit(user):
+            return False, "您没有权限编辑此任务"
+
+        # 状态转换规则
+        allowed_transitions = {
+            "draft": ["pending"],
+            "pending": ["in_progress", "completed", "cancelled"],
+            "in_progress": ["completed", "cancelled"],
+            "completed": [],
+            "cancelled": [],
+        }
+
+        allowed = allowed_transitions.get(self.status, [])
+        if new_status not in allowed:
+            return False, f"不允许的状态转换：{self.status} → {new_status}"
+
+        return True, ""
+
+    def validate_status_change(self, new_status: str, user=None) -> None:
+        """验证状态变更，不合法则抛出异常
+
+        Args:
+            new_status: 目标状态
+            user: 用户对象（可选）
+
+        Raises:
+            ServiceError: 状态变更不合法时抛出
+        """
+        can_change, reason = self.can_change_status(new_status, user)
+        if not can_change:
+            from workorder.exceptions import ServiceError
+            raise ServiceError(
+                reason,
+                code=status.HTTP_400_BAD_REQUEST,
+            )

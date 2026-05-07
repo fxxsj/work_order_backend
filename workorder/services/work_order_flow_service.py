@@ -398,7 +398,7 @@ class WorkOrderFlowService:
         处理审核拒绝（完整流程）
 
         流程步骤：
-        1. 删除所有草稿任务
+        1. 归档所有草稿任务（保留快照用于追溯）
         2. 状态转换：pending → rejected
         3. 记录拒绝日志
         4. 发送通知给创建人
@@ -414,27 +414,30 @@ class WorkOrderFlowService:
         Raises:
             ServiceError: 业务逻辑错误
         """
-        # 1. 删除草稿任务
-        deleted_count = work_order.delete_draft_tasks()
-        logger.info(
-            f"施工单 {work_order.order_number} 删除了 {deleted_count} 个草稿任务"
+        # 1. 先记录拒绝日志（归档需要关联）
+        rejection_log = WorkOrderApprovalLog.objects.create(
+            work_order=work_order,
+            approval_status="rejected",
+            approved_by=rejected_by,
+            approval_comment=reason,
+            rejection_reason=reason,
         )
 
-        # 2. 状态转换
+        # 2. 归档草稿任务（保留快照用于追溯）
+        archived_count, archived_data = work_order.archive_draft_tasks(
+            rejection_log=rejection_log,
+            archived_by=rejected_by,
+        )
+        logger.info(
+            f"施工单 {work_order.order_number} 归档了 {archived_count} 个草稿任务"
+        )
+
+        # 3. 状态转换
         work_order.approval_status = "rejected"
         work_order.approved_by = rejected_by
         work_order.approved_at = timezone.now()
         work_order.approval_comment = reason
         work_order.save()
-
-        # 3. 记录拒绝日志
-        WorkOrderApprovalLog.objects.create(
-            work_order=work_order,
-            approval_status=work_order.approval_status,
-            approved_by=rejected_by,
-            approval_comment=reason,
-            rejection_reason=reason,
-        )
 
         # 4. 发送通知
         NotificationTriggers.notify_approval_rejected(
@@ -673,29 +676,53 @@ class WorkOrderFlowService:
 
     @staticmethod
     def _auto_generate_processes(work_order: WorkOrder) -> None:
-        """根据产品配置自动生成工序"""
+        """根据产品配置自动生成工序（带版本快照）"""
         products = work_order.products.select_related("product").all()
-        process_set = set()
 
+        # 收集工序及其来源配置，使用 (process, product_process) 元组避免重复
+        process_config_map = {}
         for product_item in products:
-            # 获取产品的默认工序
-            product_processes = product_item.product.default_processes.all()
-            for process in product_processes:
-                process_set.add(process)
+            product_processes = product_item.product.default_processes.select_related(
+                'process', 'process__department'
+            ).all()
+            for product_process in product_processes:
+                process = product_process.process
+                if process.id not in process_config_map:
+                    process_config_map[process.id] = (process, product_process, product_item.product)
 
-        # 批量创建工序
-        work_order_processes = [
-            WorkOrderProcess(
-                work_order=work_order,
-                process=process,
-                sequence=index,
+        # 批量创建工序（含快照数据）
+        work_order_processes = []
+        for index, (process_id, (process, product_process, product)) in enumerate(
+            sorted(process_config_map.items(), key=lambda x: x[0]), 1
+        ):
+            # 创建工序快照数据
+            process_snapshot = {
+                "process_id": process.id,
+                "process_code": process.code,
+                "process_name": process.name,
+                "department_id": process.department_id if hasattr(process, 'department') and process.department else None,
+                "department_name": process.department.name if hasattr(process, 'department') and process.department else None,
+                "is_parallel": getattr(process, 'is_parallel', False),
+                "requires_artwork": getattr(process, 'requires_artwork', False),
+                "source_product_id": product.id,
+                "source_product_name": product.name,
+                "source_product_code": product.code,
+            }
+
+            work_order_processes.append(
+                WorkOrderProcess(
+                    work_order=work_order,
+                    process=process,
+                    sequence=index,
+                    source_product_process_id=product_process.id if product_process else None,
+                    process_snapshot=process_snapshot,
+                    source_version=getattr(product_process, 'version', '1.0') if product_process else '1.0',
+                )
             )
-            for index, process in enumerate(sorted(process_set, key=lambda p: p.id), 1)
-        ]
 
         WorkOrderProcess.objects.bulk_create(work_order_processes)
         logger.info(
-            f"为施工单 {work_order.order_number} 自动生成了 {len(work_order_processes)} 个工序"
+            f"为施工单 {work_order.order_number} 自动生成了 {len(work_order_processes)} 个工序（含版本快照）"
         )
 
     @staticmethod

@@ -4,6 +4,7 @@
 展示如何在视图中使用流程编排服务，保持视图层简洁
 """
 
+from django.db import transaction
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -101,7 +102,8 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             "production_quantity": 1000,  # 可选，所有订单统一使用
             "delivery_date": "2026-03-15",  # 可选
             "priority": "normal",  # 可选
-            "notes": "备注信息"  # 可选
+            "notes": "备注信息",  # 可选
+            "allow_partial": false  # 可选，是否允许部分成功，默认 false（全部成功才提交）
         }
         """
         sales_order_ids = request.data.get("sales_order_ids") or []
@@ -111,48 +113,84 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
+        allow_partial = request.data.get("allow_partial", False)
+
         created = []
         failed = []
 
-        for sales_order_id in sales_order_ids:
-            try:
-                work_order = WorkOrderFlowService.create_from_sales_order(
-                    sales_order_id=sales_order_id,
-                    production_quantity=request.data.get("production_quantity"),
-                    selected_items=request.data.get("selected_items"),
-                    delivery_date=request.data.get("delivery_date"),
-                    priority=request.data.get("priority", "normal"),
-                    notes=request.data.get("notes", ""),
-                    created_by=request.user,
-                    additional_data={},
-                )
-                created.append(
-                    {
-                        "sales_order_id": sales_order_id,
-                        "work_order_id": work_order.id,
-                        "order_number": work_order.order_number,
-                    }
-                )
-            except ServiceError as e:
-                failed.append(
-                    {
-                        "sales_order_id": sales_order_id,
-                        "error": str(e),
-                    }
-                )
-            except Exception as e:
-                failed.append(
-                    {
-                        "sales_order_id": sales_order_id,
-                        "error": f"创建失败：{str(e)}",
-                    }
-                )
+        # 使用事务包装，确保原子性
+        with transaction.atomic():
+            for sales_order_id in sales_order_ids:
+                try:
+                    work_order = WorkOrderFlowService.create_from_sales_order(
+                        sales_order_id=sales_order_id,
+                        production_quantity=request.data.get("production_quantity"),
+                        selected_items=request.data.get("selected_items"),
+                        delivery_date=request.data.get("delivery_date"),
+                        priority=request.data.get("priority", "normal"),
+                        notes=request.data.get("notes", ""),
+                        created_by=request.user,
+                        additional_data={},
+                    )
+                    created.append(
+                        {
+                            "sales_order_id": sales_order_id,
+                            "work_order_id": work_order.id,
+                            "order_number": work_order.order_number,
+                        }
+                    )
+                except ServiceError as e:
+                    if allow_partial:
+                        # 部分成功模式：记录失败但继续
+                        failed.append(
+                            {
+                                "sales_order_id": sales_order_id,
+                                "error": str(e),
+                            }
+                        )
+                    else:
+                        # 严格模式：任何一个失败则全部回滚
+                        transaction.set_rollback(True)
+                        return APIResponse.error(
+                            message=f"批量创建失败，已回滚所有创建：{str(e)}",
+                            code=status.HTTP_400_BAD_REQUEST,
+                            data={
+                                "created_count": len(created),
+                                "failed": {
+                                    "sales_order_id": sales_order_id,
+                                    "error": str(e),
+                                },
+                            },
+                        )
+                except Exception as e:
+                    if allow_partial:
+                        failed.append(
+                            {
+                                "sales_order_id": sales_order_id,
+                                "error": f"创建失败：{str(e)}",
+                            }
+                        )
+                    else:
+                        transaction.set_rollback(True)
+                        return APIResponse.error(
+                            message=f"批量创建失败，已回滚所有创建：{str(e)}",
+                            code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            data={
+                                "created_count": len(created),
+                                "failed": {
+                                    "sales_order_id": sales_order_id,
+                                    "error": f"创建失败：{str(e)}",
+                                },
+                            },
+                        )
 
         message = "批量创建完成"
         if created and not failed:
             message = "批量创建成功"
         elif not created and failed:
             message = "批量创建失败"
+        elif created and failed:
+            message = f"批量创建部分成功：{len(created)} 个成功，{len(failed)} 个失败"
 
         return APIResponse.success(
             data={"created": created, "failed": failed},

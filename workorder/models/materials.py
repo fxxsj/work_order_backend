@@ -600,3 +600,82 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
             purchase_order.status = "received"
             purchase_order.actual_received_date = timezone.now().date()
             purchase_order.save(update_fields=["status", "actual_received_date"])
+
+
+class MaterialStockLog(models.Model):
+    """物料库存变更日志"""
+
+    CHANGE_TYPE_CHOICES = [
+        ("add", "增加"),
+        ("reduce", "减少"),
+        ("cut_consume", "开料消耗"),
+        ("initial", "初始库存"),
+        ("adjustment", "调整"),
+        ("stocktake", "盘点"),
+    ]
+
+    material = models.ForeignKey(
+        Material,
+        on_delete=models.CASCADE,
+        related_name="stock_logs",
+        verbose_name="物料",
+    )
+    change_type = models.CharField(
+        "变更类型",
+        max_length=20,
+        choices=CHANGE_TYPE_CHOICES,
+        help_text="库存变更类型",
+    )
+    quantity = models.DecimalField(
+        "变更数量",
+        max_digits=12,
+        decimal_places=3,
+        help_text="变更数量（正数为增加，负数为减少）",
+    )
+    old_quantity = models.DecimalField(
+        "变更前库存",
+        max_digits=12,
+        decimal_places=3,
+        help_text="变更前的库存数量",
+    )
+    new_quantity = models.DecimalField(
+        "变更后库存",
+        max_digits=12,
+        decimal_places=3,
+        help_text="变更后的库存数量",
+    )
+    reason = models.TextField(
+        "变更原因",
+        blank=True,
+        help_text="库存变更的原因说明",
+    )
+    work_order = models.ForeignKey(
+        "workorder.WorkOrder",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="material_stock_logs",
+        verbose_name="关联施工单",
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="material_stock_logs",
+        verbose_name="操作人",
+    )
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "物料库存变更日志"
+        verbose_name_plural = "物料库存变更日志"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["material", "created_at"]),
+            models.Index(fields=["change_type"]),
+            models.Index(fields=["work_order"]),
+        ]
+
+    def __str__(self):
+        return f"{self.material.name} - {self.change_type} - {self.quantity}"
