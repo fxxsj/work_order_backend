@@ -248,23 +248,31 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # CORS settings - 从环境变量读取
 _cors_origins = os.environ.get("CORS_ALLOWED_ORIGINS", "")
-if _cors_origins:
+_cors_allow_all = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "").lower() in ("true", "1", "yes")
+
+if _cors_allow_all:
+    CORS_ALLOW_ALL_ORIGINS = True
+elif _cors_origins:
     CORS_ALLOWED_ORIGINS = _cors_origins.split(",")
 else:
-    # 开发环境默认值
-    CORS_ALLOWED_ORIGINS = [
-        "http://localhost:8080",
-        "http://localhost:8081",
-        "http://127.0.0.1:8080",
-        "http://127.0.0.1:8081",
-    ]
+    # 开发环境默认值（允许所有 localhost 方便 Flutter/Web 开发）
+    if DEBUG:
+        CORS_ALLOW_ALL_ORIGINS = True
+    else:
+        CORS_ALLOWED_ORIGINS = [
+            "http://localhost:8080",
+            "http://localhost:8081",
+            "http://127.0.0.1:8080",
+            "http://127.0.0.1:8081",
+        ]
 
 CORS_ALLOW_CREDENTIALS = True
 
 # Multi-platform client origins (development defaults)
 # - Tauri desktop: tauri://localhost (or tauri.localhost variants depending on setup)
 # - Capacitor/Ionic: capacitor://localhost / ionic://localhost
-if DEBUG:
+# - Flutter Web: 使用随机端口
+if DEBUG and not CORS_ALLOW_ALL_ORIGINS:
     CORS_ALLOWED_ORIGINS = list(
         dict.fromkeys(
             CORS_ALLOWED_ORIGINS
