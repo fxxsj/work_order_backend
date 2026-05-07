@@ -971,7 +971,10 @@ class WorkOrderViewSet(BaseViewSet):
         """导出施工单列表到 Excel（P1 优化：添加速率限制）"""
         # 权限检查：需要查看权限
         if not request.user.has_perm("workorder.view_workorder"):
-            return APIResponse.error("您没有权限导出施工单数据", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "您没有权限导出施工单数据",
+                code=status.HTTP_403_FORBIDDEN,
+            )
 
         # 获取过滤后的查询集（使用 get_queryset 确保权限过滤）
         queryset = self.filter_queryset(self.get_queryset())

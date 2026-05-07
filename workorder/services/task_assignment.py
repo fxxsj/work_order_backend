@@ -355,7 +355,7 @@ class TaskAssignmentService:
             Dict: 包含更新后任务信息的字典
 
         Raises:
-            ServiceError: 业务规则不满足（code=status.HTTP_422_UNPROCESSABLE_ENTITY 或 code=409）
+            ServiceError: 业务规则不满足（code=status.HTTP_422_UNPROCESSABLE_ENTITY 或 code=status.HTTP_409_CONFLICT）
             WorkOrderTask.DoesNotExist: 任务不存在
         """
         from django.contrib.auth.models import User
@@ -507,14 +507,14 @@ class TaskAssignmentService:
             Dict: 包含重试建议的字典
         """
         if isinstance(error, ServiceError):
-            if error.code == 409:
+            if error.code == status.HTTP_409_CONFLICT:
                 return {
                     'can_retry': True,
                     'suggestion': '刷新页面后重试',
                     'current_owner': (error.data or {}).get('current_owner'),
                     'action_text': '刷新页面'
                 }
-            if error.code == 403:
+            if error.code == status.HTTP_403_FORBIDDEN:
                 return {
                     'can_retry': False,
                     'suggestion': '您没有权限执行此操作',

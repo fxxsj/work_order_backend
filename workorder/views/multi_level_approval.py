@@ -505,7 +505,11 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
     def dashboard(self, request):
         """管理员仪表板"""
         try:
-            require_permission(request.user, "workorder.view_workorder", code=403)
+            require_permission(
+                request.user,
+                "workorder.view_workorder",
+                code=status.HTTP_403_FORBIDDEN,
+            )
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
@@ -531,7 +535,11 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
         from ..models.core import WorkOrderTask
 
         try:
-            require_permission(request.user, "workorder.add_workorder", code=403)
+            require_permission(
+                request.user,
+                "workorder.add_workorder",
+                code=status.HTTP_403_FORBIDDEN,
+            )
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
@@ -565,7 +573,11 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
         from ..models.core import WorkOrder
 
         try:
-            require_permission(request.user, "workorder.add_workorder", code=403)
+            require_permission(
+                request.user,
+                "workorder.add_workorder",
+                code=status.HTTP_403_FORBIDDEN,
+            )
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
@@ -596,7 +608,11 @@ class ApprovalReportViewSet(viewsets.GenericViewSet):
         from ..services.smart_assignment import SmartAssignmentService
 
         try:
-            require_permission(request.user, "workorder.view_workorder", code=403)
+            require_permission(
+                request.user,
+                "workorder.view_workorder",
+                code=status.HTTP_403_FORBIDDEN,
+            )
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 

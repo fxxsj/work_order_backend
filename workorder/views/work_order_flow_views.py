@@ -36,7 +36,7 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
         if work_order.approval_status != "pending":
             raise ServiceError(
                 '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。',
-                code=400,
+                code=status.HTTP_400_BAD_REQUEST,
             )
 
     # ========== 流程 1: 从销售订单创建施工单 ==========
@@ -84,7 +84,10 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
         except ServiceError as e:
             return APIResponse.error(message=str(e), code=e.code)
         except Exception as e:
-            return APIResponse.error(message=f"创建失败：{str(e)}", code=500)
+            return APIResponse.error(
+                message=f"创建失败：{str(e)}",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     # ========== 批量从销售订单创建施工单 ==========
     @action(detail=False, methods=["post"])
@@ -103,7 +106,10 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
         """
         sales_order_ids = request.data.get("sales_order_ids") or []
         if not isinstance(sales_order_ids, list) or len(sales_order_ids) == 0:
-            return APIResponse.error(message="sales_order_ids 不能为空", code=400)
+            return APIResponse.error(
+                message="sales_order_ids 不能为空",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
 
         created = []
         failed = []
@@ -183,7 +189,10 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
         except ServiceError as e:
             return APIResponse.error(message=str(e), code=e.code)
         except Exception as e:
-            return APIResponse.error(message=f"提交失败：{str(e)}", code=500)
+            return APIResponse.error(
+                message=f"提交失败：{str(e)}",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     # ========== 流程 3: 审核通过（自动化）==========
     @action(detail=True, methods=["post"])
@@ -206,7 +215,7 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             if validation_errors:
                 raise ServiceError(
                     "施工单数据不完整，无法审核",
-                    code=400,
+                    code=status.HTTP_400_BAD_REQUEST,
                     data={"details": validation_errors},
                 )
 
@@ -226,7 +235,10 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
         except ServiceError as e:
             return APIResponse.error(message=str(e), code=e.code)
         except Exception as e:
-            return APIResponse.error(message=f"审核失败：{str(e)}", code=500)
+            return APIResponse.error(
+                message=f"审核失败：{str(e)}",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     # ========== 流程 4: 审核拒绝 ==========
     @action(detail=True, methods=["post"])
@@ -248,7 +260,10 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             )
 
             if not reason:
-                return APIResponse.error(message="拒绝原因不能为空", code=400)
+                return APIResponse.error(
+                    message="拒绝原因不能为空",
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
 
             updated_work_order = WorkOrderFlowService.handle_approval_rejected(
                 work_order=work_order,
@@ -265,7 +280,10 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
         except ServiceError as e:
             return APIResponse.error(message=str(e), code=e.code)
         except Exception as e:
-            return APIResponse.error(message=f"审核失败：{str(e)}", code=500)
+            return APIResponse.error(
+                message=f"审核失败：{str(e)}",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     # ========== 流程 5: 请求重新审核 ==========
     @action(detail=True, methods=["post"])
@@ -296,7 +314,10 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
         except ServiceError as e:
             return APIResponse.error(message=str(e), code=e.code)
         except Exception as e:
-            return APIResponse.error(message=f"请求失败：{str(e)}", code=500)
+            return APIResponse.error(
+                message=f"请求失败：{str(e)}",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     # ========== 工具方法：检查并完成施工单 ==========
     @action(detail=True, methods=["post"])
@@ -326,4 +347,7 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
                 )
 
         except Exception as e:
-            return APIResponse.error(message=f"检查失败：{str(e)}", code=500)
+            return APIResponse.error(
+                message=f"检查失败：{str(e)}",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
