@@ -12,34 +12,50 @@
 
 ## 快速开始
 
-### 本地开发
+### 一键启动（推荐）
 
 ```bash
-# 安装依赖
+./start.sh              # 交互式启动（开发环境）
+./start.sh dev          # 开发环境
+./start.sh prod         # 生产环境
+./start.sh --skip-migrate  # 跳过迁移快速启动
+```
+
+### 手动启动
+
+```bash
+# 1. 安装依赖
 pip install -r requirements.txt
 
-# 执行迁移
-python manage.py migrate
+# 2. 执行迁移
+python manage.py migrate --skip-checks
 
-# 加载初始数据 (可选)
+# 3. 加载初始数据 (可选)
 python manage.py load_initial_users
 python manage.py loaddata workorder/fixtures/initial_products.json
 
-# 启动开发服务器
-python manage.py runserver
+# 4. 启动开发服务器
+python manage.py runserver --skip-checks
 ```
 
 ### Docker 部署
 
 ```bash
-# 启动服务
+# 启动完整服务栈 (PostgreSQL + Redis + Backend)
 docker-compose up -d
 
 # 查看日志
 docker-compose logs -f backend
 ```
 
-## 环境变量
+## 环境说明
+
+| 环境 | 配置 | 用途 |
+|------|------|------|
+| dev | `.env` (从 `.env.example` 复制) | 本地开发 |
+| prod | `.env.production` | 生产部署 |
+
+**关键环境变量：**
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
@@ -100,9 +116,13 @@ python manage.py init_multi_level_approval # 初始化审批流
 
 ## 部署
 
-### Docker
+### Docker (推荐)
 
 ```bash
+# 开发环境快速启动
+docker-compose up -d backend
+
+# 生产构建
 docker build -t workorder-backend .
 docker run -p 8000:8000 workorder-backend
 ```
@@ -112,7 +132,7 @@ docker run -p 8000:8000 workorder-backend
 ```bash
 pip install -r requirements.txt
 python manage.py collectstatic
-gunicorn config.wsgi:application --bind 0.0.0.0:8000
+daphne -b 0.0.0.0 -p 8000 config.asgi:application
 ```
 
 ## GitHub Actions
