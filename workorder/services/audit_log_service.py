@@ -71,7 +71,6 @@ def capture_changes(instance, created=False):
     if audited_models:
         if model_label not in audited_models and instance._meta.label.lower() not in audited_models:
             return
-        return
 
     try:
         # 获取请求上下文
@@ -294,7 +293,6 @@ def audit_log_delete(sender, instance, **kwargs):
     if audited_models:
         if model_label not in audited_models and instance._meta.label.lower() not in audited_models:
             return
-        return
 
     try:
         # 获取请求上下文
