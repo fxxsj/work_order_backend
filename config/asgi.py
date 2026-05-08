@@ -7,9 +7,7 @@ This application handles both HTTP and WebSocket protocols using Channels.
 import os
 
 import django
-from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.security.websocket import AllowedHostsOriginValidator
 from django.core.asgi import get_asgi_application
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
@@ -23,8 +21,8 @@ from workorder.routing import websocket_urlpatterns
 application = ProtocolTypeRouter(
     {
         "http": get_asgi_application(),
-        "websocket": AllowedHostsOriginValidator(
-            URLRouter(websocket_urlpatterns)
+        "websocket": URLRouter(
+            websocket_urlpatterns
             # 注意：认证在 NotificationConsumer 内部手动处理（从查询参数提取 token）
         ),
     }
