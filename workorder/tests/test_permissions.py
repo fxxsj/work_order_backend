@@ -34,8 +34,6 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
             customer=self.customer1,
             creator=self.salesperson1
         )
-        self.wo1.approval_status = "submitted"
-        self.wo1.save(update_fields=["approval_status"])
         self.wo2 = TestDataFactory.create_workorder(
             customer=self.customer2,
             creator=self.salesperson2
@@ -312,6 +310,8 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
             customer=self.customer1,
             creator=self.salesperson1
         )
+        self.wo1.approval_status = "submitted"
+        self.wo1.save(update_fields=["approval_status"])
 
         # 添加产品和工序以满足审核条件
         from ..models import WorkOrderProduct, WorkOrderProcess, Artwork, Die
