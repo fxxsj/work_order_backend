@@ -68,8 +68,8 @@ class WorkOrderModelTest(TestCase):
         )
         self.assertEqual(work_order.status, 'pending')
 
-    def test_default_approval_status_pending(self):
-        """测试默认审核状态为待审核"""
+    def test_default_approval_status_draft(self):
+        """测试默认审核状态为草稿"""
         work_order = WorkOrder.objects.create(
             customer=self.customer,
             production_quantity=100,
@@ -77,7 +77,7 @@ class WorkOrderModelTest(TestCase):
             created_by=self.user,
             manager=self.user
         )
-        self.assertEqual(work_order.approval_status, 'pending')
+        self.assertEqual(work_order.approval_status, 'draft')
 
     def test_auto_complete_when_all_processes_completed(self):
         """测试所有工序完成时自动完成施工单"""

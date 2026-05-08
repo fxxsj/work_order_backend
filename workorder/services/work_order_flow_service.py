@@ -64,9 +64,10 @@ class WorkOrderFlowService:
 
     # ========== 状态转换规则 ==========
     ALLOWED_STATUS_TRANSITIONS = {
-        "pending": ["pending", "approved", "rejected"],
-        "rejected": ["pending"],
-        "approved": [],
+        "draft": ["submitted"],
+        "submitted": ["approved", "rejected"],
+        "rejected": ["submitted"],
+        "approved": ["submitted"],
     }
 
     @staticmethod
@@ -91,6 +92,21 @@ class WorkOrderFlowService:
                 f"不允许的状态转换：{current_status} → {new_status}",
                 code=status.HTTP_400_BAD_REQUEST,  # HTTP 400 Bad Request
             )
+
+    @staticmethod
+    def _validate_approval_actor(*, work_order: WorkOrder, user: User) -> None:
+        """校验施工单审核人，避免视图绕过 service 直接改审核状态。"""
+        if user is None or not user.is_authenticated:
+            raise ServiceError("请先登录后再审核施工单", code=status.HTTP_401_UNAUTHORIZED)
+
+        can_review_by_role = user.groups.filter(name="业务员").exists()
+        can_review_by_perm = user.is_superuser or user.has_perm("workorder.change_workorder")
+        if not (can_review_by_role or can_review_by_perm):
+            raise ServiceError("只有业务员或主管可以审核施工单", code=status.HTTP_403_FORBIDDEN)
+
+        if can_review_by_role and not can_review_by_perm and work_order.customer.salesperson != user:
+            raise ServiceError("只能审核自己负责的施工单", code=status.HTTP_403_FORBIDDEN)
+
 
     # ========== 流程 1: 从销售订单创建施工单 ==========
 
@@ -187,7 +203,7 @@ class WorkOrderFlowService:
             notes=notes,
             created_by=created_by,
             status="pending",  # 初始状态
-            approval_status="pending",  # 待审核
+            approval_status="draft",  # 草稿，提交后才进入待审核
         )
 
         logger.info(f"从销售订单 {sales_order.order_number} 创建施工单 {order_number}")
@@ -237,12 +253,11 @@ class WorkOrderFlowService:
         提交施工单审核（完整流程）
 
         流程步骤：
-        1. 验证施工单状态（必须是待审核或已拒绝）
+        1. 验证施工单状态（必须是草稿或已拒绝）
         2. 验证施工单数据完整性（图稿、工序等）
-        3. 如果是重新提交（之前审核通过过），删除旧任务
-        4. 状态转换
-        5. 记录提交日志
-        6. 发送审核通知给业务员
+        3. 状态转换为待审核
+        4. 记录提交日志
+        5. 发送审核通知给业务员
 
         Args:
             work_order_id: 施工单ID
@@ -265,7 +280,7 @@ class WorkOrderFlowService:
 
         # 2. 验证状态
         WorkOrderFlowService._validate_status_transition(
-            work_order.approval_status, "pending"
+            work_order.approval_status, "submitted"
         )
 
         # 3. 验证数据完整性
@@ -277,22 +292,12 @@ class WorkOrderFlowService:
                 data={"details": validation_errors},
             )
 
-        # 4. 如果是重新提交审核（之前审核通过过），删除旧任务
-        # 因为审核通过后用户可能修改了施工单内容，需要重新生成任务
-        from ..models.core import WorkOrderTask
-        existing_tasks = WorkOrderTask.objects.filter(
-            work_order_process__work_order=work_order
-        )
-        if existing_tasks.exists():
-            deleted_count = existing_tasks.count()
-            existing_tasks.delete()
-            logger.info(
-                f"施工单 {work_order.order_number} 重新提交审核，删除了 {deleted_count} 个旧任务"
-            )
-
-        # 5. 状态转换
-        work_order.approval_status = "pending"
-        work_order.save()
+        # 4. 状态转换。提交审核不删除任务；已投产变更的任务同步由复审通过后的专门流程处理。
+        work_order.approval_status = "submitted"
+        work_order.approved_by = None
+        work_order.approved_at = None
+        work_order.approval_comment = comment
+        work_order.save(update_fields=["approval_status", "approved_by", "approved_at", "approval_comment", "updated_at"])
 
         logger.info(f"施工单 {work_order.order_number} 提交审核")
 
@@ -345,7 +350,24 @@ class WorkOrderFlowService:
         Raises:
             ServiceError: 业务逻辑错误
         """
+        work_order.refresh_from_db()
         logger.info(f"开始处理施工单 {work_order.order_number} 的审核通过流程")
+
+        WorkOrderFlowService._validate_approval_actor(
+            work_order=work_order,
+            user=approved_by,
+        )
+        WorkOrderFlowService._validate_status_transition(
+            work_order.approval_status, "approved"
+        )
+
+        validation_errors = work_order.validate_before_approval()
+        if validation_errors:
+            raise ServiceError(
+                "施工单数据不完整，无法审核",
+                code=status.HTTP_400_BAD_REQUEST,
+                data={"details": validation_errors},
+            )
 
         # 1. 生成正式任务并自动分派
         from workorder.services.task_generation import TaskGenerationService
@@ -412,6 +434,15 @@ class WorkOrderFlowService:
         Raises:
             ServiceError: 业务逻辑错误
         """
+        work_order.refresh_from_db()
+        WorkOrderFlowService._validate_approval_actor(
+            work_order=work_order,
+            user=rejected_by,
+        )
+        WorkOrderFlowService._validate_status_transition(
+            work_order.approval_status, "rejected"
+        )
+
         # 1. 状态转换
         work_order.approval_status = "rejected"
         work_order.approved_by = rejected_by
@@ -669,20 +700,17 @@ class WorkOrderFlowService:
         """根据产品配置自动生成工序（带版本快照）"""
         products = work_order.products.select_related("product").all()
 
-        # 收集工序及其来源配置，使用 (process, product_process) 元组避免重复
+        # 收集工序及其来源产品，Product.default_processes 直接关联 Process。
         process_config_map = {}
         for product_item in products:
-            product_processes = product_item.product.default_processes.select_related(
-                'process', 'process__department'
-            ).all()
-            for product_process in product_processes:
-                process = product_process.process
+            default_processes = product_item.product.default_processes.all()
+            for process in default_processes:
                 if process.id not in process_config_map:
-                    process_config_map[process.id] = (process, product_process, product_item.product)
+                    process_config_map[process.id] = (process, product_item.product)
 
         # 批量创建工序（含快照数据）
         work_order_processes = []
-        for index, (process_id, (process, product_process, product)) in enumerate(
+        for index, (process_id, (process, product)) in enumerate(
             sorted(process_config_map.items(), key=lambda x: x[0]), 1
         ):
             # 创建工序快照数据
@@ -690,8 +718,8 @@ class WorkOrderFlowService:
                 "process_id": process.id,
                 "process_code": process.code,
                 "process_name": process.name,
-                "department_id": process.department_id if hasattr(process, 'department') and process.department else None,
-                "department_name": process.department.name if hasattr(process, 'department') and process.department else None,
+                "department_id": None,
+                "department_name": None,
                 "is_parallel": getattr(process, 'is_parallel', False),
                 "requires_artwork": getattr(process, 'requires_artwork', False),
                 "source_product_id": product.id,
@@ -704,9 +732,9 @@ class WorkOrderFlowService:
                     work_order=work_order,
                     process=process,
                     sequence=index,
-                    source_product_process_id=product_process.id if product_process else None,
+                    source_product_process_id=None,
                     process_snapshot=process_snapshot,
-                    source_version=getattr(product_process, 'version', '1.0') if product_process else '1.0',
+                    source_version='1.0',
                 )
             )
 

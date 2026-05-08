@@ -32,6 +32,9 @@ class WorkOrderFlowServiceTest(TestCase):
         self.approver = User.objects.create_user(
             username="approver", password="123456"
         )
+        self.approver.is_superuser = True
+        self.approver.is_staff = True
+        self.approver.save(update_fields=["is_superuser", "is_staff"])
         self.operator = User.objects.create_user(
             username="operator", password="123456"
         )
@@ -101,7 +104,7 @@ class WorkOrderFlowServiceTest(TestCase):
         self.assertEqual(work_order.production_quantity, 100)
         self.assertEqual(work_order.total_amount, self.sales_order.total_amount)
         self.assertEqual(work_order.status, "pending")
-        self.assertEqual(work_order.approval_status, "pending")
+        self.assertEqual(work_order.approval_status, "draft")
         self.assertEqual(work_order.products.count(), 1)
         self.assertEqual(work_order.products.first().source_type, "sales_order")
         self.assertEqual(
@@ -159,7 +162,7 @@ class WorkOrderFlowServiceTest(TestCase):
         )
 
         # 验证状态变更
-        self.assertEqual(updated_work_order.approval_status, "pending")
+        self.assertEqual(updated_work_order.approval_status, "submitted")
 
     def test_create_from_sales_order_with_selected_items(self):
         """测试按选定订单明细创建施工单，并同步销售订单状态"""
@@ -256,10 +259,10 @@ class WorkOrderFlowServiceTest(TestCase):
         )
 
         # 修改状态为已审核
-        work_order.approval_status = "approved"
+        work_order.approval_status = "submitted"
         work_order.save()
 
-        # 再次提交审核应该失败
+        # 已提交的施工单再次提交审核应该失败
         with self.assertRaises(ServiceError) as context:
             WorkOrderFlowService.submit_for_approval(
                 work_order_id=work_order.id,
@@ -279,7 +282,7 @@ class WorkOrderFlowServiceTest(TestCase):
             priority="normal",
             created_by=self.creator,
             status="pending",
-            approval_status="pending",
+            approval_status="submitted",
         )
 
         self.sales_order.refresh_from_db()
@@ -302,7 +305,7 @@ class WorkOrderFlowServiceTest(TestCase):
             priority="normal",
             created_by=self.creator,
             status="pending",
-            approval_status="pending",
+            approval_status="submitted",
         )
 
         self.sales_order.refresh_from_db()
@@ -325,7 +328,7 @@ class WorkOrderFlowServiceTest(TestCase):
             priority="normal",
             created_by=self.creator,
             status="pending",
-            approval_status="pending",
+            approval_status="submitted",
         )
 
         related_ids = {
@@ -387,13 +390,6 @@ class WorkOrderFlowServiceTest(TestCase):
         self.assertEqual(updated_work_order.approval_status, "rejected")
         self.assertEqual(updated_work_order.approved_by, self.approver)
         self.assertEqual(updated_work_order.approval_comment, "数据不完整")
-
-        # 验证草稿任务已删除
-        draft_tasks = WorkOrderTask.objects.filter(
-            work_order_process__work_order=work_order,
-            status="draft",
-        )
-        self.assertEqual(draft_tasks.count(), 0)
 
     # ========== 测试流程 5: 检查并完成施工单 ==========
 
@@ -469,9 +465,9 @@ class WorkOrderFlowServiceTest(TestCase):
     def test_validate_status_transition_valid(self):
         """测试有效的状态转换"""
         # 不应该抛出异常
-        WorkOrderFlowService._validate_status_transition("pending", "pending")
-        WorkOrderFlowService._validate_status_transition("pending", "approved")
-        WorkOrderFlowService._validate_status_transition("rejected", "pending")
+        WorkOrderFlowService._validate_status_transition("draft", "submitted")
+        WorkOrderFlowService._validate_status_transition("submitted", "approved")
+        WorkOrderFlowService._validate_status_transition("rejected", "submitted")
 
     def test_validate_status_transition_invalid(self):
         """测试无效的状态转换"""
@@ -479,7 +475,7 @@ class WorkOrderFlowServiceTest(TestCase):
             WorkOrderFlowService._validate_status_transition("completed", "in_progress")
 
         with self.assertRaises(ServiceError):
-            WorkOrderFlowService._validate_status_transition("approved", "pending")
+            WorkOrderFlowService._validate_status_transition("approved", "draft")
 
 
 # ========== 集成测试：完整流程 ==========
@@ -492,6 +488,9 @@ class WorkOrderFlowIntegrationTest(TestCase):
         self.user = User.objects.create_user(
             username="testuser", password="123456"
         )
+        self.user.is_superuser = True
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_superuser", "is_staff"])
         self.customer = Customer.objects.create(
             name="集成测试客户",
             contact_person="李四",
@@ -546,7 +545,7 @@ class WorkOrderFlowIntegrationTest(TestCase):
             work_order_id=work_order.id,
             submitted_by=self.user,
         )
-        self.assertEqual(work_order.approval_status, "pending")
+        self.assertEqual(work_order.approval_status, "submitted")
 
         # 3. 审核通过（自动分派任务）
         work_order = WorkOrderFlowService.handle_approval_passed(

@@ -240,16 +240,18 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
 
     # 业务员审核相关字段
     APPROVAL_STATUS_CHOICES = [
-        ("pending", "待审核"),
+        ("draft", "草稿"),
+        ("submitted", "待审核"),
         ("approved", "已通过"),
         ("rejected", "已拒绝"),
     ]
 
     # 审核状态转换规则 - 集中管理状态转换
     APPROVAL_STATUS_TRANSITIONS = {
-        "pending": ["pending", "approved", "rejected"],
-        "rejected": ["pending"],
-        "approved": [],
+        "draft": ["submitted"],
+        "submitted": ["approved", "rejected"],
+        "rejected": ["submitted"],
+        "approved": ["submitted"],
     }
 
     def can_transition_to_approval_status(self, new_status: str) -> bool:
@@ -292,7 +294,7 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
             )
 
     approval_status = models.CharField(
-        "审核状态", max_length=20, choices=APPROVAL_STATUS_CHOICES, default="pending"
+        "审核状态", max_length=20, choices=APPROVAL_STATUS_CHOICES, default="draft"
     )
     approved_by = models.ForeignKey(
         User,

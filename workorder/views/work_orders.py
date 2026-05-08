@@ -94,6 +94,7 @@ from .sales import _scope_sales_orders
 
 
 class WorkOrderFilterSet(FilterSet):
+    approval_status = CharFilter(method="filter_approval_status")
     product = NumberFilter(method="filter_product")
     process = NumberFilter(method="filter_process")
 
@@ -118,6 +119,13 @@ class WorkOrderFilterSet(FilterSet):
         if not value:
             return queryset
         return queryset.filter(order_processes__process_id=value).distinct()
+
+    def filter_approval_status(self, queryset, name, value):
+        if not value:
+            return queryset
+        # 兼容旧前端/旧链接里的 pending，新的“待审核”为 submitted。
+        normalized = "submitted" if value == "pending" else value
+        return queryset.filter(approval_status=normalized)
 
 
 @extend_schema_view(
@@ -637,7 +645,7 @@ class WorkOrderViewSet(BaseViewSet):
         pending_approval_count = 0
         if request.user.groups.filter(name="业务员").exists():
             pending_approval_count = queryset.filter(
-                approval_status="pending", customer__salesperson=request.user
+                approval_status="submitted", customer__salesperson=request.user
             ).count()
 
         # ========== 新增：任务统计 ==========
@@ -939,7 +947,7 @@ class WorkOrderViewSet(BaseViewSet):
             in_progress_count=Count("id", filter=Q(status="in_progress")),
             completed_count=Count("id", filter=Q(status="completed")),
             cancelled_count=Count("id", filter=Q(status="cancelled")),
-            pending_approval_count=Count("id", filter=Q(approval_status="pending")),
+            pending_approval_count=Count("id", filter=Q(approval_status="submitted")),
             approved_count=Count("id", filter=Q(approval_status="approved")),
             rejected_approval_count=Count("id", filter=Q(approval_status="rejected")),
         )

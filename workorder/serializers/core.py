@@ -1540,7 +1540,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                         )
                 else:
                     # 有权限的用户可以修改核心字段，但需要重新审核
-                    instance.approval_status = "pending"
+                    instance.approval_status = "submitted"
                     instance.approval_comment = ""
 
         # 更新图稿（ManyToMany 字段）
@@ -1557,9 +1557,9 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
-        # 如果审核状态是 rejected，修改后自动重置为 pending（允许重新提交审核）
+        # 如果审核状态是 rejected，修改后回到草稿，用户明确提交后再进入待审核。
         if instance.approval_status == "rejected":
-            instance.approval_status = "pending"
+            instance.approval_status = "draft"
             # 清空之前的审核信息，允许重新审核
             instance.approval_comment = ""
 

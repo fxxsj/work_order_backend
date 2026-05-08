@@ -125,7 +125,7 @@ class WorkOrderService:
                 code=status.HTTP_403_FORBIDDEN,
             )
 
-        if work_order.approval_status != "pending":
+        if work_order.approval_status != "submitted":
             message = '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。'
             raise ServiceError(
                 message,
@@ -239,7 +239,7 @@ class WorkOrderService:
                     code=status.HTTP_403_FORBIDDEN,
                 )
 
-        work_order.approval_status = "pending"
+        work_order.approval_status = "submitted"
         work_order.approval_comment = ""
         work_order.save()
         return work_order
@@ -263,7 +263,7 @@ class WorkOrderService:
 
         original_approver = work_order.approved_by
 
-        work_order.approval_status = "pending"
+        work_order.approval_status = "submitted"
         if work_order.status == "in_progress":
             work_order.status = "pending"
         work_order.approval_comment = ""
