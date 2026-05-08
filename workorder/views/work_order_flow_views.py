@@ -11,8 +11,8 @@ from rest_framework.permissions import IsAuthenticated
 from workorder.response import APIResponse
 
 from ..models.core import WorkOrder
+from ..models.system import WorkOrderApprovalLog
 from ..services.work_order_flow_service import WorkOrderFlowService
-from ..services.work_order_service import WorkOrderService
 from ..services.service_errors import ServiceError
 from ..serializers.core import WorkOrderDetailSerializer
 
@@ -319,40 +319,6 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    # ========== 流程 5: 请求重新审核 ==========
-    @action(detail=True, methods=["post"])
-    def request_reapproval(self, request, pk=None):
-        """
-        请求重新审核（已审核通过的施工单修改后）
-
-        请求体：
-        {
-            "reason": "请求原因"  # 可选
-        }
-        """
-        try:
-            work_order = self.get_object()
-
-            result = WorkOrderService.request_reapproval(
-                work_order=work_order,
-                user=request.user,
-                reason=request.data.get("reason", ""),
-            )
-
-            serializer = WorkOrderDetailSerializer(work_order)
-            return APIResponse.success(
-                data=serializer.data,
-                message="已请求重新审核",
-            )
-
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
-        except Exception as e:
-            return APIResponse.error(
-                message=f"请求失败：{str(e)}",
-                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
     # ========== 工具方法：检查并完成施工单 ==========
     @action(detail=True, methods=["post"])
     def check_completion(self, request, pk=None):
@@ -385,3 +351,25 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
                 message=f"检查失败：{str(e)}",
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    @action(detail=True, methods=["post"])
+    def mark_urgent(self, request, pk=None):
+        reason = (request.data.get("reason") or "").strip()
+        if not reason:
+            return APIResponse.error(
+                message="请输入紧急原因",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        work_order = self.get_object()
+        work_order.priority = "urgent"
+        work_order.urgency_reason = reason
+        work_order.save(update_fields=["priority", "urgency_reason"])
+        WorkOrderApprovalLog.objects.create(
+            work_order=work_order,
+            action_type="mark_urgent",
+            action_by=request.user,
+            comments=reason,
+        )
+        serializer = WorkOrderDetailSerializer(work_order)
+        return APIResponse.success(data=serializer.data, message="已标记为紧急施工单")

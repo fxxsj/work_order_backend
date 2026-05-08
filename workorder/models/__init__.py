@@ -63,12 +63,6 @@ from .materials import (
     PurchaseReceiveRecord,
     Supplier,
 )
-from .multi_level_approval import (
-    ApprovalEscalation,
-    ApprovalRule,
-    ApprovalStep,
-    ApprovalWorkflow,
-)
 from .products import (
     Product,
     ProductImage,
@@ -135,11 +129,6 @@ __all__ = [
     # 销售模型
     "SalesOrder",
     "SalesOrderItem",
-    # 多级审核模型
-    "ApprovalWorkflow",
-    "ApprovalStep",
-    "ApprovalRule",
-    "ApprovalEscalation",
     # 财务模型
     "CostCenter",
     "CostItem",

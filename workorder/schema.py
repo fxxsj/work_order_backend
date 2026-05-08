@@ -73,7 +73,6 @@ class TaggedAutoSchema(AutoSchema):
         "workorder.views.system": "系统",
         "workorder.views.notification": "通知",
         "workorder.views.monitoring": "统计",
-        "workorder.views.multi_level_approval": "审核",
         "workorder.views.work_orders": "施工单",
         "workorder.views.work_order_processes": "工序",
         "workorder.views.work_order_tasks": "任务",

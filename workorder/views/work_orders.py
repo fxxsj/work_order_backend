@@ -35,7 +35,6 @@ from workorder.docs.work_orders import (
     work_order_approve_docs,
     work_order_docs,
     work_order_export_docs,
-    work_order_request_reapproval_docs,
     work_order_resubmit_docs,
     work_order_statistics_docs,
     work_order_summary_docs,
@@ -564,42 +563,6 @@ class WorkOrderViewSet(BaseViewSet):
 
         serializer = self.get_serializer(work_order)
         return APIResponse.success(data=serializer.data)
-
-    @action(detail=True, methods=["post"])
-    @work_order_request_reapproval_docs
-    def request_reapproval(self, request, pk=None):
-        """请求重新审核（审核通过后发现错误需要修改）
-
-        使用场景：
-        - 审核通过后发现需要修改核心字段（产品、工序、版等）
-        - 审核通过后发现需要添加工序
-        - 审核通过后发现数据错误需要修正
-
-        流程：
-        1. 检查权限（只有创建人或制表人可以请求重新审核）
-        2. 检查状态（只有已审核通过的施工单可以请求重新审核）
-        3. 重置审核状态为 pending
-        4. 重置施工单状态为 pending（如果已开始，需要重置）
-        5. 通知原审核人
-        """
-        work_order = self.get_object()
-        request_reason = request.data.get("reason", "")
-        try:
-            original_approver = WorkOrderService.request_reapproval(
-                work_order=work_order, user=request.user, reason=request_reason
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
-        serializer = self.get_serializer(work_order)
-        return APIResponse.success(
-            data={
-                **serializer.data,
-                "message": "重新审核请求已提交，已通知原审核人",
-                "original_approver": (
-                    original_approver.username if original_approver else None),
-            }
-        )
 
     @action(detail=False, methods=["get"])
     @work_order_statistics_docs

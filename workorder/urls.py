@@ -23,11 +23,6 @@ from .views import (
     WorkOrderFlowViewSet,
     AuditLogViewSet,
 )
-# 多级审批功能已启用。如需禁用，请注释下方导入与路由注册。
-from .views.multi_level_approval import (
-    ApprovalWorkflowViewSet, ApprovalStepViewSet, MultiLevelApprovalViewSet,
-    UrgentOrderViewSet, ApprovalReportViewSet
-)
 from .views.notification import (
     NotificationViewSet, SystemNotificationViewSet,
     UserNotificationSettingsViewSet, NotificationTemplateViewSet
@@ -91,12 +86,6 @@ router.register(r'delivery-orders', DeliveryOrderViewSet, basename='delivery-ord
 router.register(r'delivery-items', DeliveryItemViewSet, basename='delivery-item')
 router.register(r'quality-inspections', QualityInspectionViewSet, basename='quality-inspection')
 
-# 多级审批路由
-router.register(r'approval-workflows', ApprovalWorkflowViewSet)
-router.register(r'approval-steps', ApprovalStepViewSet)
-router.register(r'multi-level-approval', MultiLevelApprovalViewSet, basename='multi-level-approval')
-router.register(r'urgent-orders', UrgentOrderViewSet, basename='urgent-orders')
-router.register(r'approval-reports', ApprovalReportViewSet, basename='approval-reports')
 router.register(r'system-notifications', SystemNotificationViewSet, basename='system-notifications')
 router.register(r'user-notification-settings', UserNotificationSettingsViewSet, basename='user-notification-settings')
 router.register(r'notification-templates', NotificationTemplateViewSet, basename='notification-templates')

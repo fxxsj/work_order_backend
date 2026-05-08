@@ -14,7 +14,6 @@ Django Admin 管理界面按业务领域拆分。
 - sales: 销售管理 (SalesOrder, SalesOrderItem)
 - finance: 财务管理 (Invoice, Payment, Statement)
 - inventory: 库存管理 (ProductStock, StockIn, StockOut, DeliveryOrder)
-- approvals: 多级审批管理
 - audit: 审计日志管理
 """
 
@@ -26,12 +25,6 @@ from .mixins import FixedInlineModelAdminMixin, _patched_check_inlines
 
 ModelAdmin.checks_class._check_inlines = _patched_check_inlines
 
-from .approvals import (
-    ApprovalEscalationAdmin,
-    ApprovalRuleAdmin,
-    ApprovalStepAdmin,
-    ApprovalWorkflowAdmin,
-)
 from .audit import AuditLogAdmin, AuditLogExportAdmin, AuditLogSettingsAdmin
 from .assets import ArtworkAdmin, DieAdmin, EmbossingPlateAdmin, FoilingPlateAdmin
 
@@ -143,11 +136,6 @@ __all__ = [
     "DeliveryOrderAdmin",
     "DeliveryItemAdmin",
     "QualityInspectionAdmin",
-    # Approval Admins
-    "ApprovalWorkflowAdmin",
-    "ApprovalStepAdmin",
-    "ApprovalRuleAdmin",
-    "ApprovalEscalationAdmin",
     # Audit Admins
     "AuditLogAdmin",
     "AuditLogExportAdmin",

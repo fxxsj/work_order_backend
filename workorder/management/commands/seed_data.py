@@ -13,10 +13,6 @@ from django.db import transaction
 from django.utils import timezone
 
 from workorder.models import (
-    ApprovalEscalation,
-    ApprovalRule,
-    ApprovalStep,
-    ApprovalWorkflow,
     Artwork,
     ArtworkProduct,
     AuditLog,
@@ -343,37 +339,6 @@ class Command(BaseCommand):
                     "priority": 100,
                     "operator_selection_strategy": "least_tasks",
                 },
-            )
-
-            # === 多级审核 ===
-            workflow = ApprovalWorkflow.objects.create(
-                name="默认流程",
-                workflow_type="simple",
-                steps={"steps": ["主管审核"]},
-                created_by=manager,
-            )
-            approval_step = ApprovalStep.objects.create(
-                work_order=work_order,
-                workflow=workflow,
-                step_name="主管审核",
-                step_order=1,
-                assigned_to=approver,
-                status="pending",
-            )
-            ApprovalRule.objects.create(
-                name="默认规则",
-                rule_type="value_based",
-                workflow_type="simple",
-                conditions={"min_amount": 0},
-                created_by=manager,
-            )
-            ApprovalEscalation.objects.create(
-                work_order=work_order,
-                from_step=approval_step,
-                to_step=None,
-                escalation_reason="测试上报",
-                status="pending",
-                escalated_by=approver,
             )
 
             # === 采购 ===

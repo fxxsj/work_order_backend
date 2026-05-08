@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from django.db.models import Max
 from django.utils import timezone
@@ -243,64 +242,3 @@ class WorkOrderService:
         work_order.approval_comment = ""
         work_order.save()
         return work_order
-
-    @staticmethod
-    def request_reapproval(
-        *, work_order: WorkOrder, user, reason: str = ""
-    ) -> Optional[object]:
-        if work_order.created_by != user and work_order.manager != user:
-            if not user.has_perm("workorder.change_workorder"):
-                raise ServiceError(
-                    "只有创建人、制表人或有编辑权限的用户可以请求重新审核",
-                    code=status.HTTP_403_FORBIDDEN,
-                )
-
-        if work_order.approval_status != "approved":
-            raise ServiceError(
-                "只有已审核通过的施工单可以请求重新审核",
-                code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        original_approver = work_order.approved_by
-
-        work_order.approval_status = "submitted"
-        if work_order.status == "in_progress":
-            work_order.status = "pending"
-        work_order.approval_comment = ""
-        work_order.save()
-
-        if original_approver:
-            Notification.create_notification(
-                recipient=original_approver,
-                notification_type="reapproval_requested",
-                title="施工单请求重新审核",
-                content=f"施工单 {work_order.order_number} 已请求重新审核",
-                priority="high",
-                work_order=work_order,
-                template_key="reapproval_requested",
-                template_variables={
-                    "workorder_number": work_order.order_number,
-                    "reason": reason,
-                    "requested_by": user.username if user else "系统",
-                    "recipient_role": "approver",
-                },
-            )
-
-        if work_order.created_by and work_order.created_by != user:
-            Notification.create_notification(
-                recipient=work_order.created_by,
-                notification_type="reapproval_requested",
-                title="施工单请求重新审核",
-                content=f"施工单 {work_order.order_number} 已提交重新审核请求",
-                priority="normal",
-                work_order=work_order,
-                template_key="reapproval_requested",
-                template_variables={
-                    "workorder_number": work_order.order_number,
-                    "reason": reason,
-                    "requested_by": user.username if user else "系统",
-                    "recipient_role": "creator",
-                },
-            )
-
-        return original_approver

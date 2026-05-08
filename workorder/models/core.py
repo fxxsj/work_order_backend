@@ -310,18 +310,6 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
         "审核意见", blank=True, help_text="业务员审核意见"
     )
 
-    # 多级审核相关字段
-    multi_level_approval_enabled = models.BooleanField(
-        "是否启用多级审核", default=False, help_text="是否使用多级审核流程"
-    )
-    current_workflow = models.ForeignKey(
-        "workorder.ApprovalWorkflow",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="current_workflow",
-        verbose_name="当前审核工作流",
-    )
     urgency_reason = models.TextField(
         "紧急原因", blank=True, help_text="标记为紧急订单的原因"
     )

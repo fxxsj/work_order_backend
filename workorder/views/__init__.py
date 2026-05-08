@@ -42,13 +42,6 @@ from .materials import (
     PurchaseReceiveRecordViewSet,
     SupplierViewSet,
 )
-from .multi_level_approval import (
-    ApprovalReportViewSet,
-    ApprovalStepViewSet,
-    ApprovalWorkflowViewSet,
-    MultiLevelApprovalViewSet,
-    UrgentOrderViewSet,
-)
 from .notification import (
     NotificationTemplateViewSet,
     NotificationViewSet,
@@ -129,12 +122,6 @@ __all__ = [
     "DeliveryOrderViewSet",
     "DeliveryItemViewSet",
     "QualityInspectionViewSet",
-    # 审批视图集
-    "ApprovalWorkflowViewSet",
-    "ApprovalStepViewSet",
-    "MultiLevelApprovalViewSet",
-    "UrgentOrderViewSet",
-    "ApprovalReportViewSet",
     # 通知视图集
     "NotificationViewSet",
     "SystemNotificationViewSet",

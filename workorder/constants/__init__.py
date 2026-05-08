@@ -22,8 +22,6 @@ from .status import (
     TaskStatus,
     ProcessStatus,
     MaterialPurchaseStatus,
-    ApprovalStepStatus,
-    ApprovalEscalationStatus,
     NotificationStatus,
     DeliveryOrderStatus,
     QualityInspectionStatus,
@@ -34,14 +32,6 @@ from .status import (
 from .priority import (
     Priority,
     WorkflowPriority,
-)
-
-# 审核常量
-from .approval import (
-    WorkflowType,
-    StepType,
-    DecisionType,
-    RuleType,
 )
 
 # 权限常量
@@ -68,8 +58,6 @@ __all__ = [
     'TaskStatus',
     'ProcessStatus',
     'MaterialPurchaseStatus',
-    'ApprovalStepStatus',
-    'ApprovalEscalationStatus',
     'NotificationStatus',
     'DeliveryOrderStatus',
     'QualityInspectionStatus',
@@ -77,11 +65,6 @@ __all__ = [
     # 优先级常量
     'Priority',
     'WorkflowPriority',
-    # 审核常量
-    'WorkflowType',
-    'StepType',
-    'DecisionType',
-    'RuleType',
     # 权限常量
     'UserRole',
     'PermissionAction',

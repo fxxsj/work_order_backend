@@ -163,23 +163,6 @@ work_order_resubmit_docs = extend_schema(
     },
 )
 
-work_order_request_reapproval_docs = extend_schema(
-    tags=["施工单"],
-    summary="请求重新审核",
-    request=inline_serializer(
-        name="WorkOrderRequestReapprovalRequest",
-        fields={"reason": serializers.CharField(required=False, allow_blank=True)},
-    ),
-    responses={
-        200: OpenApiResponse(
-            response=standard_success_response(
-                "WorkOrderRequestReapprovalResponse", WorkOrderDetailSerializer
-            ),
-            description="请求成功",
-        )
-    },
-)
-
 work_order_statistics_docs = extend_schema(
     tags=["施工单"],
     summary="施工单统计",

@@ -95,38 +95,6 @@ class MaterialPurchaseStatus:
     ]
 
 
-class ApprovalStepStatus:
-    """审核步骤状态常量"""
-
-    PENDING = 'pending'
-    IN_PROGRESS = 'in_progress'
-    COMPLETED = 'completed'
-    SKIPPED = 'skipped'
-
-    CHOICES = [
-        (PENDING, _('待执行')),
-        (IN_PROGRESS, _('执行中')),
-        (COMPLETED, _('已完成')),
-        (SKIPPED, _('已跳过')),
-    ]
-
-
-class ApprovalEscalationStatus:
-    """审核上报状态常量"""
-
-    PENDING = 'pending'
-    ACCEPTED = 'accepted'
-    REJECTED = 'rejected'
-    RESOLVED = 'resolved'
-
-    CHOICES = [
-        (PENDING, _('待处理')),
-        (ACCEPTED, _('已接受')),
-        (REJECTED, _('已拒绝')),
-        (RESOLVED, _('已处理')),
-    ]
-
-
 class NotificationStatus:
     """通知状态常量"""
 
