@@ -6,10 +6,11 @@
 
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta
-from django.db import transaction
+from django.db import transaction, models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from django.db.models.functions import TruncMonth
 
 from ..models.core import (
     WorkOrder, WorkOrderProcess, WorkOrderTask, WorkOrderProduct,
@@ -771,12 +772,15 @@ class ReportBusinessService:
         )['total'] or 0
         
         # 按月统计
-        monthly_stats = queryset.extra({
-            'month': models.ExtractMonth('created_at')
-        }).values('month').annotate(
-            count=models.Count('id'),
-            amount=models.Sum('total_amount')
-        ).order_by('month')
+        monthly_stats = (
+            queryset.annotate(month=TruncMonth('created_at'))
+            .values('month')
+            .annotate(
+                count=models.Count('id'),
+                amount=models.Sum('total_amount')
+            )
+            .order_by('month')
+        )
         
         return {
             'total_orders': total_orders,

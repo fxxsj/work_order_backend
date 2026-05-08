@@ -98,17 +98,6 @@ def update_cutting_task_on_material_status_change(sender, instance, created, **k
     # 检查物料状态是否为'cut'（已开料）
     if instance.purchase_status == "cut":
         transaction.on_commit(lambda: _update_cutting_tasks(instance))
-                
-                # 记录操作日志（可选，避免日志过多）
-                # from .models import TaskLog
-                # TaskLog.objects.create(
-                #     task=task,
-                #     log_type='update_quantity',
-                #     content=f'物料已开料，自动更新完成数量：{old_quantity} → {quantity}',
-                #     quantity_before=old_quantity,
-                #     quantity_after=quantity,
-                #     quantity_increment=quantity - old_quantity
-                # )
 
 
 def register_asset_confirmation_handlers(model_class, asset_kwarg_name):

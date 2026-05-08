@@ -116,11 +116,6 @@ class ProcessAdmin(admin.ModelAdmin):
                 )
             },
         ),
-        # 注意：任务生成规则字段已废弃，任务生成现在基于工序的 code 字段自动匹配
-        # ('任务生成规则', {
-        #     'fields': ('task_generation_rule',),
-        #     'description': '注意：任务生成现在基于工序的 code 字段自动匹配，不再使用此规则字段。此字段保留仅为向后兼容，请勿修改。'
-        # }),
         (
             "工序与版的关系配置",
             {

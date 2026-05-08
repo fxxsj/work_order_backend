@@ -3,7 +3,6 @@
 
 包含所有业务逻辑服务
 """
-from .api_gateway import WorkOrderAPIService, TaskAPIService, ReportAPIService, SystemAPIService
 from .audit_export_service import AuditExportService
 from .business_logic import WorkOrderBusinessService, TaskBusinessService, ProcessBusinessService, ReportBusinessService
 from .cache_service import CacheManager
@@ -50,19 +49,11 @@ __all__ = [
     'QueryOptimizer',
     'QueryPerformanceMonitor',
     'RealtimeNotificationService',
-    'ReportAPIService',
     'ReportBusinessService',
     'SalesOrderStatusService',
     'SmartAssignmentService',
     'StockConsistencyService',
-    'SystemAPIService',
-    'TaskAPIService',
     'TaskAssignmentService',
-    'TaskBusinessService',
-    'TaskPerformanceData',
-    'TaskSyncService',
-    'UrgentOrderService',
-    'WorkOrderAPIService',
     'WorkOrderBusinessService',
     'WorkOrderFlowService',
     'WorkOrderProcessService',
