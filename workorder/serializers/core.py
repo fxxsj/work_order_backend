@@ -1610,7 +1610,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
             # 重新创建工序（如果process_ids为空，则使用产品的默认工序）
             self._create_work_order_processes(
-                instance, process_ids=process_ids if process_ids else None
+                instance, process_ids=process_ids if process_ids is not None else None
             )
 
         # 如果提供了 materials_data，更新物料列表
