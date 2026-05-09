@@ -1305,15 +1305,6 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         # 自动创建工序（使用用户选择的工序ID列表）
         self._create_work_order_processes(work_order, process_ids=process_ids)
 
-        # 保存后验证：确保数据完整，可以提交审核
-        validation_errors = work_order.validate_before_approval()
-        if validation_errors:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError({
-                "detail": "施工单数据不完整，请补充以下信息：",
-                "errors": validation_errors,
-            })
-
         return work_order
 
     def update(self, instance, validated_data):
@@ -1505,16 +1496,6 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                     notes=item.get("notes", ""),
                     purchase_status=item.get("purchase_status", "pending"),
                 )
-
-        # 保存后验证：确保数据完整，可以提交审核
-        # 注意：已审核通过的订单不需要此验证
-        if instance.approval_status != "approved":
-            validation_errors = instance.validate_before_approval()
-            if validation_errors:
-                raise ValidationError({
-                    "detail": "施工单数据不完整，请补充以下信息：",
-                    "errors": validation_errors,
-                })
 
         return instance
 

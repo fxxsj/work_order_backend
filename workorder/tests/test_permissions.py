@@ -347,9 +347,9 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
         """测试业务员可以审核自己负责客户的施工单"""
         self.client.force_login(self.salesperson1)
 
-        # 审核施工单（使用正确的参数名）
-        response = self.api_post(f'/api/v1/workorders/{self.wo1.id}/approve/', {
-            'approval_status': 'approved'
+        # 审核施工单（使用 workorders-flow 端点）
+        response = self.api_post(f'/api/v1/workorders-flow/{self.wo1.id}/approve/', {
+            'comment': 'Approved'
         }, user=self.salesperson1)
 
         # 应该成功
@@ -376,18 +376,17 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
         """测试拒绝时必须填写原因"""
         self.client.force_login(self.salesperson1)
 
-        # 拒绝但未填写原因
-        response = self.api_post(f'/api/v1/workorders/{self.wo1.id}/approve/', {
-            'approval_status': 'rejected'
+        # 拒绝但未填写原因（使用 workorders-flow 端点）
+        response = self.api_post(f'/api/v1/workorders-flow/{self.wo1.id}/reject/', {
+            'reason': ''
         }, user=self.salesperson1)
 
         # 应该失败（缺少原因）
         self.assertIn(response.status_code, [400, 403])
 
         # 拒绝并填写原因
-        response = self.api_post(f'/api/v1/workorders/{self.wo1.id}/approve/', {
-            'approval_status': 'rejected',
-            'rejection_reason': '信息不完整'
+        response = self.api_post(f'/api/v1/workorders-flow/{self.wo1.id}/reject/', {
+            'reason': '信息不完整'
         }, user=self.salesperson1)
 
         # 应该成功

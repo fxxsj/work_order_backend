@@ -29,7 +29,7 @@ class WorkOrderTaskFilterSet(FilterSet):
     task_type = CharFilter(field_name="task_type")
     assigned_department = NumberFilter(field_name="assigned_department")
     assigned_operator = NumberFilter(field_name="assigned_operator")
-    work_order_process = NumberFilter(field_name="work_order_process__process")
+    work_order_process = NumberFilter(field_name="work_order_process")
 
     # 自定义筛选：按施工单号搜索
     work_order_number = CharFilter(method="filter_work_order_number")

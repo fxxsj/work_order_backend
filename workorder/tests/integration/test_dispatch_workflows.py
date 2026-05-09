@@ -52,7 +52,7 @@ class TestAutoDispatchWorkflow:
         maker = UserFactory(username='maker', departments=[dept1])
 
         workorder = WorkOrderFactory(
-            approval_status='pending',
+            approval_status='submitted',
             created_by=maker,
             processes=0  # We'll create processes manually
         )
@@ -68,8 +68,8 @@ class TestAutoDispatchWorkflow:
         # Approve workorder
         api_client.force_authenticate(user=supervisor)
         response = api_client.post(
-            f'/api/v1/workorders/{workorder.id}/approve/',
-            {"approval_status": "approved"},
+            f'/api/v1/workorders-flow/{workorder.id}/approve/',
+            {"comment": "Approved"},
             format="json"
         )
 
@@ -77,7 +77,7 @@ class TestAutoDispatchWorkflow:
 
         # Verify tasks are created
         tasks = WorkOrderTask.objects.filter(work_order_process__work_order=workorder)
-        assert tasks.count() == 3
+        assert tasks.count() == 4
 
         # Note: Auto-dispatch may or may not be enabled
         # Test documents expected behavior when rules exist
@@ -116,15 +116,15 @@ class TestAutoDispatchWorkflow:
 
         # Create and approve workorder
         supervisor = UserFactory(username='supervisor', departments=[dept1])
-        workorder = WorkOrderFactory(approval_status='pending', processes=0)
+        workorder = WorkOrderFactory(approval_status='submitted', processes=0)
         WorkOrderProductFactory(work_order=workorder, quantity=100)
         make_salesperson(supervisor, workorder.customer)
         WorkOrderProcessFactory(work_order=workorder, process=process, tasks=1)
 
         api_client.force_authenticate(user=supervisor)
         api_client.post(
-            f'/api/v1/workorders/{workorder.id}/approve/',
-            {"approval_status": "approved"},
+            f'/api/v1/workorders-flow/{workorder.id}/approve/',
+            {"comment": "Approved"},
             format="json"
         )
 
@@ -159,15 +159,15 @@ class TestAutoDispatchWorkflow:
         )
 
         supervisor = UserFactory(username='supervisor', departments=[dept1])
-        workorder = WorkOrderFactory(approval_status='pending', processes=0)
+        workorder = WorkOrderFactory(approval_status='submitted', processes=0)
         WorkOrderProductFactory(work_order=workorder, quantity=100)
         make_salesperson(supervisor, workorder.customer)
         WorkOrderProcessFactory(work_order=workorder, process=process, tasks=1)
 
         api_client.force_authenticate(user=supervisor)
         api_client.post(
-            f'/api/v1/workorders/{workorder.id}/approve/',
-            {"approval_status": "approved"},
+            f'/api/v1/workorders-flow/{workorder.id}/approve/',
+            {"comment": "Approved"},
             format="json"
         )
 

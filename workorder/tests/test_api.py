@@ -204,6 +204,14 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
             creator=self.user,
             status='pending'
         )
+        # 添加产品和工序以满足数据完整性验证
+        work_order.products.create(
+            product=self.product,
+            quantity=100,
+            unit='件',
+            source_type='stock'
+        )
+        work_order.order_processes.create(process=self.process, sequence=10)
 
         data = {
             'production_quantity': 200,
@@ -212,7 +220,6 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
 
         response = self.api_patch(f'/api/v1/workorders/{work_order.id}/', data, user=self.user)
 
-        # 应该成功
         self.assertEqual(response.status_code, 200)
 
     def test_delete_workorder(self):
@@ -400,7 +407,6 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
 
         response = self.api_get(f'/api/v1/workorder-tasks/?work_order_process={wo_process.id}', user=self.user)
 
-        # 应该成功
         self.assertEqual(response.status_code, 200)
         self.assertGreater(len(response.data['data']['results']), 0)
 

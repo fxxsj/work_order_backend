@@ -32,7 +32,7 @@ class TestWorkOrderModel:
         work_order = TestDataFactory.create_workorder()
         
         assert work_order.status == 'pending'
-        assert work_order.approval_status == 'pending'
+        assert work_order.approval_status == 'draft'
 
     def test_default_priority(self):
         """测试默认优先级"""

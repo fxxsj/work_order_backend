@@ -66,11 +66,20 @@ class TestWorkOrderLifecycle:
         draft_task_count = workorder.tasks.filter(status='draft').count()
         assert draft_task_count > 0
 
-        # Step 2: Approve workorder
+        # Step 2: Submit workorder for approval
+        api_client.force_authenticate(user=maker)
+        response = api_client.post(
+            f'/api/v1/workorders-flow/{workorder_id}/submit_approval/',
+            {"comment": "Submitted for approval"},
+            format="json"
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+        # Step 3: Approve workorder
         api_client.force_authenticate(user=supervisor)
         response = api_client.post(
-            f'/api/v1/workorders/{workorder_id}/approve/',
-            {"approval_status": "approved"},
+            f'/api/v1/workorders-flow/{workorder_id}/approve/',
+            {"comment": "Approved"},
             format="json"
         )
 
@@ -141,13 +150,23 @@ class TestWorkOrderLifecycle:
         WorkOrderProcessFactory(work_order=workorder, process=process2, tasks=1)
         WorkOrderProcessFactory(work_order=workorder, process=process3, tasks=1)
 
-        # Approve
-        api_client.force_authenticate(user=supervisor)
-        api_client.post(
-            f'/api/v1/workorders/{workorder_id}/approve/',
-            {"approval_status": "approved"},
+        # Submit for approval
+        api_client.force_authenticate(user=maker)
+        response = api_client.post(
+            f'/api/v1/workorders-flow/{workorder_id}/submit_approval/',
+            {"comment": "Submitted for approval"},
             format="json"
         )
+        assert response.status_code == status.HTTP_200_OK
+
+        # Approve
+        api_client.force_authenticate(user=supervisor)
+        response = api_client.post(
+            f'/api/v1/workorders-flow/{workorder_id}/approve/',
+            {"comment": "Approved"},
+            format="json"
+        )
+        assert response.status_code == status.HTTP_200_OK
 
         # Verify tasks for all processes
         workorder.refresh_from_db()
