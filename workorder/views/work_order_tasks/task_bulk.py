@@ -574,8 +574,8 @@ class TaskBulkMixin:
         - reason: 删除原因（可选）
 
         权限：
-        - 施工单创建人可以删除草稿任务
-        - 超级管理员可以删除草稿任务
+        - 施工单创建人可以删除任务
+        - 超级管理员可以删除任务
         """
         from workorder.models.core import TaskLog
 
@@ -596,13 +596,6 @@ class TaskBulkMixin:
 
         for task in tasks:
             try:
-                # 只允许删除草稿状态的任务
-                if task.status != "draft":
-                    failed_tasks.append(
-                        {"task_id": task.id, "error": "只能删除草稿状态的任务"}
-                    )
-                    continue
-
                 # 权限检查：施工单创建人或超级管理员
                 can_delete = False
                 if user.is_superuser:

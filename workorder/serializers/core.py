@@ -283,118 +283,6 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
         return None
 
 
-class DraftTaskSerializer(WorkOrderTaskSerializer):
-    """草稿任务序列化器（允许编辑草稿状态的任务）"""
-
-    class Meta(WorkOrderTaskSerializer.Meta):
-        model = WorkOrderTask
-        fields = "__all__"
-        # 草稿任务允许编辑的字段
-        read_only_fields = [
-            "id",
-            "work_order_process",
-            "task_type",
-            "artwork",
-            "die",
-            "product",
-            "material",
-            "foiling_plate",
-            "embossing_plate",
-            "auto_calculate_quantity",
-            "created_at",
-            "assigned_department",
-            "assigned_operator",  # 草稿任务不分配
-            "actual_start_time",
-            "actual_end_time",
-            "duration_hours",  # 未开始
-            "quantity_completed",
-            "completion_percentage",  # 未完成
-        ]
-
-    def validate(self, attrs):
-        """验证草稿任务状态"""
-        instance = self.instance
-
-        # 如果是更新操作，检查任务是否仍为草稿状态
-        if instance and instance.status != "draft":
-            raise serializers.ValidationError(
-                "只能编辑草稿状态的任务。当前任务状态为：{}".format(
-                    instance.get_status_display()
-                )
-            )
-
-        # 检查施工单是否已审核（已审核的施工单不允许编辑草稿任务）
-        if instance and instance.work_order_process:
-            work_order = instance.work_order_process.work_order
-            if work_order.approval_status == "approved":
-                raise serializers.ValidationError("已审核的施工单不允许编辑草稿任务")
-
-        return attrs
-
-    def update(self, instance, validated_data):
-        """更新草稿任务"""
-        # 确保状态保持为 'draft'
-        validated_data["status"] = "draft"
-
-        # 调用父类的 update 方法
-        return super().update(instance, validated_data)
-
-
-class DraftTaskBulkSerializer(serializers.Serializer):
-    """草稿任务批量更新序列化器"""
-
-    task_ids = serializers.ListField(child=serializers.IntegerField())
-    production_quantity = serializers.IntegerField(required=False, allow_null=True)
-    priority = serializers.CharField(required=False, allow_null=True)
-    production_requirements = serializers.CharField(required=False, allow_null=True)
-
-    def validate_task_ids(self, value):
-        """验证任务ID列表"""
-        if len(value) > 1000:
-            raise serializers.ValidationError("批量操作最多支持1000个任务")
-        if len(value) == 0:
-            raise serializers.ValidationError("请至少选择一个任务")
-        return value
-
-    def validate(self, attrs):
-        """验证批量更新的数据"""
-        from rest_framework.exceptions import ValidationError
-
-        task_ids = attrs.get("task_ids", [])
-
-        # 验证所有任务存在且为草稿状态
-        tasks = WorkOrderTask.objects.filter(id__in=task_ids, status="draft")
-
-        if tasks.count() != len(task_ids):
-            # 检查有多少任务不存在或不是草稿状态
-            existing_tasks = WorkOrderTask.objects.filter(id__in=task_ids)
-            non_draft_count = existing_tasks.exclude(status="draft").count()
-            missing_count = len(task_ids) - existing_tasks.count()
-
-            error_msgs = []
-            if non_draft_count > 0:
-                error_msgs.append(f"有{non_draft_count}个任务不是草稿状态")
-            if missing_count > 0:
-                error_msgs.append(f"有{missing_count}个任务不存在")
-
-            raise ValidationError("、".join(error_msgs))
-
-        # 验证优先级值（如果提供）
-        if attrs.get("priority"):
-            valid_priorities = ["low", "normal", "high", "urgent"]
-            if attrs["priority"] not in valid_priorities:
-                raise ValidationError(
-                    f"无效的优先级值，可选值：{', '.join(valid_priorities)}"
-                )
-
-        # 验证生产数量（如果提供）
-        if attrs.get("production_quantity") is not None:
-            if attrs["production_quantity"] < 0:
-                raise ValidationError("生产数量不能小于0")
-
-        return attrs
-
-
 class TaskAssignmentSerializer(serializers.Serializer):
     """任务分配序列化器"""
 
@@ -552,8 +440,6 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
     product_name = serializers.SerializerMethodField()
     quantity = serializers.SerializerMethodField()
     unit = serializers.SerializerMethodField()
-    # 草稿任务统计
-    draft_task_count = serializers.SerializerMethodField()
     total_task_count = serializers.SerializerMethodField()
 
     # 来源客户订单
@@ -590,7 +476,6 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
             "approved_by_name",
             "approved_at",
             "approval_comment",
-            "draft_task_count",
             "total_task_count",
             "sales_order_id",
             "sales_order_number",
@@ -623,14 +508,6 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
         if products.exists():
             return products.first().unit
         return "件"
-
-    def get_draft_task_count(self, obj) -> int:
-        """获取草稿任务数量"""
-        from ..models import WorkOrderTask
-
-        return WorkOrderTask.objects.filter(
-            work_order_process__work_order=obj, status="draft"
-        ).count()
 
     def get_total_task_count(self, obj) -> int:
         """获取总任务数量"""
@@ -711,8 +588,6 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
     product_name = serializers.SerializerMethodField()
     quantity = serializers.SerializerMethodField()
     unit = serializers.SerializerMethodField()
-    # 草稿任务统计
-    draft_task_count = serializers.SerializerMethodField()
     total_task_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -751,14 +626,6 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         if products.exists():
             return products.first().unit
         return "件"
-
-    def get_draft_task_count(self, obj) -> int:
-        """获取草稿任务数量"""
-        from ..models import WorkOrderTask
-
-        return WorkOrderTask.objects.filter(
-            work_order_process__work_order=obj, status="draft"
-        ).count()
 
     def get_total_task_count(self, obj) -> int:
         """获取总任务数量"""

@@ -45,8 +45,6 @@ class WorkOrderTaskFilterSet(FilterSet):
     # 自定义筛选：按操作员姓名搜索
     operator_name = CharFilter(method="filter_operator_name")
 
-    # 自定义筛选：草稿任务
-    is_draft = CharFilter(method="filter_is_draft")
 
     # 关联筛选：按施工单优先级筛选
     priority = CharFilter(field_name="work_order_process__work_order__priority")

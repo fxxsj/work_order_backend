@@ -163,29 +163,6 @@ class WorkOrderService:
 
         work_order.save()
 
-        converted_count = 0
-        deleted_count = 0
-        if approval_status == "approved":
-            try:
-                converted_count = work_order.convert_draft_tasks()
-                logger.info(
-                    f"施工单 {work_order.order_number} 审核通过，转换了 {converted_count} 个草稿任务为正式任务"
-                )
-            except Exception as exc:
-                logger.error(
-                    f"施工单 {work_order.order_number} 草稿任务转换失败: {str(exc)}"
-                )
-        elif approval_status == "rejected":
-            try:
-                deleted_count = work_order.delete_draft_tasks()
-                logger.info(
-                    f"施工单 {work_order.order_number} 审核拒绝，删除了 {deleted_count} 个草稿任务"
-                )
-            except Exception as exc:
-                logger.error(
-                    f"施工单 {work_order.order_number} 草稿任务删除失败: {str(exc)}"
-                )
-
         if approval_status == "approved":
             Notification.create_notification(
                 recipient=work_order.created_by,
@@ -197,15 +174,10 @@ class WorkOrderService:
                 template_key="approval_passed",
                 template_variables={
                     "workorder_number": work_order.order_number,
-                    "dispatched_count": converted_count,
                     "approved_by": user.username if user else "系统",
                 },
             )
         else:
-            rejection_detail = rejection_reason or ""
-            if deleted_count > 0:
-                cleanup_note = f"已删除 {deleted_count} 个草稿任务"
-                rejection_detail = f"{rejection_detail}；{cleanup_note}".strip("；") if rejection_detail else cleanup_note
             Notification.create_notification(
                 recipient=work_order.created_by,
                 notification_type="approval_rejected",
@@ -216,7 +188,7 @@ class WorkOrderService:
                 template_key="approval_rejected",
                 template_variables={
                     "workorder_number": work_order.order_number,
-                    "reason": rejection_detail,
+                    "reason": rejection_reason or "",
                     "approved_by": user.username if user else "系统",
                 },
             )

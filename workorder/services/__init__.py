@@ -16,7 +16,6 @@ from .realtime_notification import NotificationEvent, NotificationPriority, Noti
 from .sales_order_status_service import SalesOrderStatusService
 from .smart_assignment import TaskPerformanceData, SmartAssignmentService, LearningSystem
 from .task_assignment import TaskAssignmentService
-from .task_generation import DraftTaskGenerationService
 from .task_sync_service import TaskSyncService
 from .work_order_flow_service import WorkOrderFlowService
 from .work_order_process_service import WorkOrderProcessService
@@ -30,7 +29,6 @@ __all__ = [
     'DataConsistencyManager',
     'DeadlineWarningService',
     'DispatchPreviewService',
-    'DraftTaskGenerationService',
     'InventoryService',
     'LearningSystem',
     'LoadBalancingService',

@@ -1,21 +1,21 @@
 """
 任务同步服务
 
-在施工单工序修改时，使用差量更新算法同步草稿任务。
+在施工单工序修改时，使用差量更新算法同步任务。
 提供预览和执行两个步骤，防止意外数据丢失。
 """
 from django.db import transaction
 from ..models import WorkOrder, WorkOrderProcess, WorkOrderTask
-from .task_generation import DraftTaskGenerationService
+from .task_generation import TaskGenerationService
 
 
 class TaskSyncService:
-    """任务同步服务类
+    """任务同步服务
 
     提供三路同步算法，当施工单工序被修改时：
     1. 计算集合差异（新增、删除、不变的工序）
-    2. 为新增工序生成草稿任务
-    3. 删除被移除工序的草稿任务（仅限草稿状态）
+    2. 为新增工序生成任务
+    3. 删除被移除工序的任务
     """
 
     @staticmethod
@@ -45,12 +45,11 @@ class TaskSyncService:
         removed = old_set - new_set  # 被移除的工序
         added = new_set - old_set    # 新增的工序
 
-        # 查询将被删除的草稿任务数量
+        # 查询将被删除的任务数量
         tasks_to_remove = 0
         if removed:
             tasks_to_remove = WorkOrderTask.objects.filter(
                 work_order_process__in=list(removed),
-                status='draft'
             ).count()
 
         # 估算新增任务数量（基于工序类型）
@@ -99,14 +98,13 @@ class TaskSyncService:
         deleted_count = 0
         added_count = 0
 
-        # 1. 删除被移除工序的草稿任务
+        # 1. 删除被移除工序的任务
         if removed_ids:
             deleted_count, _ = WorkOrderTask.objects.filter(
                 work_order_process__in=removed_ids,
-                status='draft'  # 仅删除草稿任务，不影响正式任务
             ).delete()
 
-        # 2. 为新增工序生成草稿任务
+        # 2. 为新增工序生成任务
         if added_ids:
             # 获取新增的工序对象
             new_processes = WorkOrderProcess.objects.filter(
@@ -116,8 +114,8 @@ class TaskSyncService:
 
             all_new_tasks = []
             for process in new_processes:
-                # 使用 DraftTaskGenerationService 构建任务对象
-                task_objects = DraftTaskGenerationService.build_task_objects(process)
+                # 使用 TaskGenerationService 构建任务对象
+                task_objects = TaskGenerationService.build_task_objects(process)
                 all_new_tasks.extend(task_objects)
 
             # 批量创建新任务
@@ -129,7 +127,7 @@ class TaskSyncService:
                 )
                 added_count = len(created_tasks)
 
-        message = f'同步完成：已删除 {deleted_count} 个草稿任务，新增 {added_count} 个草稿任务'
+        message = f'同步完成：已删除 {deleted_count} 个任务，新增 {added_count} 个任务'
 
         return {
             'deleted_count': deleted_count,

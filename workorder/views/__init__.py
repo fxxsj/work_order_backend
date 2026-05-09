@@ -64,7 +64,7 @@ from .work_order_tasks import WorkOrderTaskViewSet
 from .audit_log import AuditLogViewSet
 
 # 核心业务视图集（已拆分）
-from .work_orders import DraftTaskViewSet, WorkOrderViewSet
+from .work_orders import WorkOrderViewSet
 from .work_order_flow_views import WorkOrderFlowViewSet
 
 __all__ = [
@@ -92,7 +92,6 @@ __all__ = [
     "EmbossingPlateProductViewSet",
     # 核心业务视图集
     "WorkOrderViewSet",
-    "DraftTaskViewSet",
     "WorkOrderProcessViewSet",
     "WorkOrderTaskViewSet",
     "WorkOrderProductViewSet",

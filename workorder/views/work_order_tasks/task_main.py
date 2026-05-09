@@ -177,7 +177,7 @@ logger = logging.getLogger(__name__)
             ),
             400: OpenApiResponse(
                 response=standard_error_response("WorkOrderTaskDeleteErrorResponse"),
-                description="无法删除非草稿任务",
+                description="无法删除该任务",
             ),
         },
     ),

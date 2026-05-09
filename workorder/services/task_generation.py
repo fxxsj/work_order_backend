@@ -284,4 +284,4 @@ class TaskGenerationService:
 
 
 # 保留别名以保持向后兼容
-DraftTaskGenerationService = TaskGenerationService
+

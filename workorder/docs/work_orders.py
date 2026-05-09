@@ -10,7 +10,6 @@ from workorder.serializers.core import (
     WorkOrderDetailSerializer,
     WorkOrderProcessSerializer,
     WorkOrderMaterialSerializer,
-    DraftTaskSerializer,
 )
 
 
@@ -249,50 +248,3 @@ work_order_sync_check_docs = extend_schema(
     },
 )
 
-
-draft_task_docs = extend_schema_view(
-    list=extend_schema(
-        tags=["任务"],
-        summary="获取草稿任务列表",
-        responses={
-            200: OpenApiResponse(
-                response=standard_success_response("DraftTaskListResponse"),
-                description="草稿任务列表",
-            )
-        },
-    ),
-    retrieve=extend_schema(
-        tags=["任务"],
-        summary="获取草稿任务详情",
-        responses={
-            200: OpenApiResponse(
-                response=standard_success_response(
-                    "DraftTaskDetailResponse", DraftTaskSerializer
-                ),
-                description="草稿任务详情",
-            )
-        },
-    ),
-)
-
-draft_task_bulk_update_docs = extend_schema(
-    tags=["任务"],
-    summary="批量更新草稿任务",
-    request=inline_serializer(
-        name="DraftTaskBulkUpdateRequest",
-        fields={
-            "task_ids": serializers.ListField(child=serializers.IntegerField()),
-            "updates": serializers.DictField(),
-        },
-    ),
-    responses={
-        200: OpenApiResponse(
-            response=standard_success_response("DraftTaskBulkUpdateResponse"),
-            description="更新成功",
-        ),
-        400: OpenApiResponse(
-            response=standard_error_response("DraftTaskBulkUpdateBadRequest"),
-            description="请求无效",
-        ),
-    },
-)

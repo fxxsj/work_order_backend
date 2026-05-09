@@ -419,56 +419,6 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
         super().save(*args, **kwargs)
 
 
-class DraftTaskArchive(models.Model):
-    """草稿任务归档表 - 用于存储审核拒绝前的草稿任务快照"""
-
-    work_order = models.ForeignKey(
-        "WorkOrder",
-        on_delete=models.CASCADE,
-        related_name="draft_task_archives",
-        verbose_name="施工单",
-    )
-    archived_tasks_data = models.JSONField(
-        "归档任务数据",
-        help_text="存储草稿任务的完整数据快照，用于追溯和恢复",
-    )
-    archive_reason = models.CharField(
-        "归档原因",
-        max_length=50,
-        default="approval_rejected",
-        help_text="归档原因，如：approval_rejected, manual_archive 等",
-    )
-    rejection_log = models.ForeignKey(
-        "WorkOrderApprovalLog",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="archived_draft_tasks",
-        verbose_name="拒绝日志",
-    )
-    archived_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="archived_draft_tasks",
-        verbose_name="归档操作人",
-    )
-    created_at = models.DateTimeField("归档时间", auto_now_add=True)
-
-    class Meta:
-        verbose_name = "草稿任务归档"
-        verbose_name_plural = "草稿任务归档"
-        ordering = ["-created_at"]
-        indexes = [
-            models.Index(fields=["work_order", "created_at"]),
-            models.Index(fields=["archive_reason"]),
-        ]
-
-    def __str__(self):
-        return f"{self.work_order.order_number} - 草稿任务归档 ({self.created_at})"
-
-
 class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
     """施工单工序记录"""
 

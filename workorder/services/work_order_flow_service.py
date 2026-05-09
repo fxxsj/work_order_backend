@@ -48,7 +48,6 @@ from ..models.system import (
 from ..models.base import Customer, Department
 from .service_errors import ServiceError
 from .work_order_service import WorkOrderService
-from .task_generation import DraftTaskGenerationService
 from .dispatch_service import AutoDispatchService
 from .notification_triggers_flow import NotificationTriggers
 
@@ -131,9 +130,8 @@ class WorkOrderFlowService:
         2. 复制客户、产品信息
         3. 根据产品配置自动生成工序
         4. 根据产品配置自动生成物料清单
-        5. 生成草稿任务（不立即分派）
-        6. 记录操作日志
-        7. 发送通知
+        5. 记录操作日志
+        6. 发送通知
 
         Args:
             sales_order_id: 销售订单ID

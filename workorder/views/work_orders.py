@@ -28,8 +28,6 @@ from rest_framework import filters, serializers, status, viewsets
 from rest_framework.decorators import action
 from workorder.response import APIResponse
 from workorder.docs.work_orders import (
-    draft_task_bulk_update_docs,
-    draft_task_docs,
     work_order_add_material_docs,
     work_order_add_process_docs,
     work_order_approve_docs,
@@ -70,7 +68,6 @@ from ..permissions import (
 )
 from ..serializers.base import ProcessSerializer
 from ..serializers.core import (
-    DraftTaskSerializer,
     ProcessLogSerializer,
     WorkOrderCreateUpdateSerializer,
     WorkOrderDetailSerializer,
@@ -185,7 +182,7 @@ class WorkOrderFilterSet(FilterSet):
     create=extend_schema(
         tags=["施工单"],
         summary="创建施工单",
-        description="创建新的施工单，自动生成所有工序的草稿任务。",
+        description="创建新的施工单，自动生成所有工序的任务。",
         examples=[
             OpenApiExample(
                 name="示例请求",
@@ -397,23 +394,16 @@ class WorkOrderViewSet(BaseViewSet):
 
     def perform_create(self, serializer):
         # 自动设置创建人和制表人为当前用户
-        # 注意：草稿任务已在 WorkOrderCreateUpdateSerializer.create() 的
-        # _create_work_order_processes() 中为新工序自动生成，无需重复调用
         serializer.save(created_by=self.request.user, manager=self.request.user)
 
     def destroy(self, request, *args, **kwargs):
         """删除施工单时处理级联删除验证和日志记录
 
-        确保删除施工单时，所有关联的草稿任务也被正确删除，无孤立任务残留。
+        确保删除施工单时，所有关联的任务也被正确删除，无孤立任务残留。
         """
         from ..models.core import WorkOrderTask
 
         work_order = self.get_object()
-
-        # 在删除前统计草稿任务数量
-        draft_tasks_before = WorkOrderTask.objects.filter(
-            work_order_process__work_order=work_order, status="draft"
-        ).count()
 
         # 记录删除前的关联对象数量
         processes_count = work_order.order_processes.count()
@@ -423,7 +413,7 @@ class WorkOrderViewSet(BaseViewSet):
 
         logger.info(
             f"准备删除施工单 {work_order.order_number}: "
-            f"{processes_count} 个工序, {total_tasks} 个任务 (其中 {draft_tasks_before} 个草稿任务)"
+            f"{processes_count} 个工序, {total_tasks} 个任务"
         )
 
         # 执行删除（会自动级联删除工序和任务）
@@ -951,7 +941,7 @@ class WorkOrderViewSet(BaseViewSet):
             "result": {
                 "deleted_count": 5,
                 "added_count": 3,
-                "message": "同步完成：已删除 5 个草稿任务，新增 3 个草稿任务"
+                "message": "同步完成：已删除 5 个任务，新增 3 个任务"
             }
         }
         """
@@ -1036,136 +1026,3 @@ class WorkOrderViewSet(BaseViewSet):
                 "current_process_ids": current_process_ids,
                 "can_sync": can_sync,
             })
-
-
-@draft_task_docs
-class DraftTaskViewSet(BaseViewSet):
-    """草稿任务视图集（允许编辑和删除草稿状态的任务）"""
-
-    serializer_class = DraftTaskSerializer
-    permission_classes = [WorkOrderTaskPermission]
-    filterset_fields = ["status", "task_type", "work_order_process"]
-    search_fields = ["work_content", "description"]
-    ordering_fields = ["created_at", "production_quantity", "estimated_hours"]
-    ordering = ["-created_at"]
-
-    def get_queryset(self):
-        """只返回草稿状态的任务"""
-        if getattr(self, "swagger_fake_view", False):
-            return WorkOrderTask.objects.none()
-
-        user = self.request.user
-
-        # 获取草稿任务
-        queryset = WorkOrderTask.objects.filter(status="draft").select_related(
-            "work_order_process__work_order__customer",
-            "work_order_process__process",
-            "assigned_department",
-            "assigned_operator",
-        )
-
-        # 权限过滤：基于施工单的数据权限
-        if not user.is_superuser:
-            # 管理员可以看到所有草稿任务
-            if not user.has_perm("workorder.manage_all_workorders"):
-                # 普通用户只能看到自己创建的施工单的草稿任务
-                queryset = queryset.filter(
-                    work_order_process__work_order__created_by=user
-                )
-
-        return queryset
-
-    def perform_update(self, serializer):
-        """更新前验证"""
-        instance = self.get_object()
-
-        # 确保任务仍为草稿状态
-        if instance.status != "draft":
-            raise serializers.ValidationError(
-                "只能编辑草稿状态的任务。当前任务状态为：{}".format(
-                    instance.get_status_display()
-                )
-            )
-
-        # 检查施工单是否已审核
-        work_order = instance.work_order_process.work_order
-        if work_order.approval_status == "approved":
-            raise serializers.ValidationError("已审核的施工单不允许编辑草稿任务")
-
-        # 保存更新
-        serializer.save(status="draft")
-
-    def perform_destroy(self, instance):
-        """删除前验证"""
-        # 确保任务仍为草稿状态
-        if instance.status != "draft":
-            raise serializers.ValidationError(
-                "只能删除草稿状态的任务。当前任务状态为：{}".format(
-                    instance.get_status_display()
-                )
-            )
-
-        # 检查施工单是否已审核
-        work_order = instance.work_order_process.work_order
-        if work_order.approval_status == "approved":
-            raise serializers.ValidationError("已审核的施工单不允许删除草稿任务")
-
-        # 删除任务
-        instance.delete()
-
-    @action(detail=False, methods=["patch"])
-    @draft_task_bulk_update_docs
-    def bulk_update(self, request):
-        """批量更新草稿任务
-
-        请求体格式：
-        {
-            "task_ids": [1, 2, 3],
-            "updates": {
-                "estimated_hours": 8,
-                "description": "批量更新的描述"
-            }
-        }
-        """
-        task_ids = request.data.get("task_ids", [])
-        updates = request.data.get("updates", {})
-
-        if not task_ids:
-            return APIResponse.error("请提供要更新的任务ID列表", code=status.HTTP_400_BAD_REQUEST)
-
-        if not updates:
-            return APIResponse.error("请提供要更新的字段", code=status.HTTP_400_BAD_REQUEST)
-
-        # 获取任务并验证权限
-        queryset = self.get_queryset().filter(id__in=task_ids)
-
-        if queryset.count() != len(task_ids):
-            return APIResponse.error("部分任务不存在或无权访问", code=status.HTTP_404_NOT_FOUND)
-
-        # 批量更新
-        updated_count = 0
-        for task in queryset:
-            # 验证任务状态
-            if task.status != "draft":
-                continue
-
-            # 验证施工单状态
-            work_order = task.work_order_process.work_order
-            if work_order.approval_status == "approved":
-                continue
-
-            # 更新字段
-            for field, value in updates.items():
-                if hasattr(task, field):
-                    setattr(task, field, value)
-
-            task.status = "draft"  # 确保状态保持为 draft
-            task.save()
-            updated_count += 1
-
-        return APIResponse.success(data={
-                "message": f"成功更新 {updated_count} 个草稿任务",
-                "updated_count": updated_count,
-                "total_requested": len(task_ids),
-            }
-        )
