@@ -37,8 +37,7 @@ class WorkOrderProcessService:
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        process.generate_tasks()
-
+        # 注意：任务在施工单审核通过时已生成，此处不再生成
         process.status = "in_progress"
         process.actual_start_time = timezone.now()
         if operator_id:
@@ -54,7 +53,6 @@ class WorkOrderProcessService:
             operator=user,
         )
 
-        process.generate_tasks()
         return process
 
     @staticmethod

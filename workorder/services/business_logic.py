@@ -594,34 +594,6 @@ class TaskBusinessService:
         # 更新下一个工序状态为准备就绪
         next_process.status = 'ready'
         next_process.save()
-        
-        # 自动分配任务给合适的操作员
-        TaskBusinessService._auto_assign_next_tasks(workorder, next_process)
-    
-    @staticmethod
-    def _auto_assign_next_tasks(workorder: WorkOrder, next_process: WorkOrderProcess) -> None:
-        """自动分配下一个工序的任务"""
-        # 这里可以集成智能分配算法
-        # 暂时简单分配给部门的操作员
-        try:
-            from ..services.smart_assignment import SmartAssignmentService
-            
-            assignment_service = SmartAssignmentService()
-            tasks = WorkOrderTask.objects.filter(
-                workorder=workorder,
-                process=next_process.process,
-                status='ready'
-            )
-            
-            for task in tasks:
-                result = assignment_service.smart_assign_single_task(task)
-                if result['success']:
-                    task.assigned_to_id = result['assigned_to']
-                    task.status = 'pending'
-                    task.save()
-        except Exception:
-            # 如果智能分配失败，跳过
-            pass
 
 
 class ProcessBusinessService:

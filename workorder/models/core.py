@@ -745,21 +745,29 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
 
         分派规则：
         1. 优先使用工序级别的分派（self.department, self.operator）
-        2. 如果工序未指定部门，使用 AutoDispatchService 根据优先级规则自动分派
-        3. 如果 AutoDispatchService 返回 None（未启用或无规则匹配），使用兜底逻辑选择第一个可用部门
+        2. 如果工序未指定部门，查询 TaskAssignmentRule 中该工序优先级最高的部门
+        3. 如果没有规则配置，使用兜底逻辑选择第一个可用部门
         4. 如果工序未指定操作员，从分派部门中选择操作员
         """
         # 优先使用工序级别的分派
         if self.department:
             task.assigned_department = self.department
         else:
-            # 使用 AutoDispatchService 进行自动分派
-            from ..services.dispatch_service import AutoDispatchService
+            # 直接查询 TaskAssignmentRule，按优先级选择部门（无需全局开关）
+            from .system import TaskAssignmentRule
 
-            assigned_dept = AutoDispatchService.dispatch_task(task, self.process)
+            assignment_rule = (
+                TaskAssignmentRule.objects.filter(
+                    process=self.process,
+                    is_active=True,
+                )
+                .select_related("department")
+                .order_by("-priority")
+                .first()
+            )
 
-            if assigned_dept:
-                task.assigned_department = assigned_dept
+            if assignment_rule:
+                task.assigned_department = assignment_rule.department
             else:
                 # 兜底逻辑：选择第一个可用部门
                 available_departments = Department.objects.filter(
