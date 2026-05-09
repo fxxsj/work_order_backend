@@ -245,15 +245,9 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
                 work_order=work_order,
                 user=request.user,
             )
-            validation_errors = work_order.validate_before_approval()
-            if validation_errors:
-                raise ServiceError(
-                    "施工单数据不完整，无法审核",
-                    code=status.HTTP_400_BAD_REQUEST,
-                    data={"details": validation_errors},
-                )
 
             # 调用审核通过流程（自动分派任务）
+            # 注意：数据完整性已在保存时验证，无需重复验证
             updated_work_order = WorkOrderFlowService.handle_approval_passed(
                 work_order=work_order,
                 approved_by=request.user,

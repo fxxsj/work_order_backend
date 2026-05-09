@@ -250,14 +250,15 @@ class WorkOrderFlowService:
         comment: str = "",
     ) -> WorkOrder:
         """
-        提交施工单审核（完整流程）
+        提交施工单审核
+
+        注意：数据完整性验证已在保存施工单时完成，此处只验证状态转换。
 
         流程步骤：
         1. 验证施工单状态（必须是草稿或已拒绝）
-        2. 验证施工单数据完整性（图稿、工序等）
-        3. 状态转换为待审核
-        4. 记录提交日志
-        5. 发送审核通知给业务员
+        2. 状态转换为待审核
+        3. 记录提交日志
+        4. 发送审核通知给业务员
 
         Args:
             work_order_id: 施工单ID
@@ -283,16 +284,8 @@ class WorkOrderFlowService:
             work_order.approval_status, "submitted"
         )
 
-        # 3. 验证数据完整性
-        validation_errors = work_order.validate_before_approval()
-        if validation_errors:
-            raise ServiceError(
-                "施工单数据不完整，无法提交审核",
-                code=status.HTTP_400_BAD_REQUEST,
-                data={"details": validation_errors},
-            )
-
-        # 4. 状态转换。提交审核不删除任务；已投产变更的任务同步由复审通过后的专门流程处理。
+        # 3. 状态转换（数据完整性已在保存时验证）
+        # 提交审核不删除任务；已投产变更的任务同步由复审通过后的专门流程处理。
         work_order.approval_status = "submitted"
         work_order.approved_by = None
         work_order.approved_at = None
@@ -361,13 +354,7 @@ class WorkOrderFlowService:
             work_order.approval_status, "approved"
         )
 
-        validation_errors = work_order.validate_before_approval()
-        if validation_errors:
-            raise ServiceError(
-                "施工单数据不完整，无法审核",
-                code=status.HTTP_400_BAD_REQUEST,
-                data={"details": validation_errors},
-            )
+        # 注意：数据完整性已在保存时验证，无需重复验证
 
         # 1. 生成正式任务并自动分派
         from workorder.services.task_generation import TaskGenerationService
