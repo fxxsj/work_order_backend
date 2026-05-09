@@ -286,10 +286,34 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
 class TaskAssignmentSerializer(serializers.Serializer):
     """任务分配序列化器"""
 
-    operator_id = serializers.IntegerField(help_text="操作员用户ID")
+    operator_id = serializers.IntegerField(
+        required=False,
+        help_text="操作员用户ID，兼容旧字段",
+    )
+    assigned_operator = serializers.IntegerField(
+        required=False,
+        help_text="分派操作员用户ID",
+    )
+    assigned_department = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="分派部门ID；为空时清空部门分派",
+    )
     notes = serializers.CharField(
         required=False, allow_blank=True, help_text="分配备注"
     )
+    reason = serializers.CharField(
+        required=False, allow_blank=True, help_text="调整原因"
+    )
+
+    def validate(self, attrs):
+        operator_id = attrs.get("operator_id") or attrs.get("assigned_operator")
+        department_provided = "assigned_department" in self.initial_data
+        if not operator_id and not department_provided:
+            raise serializers.ValidationError("请提供操作员ID或分派部门")
+        if operator_id:
+            attrs["operator_id"] = operator_id
+        return attrs
 
     def validate_operator_id(self, value):
         """验证操作员ID"""

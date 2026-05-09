@@ -502,18 +502,16 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         并发控制：
         使用 select_for_update 防止两个操作员同时认领同一任务
         """
-        task = self.get_object()
-
         # 获取可选的备注
         notes = request.data.get("notes", "") if request.data else ""
 
         try:
             result = TaskAssignmentService.claim_task(
-                task_id=task.id, operator=request.user, notes=notes
+                task_id=pk, operator=request.user, notes=notes
             )
 
             # 重新获取更新后的任务数据
-            task.refresh_from_db()
+            task = self.queryset.get(pk=pk)
             response_serializer = self.get_serializer(task)
 
             return APIResponse.success(
@@ -569,8 +567,14 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
                 request.user
             )
 
-            # 获取完整的任务数据
-            queryset = self.get_queryset().filter(id__in=claimable_ids)
+            # get_queryset() intentionally limits normal operators to their
+            # assigned tasks. Claimable tasks are authorized by
+            # TaskAssignmentService, so fetch them from the base queryset here.
+            queryset = self.queryset.filter(
+                id__in=claimable_ids,
+                assigned_operator__isnull=True,
+                status="pending",
+            ).order_by("-created_at")
             page = self.paginate_queryset(queryset)
 
             if page is not None:
@@ -637,11 +641,15 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             :100
         ]  # Limit to 100 most recent
 
-        # Get claimable tasks (unassigned in user's departments)
+        # Get claimable tasks (unassigned in user's departments). Do not use
+        # get_queryset() here: for operators it filters to assigned_operator=user,
+        # which would hide every unassigned claimable task.
         claimable_ids = TaskAssignmentService.get_claimable_tasks_for_user(user)
-        claimable_tasks_qs = self.get_queryset().filter(
-            id__in=claimable_ids, assigned_operator__isnull=True
-        )
+        claimable_tasks_qs = self.queryset.filter(
+            id__in=claimable_ids,
+            assigned_operator__isnull=True,
+            status="pending",
+        ).order_by("-created_at")
         claimable_tasks_qs = claimable_tasks_qs.select_related(
             "assigned_department",
             "work_order_process",

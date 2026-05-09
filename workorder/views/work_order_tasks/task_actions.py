@@ -26,10 +26,12 @@ from workorder.policies.task_policy import (
     resolve_design_assets,
 )
 
+from workorder.models.base import Department
 from workorder.models.core import TaskLog, WorkOrder, WorkOrderTask
 from workorder.models.system import Notification
-from workorder.serializers.core import WorkOrderTaskSerializer
+from workorder.serializers.core import TaskAssignmentSerializer, WorkOrderTaskSerializer
 from workorder.services.realtime_notification import notification_service
+from workorder.services.task_assignment import TaskAssignmentService
 
 
 class TaskActionsMixin:
@@ -567,105 +569,142 @@ class TaskActionsMixin:
 
     @action(detail=True, methods=["post"])
     def assign(self, request, pk=None):
-        """分派任务到部门和操作员（支持调整分派）
+        """分派任务给部门或操作员
 
         使用场景：
-        - 自动分派后需要调整（如从包装车间调整为外协车间）
-        - 手动调整任务分派
-        - 记录调整原因和备注
+        - 主管将任务调整到指定部门
+        - 主管将本部门任务分派给本部门操作员
+        - 施工单创建人分派其创建施工单下的任务
+        - 超级管理员分派任意任务
+
+        兼容字段：
+        - assigned_department: 部门ID；传空值时清空部门分派
+        - assigned_operator: 操作员ID
+        - operator_id: 操作员ID（旧字段）
         """
-        from workorder.models.core import TaskLog
-
         task = self.get_object()
-        department_id = request.data.get("assigned_department")
-        operator_id = request.data.get("assigned_operator")
-        reason = request.data.get("reason", "")  # 调整原因
-        notes = request.data.get("notes", "")  # 备注
+        serializer = TaskAssignmentSerializer(data=request.data)
 
-        # 记录调整前的状态
-        old_department = task.assigned_department
-        old_operator = task.assigned_operator
-        changes = []
-
-        # 更新分派部门
-        if department_id is not None:
-            if department_id:
-                try:
-                    from workorder.models.base import Department
-
-                    department = Department.objects.get(id=department_id)
-                    if task.assigned_department != department:
-                        changes.append(
-                            f'部门：{old_department.name if old_department else "未分配"} → {department.name}'
-                        )
-                        task.assigned_department = department
-                except Department.DoesNotExist:
-                    return APIResponse.error("部门不存在", code=status.HTTP_400_BAD_REQUEST)
-            else:
-                if task.assigned_department:
-                    changes.append(
-                        f'部门：{old_department.name if old_department else "未分配"} → 未分配'
-                    )
-                    task.assigned_department = None
-
-        # 更新分派操作员
-        if operator_id is not None:
-            if operator_id:
-                try:
-                    from django.contrib.auth.models import User
-
-                    operator = User.objects.get(id=operator_id)
-                    old_operator_name = (
-                        f"{old_operator.first_name}{old_operator.last_name}"
-                        if old_operator
-                        else "未分配"
-                    )
-                    new_operator_name = f"{operator.first_name}{operator.last_name}"
-                    if task.assigned_operator != operator:
-                        changes.append(
-                            f"操作员：{old_operator_name} → {new_operator_name}"
-                        )
-                        task.assigned_operator = operator
-                except User.DoesNotExist:
-                    return APIResponse.error("操作员不存在", code=status.HTTP_404_NOT_FOUND)
-            else:
-                if task.assigned_operator:
-                    old_operator_name = (
-                        f"{old_operator.first_name}{old_operator.last_name}"
-                        if old_operator
-                        else "未分配"
-                    )
-                    changes.append(f"操作员：{old_operator_name} → 未分配")
-                    task.assigned_operator = None
-
-        # 如果有变更，保存并记录日志
-        if changes:
-            task.save()
-
-            # 如果分配了操作员，发送通知
-            if task.assigned_operator and old_operator != task.assigned_operator:
-                notification_service.notify_task_assigned(
-                    task=task,
-                    assigned_operator=task.assigned_operator,
-                    assigned_by=request.user,
-                )
-
-            # 记录调整日志
-            log_content = f'调整任务分派：{", ".join(changes)}'
-            if reason:
-                log_content += f"，原因：{reason}"
-            if notes:
-                log_content += f"，备注：{notes}"
-
-            TaskLog.objects.create(
-                task=task,
-                log_type="status_change",
-                content=log_content,
-                operator=request.user,
+        if not serializer.is_valid():
+            return APIResponse.error(
+                "请求参数错误",
+                code=status.HTTP_400_BAD_REQUEST,
+                errors=serializer.errors,
             )
 
-        serializer = self.get_serializer(task)
-        return APIResponse.success(data=serializer.data)
+        try:
+            result = None
+            notes = serializer.validated_data.get("notes", "")
+            reason = serializer.validated_data.get("reason", "")
+
+            if "assigned_department" in request.data:
+                TaskAssignmentService.validate_supervisor_permission(
+                    request.user, task
+                )
+                old_department = task.assigned_department
+                old_operator = task.assigned_operator
+                department_id = serializer.validated_data.get("assigned_department")
+                department = None
+
+                if department_id:
+                    try:
+                        department = Department.objects.get(
+                            id=department_id, is_active=True
+                        )
+                    except Department.DoesNotExist:
+                        return APIResponse.error(
+                            "部门不存在或已停用",
+                            code=status.HTTP_404_NOT_FOUND,
+                        )
+
+                if task.assigned_department_id != department_id:
+                    task.assigned_department = department
+                    if old_operator and department:
+                        try:
+                            TaskAssignmentService.validate_operator_in_department(
+                                old_operator, department
+                            )
+                        except ServiceError:
+                            task.assigned_operator = None
+                    elif not department:
+                        task.assigned_operator = None
+
+                    task.save(
+                        update_fields=[
+                            "assigned_department",
+                            "assigned_operator",
+                            "updated_at",
+                        ]
+                    )
+
+                    old_department_name = (
+                        old_department.name if old_department else "未分配"
+                    )
+                    new_department_name = department.name if department else "未分配"
+                    log_content = (
+                        f"调整任务分派部门：{old_department_name} → "
+                        f"{new_department_name}"
+                    )
+                    if old_operator and task.assigned_operator_id != old_operator.id:
+                        old_operator_name = (
+                            f"{old_operator.first_name}{old_operator.last_name}"
+                            or old_operator.username
+                        )
+                        log_content += f"，清空原操作员：{old_operator_name}"
+                    if reason:
+                        log_content += f"，原因：{reason}"
+                    if notes:
+                        log_content += f"，备注：{notes}"
+
+                    TaskLog.objects.create(
+                        task=task,
+                        log_type="status_change",
+                        content=log_content,
+                        operator=request.user,
+                    )
+
+            operator_id = serializer.validated_data.get("operator_id")
+            if operator_id:
+                result = TaskAssignmentService.assign_to_operator(
+                    task_id=task.id,
+                    operator_id=operator_id,
+                    assigned_by=request.user,
+                    notes=notes,
+                )
+
+            task.refresh_from_db()
+            response_serializer = self.get_serializer(task)
+            return APIResponse.success(
+                data={
+                    "detail": "任务分配成功",
+                    "data": result,
+                    "task": response_serializer.data,
+                },
+                code=status.HTTP_200_OK,
+            )
+        except ServiceError as exc:
+            retry_info = TaskAssignmentService.get_retry_suggestion(exc)
+            error_response = {
+                "detail": exc.message,
+                "code": "error",
+                "retry": retry_info,
+            }
+            if exc.data:
+                error_response.update(exc.data)
+            return APIResponse.error(
+                exc.message,
+                code=exc.code,
+                data=error_response,
+            )
+        except Exception as exc:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.error(f"任务分配失败: {str(exc)}")
+            return APIResponse.error(
+                "任务分配失败，请稍后重试",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):

@@ -83,6 +83,116 @@ class TestWorkOrderTaskWorkflow:
         task.refresh_from_db()
         assert task.assigned_operator == operator
 
+    def test_task_assignment_accepts_operator_id_alias(self, api_client):
+        """
+        GIVEN: A pending task and an operator
+        WHEN: Supervisor assigns using the legacy operator_id field
+        THEN: Task is assigned to operator
+        """
+        dept = DepartmentFactory()
+        supervisor = UserFactory(username='supervisor_alias', departments=[dept])
+        operator = UserFactory(username='operator_alias', departments=[dept])
+
+        task = WorkOrderTaskFactory(status='pending')
+        task.assigned_department = dept
+        task.save()
+
+        api_client.force_authenticate(user=supervisor)
+        response = api_client.post(f'/api/v1/workorder-tasks/{task.id}/assign/', {
+            'operator_id': operator.id
+        }, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        task.refresh_from_db()
+        assert task.assigned_operator == operator
+
+    def test_task_assignment_can_update_department_only(self, api_client):
+        """
+        GIVEN: A pending task assigned to one department and operator
+        WHEN: Supervisor moves it to another department without an operator
+        THEN: Task department changes and incompatible operator is cleared
+        """
+        old_dept = DepartmentFactory(name='Printing')
+        new_dept = DepartmentFactory(name='Packaging')
+        supervisor = UserFactory(username='department_assigner', departments=[old_dept])
+        operator = UserFactory(username='old_department_operator', departments=[old_dept])
+
+        task = WorkOrderTaskFactory(status='pending')
+        task.assigned_department = old_dept
+        task.assigned_operator = operator
+        task.save()
+
+        api_client.force_authenticate(user=supervisor)
+        response = api_client.post(f'/api/v1/workorder-tasks/{task.id}/assign/', {
+            'assigned_department': new_dept.id
+        }, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        task.refresh_from_db()
+        assert task.assigned_department == new_dept
+        assert task.assigned_operator is None
+
+    def test_operator_center_returns_department_claimable_tasks(self, api_client):
+        """
+        GIVEN: Operator belongs to one department and there are unassigned tasks
+        WHEN: Operator opens operator center
+        THEN: Only unassigned pending tasks in their department are claimable
+        """
+        dept = DepartmentFactory(name='Printing')
+        other_dept = DepartmentFactory(name='Packaging')
+        operator = UserFactory(
+            username='operator_center_user',
+            departments=[dept],
+            add_permissions=['view_workorder'],
+        )
+
+        claimable_task = WorkOrderTaskFactory(status='pending')
+        claimable_task.assigned_department = dept
+        claimable_task.assigned_operator = None
+        claimable_task.save()
+
+        other_task = WorkOrderTaskFactory(status='pending')
+        other_task.assigned_department = other_dept
+        other_task.assigned_operator = None
+        other_task.save()
+
+        api_client.force_authenticate(user=operator)
+        response = api_client.get('/api/v1/workorder-tasks/operator_center/')
+
+        assert response.status_code == status.HTTP_200_OK
+        claimable_ids = {
+            item['id']
+            for item in response.data['data']['claimable_tasks']
+        }
+        assert claimable_task.id in claimable_ids
+        assert other_task.id not in claimable_ids
+
+    def test_cross_department_task_claim_is_rejected(self, api_client):
+        """
+        GIVEN: A task assigned to another department
+        WHEN: Operator attempts to claim it
+        THEN: Claim is rejected and task remains unassigned
+        """
+        dept = DepartmentFactory(name='Printing')
+        other_dept = DepartmentFactory(name='Packaging')
+        operator = UserFactory(
+            username='cross_dept_operator',
+            departments=[dept],
+            add_permissions=['view_workorder'],
+        )
+
+        task = WorkOrderTaskFactory(status='pending')
+        task.assigned_department = other_dept
+        task.assigned_operator = None
+        task.save()
+
+        api_client.force_authenticate(user=operator)
+        response = api_client.post(f'/api/v1/workorder-tasks/{task.id}/claim/', {}, format='json')
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        task.refresh_from_db()
+        assert task.assigned_operator is None
+
     def test_concurrent_task_claiming(self, api_client):
         """
         GIVEN: An unassigned task
@@ -240,7 +350,11 @@ class TestWorkOrderTaskWorkflow:
 
         # The API may or may not enforce capacity limits
         # Test documents the current behavior
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
+        assert response.status_code in [
+            status.HTTP_200_OK,
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ]
 
     def test_unauthorized_task_assignment_fails(self, api_client):
         """
