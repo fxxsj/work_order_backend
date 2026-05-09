@@ -1676,10 +1676,23 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             processes.update(plate_making_processes)
 
         # 为每个工序创建 WorkOrderProcess
+        from workorder.models.system import TaskAssignmentRule
+
         for process in sorted(processes, key=lambda p: p.sort_order):
-            # 查找负责该工序的部门（可能有多个，选择第一个）
-            departments = Department.objects.filter(processes=process, is_active=True)
-            department = departments.first() if departments.exists() else None
+            # 部门分配优先级：
+            # 1. TaskAssignmentRule 中该工序优先级最高的部门
+            # 2. 兜底：M2M processes 关联的第一个部门
+            assignment_rule = (
+                TaskAssignmentRule.objects.filter(process=process, is_active=True)
+                .select_related("department")
+                .order_by("-priority")
+                .first()
+            )
+            if assignment_rule:
+                department = assignment_rule.department
+            else:
+                departments = Department.objects.filter(processes=process, is_active=True)
+                department = departments.first() if departments.exists() else None
 
             WorkOrderProcess.objects.get_or_create(
                 work_order=work_order,
