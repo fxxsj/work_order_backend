@@ -134,7 +134,6 @@ class TaskAssignmentService:
         """验证任务是否可以分配
 
         规则：
-        - 草稿状态的任务不能分配
         - 已完成的任务不能重新分配
         - 已取消的任务不能分配
 
@@ -147,12 +146,6 @@ class TaskAssignmentService:
         Raises:
             ServiceError: 不可分配时抛出（code=status.HTTP_422_UNPROCESSABLE_ENTITY）
         """
-        if task.status == 'draft':
-            raise ServiceError(
-                "草稿状态的任务不能分配，请先等待施工单审核通过",
-                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
-
         if task.status == 'completed':
             raise ServiceError(
                 "已完成的任务不能重新分配",
@@ -468,16 +461,18 @@ class TaskAssignmentService:
                 code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
+        # 验证部门是否负责该工序（与分配逻辑一致）
+        process = task.work_order_process.process
+        if not task.assigned_department.processes.filter(id=process.id).exists():
+            raise ServiceError(
+                f"部门 {task.assigned_department.name} 不负责工序 {process.name}，无法认领该任务",
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
         # 验证操作员任务容量（复用分配服务的验证方法）
         TaskAssignmentService.validate_operator_task_capacity(operator)
 
         # 验证任务可认领性
-        if task.status == 'draft':
-            raise ServiceError(
-                "草稿状态的任务不能认领，请先等待施工单审核通过",
-                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
-
         if task.status == 'completed':
             raise ServiceError(
                 "已完成的任务不能认领",
