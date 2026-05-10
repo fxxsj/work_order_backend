@@ -486,6 +486,34 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
                 data={"detail": f"部门ID {department_id} 不存在"},
             )
 
+    @action(detail=False, methods=["get"], url_path="process-departments")
+    def process_departments(self, request):
+        """获取工序负责的部门列表
+
+        GET /workorder-tasks/process-departments/?process_id=123
+
+        用于任务分配时选择部门下拉框
+        """
+        from workorder.models.base import Process
+
+        process_id = request.query_params.get("process_id")
+        if not process_id:
+            return APIResponse.error(
+                "请提供 process_id 参数",
+                code=status.HTTP_400_BAD_REQUEST,
+                data={"detail": "请提供 process_id 参数"},
+            )
+
+        try:
+            departments = TaskAssignmentService.get_process_departments(int(process_id))
+            return APIResponse.success(data=departments)
+        except Process.DoesNotExist:
+            return APIResponse.error(
+                f"工序ID {process_id} 不存在",
+                code=status.HTTP_404_NOT_FOUND,
+                data={"detail": f"工序ID {process_id} 不存在"},
+            )
+
     @action(detail=True, methods=["post"], url_path="claim")
     @task_claim_docs
     def claim(self, request, pk=None):

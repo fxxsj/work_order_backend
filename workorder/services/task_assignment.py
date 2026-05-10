@@ -223,7 +223,65 @@ class TaskAssignmentService:
         TaskAssignmentService.validate_operator_task_capacity(operator)
 
         # 验证操作员属于任务部门
-        TaskAssignmentService.validate_operator_in_department(operator, task.assigned_department)
+        old_department_name = task.assigned_department.name if task.assigned_department else "未分配"
+        if not PermissionCache.is_user_in_department(operator, task.assigned_department.id):
+            # 操作员不属于当前部门，检查是否可以自动调整
+            operator_departments = PermissionCache.get_user_departments(operator)
+            process = task.work_order_process.process
+            if len(operator_departments) == 1:
+                # 操作员只属于一个部门，检查该部门是否是该工序的合法分派部门
+                new_department = Department.objects.get(id=operator_departments[0])
+                # 检查该部门是否负责该工序（通过 department.processes M2M 关系）
+                if not new_department.processes.filter(id=process.id).exists():
+                    # 如果该部门未配置为该工序的分派部门，报错
+                    raise ServiceError(
+                        f"部门 {new_department.name} 不负责工序 {process.name}，"
+                        f"无法将任务分派到该部门",
+                        code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    )
+                logger.info(
+                    f"任务 {task_id} 部门已自动从 {old_department_name} "
+                    f"调整为 {new_department.name}（操作员 {operator.username} 所在部门）"
+                )
+                task.assigned_department = new_department
+            elif len(operator_departments) > 1:
+                # 操作员属于多个部门，检查是否有任何一个部门负责该工序
+                valid_departments = Department.objects.filter(
+                    id__in=operator_departments,
+                    processes__id=process.id
+                ).distinct()
+                if valid_departments.count() == 1:
+                    # 只有一个部门负责该工序，自动切换
+                    new_department = valid_departments.first()
+                    logger.info(
+                        f"任务 {task_id} 部门已自动从 {old_department_name} "
+                        f"调整为 {new_department.name}（操作员 {operator.username} 所在部门）"
+                    )
+                    task.assigned_department = new_department
+                elif valid_departments.count() > 1:
+                    # 有多个部门负责该工序，需要手动选择
+                    department_names = "、".join([d.name for d in valid_departments])
+                    raise ServiceError(
+                        f"操作员 {operator.username} 所属的 {department_names} 等部门都负责工序 "
+                        f"{task.work_order_process.process.name}，请先手动选择部门后再分配",
+                        code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    )
+                else:
+                    # 没有一个部门负责该工序
+                    operator_department_names = "、".join(
+                        Department.objects.filter(id__in=operator_departments).values_list('name', flat=True)
+                    )
+                    raise ServiceError(
+                        f"操作员 {operator.username} 所属的部门（{operator_department_names}）"
+                        f"都不负责工序 {task.work_order_process.process.name}，无法分配",
+                        code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    )
+            else:
+                # 操作员不属于任何部门
+                raise ServiceError(
+                    f"操作员 {operator.username} 未分配任何部门，无法分配任务",
+                    code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
 
         # 验证任务可分配性
         TaskAssignmentService.validate_task_assignment_eligibility(task)
@@ -233,7 +291,7 @@ class TaskAssignmentService:
 
         # 执行分配
         task.assigned_operator = operator
-        task.save(update_fields=['assigned_operator', 'updated_at'])
+        task.save(update_fields=['assigned_department', 'assigned_operator', 'updated_at'])
 
         # 创建任务分配通知
         work_order = task.work_order_process.work_order if task.work_order_process else None
@@ -261,6 +319,12 @@ class TaskAssignmentService:
 
         return {
             'task_id': task.id,
+            'assigned_department': {
+                'id': task.assigned_department.id,
+                'name': task.assigned_department.name,
+            },
+            'department_adjusted': old_department_name != task.assigned_department.name,
+            'previous_department': old_department_name if old_department_name != task.assigned_department.name else None,
             'assigned_operator': {
                 'id': operator.id,
                 'username': operator.username,
@@ -295,6 +359,31 @@ class TaskAssignmentService:
         ).values('id', 'username', 'first_name', 'last_name')
 
         return list(users)
+
+    @staticmethod
+    def get_process_departments(process_id: int) -> list:
+        """获取某工序负责的所有部门
+
+        Args:
+            process_id: 工序ID
+
+        Returns:
+            list: 部门列表，每个包含 id, name, code, process_ids
+        """
+        departments = Department.objects.filter(
+            processes__id=process_id,
+            is_active=True
+        ).order_by('sort_order', 'name').prefetch_related('processes')
+
+        result = []
+        for dept in departments:
+            result.append({
+                'id': dept.id,
+                'name': dept.name,
+                'code': dept.code,
+                'process_ids': [p.id for p in dept.processes.all()],
+            })
+        return result
 
     @staticmethod
     def get_assignable_tasks_for_department(department_id: int, user) -> list:

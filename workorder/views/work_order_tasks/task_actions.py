@@ -616,6 +616,12 @@ class TaskActionsMixin:
                             "部门不存在或已停用",
                             code=status.HTTP_404_NOT_FOUND,
                         )
+                    # 验证该部门是否负责该工序
+                    if not department.processes.filter(id=task.work_order_process.process.id).exists():
+                        return APIResponse.error(
+                            f"部门 {department.name} 不负责工序 {task.work_order_process.process.name}，无法分配",
+                            code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        )
 
                 if task.assigned_department_id != department_id:
                     task.assigned_department = department
