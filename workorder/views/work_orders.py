@@ -59,6 +59,7 @@ from ..models.core import (
 from ..models.materials import Material
 from ..models.products import Product, ProductMaterial
 from ..models.sales import SalesOrder
+from ..constants.role_codes import SALES
 from ..permissions import (
     SuperuserFriendlyModelPermissions,
     WorkOrderDataPermission,
@@ -360,7 +361,7 @@ class WorkOrderViewSet(BaseViewSet):
 
         # 使用缓存优化权限查询
         def get_filtered_queryset():
-            if user.groups.filter(name="sales").exists():
+            if user.groups.filter(name=SALES).exists():
                 return queryset.filter(customer__salesperson=user)
 
             elif user.has_perm("workorder.change_workorder"):
@@ -532,7 +533,7 @@ class WorkOrderViewSet(BaseViewSet):
 
         # 未审核施工单数量（仅业务员可见，只统计自己负责的）
         pending_approval_count = 0
-        if request.user.groups.filter(name="sales").exists():
+        if request.user.groups.filter(name=SALES).exists():
             pending_approval_count = queryset.filter(
                 approval_status="submitted", customer__salesperson=request.user
             ).count()
@@ -688,7 +689,8 @@ class WorkOrderViewSet(BaseViewSet):
             for item in product_stats
         ]
 
-        return APIResponse.success(data={
+        return APIResponse.success(
+            data={
                 # 基础统计
                 "total_count": total_count,
                 "status_statistics": status_statistics,
@@ -719,7 +721,8 @@ class WorkOrderViewSet(BaseViewSet):
                     "customer_statistics": customer_statistics,
                     "product_statistics": product_statistics,
                 },
-            })
+            }
+        )
 
     @action(detail=False, methods=["get"])
     def sales_order_candidates(self, request):
@@ -736,9 +739,11 @@ class WorkOrderViewSet(BaseViewSet):
                     code=status.HTTP_400_BAD_REQUEST,
                 )
 
-            existing_work_order = WorkOrder.objects.filter(
-                pk=excluded_work_order_id
-            ).only("sales_order_id").first()
+            existing_work_order = (
+                WorkOrder.objects.filter(pk=excluded_work_order_id)
+                .only("sales_order_id")
+                .first()
+            )
             if existing_work_order is not None:
                 include_sales_order_id = existing_work_order.sales_order_id
 
@@ -747,8 +752,7 @@ class WorkOrderViewSet(BaseViewSet):
             "source_work_orders__products__product",
         )
         queryset = _scope_sales_orders(queryset, request.user).filter(
-            Q(status__in=["approved", "in_production"])
-            | Q(pk=include_sales_order_id)
+            Q(status__in=["approved", "in_production"]) | Q(pk=include_sales_order_id)
         )
 
         candidates = []
@@ -760,25 +764,29 @@ class WorkOrderViewSet(BaseViewSet):
                     continue
                 for product_item in work_order.products.all():
                     if product_item.sales_order_item_id:
-                        allocated_quantities_by_item[product_item.sales_order_item_id] = (
-                            allocated_quantities_by_item.get(
-                                product_item.sales_order_item_id, 0
-                            )
-                            + int(product_item.quantity or 0)
+                        allocated_quantities_by_item[
+                            product_item.sales_order_item_id
+                        ] = allocated_quantities_by_item.get(
+                            product_item.sales_order_item_id, 0
+                        ) + int(
+                            product_item.quantity or 0
                         )
                     else:
-                        legacy_allocated_quantities_by_product[product_item.product_id] = (
-                            legacy_allocated_quantities_by_product.get(
-                                product_item.product_id, 0
-                            )
-                            + int(product_item.quantity or 0)
+                        legacy_allocated_quantities_by_product[
+                            product_item.product_id
+                        ] = legacy_allocated_quantities_by_product.get(
+                            product_item.product_id, 0
+                        ) + int(
+                            product_item.quantity or 0
                         )
 
             available_products = []
             for item in sales_order.items.all():
                 if not item.product_id:
                     continue
-                allocated_quantity = int(allocated_quantities_by_item.get(item.id, 0) or 0)
+                allocated_quantity = int(
+                    allocated_quantities_by_item.get(item.id, 0) or 0
+                )
                 legacy_allocated_quantity = int(
                     legacy_allocated_quantities_by_product.get(item.product_id, 0) or 0
                 )
@@ -906,14 +914,18 @@ class WorkOrderViewSet(BaseViewSet):
 
         # 验证输入
         if not isinstance(new_process_ids, list):
-            return APIResponse.error("process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 获取当前工序ID列表
         old_process_ids = list(work_order.order_processes.values_list("id", flat=True))
 
         # 验证施工单是否已审核
         if work_order.approval_status == "approved":
-            return APIResponse.error("已审核的施工单不能修改工序", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "已审核的施工单不能修改工序", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 权限检查
         if not request.user.is_staff and not request.user.is_superuser:
@@ -954,18 +966,25 @@ class WorkOrderViewSet(BaseViewSet):
 
         # 验证输入
         if not isinstance(new_process_ids, list):
-            return APIResponse.error("process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 获取当前工序ID列表
         old_process_ids = list(work_order.order_processes.values_list("id", flat=True))
 
         # 验证施工单是否已审核
         if work_order.approval_status == "approved":
-            return APIResponse.error("已审核的施工单不能同步任务", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "已审核的施工单不能同步任务", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 要求确认标志（防止误操作）
         if not request.data.get("confirmed"):
-            return APIResponse.error("需要确认后才能执行同步，请设置 confirmed=true", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "需要确认后才能执行同步，请设置 confirmed=true",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
 
         # 权限检查
         if not request.user.is_staff and not request.user.is_superuser:
@@ -1029,8 +1048,10 @@ class WorkOrderViewSet(BaseViewSet):
         # 检查是否可以同步（未审核的施工单才能同步）
         can_sync = work_order.approval_status != "approved"
 
-        return APIResponse.success(data={
+        return APIResponse.success(
+            data={
                 "sync_needed": has_changes and can_sync,
                 "current_process_ids": current_process_ids,
                 "can_sync": can_sync,
-            })
+            }
+        )

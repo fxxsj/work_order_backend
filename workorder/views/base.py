@@ -20,11 +20,16 @@ from workorder.docs.base import (
     process_docs,
 )
 from workorder.permission_utils import PermissionUtils
+from workorder.constants.role_codes import SALES
 
 from ..models.base import Customer, Department, Process
 from ..models.core import WorkOrder
 from ..permissions import CustomerDataPermission
-from ..serializers.base import CustomerSerializer, DepartmentSerializer, ProcessSerializer
+from ..serializers.base import (
+    CustomerSerializer,
+    DepartmentSerializer,
+    ProcessSerializer,
+)
 from .base_viewsets import BaseViewSet
 
 
@@ -53,7 +58,7 @@ class CustomerViewSet(BaseViewSet):
             return queryset.select_related("salesperson")
 
         # 如果是业务员，只返回自己负责的客户
-        if self.request.user.groups.filter(name="sales").exists():
+        if self.request.user.groups.filter(name=SALES).exists():
             return queryset.filter(salesperson=self.request.user).select_related(
                 "salesperson"
             )
@@ -74,9 +79,11 @@ class CustomerViewSet(BaseViewSet):
             visible_customer_ids = WorkOrder.objects.filter(
                 PermissionUtils.build_work_order_scope_q(self.request.user, "")
             ).values_list("customer_id", flat=True)
-            return queryset.filter(id__in=visible_customer_ids).select_related(
-                "salesperson"
-            ).distinct()
+            return (
+                queryset.filter(id__in=visible_customer_ids)
+                .select_related("salesperson")
+                .distinct()
+            )
 
         # 否则返回空查询集
         return queryset.none()
@@ -147,7 +154,9 @@ class DepartmentViewSet(BaseViewSet):
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        if WorkOrderTask.objects.filter(work_order_process__department=instance).exists():
+        if WorkOrderTask.objects.filter(
+            work_order_process__department=instance
+        ).exists():
             return APIResponse.error(
                 "该部门已被施工单任务使用，不可删除",
                 code=status.HTTP_400_BAD_REQUEST,

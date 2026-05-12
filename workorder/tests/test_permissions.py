@@ -2,6 +2,7 @@
 权限系统测试
 测试数据权限和操作权限
 """
+
 from django.test import TestCase
 from django.contrib.auth.models import User, Group
 from rest_framework.test import APIClient
@@ -16,40 +17,37 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
     def setUp(self):
         """设置测试数据"""
         # 创建业务员1和业务员2
-        self.salesperson1 = TestDataFactory.create_user(username='sales1')
-        self.salesperson2 = TestDataFactory.create_user(username='sales2')
+        self.salesperson1 = TestDataFactory.create_user(username="sales1")
+        self.salesperson2 = TestDataFactory.create_user(username="sales2")
 
         # 创建客户1（属于业务员1）和客户2（属于业务员2）
         self.customer1 = TestDataFactory.create_customer(
-            name='客户1',
-            salesperson=self.salesperson1
+            name="客户1", salesperson=self.salesperson1
         )
         self.customer2 = TestDataFactory.create_customer(
-            name='客户2',
-            salesperson=self.salesperson2
+            name="客户2", salesperson=self.salesperson2
         )
 
         # 创建施工单
         self.wo1 = TestDataFactory.create_workorder(
-            customer=self.customer1,
-            creator=self.salesperson1
+            customer=self.customer1, creator=self.salesperson1
         )
         self.wo2 = TestDataFactory.create_workorder(
-            customer=self.customer2,
-            creator=self.salesperson2
+            customer=self.customer2, creator=self.salesperson2
         )
 
         # 创建部门（使用 get_or_create 避免与预置数据冲突）
         self.department, _ = Department.objects.get_or_create(
-            code='TEST_DEPT',
+            code="TEST_DEPT",
             defaults={
-                'name': '测试部门',
-            }
+                "name": "测试部门",
+            },
         )
 
         # 创建生产主管
-        self.supervisor = TestDataFactory.create_user(username='supervisor')
+        self.supervisor = TestDataFactory.create_user(username="supervisor")
         from workorder.models import UserProfile
+
         self.supervisor_profile = UserProfile.objects.create(user=self.supervisor)
         self.supervisor_profile.departments.add(self.department)
 
@@ -59,11 +57,11 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
         self.client.force_login(self.salesperson1)
 
         # 获取施工单列表
-        response = self.api_get('/api/v1/workorders/', user=self.salesperson1)
+        response = self.api_get("/api/v1/workorders/", user=self.salesperson1)
 
         # 应该只看到客户1的施工单
         self.assertEqual(response.status_code, 200)
-        workorder_ids = [wo['id'] for wo in response.data['data']['results']]
+        workorder_ids = [wo["id"] for wo in response.data["data"]["results"]]
         self.assertIn(self.wo1.id, workorder_ids)
         self.assertNotIn(self.wo2.id, workorder_ids)
 
@@ -72,12 +70,12 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
         self.client.force_login(self.salesperson1)
 
         data = {
-            'customer': self.customer1.id,
-            'production_quantity': 100,
-            'delivery_date': date(2026, 12, 31)
+            "customer": self.customer1.id,
+            "production_quantity": 100,
+            "delivery_date": date(2026, 12, 31),
         }
 
-        response = self.api_post('/api/v1/workorders/', data, user=self.salesperson1)
+        response = self.api_post("/api/v1/workorders/", data, user=self.salesperson1)
 
         # 应该成功
         self.assertEqual(response.status_code, 201)
@@ -87,12 +85,12 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
         self.client.force_login(self.salesperson1)
 
         data = {
-            'customer': self.customer2.id,  # 客户2属于业务员2
-            'production_quantity': 100,
-            'delivery_date': date(2026, 12, 31)
+            "customer": self.customer2.id,  # 客户2属于业务员2
+            "production_quantity": 100,
+            "delivery_date": date(2026, 12, 31),
         }
 
-        response = self.api_post('/api/v1/workorders/', data, user=self.salesperson1)
+        response = self.api_post("/api/v1/workorders/", data, user=self.salesperson1)
 
         # 当前实现允许业务员为任何客户创建施工单
         # 如果需要添加客户所有权限制，应该在 serializer 中添加 validate_customer 方法
@@ -103,40 +101,44 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
         # TODO: 实现生产主管可以看到相关部门任务时的测试
         pass
 
-    def test_workorder_editor_can_read_related_customers_without_customer_permission(self):
+    def test_workorder_editor_can_read_related_customers_without_customer_permission(
+        self,
+    ):
         """测试仅有施工单权限的用户也能读取关联客户列表，用于施工单表单。"""
         from django.contrib.auth.models import Permission
         from django.contrib.contenttypes.models import ContentType
 
         supervisor = TestDataFactory.create_user(
-            username='wo_editor_only',
+            username="wo_editor_only",
             add_permissions=False,
         )
         workorder_ct = ContentType.objects.get_for_model(WorkOrder)
         view_perm = Permission.objects.get(
             content_type=workorder_ct,
-            codename='view_workorder',
+            codename="view_workorder",
         )
         change_perm = Permission.objects.get(
             content_type=workorder_ct,
-            codename='change_workorder',
+            codename="change_workorder",
         )
         supervisor.user_permissions.add(view_perm, change_perm)
 
         customer = TestDataFactory.create_customer(
-            name='关联客户',
+            name="关联客户",
             salesperson=self.salesperson1,
         )
         TestDataFactory.create_workorder(customer=customer, creator=supervisor)
 
-        response = self.api_get('/api/v1/customers/', user=supervisor)
+        response = self.api_get("/api/v1/customers/", user=supervisor)
 
         self.assertEqual(response.status_code, 200)
-        results = response.data['data']['results']
-        customer_ids = [item['id'] for item in results]
+        results = response.data["data"]["results"]
+        customer_ids = [item["id"] for item in results]
         self.assertIn(customer.id, customer_ids)
 
-    def test_workorder_editor_can_read_supporting_assets_without_asset_permissions(self):
+    def test_workorder_editor_can_read_supporting_assets_without_asset_permissions(
+        self,
+    ):
         """测试仅有施工单权限的用户可读取施工单依赖的资产列表。"""
         from django.contrib.auth.models import Permission
         from django.contrib.contenttypes.models import ContentType
@@ -144,31 +146,31 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
         from ..models import Artwork
 
         supervisor = TestDataFactory.create_user(
-            username='wo_asset_reader',
+            username="wo_asset_reader",
             add_permissions=False,
         )
         workorder_ct = ContentType.objects.get_for_model(WorkOrder)
         view_perm = Permission.objects.get(
             content_type=workorder_ct,
-            codename='view_workorder',
+            codename="view_workorder",
         )
         change_perm = Permission.objects.get(
             content_type=workorder_ct,
-            codename='change_workorder',
+            codename="change_workorder",
         )
         supervisor.user_permissions.add(view_perm, change_perm)
 
         artwork = Artwork.objects.create(
-            base_code='ART-TEST',
+            base_code="ART-TEST",
             version=1,
-            name='测试图稿',
+            name="测试图稿",
         )
 
-        response = self.api_get('/api/v1/artworks/', user=supervisor)
+        response = self.api_get("/api/v1/artworks/", user=supervisor)
 
         self.assertEqual(response.status_code, 200)
-        results = response.data['data']['results']
-        artwork_ids = [item['id'] for item in results]
+        results = response.data["data"]["results"]
+        artwork_ids = [item["id"] for item in results]
         self.assertIn(artwork.id, artwork_ids)
 
 
@@ -182,72 +184,78 @@ class WorkOrderTaskPermissionTest(APITestCaseMixin, TestCase):
         from ..models import WorkOrder
 
         # 创建用户（操作员只需要 view_workorder 权限）
-        self.operator1 = TestDataFactory.create_user(username='op1', add_permissions=False)
-        self.operator2 = TestDataFactory.create_user(username='op2', add_permissions=False)
-        self.supervisor = TestDataFactory.create_user(username='sup')
+        self.operator1 = TestDataFactory.create_user(
+            username="op1", add_permissions=False
+        )
+        self.operator2 = TestDataFactory.create_user(
+            username="op2", add_permissions=False
+        )
+        self.supervisor = TestDataFactory.create_user(username="sup")
 
         # 为操作员添加 view_workorder 权限（这样他们可以查看任务）
         ct = ContentType.objects.get_for_model(WorkOrder)
-        view_perm = Permission.objects.get(content_type=ct, codename='view_workorder')
+        view_perm = Permission.objects.get(content_type=ct, codename="view_workorder")
         self.operator1.user_permissions.add(view_perm)
         self.operator2.user_permissions.add(view_perm)
 
         # 创建部门和施工单
-        self.department = Department.objects.create(
-            name='生产一部',
-            code='DEPT1'
-        )
+        self.department = Department.objects.create(name="生产一部", code="DEPT1")
         self.customer = TestDataFactory.create_customer(salesperson=self.supervisor)
         self.work_order = TestDataFactory.create_workorder(
-            customer=self.customer,
-            creator=self.supervisor
+            customer=self.customer, creator=self.supervisor
         )
-        self.process = Process.objects.create(name='测试工序', code='TEST')
+        self.process = Process.objects.create(name="测试工序", code="TEST")
 
     def test_operator_can_only_update_own_tasks(self):
         """测试操作员只能更新自己分派的任务"""
         from ..models import WorkOrderProcess, WorkOrderTask
 
         wo_process = WorkOrderProcess.objects.create(
-            work_order=self.work_order,
-            process=self.process,
-            sequence=10
+            work_order=self.work_order, process=self.process, sequence=10
         )
 
         # 创建任务1（分派给操作员1）和任务2（分派给操作员2）
         task1 = WorkOrderTask.objects.create(
             work_order_process=wo_process,
-            task_type='general',
-            work_content='任务1',
+            task_type="general",
+            work_content="任务1",
             production_quantity=100,
-            assigned_operator=self.operator1
+            assigned_operator=self.operator1,
         )
 
         task2 = WorkOrderTask.objects.create(
             work_order_process=wo_process,
-            task_type='general',
-            work_content='任务2',
+            task_type="general",
+            work_content="任务2",
             production_quantity=100,
-            assigned_operator=self.operator2
+            assigned_operator=self.operator2,
         )
 
         # 操作员1登录
         self.client.force_login(self.operator1)
 
         # 可以查看自己的任务列表
-        response = self.api_get('/api/v1/workorder-tasks/', user=self.operator1)
+        response = self.api_get("/api/v1/workorder-tasks/", user=self.operator1)
         self.assertEqual(response.status_code, 200)
-        task_ids = [t['id'] for t in response.data['data']['results']]
+        task_ids = [t["id"] for t in response.data["data"]["results"]]
         self.assertIn(task1.id, task_ids)
         self.assertNotIn(task2.id, task_ids)
 
         # 可以更新自己的任务（使用正确的参数名）
-        data = {'quantity_increment': 10, 'version': task1.version}
-        response = self.api_post(f'/api/v1/workorder-tasks/{task1.id}/update_quantity/', data, user=self.operator1)
+        data = {"quantity_increment": 10, "version": task1.version}
+        response = self.api_post(
+            f"/api/v1/workorder-tasks/{task1.id}/update_quantity/",
+            data,
+            user=self.operator1,
+        )
         self.assertEqual(response.status_code, 200)
 
         # 不能更新别人的任务（会得到404因为不在查询集中）
-        response = self.api_post(f'/api/v1/workorder-tasks/{task2.id}/update_quantity/', data, user=self.operator1)
+        response = self.api_post(
+            f"/api/v1/workorder-tasks/{task2.id}/update_quantity/",
+            data,
+            user=self.operator1,
+        )
         self.assertIn(response.status_code, [403, 404])
 
     def test_supervisor_can_update_department_tasks(self):
@@ -258,7 +266,7 @@ class WorkOrderTaskPermissionTest(APITestCaseMixin, TestCase):
             work_order=self.work_order,
             process=self.process,
             sequence=10,
-            department=self.department
+            department=self.department,
         )
 
         # 为生产主管创建 UserProfile 并添加到部门
@@ -268,18 +276,22 @@ class WorkOrderTaskPermissionTest(APITestCaseMixin, TestCase):
         # 创建部门任务
         task = WorkOrderTask.objects.create(
             work_order_process=wo_process,
-            task_type='general',
-            work_content='部门任务',
+            task_type="general",
+            work_content="部门任务",
             production_quantity=100,
-            assigned_department=self.department
+            assigned_department=self.department,
         )
 
         # 生产主管登录
         self.client.force_login(self.supervisor)
 
         # 应该可以更新部门任务（使用正确的参数名）
-        data = {'quantity_increment': 10, 'version': task.version}
-        response = self.api_post(f'/api/v1/workorder-tasks/{task.id}/update_quantity/', data, user=self.supervisor)
+        data = {"quantity_increment": 10, "version": task.version}
+        response = self.api_post(
+            f"/api/v1/workorder-tasks/{task.id}/update_quantity/",
+            data,
+            user=self.supervisor,
+        )
         self.assertEqual(response.status_code, 200)
 
 
@@ -288,45 +300,40 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
 
     def setUp(self):
         """设置测试数据"""
-        # 创建业务员组
-        self.sales_group = Group.objects.get_or_create(name='业务员')[0]
+        from workorder.constants.role_codes import SALES
+
+        self.sales_group = Group.objects.get_or_create(name=SALES)[0]
 
         # 创建业务员1和业务员2并添加到业务员组
-        self.salesperson1 = TestDataFactory.create_user(username='sales1')
-        self.salesperson2 = TestDataFactory.create_user(username='sales2')
+        self.salesperson1 = TestDataFactory.create_user(username="sales1")
+        self.salesperson2 = TestDataFactory.create_user(username="sales2")
         self.salesperson1.groups.add(self.sales_group)
         self.salesperson2.groups.add(self.sales_group)
 
         # 创建客户
-        self.customer1 = TestDataFactory.create_customer(
-            salesperson=self.salesperson1
-        )
-        self.customer2 = TestDataFactory.create_customer(
-            salesperson=self.salesperson2
-        )
+        self.customer1 = TestDataFactory.create_customer(salesperson=self.salesperson1)
+        self.customer2 = TestDataFactory.create_customer(salesperson=self.salesperson2)
 
         # 创建待审核的施工单
         self.wo1 = TestDataFactory.create_workorder(
-            customer=self.customer1,
-            creator=self.salesperson1
+            customer=self.customer1, creator=self.salesperson1
         )
         self.wo1.approval_status = "submitted"
         self.wo1.save(update_fields=["approval_status"])
 
         # 添加产品和工序以满足审核条件
         from ..models import WorkOrderProduct, WorkOrderProcess, Artwork, Die
+
         product = TestDataFactory.create_product()
         WorkOrderProduct.objects.create(
-            work_order=self.wo1,
-            product=product,
-            quantity=50
+            work_order=self.wo1, product=product, quantity=50
         )
 
         # 添加一个不需要图稿和刀模的工序以满足审核条件
         # 创建一个全新的测试工序，确保不需要图稿和刀模
         process = Process.objects.create(
-            name='测试工序',
-            code='TEST_NO_PLATES',
+            name="测试工序",
+            code="TEST_NO_PLATES",
             requires_artwork=False,
             requires_die=False,
             requires_foiling_plate=False,
@@ -334,13 +341,11 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
             artwork_required=False,
             die_required=False,
             foiling_plate_required=False,
-            embossing_plate_required=False
+            embossing_plate_required=False,
         )
 
         WorkOrderProcess.objects.create(
-            work_order=self.wo1,
-            process=process,
-            sequence=10
+            work_order=self.wo1, process=process, sequence=10
         )
 
     def test_salesperson_can_approve_own_customer_orders(self):
@@ -348,25 +353,29 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
         self.client.force_login(self.salesperson1)
 
         # 审核施工单（使用 workorders-flow 端点）
-        response = self.api_post(f'/api/v1/workorders-flow/{self.wo1.id}/approve/', {
-            'comment': 'Approved'
-        }, user=self.salesperson1)
+        response = self.api_post(
+            f"/api/v1/workorders-flow/{self.wo1.id}/approve/",
+            {"comment": "Approved"},
+            user=self.salesperson1,
+        )
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
 
         # 验证状态已更新
         self.wo1.refresh_from_db()
-        self.assertEqual(self.wo1.approval_status, 'approved')
+        self.assertEqual(self.wo1.approval_status, "approved")
 
     def test_salesperson_cannot_approve_other_customer_orders(self):
         """测试业务员不能审核其他业务员客户的施工单"""
         self.client.force_login(self.salesperson2)
 
         # 尝试审核施工单
-        response = self.api_post(f'/api/v1/workorders/{self.wo1.id}/approve/', {
-            'approval_status': 'approved'
-        }, user=self.salesperson2)
+        response = self.api_post(
+            f"/api/v1/workorders/{self.wo1.id}/approve/",
+            {"approval_status": "approved"},
+            user=self.salesperson2,
+        )
 
         # 应该被拒绝（404 Not Found 因为数据权限过滤掉了其他业务员的施工单）
         # 或者 403 Forbidden 如果权限检查在对象获取之后
@@ -377,24 +386,28 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
         self.client.force_login(self.salesperson1)
 
         # 拒绝但未填写原因（使用 workorders-flow 端点）
-        response = self.api_post(f'/api/v1/workorders-flow/{self.wo1.id}/reject/', {
-            'reason': ''
-        }, user=self.salesperson1)
+        response = self.api_post(
+            f"/api/v1/workorders-flow/{self.wo1.id}/reject/",
+            {"reason": ""},
+            user=self.salesperson1,
+        )
 
         # 应该失败（缺少原因）
         self.assertIn(response.status_code, [400, 403])
 
         # 拒绝并填写原因
-        response = self.api_post(f'/api/v1/workorders-flow/{self.wo1.id}/reject/', {
-            'reason': '信息不完整'
-        }, user=self.salesperson1)
+        response = self.api_post(
+            f"/api/v1/workorders-flow/{self.wo1.id}/reject/",
+            {"reason": "信息不完整"},
+            user=self.salesperson1,
+        )
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
 
         # 验证状态
         self.wo1.refresh_from_db()
-        self.assertEqual(self.wo1.approval_status, 'rejected')
+        self.assertEqual(self.wo1.approval_status, "rejected")
 
 
 class APIAuthenticationTest(TestCase):
@@ -406,7 +419,7 @@ class APIAuthenticationTest(TestCase):
 
     def test_login_required(self):
         """测试需要登录"""
-        response = self.client.get('/api/v1/workorders/')
+        response = self.client.get("/api/v1/workorders/")
 
         # 未登录应该返回 401 或 403（取决于 DRF 配置）
         self.assertIn(response.status_code, [401, 403])
@@ -415,24 +428,23 @@ class APIAuthenticationTest(TestCase):
         """测试登录成功"""
         user = TestDataFactory.create_user()
 
-        response = self.client.post('/api/v1/auth/login/', {
-            'username': user.username,
-            'password': 'testpass123'
-        })
+        response = self.client.post(
+            "/api/v1/auth/login/",
+            {"username": user.username, "password": "testpass123"},
+        )
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
-        self.assertIn('id', response.data['data'])
-        self.assertEqual(response.data['data']['username'], user.username)
+        self.assertIn("id", response.data["data"])
+        self.assertEqual(response.data["data"]["username"], user.username)
 
     def test_login_wrong_password(self):
         """测试密码错误"""
         TestDataFactory.create_user()
 
-        response = self.client.post('/api/v1/auth/login/', {
-            'username': 'testuser',
-            'password': 'wrongpassword'
-        })
+        response = self.client.post(
+            "/api/v1/auth/login/", {"username": "testuser", "password": "wrongpassword"}
+        )
 
         # 应该失败
         self.assertEqual(response.status_code, 401)
@@ -442,14 +454,16 @@ class APIAuthenticationTest(TestCase):
         user = TestDataFactory.create_user()
 
         # 先登录获取 access token
-        login_response = self.client.post('/api/v1/auth/login/', {
-            'username': user.username,
-            'password': 'testpass123'
-        })
-        access = login_response.data['data']['access']
+        login_response = self.client.post(
+            "/api/v1/auth/login/",
+            {"username": user.username, "password": "testpass123"},
+        )
+        access = login_response.data["data"]["access"]
 
         # 登出（使用 JWT 认证）
-        response = self.client.post('/api/v1/auth/logout/', HTTP_AUTHORIZATION=f'Bearer {access}')
+        response = self.client.post(
+            "/api/v1/auth/logout/", HTTP_AUTHORIZATION=f"Bearer {access}"
+        )
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
@@ -459,16 +473,18 @@ class APIAuthenticationTest(TestCase):
         user = TestDataFactory.create_user()
 
         # 先登录获取 access token
-        login_response = self.client.post('/api/v1/auth/login/', {
-            'username': user.username,
-            'password': 'testpass123'
-        })
-        access = login_response.data['data']['access']
+        login_response = self.client.post(
+            "/api/v1/auth/login/",
+            {"username": user.username, "password": "testpass123"},
+        )
+        access = login_response.data["data"]["access"]
 
         # 获取当前用户（使用 JWT 认证）
-        response = self.client.get('/api/v1/auth/user/', HTTP_AUTHORIZATION=f'Bearer {access}')
+        response = self.client.get(
+            "/api/v1/auth/user/", HTTP_AUTHORIZATION=f"Bearer {access}"
+        )
 
         # 应该成功
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['data']['id'], user.id)
-        self.assertEqual(response.data['data']['username'], user.username)
+        self.assertEqual(response.data["data"]["id"], user.id)
+        self.assertEqual(response.data["data"]["username"], user.username)

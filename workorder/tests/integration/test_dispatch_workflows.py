@@ -1,17 +1,24 @@
 """Integration tests for auto-dispatch workflows"""
+
 import pytest
 from django.contrib.auth.models import Group
 from rest_framework import status
 from rest_framework.test import APIClient
+from workorder.constants.role_codes import SALES
 from workorder.tests.factories import (
-    WorkOrderFactory, UserFactory, DepartmentFactory, ProcessFactory,
-    WorkOrderProcessFactory, WorkOrderTaskFactory, WorkOrderProductFactory
+    WorkOrderFactory,
+    UserFactory,
+    DepartmentFactory,
+    ProcessFactory,
+    WorkOrderProcessFactory,
+    WorkOrderTaskFactory,
+    WorkOrderProductFactory,
 )
 from workorder.models import TaskAssignmentRule, WorkOrderTask
 
 
 def make_salesperson(user, customer):
-    group, _ = Group.objects.get_or_create(name="业务员")
+    group, _ = Group.objects.get_or_create(name=SALES)
     user.groups.add(group)
     if customer is not None:
         customer.salesperson = user
@@ -30,47 +37,35 @@ class TestAutoDispatchWorkflow:
         THEN: Tasks are dispatched to highest-priority department
         """
         # Setup: Create departments with priority
-        dept1 = DepartmentFactory(name='Printing Dept A', code='PRT001')
-        dept2 = DepartmentFactory(name='Printing Dept B', code='PRT002')
+        dept1 = DepartmentFactory(name="Printing Dept A", code="PRT001")
+        dept2 = DepartmentFactory(name="Printing Dept B", code="PRT002")
 
-        process = ProcessFactory(name='Offset Printing')
+        process = ProcessFactory(name="Offset Printing")
 
         # Configure dispatch rules
-        TaskAssignmentRule.objects.create(
-            process=process,
-            department=dept1,
-            priority=1
-        )
-        TaskAssignmentRule.objects.create(
-            process=process,
-            department=dept2,
-            priority=2
-        )
+        TaskAssignmentRule.objects.create(process=process, department=dept1, priority=1)
+        TaskAssignmentRule.objects.create(process=process, department=dept2, priority=2)
 
         # Create workorder
-        supervisor = UserFactory(username='supervisor', departments=[dept1])
-        maker = UserFactory(username='maker', departments=[dept1])
+        supervisor = UserFactory(username="supervisor", departments=[dept1])
+        maker = UserFactory(username="maker", departments=[dept1])
 
         workorder = WorkOrderFactory(
-            approval_status='submitted',
+            approval_status="submitted",
             created_by=maker,
-            processes=0  # We'll create processes manually
+            processes=0,  # We'll create processes manually
         )
         WorkOrderProductFactory(work_order=workorder, quantity=100)
         make_salesperson(supervisor, workorder.customer)
 
-        WorkOrderProcessFactory(
-            work_order=workorder,
-            process=process,
-            tasks=3
-        )
+        WorkOrderProcessFactory(work_order=workorder, process=process, tasks=3)
 
         # Approve workorder
         api_client.force_authenticate(user=supervisor)
         response = api_client.post(
-            f'/api/v1/workorders-flow/{workorder.id}/approve/',
+            f"/api/v1/workorders-flow/{workorder.id}/approve/",
             {"comment": "Approved"},
-            format="json"
+            format="json",
         )
 
         assert response.status_code == status.HTTP_200_OK
@@ -88,48 +83,44 @@ class TestAutoDispatchWorkflow:
         WHEN: Tasks are dispatched
         THEN: System considers department load for dispatch
         """
-        dept1 = DepartmentFactory(name='Dept A')
-        dept2 = DepartmentFactory(name='Dept B')
-        process = ProcessFactory(name='Test Process')
+        dept1 = DepartmentFactory(name="Dept A")
+        dept2 = DepartmentFactory(name="Dept B")
+        process = ProcessFactory(name="Test Process")
 
         # Equal priority
         TaskAssignmentRule.objects.create(
-            process=process,
-            department=dept1,
-            priority=1,
-            is_active=True
+            process=process, department=dept1, priority=1, is_active=True
         )
         TaskAssignmentRule.objects.create(
-            process=process,
-            department=dept2,
-            priority=1,
-            is_active=True
+            process=process, department=dept2, priority=1, is_active=True
         )
 
         # Add existing tasks to dept1 to increase load
-        operator = UserFactory(username='op', departments=[dept1])
+        operator = UserFactory(username="op", departments=[dept1])
         for _ in range(5):
-            task = WorkOrderTaskFactory(status='in_progress')
+            task = WorkOrderTaskFactory(status="in_progress")
             task.assigned_department = dept1
             task.assigned_operator = operator
             task.save()
 
         # Create and approve workorder
-        supervisor = UserFactory(username='supervisor', departments=[dept1])
-        workorder = WorkOrderFactory(approval_status='submitted', processes=0)
+        supervisor = UserFactory(username="supervisor", departments=[dept1])
+        workorder = WorkOrderFactory(approval_status="submitted", processes=0)
         WorkOrderProductFactory(work_order=workorder, quantity=100)
         make_salesperson(supervisor, workorder.customer)
         WorkOrderProcessFactory(work_order=workorder, process=process, tasks=1)
 
         api_client.force_authenticate(user=supervisor)
         api_client.post(
-            f'/api/v1/workorders-flow/{workorder.id}/approve/',
+            f"/api/v1/workorders-flow/{workorder.id}/approve/",
             {"comment": "Approved"},
-            format="json"
+            format="json",
         )
 
         # Verify task was created
-        task = WorkOrderTask.objects.filter(work_order_process__work_order=workorder).first()
+        task = WorkOrderTask.objects.filter(
+            work_order_process__work_order=workorder
+        ).first()
         assert task is not None
         # Note: Load balancing may or may not be implemented
         # Test documents the expectation
@@ -140,39 +131,38 @@ class TestAutoDispatchWorkflow:
         WHEN: Workorder is approved
         THEN: Task should not be dispatched to that inactive rule's department
         """
-        dept1 = DepartmentFactory(name='Active Dept')
-        dept2 = DepartmentFactory(name='Inactive Dept')
-        process = ProcessFactory(name='Test Process')
+        dept1 = DepartmentFactory(name="Active Dept")
+        dept2 = DepartmentFactory(name="Inactive Dept")
+        process = ProcessFactory(name="Test Process")
 
         # dept2 rule is inactive
         TaskAssignmentRule.objects.create(
-            process=process,
-            department=dept1,
-            priority=1,
-            is_active=True
+            process=process, department=dept1, priority=1, is_active=True
         )
         TaskAssignmentRule.objects.create(
             process=process,
             department=dept2,
             priority=0,  # Higher priority but inactive
-            is_active=False
+            is_active=False,
         )
 
-        supervisor = UserFactory(username='supervisor', departments=[dept1])
-        workorder = WorkOrderFactory(approval_status='submitted', processes=0)
+        supervisor = UserFactory(username="supervisor", departments=[dept1])
+        workorder = WorkOrderFactory(approval_status="submitted", processes=0)
         WorkOrderProductFactory(work_order=workorder, quantity=100)
         make_salesperson(supervisor, workorder.customer)
         WorkOrderProcessFactory(work_order=workorder, process=process, tasks=1)
 
         api_client.force_authenticate(user=supervisor)
         api_client.post(
-            f'/api/v1/workorders-flow/{workorder.id}/approve/',
+            f"/api/v1/workorders-flow/{workorder.id}/approve/",
             {"comment": "Approved"},
-            format="json"
+            format="json",
         )
 
         # Verify task was created
-        task = WorkOrderTask.objects.filter(work_order_process__work_order=workorder).first()
+        task = WorkOrderTask.objects.filter(
+            work_order_process__work_order=workorder
+        ).first()
         assert task is not None
         # Note: Auto-dispatch behavior depends on implementation
         # Test documents expected behavior with inactive rules
@@ -184,16 +174,18 @@ class TestAutoDispatchWorkflow:
         THEN: Task is assigned to the specified department
         """
         dept = DepartmentFactory()
-        supervisor = UserFactory(username='supervisor', departments=[dept])
+        supervisor = UserFactory(username="supervisor", departments=[dept])
 
         # Create task without department assignment
-        task = WorkOrderTaskFactory(status='pending')
+        task = WorkOrderTaskFactory(status="pending")
 
         # Manually assign department (if API supports it)
         api_client.force_authenticate(user=supervisor)
-        response = api_client.patch(f'/api/v1/workorder-tasks/{task.id}/', {
-            'assigned_department': dept.id
-        }, format='json')
+        response = api_client.patch(
+            f"/api/v1/workorder-tasks/{task.id}/",
+            {"assigned_department": dept.id},
+            format="json",
+        )
 
         # API may or may not support direct department assignment
         if response.status_code == status.HTTP_200_OK:
@@ -212,27 +204,20 @@ class TestAutoDispatchWorkflow:
 
         # Create active and inactive rules
         TaskAssignmentRule.objects.create(
-            process=process,
-            department=dept1,
-            priority=1,
-            is_active=True
+            process=process, department=dept1, priority=1, is_active=True
         )
         TaskAssignmentRule.objects.create(
-            process=process,
-            department=dept2,
-            priority=2,
-            is_active=False
+            process=process, department=dept2, priority=2, is_active=False
         )
 
-        user = UserFactory(username='user')
+        user = UserFactory(username="user")
         api_client.force_authenticate(user=user)
 
         # Query rules
-        response = api_client.get('/api/v1/task-assignment-rules/', {
-            'process': process.id,
-            'is_active': True
-        })
+        response = api_client.get(
+            "/api/v1/task-assignment-rules/", {"process": process.id, "is_active": True}
+        )
 
         assert response.status_code == status.HTTP_200_OK
         # Should return at least the active rule
-        assert response.data['data']['count'] >= 1
+        assert response.data["data"]["count"] >= 1

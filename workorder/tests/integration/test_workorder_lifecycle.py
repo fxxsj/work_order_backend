@@ -1,18 +1,25 @@
 """Integration tests for complete work order lifecycle"""
+
 import pytest
 from django.contrib.auth.models import Group
 from rest_framework import status
 from rest_framework.test import APIClient
+from workorder.constants.role_codes import SALES
 from workorder.tests.factories import (
-    WorkOrderFactory, UserFactory, DepartmentFactory, ProcessFactory,
-    WorkOrderProcessFactory, CustomerFactory, ProductFactory,
-    WorkOrderProductFactory
+    WorkOrderFactory,
+    UserFactory,
+    DepartmentFactory,
+    ProcessFactory,
+    WorkOrderProcessFactory,
+    CustomerFactory,
+    ProductFactory,
+    WorkOrderProductFactory,
 )
 from workorder.models import WorkOrder, WorkOrderTask
 
 
 def make_salesperson(user, customer):
-    group, _ = Group.objects.get_or_create(name="业务员")
+    group, _ = Group.objects.get_or_create(name=SALES)
     user.groups.add(group)
     if customer is not None:
         customer.salesperson = user
@@ -31,73 +38,76 @@ class TestWorkOrderLifecycle:
         THEN: All transitions work correctly
         """
         # Setup
-        dept = DepartmentFactory(name='Printing')
-        process = ProcessFactory(name='Offset Printing')
-        maker = UserFactory(username='maker', departments=[dept])
-        supervisor = UserFactory(username='supervisor', departments=[dept])
-        operator = UserFactory(username='operator', departments=[dept])
-        customer = CustomerFactory(name='Test Customer')
+        dept = DepartmentFactory(name="Printing")
+        process = ProcessFactory(name="Offset Printing")
+        maker = UserFactory(username="maker", departments=[dept])
+        supervisor = UserFactory(username="supervisor", departments=[dept])
+        operator = UserFactory(username="operator", departments=[dept])
+        customer = CustomerFactory(name="Test Customer")
         product = ProductFactory()
 
         # Step 1: Create workorder with draft tasks
         api_client.force_authenticate(user=maker)
-        response = api_client.post('/api/v1/workorders/', {
-            'customer': customer.id,
-            'production_quantity': 100,
-            'delivery_date': '2026-12-31',
-            'priority': 'normal',
-        }, format='json')
+        response = api_client.post(
+            "/api/v1/workorders/",
+            {
+                "customer": customer.id,
+                "production_quantity": 100,
+                "delivery_date": "2026-12-31",
+                "priority": "normal",
+            },
+            format="json",
+        )
 
         assert response.status_code == status.HTTP_201_CREATED
-        workorder_id = response.data['data']['id']
+        workorder_id = response.data["data"]["id"]
         workorder = WorkOrder.objects.get(id=workorder_id)
         WorkOrderProductFactory(work_order=workorder, product=product, quantity=100)
         make_salesperson(supervisor, customer)
 
         # Add processes manually (API might not support nested creation)
         wop = WorkOrderProcessFactory(
-            work_order=workorder,
-            process=process,
-            department=dept,
-            tasks=1
+            work_order=workorder, process=process, department=dept, tasks=1
         )
 
         # Verify draft tasks were created
-        draft_task_count = workorder.tasks.filter(status='draft').count()
+        draft_task_count = workorder.tasks.filter(status="draft").count()
         assert draft_task_count > 0
 
         # Step 2: Submit workorder for approval
         api_client.force_authenticate(user=maker)
         response = api_client.post(
-            f'/api/v1/workorders-flow/{workorder_id}/submit_approval/',
+            f"/api/v1/workorders-flow/{workorder_id}/submit_approval/",
             {"comment": "Submitted for approval"},
-            format="json"
+            format="json",
         )
         assert response.status_code == status.HTTP_200_OK
 
         # Step 3: Approve workorder
         api_client.force_authenticate(user=supervisor)
         response = api_client.post(
-            f'/api/v1/workorders-flow/{workorder_id}/approve/',
+            f"/api/v1/workorders-flow/{workorder_id}/approve/",
             {"comment": "Approved"},
-            format="json"
+            format="json",
         )
 
         assert response.status_code == status.HTTP_200_OK
         workorder.refresh_from_db()
-        assert workorder.approval_status == 'approved'
+        assert workorder.approval_status == "approved"
 
         # Verify tasks converted to pending
-        tasks = workorder.tasks.filter(status='pending')
+        tasks = workorder.tasks.filter(status="pending")
         assert tasks.count() == draft_task_count
 
         # Step 3: Auto-dispatch (tasks assigned to department if enabled)
         task = tasks.first()
 
         # Step 4: Supervisor assigns task to operator
-        response = api_client.post(f'/api/v1/workorder-tasks/{task.id}/assign/', {
-            'assigned_operator': operator.id
-        }, format='json')
+        response = api_client.post(
+            f"/api/v1/workorder-tasks/{task.id}/assign/",
+            {"assigned_operator": operator.id},
+            format="json",
+        )
 
         assert response.status_code == status.HTTP_200_OK
         task.refresh_from_db()
@@ -108,14 +118,15 @@ class TestWorkOrderLifecycle:
 
         # Step 6: Operator completes task
         api_client.force_authenticate(user=operator)
-        response = api_client.post(f'/api/v1/workorder-tasks/{task.id}/complete/', {
-            'completion_quantity': 100,
-            'defective_quantity': 0
-        }, format='json')
+        response = api_client.post(
+            f"/api/v1/workorder-tasks/{task.id}/complete/",
+            {"completion_quantity": 100, "defective_quantity": 0},
+            format="json",
+        )
 
         assert response.status_code == status.HTTP_200_OK
         task.refresh_from_db()
-        assert task.status == 'completed'
+        assert task.status == "completed"
 
     def test_workorder_with_multiple_processes(self, api_client):
         """
@@ -124,23 +135,27 @@ class TestWorkOrderLifecycle:
         THEN: Tasks are generated for all processes
         """
         dept = DepartmentFactory()
-        process1 = ProcessFactory(name='CTP')
-        process2 = ProcessFactory(name='Printing')
-        process3 = ProcessFactory(name='Die Cutting')
+        process1 = ProcessFactory(name="CTP")
+        process2 = ProcessFactory(name="Printing")
+        process3 = ProcessFactory(name="Die Cutting")
 
-        maker = UserFactory(username='maker', departments=[dept])
-        supervisor = UserFactory(username='supervisor', departments=[dept])
+        maker = UserFactory(username="maker", departments=[dept])
+        supervisor = UserFactory(username="supervisor", departments=[dept])
         customer = CustomerFactory()
 
         api_client.force_authenticate(user=maker)
-        response = api_client.post('/api/v1/workorders/', {
-            'customer': customer.id,
-            'production_quantity': 500,
-            'delivery_date': '2026-12-31',
-        }, format='json')
+        response = api_client.post(
+            "/api/v1/workorders/",
+            {
+                "customer": customer.id,
+                "production_quantity": 500,
+                "delivery_date": "2026-12-31",
+            },
+            format="json",
+        )
 
         assert response.status_code == status.HTTP_201_CREATED
-        workorder_id = response.data['data']['id']
+        workorder_id = response.data["data"]["id"]
         workorder = WorkOrder.objects.get(id=workorder_id)
         WorkOrderProductFactory(work_order=workorder, quantity=100)
         make_salesperson(supervisor, customer)
@@ -153,24 +168,24 @@ class TestWorkOrderLifecycle:
         # Submit for approval
         api_client.force_authenticate(user=maker)
         response = api_client.post(
-            f'/api/v1/workorders-flow/{workorder_id}/submit_approval/',
+            f"/api/v1/workorders-flow/{workorder_id}/submit_approval/",
             {"comment": "Submitted for approval"},
-            format="json"
+            format="json",
         )
         assert response.status_code == status.HTTP_200_OK
 
         # Approve
         api_client.force_authenticate(user=supervisor)
         response = api_client.post(
-            f'/api/v1/workorders-flow/{workorder_id}/approve/',
+            f"/api/v1/workorders-flow/{workorder_id}/approve/",
             {"comment": "Approved"},
-            format="json"
+            format="json",
         )
         assert response.status_code == status.HTTP_200_OK
 
         # Verify tasks for all processes
         workorder.refresh_from_db()
-        tasks = workorder.tasks.filter(status='pending')
+        tasks = workorder.tasks.filter(status="pending")
         assert tasks.count() == 3  # One task per process
 
     def test_workorder_edit_before_approval(self, api_client):
@@ -180,22 +195,26 @@ class TestWorkOrderLifecycle:
         THEN: Tasks are synced with new processes
         """
         dept = DepartmentFactory()
-        process1 = ProcessFactory(name='CTP')
-        process2 = ProcessFactory(name='Printing')
+        process1 = ProcessFactory(name="CTP")
+        process2 = ProcessFactory(name="Printing")
 
-        maker = UserFactory(username='maker', departments=[dept])
+        maker = UserFactory(username="maker", departments=[dept])
         customer = CustomerFactory()
 
         # Create workorder
         api_client.force_authenticate(user=maker)
-        response = api_client.post('/api/v1/workorders/', {
-            'customer': customer.id,
-            'production_quantity': 100,
-            'delivery_date': '2026-12-31',
-        }, format='json')
+        response = api_client.post(
+            "/api/v1/workorders/",
+            {
+                "customer": customer.id,
+                "production_quantity": 100,
+                "delivery_date": "2026-12-31",
+            },
+            format="json",
+        )
 
         assert response.status_code == status.HTTP_201_CREATED
-        workorder_id = response.data['data']['id']
+        workorder_id = response.data["data"]["id"]
         workorder = WorkOrder.objects.get(id=workorder_id)
 
         # Add first process with tasks
@@ -216,26 +235,30 @@ class TestWorkOrderLifecycle:
         THEN: Priority field is correctly set
         """
         dept = DepartmentFactory()
-        user = UserFactory(username='user', departments=[dept])
+        user = UserFactory(username="user", departments=[dept])
         customer = CustomerFactory()
         make_salesperson(user, customer)
 
         api_client.force_authenticate(user=user)
 
         # Create workorders with different priorities
-        for priority in ['low', 'normal', 'high', 'urgent']:
-            response = api_client.post('/api/v1/workorders/', {
-                'customer': customer.id,
-                'production_quantity': 100,
-                'priority': priority,
-                'delivery_date': '2026-12-31',
-            }, format='json')
+        for priority in ["low", "normal", "high", "urgent"]:
+            response = api_client.post(
+                "/api/v1/workorders/",
+                {
+                    "customer": customer.id,
+                    "production_quantity": 100,
+                    "priority": priority,
+                    "delivery_date": "2026-12-31",
+                },
+                format="json",
+            )
             assert response.status_code == status.HTTP_201_CREATED
 
         # List workorders
-        response = api_client.get('/api/v1/workorders/')
+        response = api_client.get("/api/v1/workorders/")
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['data']['count'] >= 4
+        assert response.data["data"]["count"] >= 4
 
     def test_workorder_deletion_cascade(self, api_client):
         """
@@ -244,7 +267,7 @@ class TestWorkOrderLifecycle:
         THEN: All related tasks are deleted
         """
         dept = DepartmentFactory()
-        user = UserFactory(username='user', departments=[dept])
+        user = UserFactory(username="user", departments=[dept])
 
         workorder = WorkOrderFactory(created_by=user, processes=1)
         initial_task_count = WorkOrderTask.objects.filter(

@@ -1,10 +1,13 @@
 """
 工具函数
 """
+
 import logging
 from django.db import models, transaction, DatabaseError
 from django.utils import timezone
 from django.contrib.auth.models import User
+
+from workorder.constants.role_codes import SALES
 
 
 logger = logging.getLogger(__name__)
@@ -16,7 +19,7 @@ def generate_order_number(
     prefix: str,
     date_format: str = "%Y%m%d",
     sequence_length: int = 4,
-    max_retries: int = 3
+    max_retries: int = 3,
 ) -> str:
     """
     通用单号生成器：前缀 + 日期 + N位序号
@@ -55,11 +58,11 @@ def generate_order_number(
 
                 if last_instance:
                     last_number_str = getattr(last_instance, field_name)
-                    last_sequence = int(last_number_str[len(full_prefix):])
+                    last_sequence = int(last_number_str[len(full_prefix) :])
                     new_sequence = last_sequence + 1
                 else:
                     new_sequence = 1
-                
+
                 return f"{full_prefix}{new_sequence:0{sequence_length}d}"
 
         except DatabaseError as e:
@@ -74,51 +77,54 @@ def generate_order_number(
             )
             continue
         except Exception as e:
-            logger.error(f"生成单号时发生未知错误(模型={model_class.__name__}, 字段={field_name}): {e}")
+            logger.error(
+                f"生成单号时发生未知错误(模型={model_class.__name__}, 字段={field_name}): {e}"
+            )
             raise
-    
+
     # This should not be reached
-    raise Exception(f"生成单号失败(模型={model_class.__name__}, 字段={field_name}): 超过最大重试次数")
+    raise Exception(
+        f"生成单号失败(模型={model_class.__name__}, 字段={field_name}): 超过最大重试次数"
+    )
 
 
 def is_salesperson(user):
     """
     判断用户是否为业务员
-    
+
     Args:
         user: User 实例或用户对象
-        
+
     Returns:
-        bool: 如果用户属于"业务员"组，返回 True，否则返回 False
+        bool: 如果用户属于业务员角色，返回 True，否则返回 False
     """
     if not user or not user.is_authenticated:
         return False
-    
+
     # 如果传入的是用户ID，获取用户对象
     if isinstance(user, int):
         try:
             user = User.objects.get(pk=user)
         except User.DoesNotExist:
             return False
-    
-    return user.groups.filter(name='sales').exists()
+
+    return user.groups.filter(name=SALES).exists()
 
 
 def get_user_role(user):
     """
     获取用户角色
-    
+
     Args:
         user: User 实例
-        
+
     Returns:
         str: 用户角色名称，如果用户属于多个组，返回第一个组的名称
     """
     if not user or not user.is_authenticated:
         return None
-    
+
     groups = user.groups.all()
     if groups.exists():
         return groups.first().name
     return None
-

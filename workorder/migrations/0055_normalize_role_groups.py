@@ -6,7 +6,7 @@ from django.db import migrations
 
 
 ROLE_PERMISSIONS = {
-    "业务员": {
+    "sales": {
         "WorkOrder": ["add", "view", "change"],
         "SalesOrder": ["add", "view", "change"],
         "SalesOrderItem": ["add", "view", "change"],
@@ -35,7 +35,7 @@ ROLE_PERMISSIONS = {
         "PaymentPlan": ["view"],
         "Statement": ["view"],
     },
-    "主管": {
+    "supervisor": {
         "WorkOrder": ["view", "change"],
         "WorkOrderProcess": ["view", "change"],
         "WorkOrderTask": ["view", "change"],
@@ -65,7 +65,7 @@ ROLE_PERMISSIONS = {
         "ProductionCost": ["view"],
         "TaskAssignmentRule": ["view", "change"],
     },
-    "经理": {
+    "manager": {
         "WorkOrder": ["view", "change"],
         "WorkOrderProcess": ["view", "change"],
         "WorkOrderTask": ["view", "change"],
@@ -100,7 +100,7 @@ ROLE_PERMISSIONS = {
         "AuditLogExport": ["view"],
         "AuditLogSettings": ["view", "change"],
     },
-    "操作员": {
+    "operator": {
         "WorkOrder": ["view"],
         "WorkOrderTask": ["view", "change"],
         "Process": ["view"],
@@ -111,7 +111,7 @@ ROLE_PERMISSIONS = {
         "StockIn": ["view"],
         "StockOut": ["view"],
     },
-    "财务": {
+    "finance": {
         "SalesOrder": ["view"],
         "Customer": ["view"],
         "Supplier": ["view"],
@@ -123,7 +123,7 @@ ROLE_PERMISSIONS = {
         "CostCenter": ["view", "change"],
         "CostItem": ["view", "change"],
     },
-    "仓储": {
+    "inventory": {
         "WorkOrder": ["view"],
         "SalesOrder": ["view"],
         "Product": ["view"],
@@ -135,7 +135,7 @@ ROLE_PERMISSIONS = {
         "DeliveryItem": ["view", "change"],
         "PurchaseReceiveRecord": ["view", "change"],
     },
-    "质检": {
+    "quality": {
         "WorkOrder": ["view"],
         "WorkOrderTask": ["view"],
         "Product": ["view"],
@@ -145,7 +145,7 @@ ROLE_PERMISSIONS = {
         "ProductStock": ["view"],
         "StockIn": ["view"],
     },
-    "系统管理员": {
+    "admin": {
         "Customer": ["view", "change"],
         "Supplier": ["view", "change"],
         "Department": ["add", "view", "change"],
@@ -161,18 +161,26 @@ ROLE_PERMISSIONS = {
 }
 
 ROLE_CUSTOM_PERMISSIONS = {
-    "经理": {
+    "manager": {
         "WorkOrder": ["change_approved_workorder"],
         "SalesOrder": ["change_approved_salesorder"],
     },
 }
 
 ROLE_ALIASES = {
-    "salespersons": "业务员",
-    "operators": "操作员",
-    "managers": "经理",
-    "administrators": "系统管理员",
-    "supervisor": "主管",
+    "业务员": "sales",
+    "主管": "supervisor",
+    "经理": "manager",
+    "操作员": "operator",
+    "财务": "finance",
+    "仓储": "inventory",
+    "质检": "quality",
+    "系统管理员": "admin",
+    "salespersons": "sales",
+    "operators": "operator",
+    "managers": "manager",
+    "administrators": "admin",
+    "warehouse": "inventory",
 }
 
 
@@ -246,17 +254,6 @@ def normalize_role_groups_forward(apps, schema_editor):
         alias_group.delete()
 
 
-def normalize_role_groups_backward(apps, schema_editor):
-    Group = apps.get_model("auth", "Group")
-
-    for alias_name, target_name in ROLE_ALIASES.items():
-        alias_group, _ = Group.objects.get_or_create(name=alias_name)
-        target_group = Group.objects.filter(name=target_name).first()
-        if not target_group:
-            continue
-        alias_group.permissions.set(target_group.permissions.all())
-
-
 class Migration(migrations.Migration):
     dependencies = [
         ("workorder", "0054_remove_multi_level_approval"),
@@ -265,6 +262,6 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(
             normalize_role_groups_forward,
-            normalize_role_groups_backward,
+            migrations.RunPython.noop,
         ),
     ]

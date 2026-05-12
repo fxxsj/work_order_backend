@@ -12,6 +12,7 @@ from django.db.models import Max
 from django.utils import timezone
 from rest_framework import status
 
+from ..constants.role_codes import SALES
 from ..models.base import Process
 from ..models.core import WorkOrder, WorkOrderMaterial, WorkOrderProcess
 from ..models.materials import Material
@@ -23,7 +24,9 @@ logger = logging.getLogger(__name__)
 
 class WorkOrderService:
     @staticmethod
-    def add_process(*, work_order: WorkOrder, process_id, sequence=0) -> WorkOrderProcess:
+    def add_process(
+        *, work_order: WorkOrder, process_id, sequence=0
+    ) -> WorkOrderProcess:
         if not process_id:
             raise ServiceError(
                 "请提供工序ID",
@@ -112,7 +115,7 @@ class WorkOrderService:
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        if not user.groups.filter(name="sales").exists():
+        if not user.groups.filter(name=SALES).exists():
             raise ServiceError(
                 "只有业务员可以审核施工单",
                 code=status.HTTP_403_FORBIDDEN,
@@ -125,7 +128,9 @@ class WorkOrderService:
             )
 
         if work_order.approval_status != "submitted":
-            message = '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。'
+            message = (
+                '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。'
+            )
             raise ServiceError(
                 message,
                 code=status.HTTP_400_BAD_REQUEST,

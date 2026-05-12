@@ -10,6 +10,8 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework import serializers
 
+from workorder.constants.role_codes import SALES, resolve_role_codes
+
 from ..models.base import Customer, Department, Process
 
 
@@ -75,16 +77,11 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_role_codes(self, obj) -> List[str]:
         """获取用户所属的角色代码列表"""
-        from workorder.constants.role_codes import resolve_role_code
-        codes = [
-            resolve_role_code(name)
-            for name in obj.groups.values_list("name", flat=True)
-        ]
-        return [c for c in codes if c]
+        return resolve_role_codes(list(obj.groups.values_list("name", flat=True)))
 
     def get_is_salesperson(self, obj) -> bool:
         """判断用户是否为业务员"""
-        return obj.groups.filter(name="sales").exists()
+        return obj.groups.filter(name=SALES).exists()
 
 
 class CustomerSerializer(serializers.ModelSerializer):

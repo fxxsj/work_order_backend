@@ -1,62 +1,67 @@
 """
-为用户分配权限的管理命令
-运行: python manage.py assign_permissions <username> <group_name>
-例如: python manage.py assign_permissions 陈大文 业务员
+为用户分配业务角色。
+
+运行: python manage.py assign_permissions <username> <role_code>
+例如: python manage.py assign_permissions zhangsan sales
 """
+
+from django.contrib.auth.models import Group, User
 from django.core.management.base import BaseCommand, CommandError
-from django.contrib.auth.models import User, Group
+
+from workorder.constants.role_codes import ALL_ROLE_CODES, CODE_TO_LABEL
 
 
 class Command(BaseCommand):
-    help = '将用户添加到指定的组（从而获得该组的权限）'
+    help = "将用户添加到指定业务角色组"
 
     def add_arguments(self, parser):
-        parser.add_argument('username', type=str, help='用户名')
-        parser.add_argument('group_name', type=str, help='组名（如：业务员）')
+        parser.add_argument("username", type=str, help="用户名")
+        parser.add_argument(
+            "role_code",
+            type=str,
+            help=f"角色 code：{', '.join(ALL_ROLE_CODES)}",
+        )
 
     def handle(self, *args, **options):
-        username = options['username']
-        group_name = options['group_name']
-        
-        # 获取用户
+        username = options["username"]
+        role_code = options["role_code"]
+
+        if role_code not in ALL_ROLE_CODES:
+            raise CommandError(
+                f'角色 "{role_code}" 不存在，可用角色：{", ".join(ALL_ROLE_CODES)}'
+            )
+
         try:
             user = User.objects.get(username=username)
-        except User.DoesNotExist:
-            raise CommandError(f'用户 "{username}" 不存在')
-        
-        # 获取组
+        except User.DoesNotExist as exc:
+            raise CommandError(f'用户 "{username}" 不存在') from exc
+
         try:
-            group = Group.objects.get(name=group_name)
-        except Group.DoesNotExist:
-            raise CommandError(f'组 "{group_name}" 不存在。请先运行: python manage.py init_groups')
-        
-        # 将用户添加到组
-        if user.groups.filter(name=group_name).exists():
+            group = Group.objects.get(name=role_code)
+        except Group.DoesNotExist as exc:
+            raise CommandError(
+                f'角色组 "{role_code}" 不存在，请先执行数据库迁移'
+            ) from exc
+
+        role_label = CODE_TO_LABEL.get(role_code, role_code)
+        if user.groups.filter(name=role_code).exists():
             self.stdout.write(
-                self.style.WARNING(f'用户 "{username}" 已经在组 "{group_name}" 中')
+                self.style.WARNING(
+                    f'用户 "{username}" 已经拥有角色 "{role_code}"（{role_label}）'
+                )
             )
         else:
             user.groups.add(group)
             self.stdout.write(
-                self.style.SUCCESS(f'✓ 成功将用户 "{username}" 添加到组 "{group_name}"')
+                self.style.SUCCESS(
+                    f'成功将用户 "{username}" 添加到角色 "{role_code}"（{role_label}）'
+                )
             )
-        
-        # 显示用户当前的权限
-        self.stdout.write('')
-        self.stdout.write(f'用户 "{username}" 的权限信息:')
-        self.stdout.write(f'  组: {", ".join(user.groups.values_list("name", flat=True))}')
-        self.stdout.write(f'  权限数量: {user.user_permissions.count() + sum(g.permissions.count() for g in user.groups.all())}')
-        
-        # 显示组的所有权限
-        if group.permissions.exists():
-            self.stdout.write('')
-            self.stdout.write(f'组 "{group_name}" 的权限:')
-            for perm in group.permissions.all():
-                self.stdout.write(f'  - {perm.name} ({perm.codename})')
-        else:
-            self.stdout.write('')
-            self.stdout.write(
-                self.style.WARNING(f'组 "{group_name}" 没有任何权限')
-            )
-            self.stdout.write('请运行: python manage.py init_groups 来初始化权限')
 
+        group_names = ", ".join(user.groups.values_list("name", flat=True))
+        permission_count = user.user_permissions.count() + sum(
+            g.permissions.count() for g in user.groups.all()
+        )
+        self.stdout.write("")
+        self.stdout.write(f'用户 "{username}" 当前角色: {group_names}')
+        self.stdout.write(f"权限数量: {permission_count}")

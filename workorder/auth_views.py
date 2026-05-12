@@ -12,7 +12,7 @@ from django.utils.decorators import method_decorator
 from .serializers import UserSerializer
 from workorder.response import APIResponse
 from workorder.schema import standard_error_response, standard_success_response
-from workorder.constants.role_codes import resolve_role_code
+from workorder.constants.role_codes import SALES, resolve_role_codes
 import re
 
 
@@ -40,7 +40,7 @@ login_data_serializer = inline_serializer(
         "last_name": serializers.CharField(required=False, allow_blank=True),
         "is_staff": serializers.BooleanField(),
         "is_superuser": serializers.BooleanField(),
-        "groups": serializers.ListField(child=serializers.CharField()),
+        "role_codes": serializers.ListField(child=serializers.CharField()),
         "departments": serializers.ListField(child=serializers.CharField()),
         "is_salesperson": serializers.BooleanField(),
         "permissions": serializers.ListField(child=serializers.CharField()),
@@ -81,7 +81,7 @@ current_user_data_serializer = inline_serializer(
         "last_name": serializers.CharField(required=False, allow_blank=True),
         "is_staff": serializers.BooleanField(),
         "is_superuser": serializers.BooleanField(),
-        "groups": serializers.ListField(child=serializers.CharField()),
+        "role_codes": serializers.ListField(child=serializers.CharField()),
         "departments": serializers.ListField(child=serializers.CharField()),
         "is_salesperson": serializers.BooleanField(),
         "permissions": serializers.ListField(child=serializers.CharField()),
@@ -116,7 +116,7 @@ update_profile_data_serializer = inline_serializer(
         "last_name": serializers.CharField(required=False, allow_blank=True),
         "is_staff": serializers.BooleanField(),
         "is_superuser": serializers.BooleanField(),
-        "groups": serializers.ListField(child=serializers.CharField()),
+        "role_codes": serializers.ListField(child=serializers.CharField()),
         "departments": serializers.ListField(child=serializers.CharField()),
         "permissions": serializers.ListField(child=serializers.CharField()),
     },
@@ -144,6 +144,7 @@ def _department_names(user):
 
 class LoginView(APIView):
     """用户登录视图"""
+
     permission_classes = [AllowAny]
     authentication_classes = []  # 禁用所有认证类，避免 CSRF 检查
 
@@ -153,7 +154,9 @@ class LoginView(APIView):
         request=login_request_serializer,
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("LoginResponse", login_data_serializer),
+                response=standard_success_response(
+                    "LoginResponse", login_data_serializer
+                ),
                 description="登录成功",
             ),
             400: OpenApiResponse(
@@ -168,11 +171,13 @@ class LoginView(APIView):
     )
     def post(self, request):
         """用户登录"""
-        username = request.data.get('username')
-        password = request.data.get('password')
+        username = request.data.get("username")
+        password = request.data.get("password")
 
         if not username or not password:
-            return APIResponse.error('请提供用户名和密码', code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "请提供用户名和密码", code=status.HTTP_400_BAD_REQUEST
+            )
 
         user = authenticate(request, username=username, password=password)
 
@@ -180,34 +185,38 @@ class LoginView(APIView):
             refresh = RefreshToken.for_user(user)
 
             # 获取用户所属的角色代码
-            group_names = list(user.groups.values_list('name', flat=True))
-            role_codes = [r for r in (resolve_role_code(g) for g in group_names) if r]
+            group_names = list(user.groups.values_list("name", flat=True))
+            role_codes = resolve_role_codes(group_names)
             departments = _department_names(user)
 
             # 获取用户权限（用于前端权限控制）
             permissions = []
             if user.is_superuser:
-                permissions = ['*']
+                permissions = ["*"]
             else:
                 permissions = list(user.get_all_permissions())
 
-            return APIResponse.success(data={
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'is_staff': user.is_staff,
-                'is_superuser': user.is_superuser,
-                'role_codes': role_codes,
-                'departments': departments,
-                'is_salesperson': 'sales' in role_codes,
-                'permissions': permissions,
-                'access': str(refresh.access_token),
-                'refresh': str(refresh),
-            })
+            return APIResponse.success(
+                data={
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "is_staff": user.is_staff,
+                    "is_superuser": user.is_superuser,
+                    "role_codes": role_codes,
+                    "departments": departments,
+                    "is_salesperson": SALES in role_codes,
+                    "permissions": permissions,
+                    "access": str(refresh.access_token),
+                    "refresh": str(refresh),
+                }
+            )
         else:
-            return APIResponse.error('用户名或密码错误', code=status.HTTP_401_UNAUTHORIZED)
+            return APIResponse.error(
+                "用户名或密码错误", code=status.HTTP_401_UNAUTHORIZED
+            )
 
 
 class LogoutView(APIView):
@@ -229,7 +238,7 @@ class LogoutView(APIView):
     def post(self, request):
         """用户登出"""
         logout(request)
-        return APIResponse.success(message='已成功登出')
+        return APIResponse.success(message="已成功登出")
 
 
 class AdminSessionView(APIView):
@@ -249,7 +258,9 @@ class AdminSessionView(APIView):
     def post(self, request):
         user = request.user
         if not user.is_staff:
-            return APIResponse.error("当前用户无管理后台权限", code=status.HTTP_403_FORBIDDEN)
+            return APIResponse.error(
+                "当前用户无管理后台权限", code=status.HTTP_403_FORBIDDEN
+            )
 
         login(request, user, backend="django.contrib.auth.backends.ModelBackend")
         return APIResponse.success(
@@ -293,38 +304,40 @@ class TokenRefreshViewWithDocs(TokenRefreshView):
         ),
     },
 )
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_current_user(request):
     """获取当前登录用户信息"""
     if request.user.is_authenticated:
         # 获取用户所属的角色代码
-        group_names = list(request.user.groups.values_list('name', flat=True))
-        role_codes = [r for r in (resolve_role_code(g) for g in group_names) if r]
+        group_names = list(request.user.groups.values_list("name", flat=True))
+        role_codes = resolve_role_codes(group_names)
         departments = _department_names(request.user)
 
         # 获取用户权限（用于前端权限控制）
         permissions = []
         if request.user.is_superuser:
-            permissions = ['*']
+            permissions = ["*"]
         else:
             permissions = list(request.user.get_all_permissions())
 
-        return APIResponse.success(data={
-            'id': request.user.id,
-            'username': request.user.username,
-            'email': request.user.email,
-            'first_name': request.user.first_name,
-            'last_name': request.user.last_name,
-            'is_staff': request.user.is_staff,
-            'is_superuser': request.user.is_superuser,
-            'role_codes': role_codes,
-            'departments': departments,
-            'is_salesperson': 'sales' in role_codes,
-            'permissions': permissions,
-        })
+        return APIResponse.success(
+            data={
+                "id": request.user.id,
+                "username": request.user.username,
+                "email": request.user.email,
+                "first_name": request.user.first_name,
+                "last_name": request.user.last_name,
+                "is_staff": request.user.is_staff,
+                "is_superuser": request.user.is_superuser,
+                "role_codes": role_codes,
+                "departments": departments,
+                "is_salesperson": SALES in role_codes,
+                "permissions": permissions,
+            }
+        )
     else:
-        return APIResponse.error('未登录', code=status.HTTP_401_UNAUTHORIZED)
+        return APIResponse.error("未登录", code=status.HTTP_401_UNAUTHORIZED)
 
 
 @extend_schema(
@@ -344,44 +357,51 @@ def get_current_user(request):
         ),
     },
 )
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([AllowAny])
 def register_view(request):
     """用户注册"""
-    username = request.data.get('username')
-    password = request.data.get('password')
-    email = request.data.get('email', '')
-    first_name = request.data.get('first_name', '')
-    last_name = request.data.get('last_name', '')
-    
+    username = request.data.get("username")
+    password = request.data.get("password")
+    email = request.data.get("email", "")
+    first_name = request.data.get("first_name", "")
+    last_name = request.data.get("last_name", "")
+
     if not username or not password:
-        return APIResponse.error('请提供用户名和密码', code=status.HTTP_400_BAD_REQUEST)
-    
+        return APIResponse.error("请提供用户名和密码", code=status.HTTP_400_BAD_REQUEST)
+
     # 验证用户名格式（允许中文、字母、数字、下划线、连字符）
-    if not re.match(r'^[\w\u4e00-\u9fa5-]+$', username):
-        return APIResponse.error('用户名只能包含字母、数字、下划线、连字符和中文字符', code=status.HTTP_400_BAD_REQUEST)
-    
+    if not re.match(r"^[\w\u4e00-\u9fa5-]+$", username):
+        return APIResponse.error(
+            "用户名只能包含字母、数字、下划线、连字符和中文字符",
+            code=status.HTTP_400_BAD_REQUEST,
+        )
+
     if User.objects.filter(username=username).exists():
-        return APIResponse.error('用户名已存在', code=status.HTTP_400_BAD_REQUEST)
-    
+        return APIResponse.error("用户名已存在", code=status.HTTP_400_BAD_REQUEST)
+
     user = User.objects.create_user(
         username=username,
         password=password,
         email=email,
         first_name=first_name,
-        last_name=last_name
+        last_name=last_name,
     )
-    
+
     # 自动登录
     login(request, user)
-    
-    return APIResponse.success(data={
-        'id': user.id,
-        'username': user.username,
-        'email': user.email,
-        'first_name': user.first_name,
-        'last_name': user.last_name,
-    }, message='注册成功', code=status.HTTP_201_CREATED)
+
+    return APIResponse.success(
+        data={
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+        },
+        message="注册成功",
+        code=status.HTTP_201_CREATED,
+    )
 
 
 @extend_schema(
@@ -400,21 +420,22 @@ def register_view(request):
         ),
     },
 )
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_salespersons(request):
     """获取业务员列表"""
     try:
-        # 获取"业务员"组
-        salesperson_group = Group.objects.filter(name='sales').first()
-        
+        salesperson_group = Group.objects.filter(name=SALES).first()
+
         if salesperson_group:
             # 获取属于业务员组的用户
-            salespersons = salesperson_group.user_set.filter(is_active=True).order_by('username')
+            salespersons = salesperson_group.user_set.filter(is_active=True).order_by(
+                "username"
+            )
         else:
             # 如果业务员组不存在，返回空列表
             salespersons = User.objects.none()
-        
+
         serializer = UserSerializer(salespersons, many=True)
         return APIResponse.success(data=serializer.data)
     except Exception as e:
@@ -437,14 +458,14 @@ def get_salespersons(request):
         ),
     },
 )
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_users_by_department(request):
     """根据部门获取用户列表"""
     from .models import UserProfile
 
     try:
-        department_id = request.query_params.get('department_id')
+        department_id = request.query_params.get("department_id")
 
         # 获取所有活跃用户
         users = User.objects.filter(is_active=True).exclude(is_superuser=True)
@@ -453,7 +474,7 @@ def get_users_by_department(request):
         if department_id:
             users = users.filter(profile__departments__id=department_id).distinct()
 
-        users = users.order_by('username')
+        users = users.order_by("username")
         serializer = UserSerializer(users, many=True)
         return APIResponse.success(data=serializer.data)
     except Exception as e:
@@ -479,37 +500,45 @@ def get_users_by_department(request):
         ),
     },
 )
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def change_password(request):
     """修改密码"""
-    old_password = request.data.get('old_password')
-    new_password = request.data.get('new_password')
-    confirm_password = request.data.get('confirm_password')
+    old_password = request.data.get("old_password")
+    new_password = request.data.get("new_password")
+    confirm_password = request.data.get("confirm_password")
 
     # 验证参数
     if not old_password or not new_password or not confirm_password:
-        return APIResponse.error('请提供旧密码、新密码和确认密码', code=status.HTTP_400_BAD_REQUEST)
+        return APIResponse.error(
+            "请提供旧密码、新密码和确认密码", code=status.HTTP_400_BAD_REQUEST
+        )
 
     # 验证新密码和确认密码是否一致
     if new_password != confirm_password:
-        return APIResponse.error('新密码和确认密码不一致', code=status.HTTP_400_BAD_REQUEST)
+        return APIResponse.error(
+            "新密码和确认密码不一致", code=status.HTTP_400_BAD_REQUEST
+        )
 
     # 验证旧密码是否正确
     if not request.user.check_password(old_password):
-        return APIResponse.error('旧密码错误', code=status.HTTP_400_BAD_REQUEST)
+        return APIResponse.error("旧密码错误", code=status.HTTP_400_BAD_REQUEST)
 
     # 验证新密码长度
     if len(new_password) < 6:
-        return APIResponse.error('新密码长度至少为6位', code=status.HTTP_400_BAD_REQUEST)
+        return APIResponse.error(
+            "新密码长度至少为6位", code=status.HTTP_400_BAD_REQUEST
+        )
 
     # 修改密码
     try:
         request.user.set_password(new_password)
         request.user.save()
-        return APIResponse.success(message='密码修改成功')
+        return APIResponse.success(message="密码修改成功")
     except Exception as e:
-        return APIResponse.error(f'密码修改失败: {str(e)}', code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return APIResponse.error(
+            f"密码修改失败: {str(e)}", code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @extend_schema(
@@ -530,7 +559,7 @@ def change_password(request):
         ),
     },
 )
-@api_view(['PUT', 'PATCH'])
+@api_view(["PUT", "PATCH"])
 @permission_classes([IsAuthenticated])
 def update_profile(request):
     """更新个人信息"""
@@ -538,34 +567,40 @@ def update_profile(request):
 
     try:
         # 更新允许修改的字段
-        if 'email' in data:
-            request.user.email = data['email']
-        if 'first_name' in data:
-            request.user.first_name = data['first_name']
-        if 'last_name' in data:
-            request.user.last_name = data['last_name']
+        if "email" in data:
+            request.user.email = data["email"]
+        if "first_name" in data:
+            request.user.first_name = data["first_name"]
+        if "last_name" in data:
+            request.user.last_name = data["last_name"]
 
         request.user.save()
 
         # 返回更新后的用户信息
-        groups = list(request.user.groups.values_list('name', flat=True))
+        groups = list(request.user.groups.values_list("name", flat=True))
         departments = _department_names(request.user)
-        permissions = ['*'] if request.user.is_superuser else list(request.user.get_all_permissions())
+        permissions = (
+            ["*"]
+            if request.user.is_superuser
+            else list(request.user.get_all_permissions())
+        )
 
         return APIResponse.success(
             data={
-                'id': request.user.id,
-                'username': request.user.username,
-                'email': request.user.email,
-                'first_name': request.user.first_name,
-                'last_name': request.user.last_name,
-                'is_staff': request.user.is_staff,
-                'is_superuser': request.user.is_superuser,
-                'groups': groups,
-                'departments': departments,
-                'permissions': permissions,
+                "id": request.user.id,
+                "username": request.user.username,
+                "email": request.user.email,
+                "first_name": request.user.first_name,
+                "last_name": request.user.last_name,
+                "is_staff": request.user.is_staff,
+                "is_superuser": request.user.is_superuser,
+                "groups": groups,
+                "departments": departments,
+                "permissions": permissions,
             },
-            message='个人信息更新成功',
+            message="个人信息更新成功",
         )
     except Exception as e:
-        return APIResponse.error(f'个人信息更新失败: {str(e)}', code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return APIResponse.error(
+            f"个人信息更新失败: {str(e)}", code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

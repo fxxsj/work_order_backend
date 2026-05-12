@@ -30,6 +30,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from rest_framework import status
 
+from ..constants.role_codes import SALES
 from ..models.core import (
     WorkOrder,
     WorkOrderProcess,
@@ -70,9 +71,7 @@ class WorkOrderFlowService:
     }
 
     @staticmethod
-    def _validate_status_transition(
-        current_status: str, new_status: str
-    ) -> None:
+    def _validate_status_transition(current_status: str, new_status: str) -> None:
         """
         验证状态转换是否合法
 
@@ -96,16 +95,27 @@ class WorkOrderFlowService:
     def _validate_approval_actor(*, work_order: WorkOrder, user: User) -> None:
         """校验施工单审核人，避免视图绕过 service 直接改审核状态。"""
         if user is None or not user.is_authenticated:
-            raise ServiceError("请先登录后再审核施工单", code=status.HTTP_401_UNAUTHORIZED)
+            raise ServiceError(
+                "请先登录后再审核施工单", code=status.HTTP_401_UNAUTHORIZED
+            )
 
-        can_review_by_role = user.groups.filter(name="sales").exists()
-        can_review_by_perm = user.is_superuser or user.has_perm("workorder.change_workorder")
+        can_review_by_role = user.groups.filter(name=SALES).exists()
+        can_review_by_perm = user.is_superuser or user.has_perm(
+            "workorder.change_workorder"
+        )
         if not (can_review_by_role or can_review_by_perm):
-            raise ServiceError("只有业务员或主管可以审核施工单", code=status.HTTP_403_FORBIDDEN)
+            raise ServiceError(
+                "只有业务员或主管可以审核施工单", code=status.HTTP_403_FORBIDDEN
+            )
 
-        if can_review_by_role and not can_review_by_perm and work_order.customer.salesperson != user:
-            raise ServiceError("只能审核自己负责的施工单", code=status.HTTP_403_FORBIDDEN)
-
+        if (
+            can_review_by_role
+            and not can_review_by_perm
+            and work_order.customer.salesperson != user
+        ):
+            raise ServiceError(
+                "只能审核自己负责的施工单", code=status.HTTP_403_FORBIDDEN
+            )
 
     # ========== 流程 1: 从销售订单创建施工单 ==========
 
@@ -171,19 +181,27 @@ class WorkOrderFlowService:
         if not production_items:
             production_items = WorkOrderFlowService._build_production_items(sales_order)
         if not production_items:
-            raise ServiceError("销售订单库存充足，无需生成施工单", code=status.HTTP_400_BAD_REQUEST)
+            raise ServiceError(
+                "销售订单库存充足，无需生成施工单", code=status.HTTP_400_BAD_REQUEST
+            )
 
         if production_quantity is not None:
             try:
                 production_quantity = int(production_quantity)
             except (TypeError, ValueError) as exc:
-                raise ServiceError("生产数量无效", code=status.HTTP_400_BAD_REQUEST) from exc
+                raise ServiceError(
+                    "生产数量无效", code=status.HTTP_400_BAD_REQUEST
+                ) from exc
 
         if production_quantity is None:
-            production_quantity = sum(item["produce_quantity"] for item in production_items)
+            production_quantity = sum(
+                item["produce_quantity"] for item in production_items
+            )
 
         if production_quantity <= 0:
-            raise ServiceError("销售订单没有可生产数量", code=status.HTTP_400_BAD_REQUEST)
+            raise ServiceError(
+                "销售订单没有可生产数量", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 2. 生成施工单号
         order_number = WorkOrderFlowService._generate_order_number()
@@ -275,7 +293,9 @@ class WorkOrderFlowService:
                 id=work_order_id
             )
         except WorkOrder.DoesNotExist as exc:
-            raise ServiceError("施工订单不存在", code=status.HTTP_404_NOT_FOUND) from exc
+            raise ServiceError(
+                "施工订单不存在", code=status.HTTP_404_NOT_FOUND
+            ) from exc
 
         # 2. 验证状态
         WorkOrderFlowService._validate_status_transition(
@@ -288,7 +308,15 @@ class WorkOrderFlowService:
         work_order.approved_by = None
         work_order.approved_at = None
         work_order.approval_comment = comment
-        work_order.save(update_fields=["approval_status", "approved_by", "approved_at", "approval_comment", "updated_at"])
+        work_order.save(
+            update_fields=[
+                "approval_status",
+                "approved_by",
+                "approved_at",
+                "approval_comment",
+                "updated_at",
+            ]
+        )
 
         logger.info(f"施工单 {work_order.order_number} 提交审核")
 
@@ -358,6 +386,7 @@ class WorkOrderFlowService:
 
         # 1. 生成正式任务并自动分派
         from workorder.services.task_generation import TaskGenerationService
+
         task_result = TaskGenerationService.generate_tasks_and_dispatch(work_order)
         logger.info(
             f"施工单 {work_order.order_number} 生成了 {task_result['created_count']} 个任务，"
@@ -474,10 +503,11 @@ class WorkOrderFlowService:
             return False
 
         # 检查是否所有任务都已完成
-        total_tasks = WorkOrderTask.objects.filter(work_order_process__work_order=work_order).count()
+        total_tasks = WorkOrderTask.objects.filter(
+            work_order_process__work_order=work_order
+        ).count()
         completed_tasks = WorkOrderTask.objects.filter(
-            work_order_process__work_order=work_order,
-            status="completed"
+            work_order_process__work_order=work_order, status="completed"
         ).count()
 
         if total_tasks == completed_tasks and total_tasks > 0:
@@ -494,7 +524,9 @@ class WorkOrderFlowService:
             # 发送通知
             NotificationTriggers.notify_workorder_completed(work_order)
 
-            logger.info(f"施工单 {work_order.order_number} 所有任务已完成，自动标记为完成")
+            logger.info(
+                f"施工单 {work_order.order_number} 所有任务已完成，自动标记为完成"
+            )
             return True
 
         return False
@@ -577,17 +609,25 @@ class WorkOrderFlowService:
         production_items = []
         for index, item in enumerate(selected_items, start=1):
             if not isinstance(item, dict):
-                raise ServiceError(f"第 {index} 个施工单产品配置无效", code=status.HTTP_400_BAD_REQUEST)
+                raise ServiceError(
+                    f"第 {index} 个施工单产品配置无效", code=status.HTTP_400_BAD_REQUEST
+                )
 
             sales_order_item_id = item.get("sales_order_item_id")
             sales_item = sales_items.get(sales_order_item_id)
             if sales_item is None:
-                raise ServiceError(f"第 {index} 个订单产品不存在或不属于当前订单", code=status.HTTP_400_BAD_REQUEST)
+                raise ServiceError(
+                    f"第 {index} 个订单产品不存在或不属于当前订单",
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
 
             try:
                 produce_quantity = int(item.get("production_quantity"))
             except (TypeError, ValueError) as exc:
-                raise ServiceError(f"第 {index} 个订单产品生产数量无效", code=status.HTTP_400_BAD_REQUEST) from exc
+                raise ServiceError(
+                    f"第 {index} 个订单产品生产数量无效",
+                    code=status.HTTP_400_BAD_REQUEST,
+                ) from exc
 
             remaining_quantity = max(
                 int(sales_item.quantity)
@@ -646,9 +686,7 @@ class WorkOrderFlowService:
         stock_totals = (
             ProductStock.objects.filter(product_id__in=product_ids)
             .values("product_id")
-            .annotate(
-                available_quantity=Sum(F("quantity") - F("reserved_quantity"))
-            )
+            .annotate(available_quantity=Sum(F("quantity") - F("reserved_quantity")))
         )
         available_map = {}
         for item in stock_totals:
@@ -707,8 +745,8 @@ class WorkOrderFlowService:
                 "process_name": process.name,
                 "department_id": None,
                 "department_name": None,
-                "is_parallel": getattr(process, 'is_parallel', False),
-                "requires_artwork": getattr(process, 'requires_artwork', False),
+                "is_parallel": getattr(process, "is_parallel", False),
+                "requires_artwork": getattr(process, "requires_artwork", False),
                 "source_product_id": product.id,
                 "source_product_name": product.name,
                 "source_product_code": product.code,
@@ -721,7 +759,7 @@ class WorkOrderFlowService:
                     sequence=index,
                     source_product_process_id=None,
                     process_snapshot=process_snapshot,
-                    source_version='1.0',
+                    source_version="1.0",
                 )
             )
 
@@ -750,9 +788,7 @@ class WorkOrderFlowService:
                     notes=f"从产品 {product_item.product.name} 自动生成",
                 )
 
-        logger.info(
-            f"为施工单 {work_order.order_number} 自动生成了物料清单"
-        )
+        logger.info(f"为施工单 {work_order.order_number} 自动生成了物料清单")
 
     @staticmethod
     def _link_assets(work_order: WorkOrder, additional_data: Dict[str, Any]) -> None:
@@ -820,8 +856,8 @@ class WorkOrderFlowService:
                     )
 
         return {
-            'dispatched_count': dispatched_count,
-            'total_count': tasks.count(),
-            'notified_operators': list(notified_operators),
-            'operator_tasks': operator_tasks,
+            "dispatched_count": dispatched_count,
+            "total_count": tasks.count(),
+            "notified_operators": list(notified_operators),
+            "operator_tasks": operator_tasks,
         }
