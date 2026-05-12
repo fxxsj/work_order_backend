@@ -915,6 +915,10 @@ class WorkOrderViewSet(BaseViewSet):
         if work_order.approval_status == "approved":
             return APIResponse.error("已审核的施工单不能修改工序", code=status.HTTP_400_BAD_REQUEST)
 
+        # 权限检查
+        if not request.user.is_staff and not request.user.is_superuser:
+            return APIResponse.error("需要管理员权限", code=status.HTTP_403_FORBIDDEN)
+
         # 调用 TaskSyncService 计算预览
         preview = TaskSyncService.preview_sync(
             work_order, old_process_ids, new_process_ids
@@ -962,6 +966,10 @@ class WorkOrderViewSet(BaseViewSet):
         # 要求确认标志（防止误操作）
         if not request.data.get("confirmed"):
             return APIResponse.error("需要确认后才能执行同步，请设置 confirmed=true", code=status.HTTP_400_BAD_REQUEST)
+
+        # 权限检查
+        if not request.user.is_staff and not request.user.is_superuser:
+            return APIResponse.error("需要管理员权限", code=status.HTTP_403_FORBIDDEN)
 
         # 执行同步
         try:

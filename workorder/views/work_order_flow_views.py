@@ -348,6 +348,11 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
 
     @action(detail=True, methods=["post"])
     def mark_urgent(self, request, pk=None):
+        if not request.user.is_staff and not request.user.is_superuser:
+            return APIResponse.error(
+                message="只有管理员可以标记紧急",
+                code=status.HTTP_403_FORBIDDEN,
+            )
         reason = (request.data.get("reason") or "").strip()
         if not reason:
             return APIResponse.error(

@@ -72,9 +72,6 @@ class WorkOrderBusinessService:
         if 'materials' in data:
             WorkOrderBusinessService._create_workorder_materials(workorder, data['materials'])
         
-        # 自动生成任务
-        WorkOrderBusinessService._generate_tasks(workorder, created_by)
-        
         # 记录操作日志
         WorkOrderApprovalLog.objects.create(
             work_order=workorder,
