@@ -10,16 +10,24 @@ from django.utils.translation import gettext_lazy as _
 class UserRole:
     """用户角色常量"""
 
-    ADMIN = 'admin'
-    MANAGER = 'manager'
-    OPERATOR = 'operator'
-    SALESPERSON = 'salesperson'
+    ADMIN = '系统管理员'
+    MANAGER = '经理'
+    SUPERVISOR = '主管'
+    OPERATOR = '操作员'
+    SALESPERSON = '业务员'
+    FINANCE = '财务'
+    WAREHOUSE = '仓储'
+    QUALITY = '质检'
 
     CHOICES = [
-        (ADMIN, _('管理员')),
+        (ADMIN, _('系统管理员')),
         (MANAGER, _('经理')),
+        (SUPERVISOR, _('主管')),
         (OPERATOR, _('操作员')),
         (SALESPERSON, _('业务员')),
+        (FINANCE, _('财务')),
+        (WAREHOUSE, _('仓储')),
+        (QUALITY, _('质检')),
     ]
 
 
@@ -59,14 +67,30 @@ SUPPLIER = 'supplier'
 class PermissionGroups:
     """权限组常量"""
 
-    ADMINISTRATORS = 'administrators'
-    MANAGERS = 'managers'
-    OPERATORS = 'operators'
-    SALESPERSONS = 'salespersons'
+    SYSTEM_ADMINS = '系统管理员'
+    MANAGERS = '经理'
+    SUPERVISORS = '主管'
+    OPERATORS = '操作员'
+    SALESPERSONS = '业务员'
+    FINANCE = '财务'
+    WAREHOUSE = '仓储'
+    QUALITY = '质检'
+
+    LEGACY_ALIASES = {
+        'administrators': SYSTEM_ADMINS,
+        'managers': MANAGERS,
+        'supervisor': SUPERVISORS,
+        'operators': OPERATORS,
+        'salespersons': SALESPERSONS,
+    }
 
     ALL = [
-        ADMINISTRATORS,
+        SYSTEM_ADMINS,
         MANAGERS,
+        SUPERVISORS,
         OPERATORS,
         SALESPERSONS,
+        FINANCE,
+        WAREHOUSE,
+        QUALITY,
     ]

@@ -76,6 +76,27 @@ class EmptySerializer(serializers.Serializer):
     pass
 
 
+class IsSystemNotificationAdmin(permissions.BasePermission):
+    """系统通知管理权限。"""
+
+    permission_codes = (
+        "workorder.view_systemnotificationsettings",
+        "workorder.change_systemnotificationsettings",
+        "workorder.view_notificationtemplate",
+        "workorder.add_notificationtemplate",
+        "workorder.change_notificationtemplate",
+        "workorder.delete_notificationtemplate",
+    )
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_superuser or user.is_staff:
+            return True
+        return any(user.has_perm(code) for code in self.permission_codes)
+
+
 @extend_schema_view(
     list=extend_schema(
         tags=["通知"],
@@ -273,7 +294,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
 class SystemNotificationViewSet(viewsets.GenericViewSet):
     """系统通知管理视图集"""
 
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsSystemNotificationAdmin]
     serializer_class = EmptySerializer
 
     def _serialize_settings(self, settings):
@@ -624,7 +645,7 @@ class UserNotificationSettingsViewSet(viewsets.GenericViewSet):
 class NotificationTemplateViewSet(viewsets.GenericViewSet):
     """通知模板视图集"""
 
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsSystemNotificationAdmin]
     serializer_class = EmptySerializer
 
     def _serialize_templates(self):
