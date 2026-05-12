@@ -19,6 +19,7 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from workorder.permission_utils import PermissionUtils
+from workorder.permissions import SuperuserFriendlyModelPermissions
 from workorder.response import APIResponse
 from workorder.docs.finance import (
     cost_center_docs,
@@ -101,6 +102,7 @@ class CostCenterViewSet(viewsets.ModelViewSet):
 
     queryset = CostCenter.objects.all()
     serializer_class = CostCenterSerializer
+    permission_classes = [SuperuserFriendlyModelPermissions]
 
     def get_queryset(self):
         """支持搜索和过滤"""
@@ -127,6 +129,7 @@ class CostItemViewSet(viewsets.ModelViewSet):
 
     queryset = CostItem.objects.all()
     serializer_class = CostItemSerializer
+    permission_classes = [SuperuserFriendlyModelPermissions]
 
     def get_queryset(self):
         """支持搜索和过滤"""
@@ -160,6 +163,7 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
         "work_order", "calculated_by"
     ).all()
     serializer_class = ProductionCostSerializer
+    permission_classes = [SuperuserFriendlyModelPermissions]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -256,6 +260,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         .all()
     )
     serializer_class = InvoiceSerializer
+    permission_classes = [SuperuserFriendlyModelPermissions]
 
     def get_serializer_class(self):
         """根据操作选择序列化器"""
@@ -284,9 +289,9 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
         todo_filter = (self.request.query_params.get("todo") or "").strip()
         if todo_filter == "pending_attachment":
-            queryset = queryset.filter(status__in=["issued", "sent", "received"]).filter(
-                Q(attachment="") | Q(attachment__isnull=True)
-            )
+            queryset = queryset.filter(
+                status__in=["issued", "sent", "received"]
+            ).filter(Q(attachment="") | Q(attachment__isnull=True))
         elif todo_filter == "pending_receipt":
             queryset = queryset.filter(status__in=["issued", "sent"])
         elif todo_filter == "pending_payment":
@@ -325,7 +330,9 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         invoice = self.get_object()
 
         if invoice.status != "draft":
-            return APIResponse.error("只有草稿状态的发票可以提交", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "只有草稿状态的发票可以提交", code=status.HTTP_400_BAD_REQUEST
+            )
 
         invoice.status = "issued"
         invoice.submitted_by = request.user
@@ -342,7 +349,9 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         invoice = self.get_object()
 
         if invoice.status != "issued":
-            return APIResponse.error("只有已开具状态的发票可以审核", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "只有已开具状态的发票可以审核", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 获取审核意见
         approval_comment = request.data.get("approval_comment")
@@ -368,7 +377,8 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         queryset = self.get_queryset()
         actionable_statuses = ["issued", "sent", "received"]
         pending_payment_queryset = queryset.filter(
-            status__in=actionable_statuses, received_payment_amount__lt=F("total_amount")
+            status__in=actionable_statuses,
+            received_payment_amount__lt=F("total_amount"),
         )
 
         # 统计数据
@@ -403,7 +413,9 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             queryset.values("status").annotate(count=Count("id")).order_by("status")
         )
 
-        return APIResponse.success(data={"summary": summary, "by_status": list(status_stats)})
+        return APIResponse.success(
+            data={"summary": summary, "by_status": list(status_stats)}
+        )
 
 
 @payment_docs
@@ -414,6 +426,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
         "customer", "sales_order", "invoice", "recorded_by"
     ).all()
     serializer_class = PaymentSerializer
+    permission_classes = [SuperuserFriendlyModelPermissions]
 
     def get_serializer_class(self):
         """根据操作选择序列化器"""
@@ -485,12 +498,9 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 "id", filter=Q(invoice__isnull=True) & Q(sales_order__isnull=False)
             ),
         )
-        summary["pending_writeoff_amount"] = (
-            queryset.filter(remaining_amount__gt=0).aggregate(total=Sum("remaining_amount"))[
-                "total"
-            ]
-            or Decimal("0")
-        )
+        summary["pending_writeoff_amount"] = queryset.filter(
+            remaining_amount__gt=0
+        ).aggregate(total=Sum("remaining_amount"))["total"] or Decimal("0")
 
         # 按收款方式统计
         method_stats = (
@@ -499,7 +509,9 @@ class PaymentViewSet(viewsets.ModelViewSet):
             .order_by("payment_method")
         )
 
-        return APIResponse.success(data={"summary": summary, "by_method": list(method_stats)})
+        return APIResponse.success(
+            data={"summary": summary, "by_method": list(method_stats)}
+        )
 
 
 @payment_plan_docs
@@ -508,6 +520,7 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
 
     queryset = PaymentPlan.objects.select_related("sales_order").all()
     serializer_class = PaymentPlanSerializer
+    permission_classes = [SuperuserFriendlyModelPermissions]
 
     def get_queryset(self):
         """支持过滤"""
@@ -590,8 +603,12 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
                 overdue_amount += gap
         summary["remaining_amount"] = remaining_amount
         summary["overdue_amount"] = overdue_amount
-        by_status = queryset.values("status").annotate(count=Count("id")).order_by("status")
-        return APIResponse.success(data={"summary": summary, "by_status": list(by_status)})
+        by_status = (
+            queryset.values("status").annotate(count=Count("id")).order_by("status")
+        )
+        return APIResponse.success(
+            data={"summary": summary, "by_status": list(by_status)}
+        )
 
 
 @statement_docs
@@ -602,6 +619,7 @@ class StatementViewSet(viewsets.ModelViewSet):
         "customer", "supplier", "created_by", "confirmed_by"
     ).all()
     serializer_class = StatementSerializer
+    permission_classes = [SuperuserFriendlyModelPermissions]
 
     def get_serializer_class(self):
         """根据操作选择序列化器"""
@@ -676,7 +694,9 @@ class StatementViewSet(viewsets.ModelViewSet):
         statement = self.get_object()
 
         if statement.status not in ["draft", "sent"]:
-            return APIResponse.error("只有草稿或已发送状态的对账单可以确认", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "只有草稿或已发送状态的对账单可以确认", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 获取确认信息
         confirmed = request.data.get("confirmed", True)
@@ -704,16 +724,18 @@ class StatementViewSet(viewsets.ModelViewSet):
         queryset = self.get_queryset()
         summary = queryset.aggregate(
             total_count=Count("id"),
-            pending_confirm_count=Count(
-                "id", filter=Q(status__in=["draft", "sent"])
-            ),
+            pending_confirm_count=Count("id", filter=Q(status__in=["draft", "sent"])),
             disputed_count=Count("id", filter=Q(status="disputed")),
             confirmed_count=Count("id", filter=Q(status="confirmed")),
             total_amount=Sum("total_amount"),
             closing_balance=Sum("closing_balance"),
         )
-        by_status = queryset.values("status").annotate(count=Count("id")).order_by("status")
-        return APIResponse.success(data={"summary": summary, "by_status": list(by_status)})
+        by_status = (
+            queryset.values("status").annotate(count=Count("id")).order_by("status")
+        )
+        return APIResponse.success(
+            data={"summary": summary, "by_status": list(by_status)}
+        )
 
     @action(detail=False, methods=["get"])
     @statement_generate_docs
@@ -725,7 +747,9 @@ class StatementViewSet(viewsets.ModelViewSet):
         period = request.query_params.get("period")
 
         if not period:
-            return APIResponse.error("必须指定对账周期", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "必须指定对账周期", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 解析周期 (格式: 2024-01)
         try:
@@ -737,7 +761,9 @@ class StatementViewSet(viewsets.ModelViewSet):
             last_day = monthrange(int(year), int(month))[1]
             end_date = date(int(year), int(month), last_day)
         except Exception:
-            return APIResponse.error("周期格式错误，应为 YYYY-MM", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "周期格式错误，应为 YYYY-MM", code=status.HTTP_400_BAD_REQUEST
+            )
 
         statement_type = None
         opening_balance = 0
@@ -812,11 +838,14 @@ class StatementViewSet(viewsets.ModelViewSet):
             # NOTE: 当前系统未建模“供应商付款”记录，本期贷方暂不计算。
             total_credit = 0
         else:
-            return APIResponse.error("必须指定客户或供应商", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "必须指定客户或供应商", code=status.HTTP_400_BAD_REQUEST
+            )
 
         closing_balance = opening_balance + total_debit - total_credit
 
-        return APIResponse.success(data={
+        return APIResponse.success(
+            data={
                 "statement_type": statement_type,
                 "period": period,
                 "start_date": start_date,
@@ -825,4 +854,5 @@ class StatementViewSet(viewsets.ModelViewSet):
                 "total_debit": total_debit,
                 "total_credit": total_credit,
                 "closing_balance": closing_balance,
-            })
+            }
+        )

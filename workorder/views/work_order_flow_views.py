@@ -10,8 +10,10 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from workorder.response import APIResponse
 
+from ..models.sales import SalesOrder
 from ..models.core import WorkOrder
 from ..models.system import WorkOrderApprovalLog
+from ..permission_utils import PermissionUtils
 from ..services.work_order_flow_service import WorkOrderFlowService
 from ..services.service_errors import ServiceError
 from ..serializers.core import WorkOrderDetailSerializer
@@ -27,6 +29,40 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
     permission_classes = [IsAuthenticated]
     queryset = WorkOrder.objects.all()
     serializer_class = WorkOrderDetailSerializer
+
+    @staticmethod
+    def _require_permission(user, permission: str, message: str = "权限不足") -> None:
+        if user.is_superuser or user.has_perm(permission):
+            return
+        raise ServiceError(message=message, code=status.HTTP_403_FORBIDDEN)
+
+    @staticmethod
+    def _ensure_sales_order_visible(*, sales_order_id, user) -> None:
+        if not sales_order_id:
+            raise ServiceError("请提供销售订单ID", code=status.HTTP_400_BAD_REQUEST)
+
+        queryset = SalesOrder.objects.filter(id=sales_order_id)
+        if user.is_superuser or PermissionUtils.is_finance_user(user):
+            visible = queryset.exists()
+        else:
+            visible = queryset.filter(
+                PermissionUtils.build_sales_order_scope_q(user, "")
+            ).exists()
+
+        if not visible:
+            raise ServiceError(
+                "销售订单不存在或无权访问", code=status.HTTP_404_NOT_FOUND
+            )
+
+    @staticmethod
+    def _ensure_work_order_writable(*, work_order: WorkOrder, user) -> None:
+        if user.is_superuser:
+            return
+        if work_order.created_by_id == user.id:
+            return
+        if user.has_perm("workorder.change_workorder"):
+            return
+        raise ServiceError("无权操作该施工单", code=status.HTTP_403_FORBIDDEN)
 
     @staticmethod
     def _validate_approval_permissions(*, work_order: WorkOrder, user) -> None:
@@ -56,6 +92,15 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
         }
         """
         try:
+            self._require_permission(
+                request.user,
+                "workorder.add_workorder",
+                "无权从销售订单创建施工单",
+            )
+            self._ensure_sales_order_visible(
+                sales_order_id=request.data.get("sales_order_id"),
+                user=request.user,
+            )
             work_order = WorkOrderFlowService.create_from_sales_order(
                 sales_order_id=request.data.get("sales_order_id"),
                 production_quantity=request.data.get("production_quantity"),
@@ -110,6 +155,19 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             )
 
         allow_partial = request.data.get("allow_partial", False)
+        try:
+            self._require_permission(
+                request.user,
+                "workorder.add_workorder",
+                "无权从销售订单创建施工单",
+            )
+            for sales_order_id in sales_order_ids:
+                self._ensure_sales_order_visible(
+                    sales_order_id=sales_order_id,
+                    user=request.user,
+                )
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code)
 
         created = []
         failed = []
@@ -207,6 +265,10 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
         """
         try:
             work_order = self.get_object()
+            self._ensure_work_order_writable(
+                work_order=work_order,
+                user=request.user,
+            )
 
             updated_work_order = WorkOrderFlowService.submit_for_approval(
                 work_order_id=work_order.id,
@@ -323,6 +385,11 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
         """
         try:
             work_order = self.get_object()
+            self._require_permission(
+                request.user,
+                "workorder.change_workorder",
+                "无权检查施工单完成状态",
+            )
 
             is_completed = WorkOrderFlowService.check_and_complete_workorder(
                 work_order=work_order
@@ -348,9 +415,11 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
 
     @action(detail=True, methods=["post"])
     def mark_urgent(self, request, pk=None):
-        if not request.user.is_staff and not request.user.is_superuser:
+        if not request.user.is_superuser and not request.user.has_perm(
+            "workorder.change_workorder"
+        ):
             return APIResponse.error(
-                message="只有管理员可以标记紧急",
+                message="无权标记紧急施工单",
                 code=status.HTTP_403_FORBIDDEN,
             )
         reason = (request.data.get("reason") or "").strip()

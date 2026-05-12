@@ -63,6 +63,7 @@ class ProcessLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     queryset = ProcessLog.objects.all()
     serializer_class = ProcessLogSerializer
+    permission_classes = [SuperuserFriendlyModelPermissions]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["work_order_process", "log_type", "operator"]
     ordering_fields = ["created_at"]

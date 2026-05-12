@@ -38,6 +38,7 @@ from ..permissions import (
     WorkOrderDataPermission,
     WorkOrderMaterialPermission,
     WorkOrderProcessPermission,
+    WorkOrderProductPermission,
     WorkOrderTaskPermission,
 )
 from ..serializers.base import ProcessSerializer
@@ -63,6 +64,7 @@ class WorkOrderProductViewSet(viewsets.ModelViewSet):
 
     queryset = WorkOrderProduct.objects.select_related("product", "work_order")
     serializer_class = WorkOrderProductSerializer
+    permission_classes = [WorkOrderProductPermission]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["work_order", "product"]
     ordering_fields = ["sort_order", "created_at"]

@@ -4,6 +4,7 @@
 
 P1 优化：使用缓存减少权限检查的数据库查询
 """
+
 from rest_framework import permissions
 from .permission_utils import PermissionCache, PermissionUtils
 
@@ -15,6 +16,17 @@ class SuperuserFriendlyModelPermissions(permissions.DjangoModelPermissions):
     虽然 DjangoModelPermissions 理论上会自动处理 superuser，
     但为了确保万无一失，我们显式检查 is_superuser
     """
+
+    perms_map = {
+        "GET": ["%(app_label)s.view_%(model_name)s"],
+        "OPTIONS": [],
+        "HEAD": [],
+        "POST": ["%(app_label)s.add_%(model_name)s"],
+        "PUT": ["%(app_label)s.change_%(model_name)s"],
+        "PATCH": ["%(app_label)s.change_%(model_name)s"],
+        "DELETE": ["%(app_label)s.delete_%(model_name)s"],
+    }
+
     def has_permission(self, request, view):
         # 超级用户拥有所有权限
         if request.user and request.user.is_superuser:
@@ -142,11 +154,12 @@ class IsStaffOrReadOnly(permissions.BasePermission):
     自定义权限：只有 staff 用户可以修改，其他用户只能查看
     用于某些敏感操作
     """
+
     def has_permission(self, request, view):
         # 读取操作：所有已登录用户都可以
         if request.method in permissions.SAFE_METHODS:
             return request.user.is_authenticated
-        
+
         # 写入操作：只有 staff 用户可以
         return request.user.is_authenticated and request.user.is_staff
 
@@ -156,11 +169,12 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
     自定义权限：只有对象的所有者可以修改
     用于用户只能修改自己创建的资源
     """
+
     def has_object_permission(self, request, view, obj):
         # 读取操作：所有已登录用户都可以
         if request.method in permissions.SAFE_METHODS:
             return request.user.is_authenticated
-        
+
         # 写入操作：只有所有者可以
         return obj.created_by == request.user
 
@@ -214,6 +228,14 @@ class WorkOrderMaterialPermission(WorkOrderAssetPermission):
     pass
 
 
+class WorkOrderProductPermission(WorkOrderAssetPermission):
+    """
+    施工单产品权限：施工单产品是施工单的一部分，沿用施工单读写权限。
+    """
+
+    pass
+
+
 class WorkOrderTaskPermission(permissions.BasePermission):
     """
     任务操作权限：细粒度权限控制
@@ -224,6 +246,7 @@ class WorkOrderTaskPermission(permissions.BasePermission):
     3. 管理员可以更新所有任务
     4. 跨部门操作需要特殊权限（change_workorder）
     """
+
     def has_permission(self, request, view):
         # 检查用户是否已登录
         if not request.user.is_authenticated:
@@ -235,12 +258,12 @@ class WorkOrderTaskPermission(permissions.BasePermission):
 
         # 读取操作：检查是否有查看施工单的权限
         if request.method in permissions.SAFE_METHODS:
-            return request.user.has_perm('workorder.view_workorder')
+            return request.user.has_perm("workorder.view_workorder")
 
         # 写入操作：允许有查看权限的用户访问，具体权限由 has_object_permission 检查
         # 这样可以让操作员通过 update_quantity 等操作更新自己的任务
-        return request.user.has_perm('workorder.view_workorder')
-    
+        return request.user.has_perm("workorder.view_workorder")
+
     def has_object_permission(self, request, view, obj):
         """
         对象级权限检查：基于任务分派和部门进行权限控制
@@ -248,52 +271,58 @@ class WorkOrderTaskPermission(permissions.BasePermission):
         # 检查用户是否已登录
         if not request.user.is_authenticated:
             return False
-        
+
         # 读取操作：检查数据权限
         if request.method in permissions.SAFE_METHODS:
             # 管理员可以查看所有任务
-            if request.user.is_superuser or request.user.has_perm('workorder.view_workorder'):
+            if request.user.is_superuser or request.user.has_perm(
+                "workorder.view_workorder"
+            ):
                 return True
-            
+
             # 操作员只能查看自己分派的任务
             if obj.assigned_operator == request.user:
                 return True
-            
+
             # 生产主管可以查看本部门的任务
             if obj.assigned_department:
                 # P1 优化: 使用缓存检查用户是否属于该部门
-                if PermissionCache.is_user_in_department(request.user, obj.assigned_department.id):
+                if PermissionCache.is_user_in_department(
+                    request.user, obj.assigned_department.id
+                ):
                     return True
-            
+
             # 施工单创建人可以查看自己创建的施工单的任务
             if obj.work_order_process.work_order.created_by == request.user:
                 return True
-            
+
             return False
-        
+
         # 写入操作：更严格的权限控制
         # 管理员可以操作所有任务
         if request.user.is_superuser:
             return True
-        
+
         # 操作员只能更新自己分派的任务
         if obj.assigned_operator == request.user:
             return True
-        
+
         # 生产主管可以更新本部门的所有任务
         if obj.assigned_department:
             # P1 优化: 使用缓存检查用户是否属于该部门
-            if PermissionCache.is_user_in_department(request.user, obj.assigned_department.id):
+            if PermissionCache.is_user_in_department(
+                request.user, obj.assigned_department.id
+            ):
                 # 检查是否有 change_workorder 权限（生产主管）
-                if request.user.has_perm('workorder.change_workorder'):
+                if request.user.has_perm("workorder.change_workorder"):
                     return True
-        
+
         # 施工单创建人可以操作自己创建的施工单的任务
         if obj.work_order_process.work_order.created_by == request.user:
             return True
-        
+
         # 跨部门操作需要特殊权限
-        if request.user.has_perm('workorder.change_workorder'):
+        if request.user.has_perm("workorder.change_workorder"):
             # 检查是否是跨部门操作
             if obj.assigned_department:
                 # P1 优化: 使用缓存检查跨部门操作
@@ -301,19 +330,20 @@ class WorkOrderTaskPermission(permissions.BasePermission):
                 if obj.assigned_department.id not in user_departments:
                     # 跨部门操作，需要特殊权限（这里允许有 change_workorder 权限的用户）
                     return True
-        
+
         return False
 
 
 class WorkOrderDataPermission(permissions.BasePermission):
     """
     施工单数据权限：基于数据所有权的权限控制
-    
+
     规则：
     1. 只能查看自己负责的施工单（业务员）
     2. 管理员可以查看所有数据
     3. 生产主管可以查看本部门的任务相关的施工单
     """
+
     def has_permission(self, request, view):
         # 检查用户是否已登录
         if not request.user.is_authenticated:
@@ -325,11 +355,14 @@ class WorkOrderDataPermission(permissions.BasePermission):
 
         # 读取操作：检查是否有查看施工单的权限
         if request.method in permissions.SAFE_METHODS:
-            return request.user.has_perm('workorder.view_workorder')
+            return request.user.has_perm("workorder.view_workorder")
+
+        if request.method == "DELETE":
+            return request.user.has_perm("workorder.delete_workorder")
 
         # 写入操作：检查是否有编辑施工单的权限
-        return request.user.has_perm('workorder.change_workorder')
-    
+        return request.user.has_perm("workorder.change_workorder")
+
     def has_object_permission(self, request, view, obj):
         """
         对象级权限检查：基于数据所有权进行权限控制
@@ -337,50 +370,58 @@ class WorkOrderDataPermission(permissions.BasePermission):
         # 检查用户是否已登录
         if not request.user.is_authenticated:
             return False
-        
+
         # 管理员可以查看所有数据
         if request.user.is_superuser:
             return True
-        
+
         # 读取操作：数据权限
         if request.method in permissions.SAFE_METHODS:
             # 施工单创建人可以查看自己创建的施工单
             if obj.created_by == request.user:
                 return True
-            
+
             # 业务员只能查看自己负责的客户的施工单
-            if hasattr(obj, 'customer') and obj.customer:
+            if hasattr(obj, "customer") and obj.customer:
                 if obj.customer.salesperson == request.user:
                     return True
-            
+
             # 生产主管可以查看本部门有任务的施工单
-            if request.user.has_perm('workorder.change_workorder'):
+            if request.user.has_perm("workorder.change_workorder"):
                 # 检查是否有本部门的任务
-                user_departments = request.user.profile.departments.all() if hasattr(request.user, 'profile') else []
+                user_departments = (
+                    request.user.profile.departments.all()
+                    if hasattr(request.user, "profile")
+                    else []
+                )
                 if user_departments:
                     # 检查施工单是否有任务分派到用户部门
                     from .models import WorkOrderTask
+
                     has_department_task = WorkOrderTask.objects.filter(
                         work_order_process__work_order=obj,
-                        assigned_department__in=user_departments
+                        assigned_department__in=user_departments,
                     ).exists()
                     if has_department_task:
                         return True
-            
+
             # 注意：不再有 view_workorder 全局 fallback
             # 数据可见性完全由创建人/业务员/部门作用域决定
             return False
-        
+
+        if request.method == "DELETE":
+            return request.user.has_perm("workorder.delete_workorder")
+
         # 写入操作：更严格的权限控制
         # 施工单创建人可以编辑自己创建的施工单（在审核前）
         if obj.created_by == request.user:
             # 如果已审核，需要特殊权限
-            if obj.approval_status == 'approved':
-                return request.user.has_perm('workorder.change_workorder')
+            if obj.approval_status == "approved":
+                return request.user.has_perm("workorder.change_workorder")
             return True
-        
+
         # 有 change_workorder 权限的用户可以编辑
-        if request.user.has_perm('workorder.change_workorder'):
+        if request.user.has_perm("workorder.change_workorder"):
             return True
-        
+
         return False

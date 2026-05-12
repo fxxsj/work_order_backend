@@ -13,22 +13,22 @@ ROLE_PERMISSIONS = {
         "Customer": ["add", "view", "change"],
         "Process": ["view"],
         "Department": ["view"],
-        "Product": ["view"],
+        "Product": ["add", "view", "change"],
         "ProductGroup": ["view"],
         "ProductGroupItem": ["view"],
         "ProductMaterial": ["view"],
-        "Material": ["view"],
+        "Material": ["add", "view", "change"],
         "Supplier": ["view"],
         "MaterialSupplier": ["view"],
-        "Artwork": ["view"],
+        "Artwork": ["add", "view", "change"],
         "ArtworkProduct": ["view"],
         "Die": ["view"],
         "DieProduct": ["view"],
-        "FoilingPlate": ["view"],
+        "FoilingPlate": ["add", "view", "change"],
         "FoilingPlateProduct": ["view"],
-        "EmbossingPlate": ["view"],
+        "EmbossingPlate": ["add", "view", "change"],
         "EmbossingPlateProduct": ["view"],
-        "DeliveryOrder": ["view"],
+        "DeliveryOrder": ["add", "view", "change"],
         "DeliveryItem": ["view"],
         "Invoice": ["view"],
         "Payment": ["view"],
@@ -75,16 +75,16 @@ ROLE_PERMISSIONS = {
         "TaskLog": ["view"],
         "Process": ["view"],
         "Department": ["view"],
-        "Product": ["view", "change"],
-        "Material": ["view", "change"],
-        "Supplier": ["view", "change"],
+        "Product": ["add", "view", "change"],
+        "Material": ["add", "view", "change"],
+        "Supplier": ["add", "view", "change"],
         "PurchaseOrder": ["view", "change"],
         "PurchaseOrderItem": ["view", "change"],
         "PurchaseReceiveRecord": ["view", "change"],
         "ProductStock": ["view", "change"],
         "StockIn": ["view", "change"],
         "StockOut": ["view", "change"],
-        "DeliveryOrder": ["view", "change"],
+        "DeliveryOrder": ["add", "view", "change"],
         "DeliveryItem": ["view", "change"],
         "QualityInspection": ["view", "change"],
         "SalesOrder": ["view", "change"],
@@ -114,7 +114,7 @@ ROLE_PERMISSIONS = {
     "finance": {
         "SalesOrder": ["view"],
         "Customer": ["view"],
-        "Supplier": ["view"],
+        "Supplier": ["add", "view", "change"],
         "Invoice": ["add", "view", "change"],
         "Payment": ["add", "view", "change"],
         "PaymentPlan": ["view", "change"],
@@ -131,7 +131,7 @@ ROLE_PERMISSIONS = {
         "ProductStock": ["view", "change"],
         "StockIn": ["add", "view", "change"],
         "StockOut": ["add", "view", "change"],
-        "DeliveryOrder": ["view", "change"],
+        "DeliveryOrder": ["add", "view", "change"],
         "DeliveryItem": ["view", "change"],
         "PurchaseReceiveRecord": ["view", "change"],
     },
@@ -146,7 +146,7 @@ ROLE_PERMISSIONS = {
         "StockIn": ["view"],
     },
     "admin": {
-        "Customer": ["view", "change"],
+        "Customer": ["view", "change", "delete"],
         "Supplier": ["view", "change"],
         "Department": ["add", "view", "change"],
         "Process": ["add", "view", "change"],
@@ -162,7 +162,7 @@ ROLE_PERMISSIONS = {
 
 ROLE_CUSTOM_PERMISSIONS = {
     "manager": {
-        "WorkOrder": ["change_approved_workorder"],
+        "WorkOrder": ["change_approved_workorder", "delete_workorder"],
         "SalesOrder": ["change_approved_salesorder"],
     },
 }
@@ -181,6 +181,13 @@ ROLE_ALIASES = {
     "managers": "manager",
     "administrators": "admin",
     "warehouse": "inventory",
+}
+
+STALE_PERMISSION_MODELS = {
+    "approvalworkflow",
+    "approvalstep",
+    "approvalrule",
+    "approvalescalation",
 }
 
 
@@ -252,6 +259,13 @@ def normalize_role_groups_forward(apps, schema_editor):
         for user in alias_group.user_set.all():
             target_group.user_set.add(user)
         alias_group.delete()
+
+    stale_content_types = ContentType.objects.filter(
+        app_label="workorder",
+        model__in=STALE_PERMISSION_MODELS,
+    )
+    Permission.objects.filter(content_type__in=stale_content_types).delete()
+    stale_content_types.delete()
 
 
 class Migration(migrations.Migration):

@@ -21,15 +21,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "True") == "True"
 
-SECRET_KEY=os.environ.get("SECRET_KEY", "")
+SECRET_KEY = os.environ.get("SECRET_KEY", "")
 if not SECRET_KEY:
     if DEBUG:
         import warnings
+
         warnings.warn("SECRET_KEY 未设置，使用临时随机值。请在 .env 文件中配置。")
         import os
+
         SECRET_KEY = os.urandom(32).hex()
     else:
         from django.core.exceptions import ImproperlyConfigured
+
         raise ImproperlyConfigured("生产环境必须设置 SECRET_KEY 环境变量。")
 
 # 允许的主机
@@ -251,7 +254,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # CORS settings - 从环境变量读取
 _cors_origins = os.environ.get("CORS_ALLOWED_ORIGINS", "")
-_cors_allow_all = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "").lower() in ("true", "1", "yes")
+_cors_allow_all = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 if _cors_allow_all:
     CORS_ALLOW_ALL_ORIGINS = True
@@ -336,7 +343,7 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticatedOrReadOnly",  # 认证用户可读写，未认证用户只读
+        "rest_framework.permissions.IsAuthenticated",
     ],
     "EXCEPTION_HANDLER": "workorder.error_handler.custom_exception_handler",
     # P1 优化: 添加速率限制配置

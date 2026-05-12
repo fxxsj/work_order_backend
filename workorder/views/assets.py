@@ -54,7 +54,10 @@ from ..serializers.assets import (
     FoilingPlateProductSerializer,
     FoilingPlateSerializer,
 )
-from ..permissions import WorkOrderSupportingDataPermission
+from ..permissions import (
+    SuperuserFriendlyModelPermissions,
+    WorkOrderSupportingDataPermission,
+)
 from .base_viewsets import BaseViewSet
 
 
@@ -72,13 +75,17 @@ class PlateMakingConfirmMixin:
         from django.db import transaction
 
         if not self.confirm_fk_field:
-            return APIResponse.error("未配置 confirm_fk_field", code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return APIResponse.error(
+                "未配置 confirm_fk_field", code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         with transaction.atomic():
             asset = self._confirm_select_for_update(pk)
 
             if asset.confirmed:
-                return APIResponse.error(self.confirm_error_message, code=status.HTTP_400_BAD_REQUEST)
+                return APIResponse.error(
+                    self.confirm_error_message, code=status.HTTP_400_BAD_REQUEST
+                )
 
             asset.confirmed = True
             asset.confirmed_by = request.user
@@ -384,6 +391,7 @@ class ArtworkProductViewSet(viewsets.ModelViewSet):
 
     queryset = ArtworkProduct.objects.all()
     serializer_class = ArtworkProductSerializer
+    permission_classes = [SuperuserFriendlyModelPermissions]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     ordering_fields = ["sort_order"]
     ordering = ["artwork", "sort_order"]
@@ -406,6 +414,7 @@ class DieProductViewSet(viewsets.ModelViewSet):
 
     queryset = DieProduct.objects.all()
     serializer_class = DieProductSerializer
+    permission_classes = [SuperuserFriendlyModelPermissions]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     ordering_fields = ["sort_order"]
     ordering = ["die", "sort_order"]
@@ -428,6 +437,7 @@ class FoilingPlateProductViewSet(viewsets.ModelViewSet):
 
     queryset = FoilingPlateProduct.objects.all()
     serializer_class = FoilingPlateProductSerializer
+    permission_classes = [SuperuserFriendlyModelPermissions]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     ordering_fields = ["sort_order"]
     ordering = ["foiling_plate", "sort_order"]
@@ -450,6 +460,7 @@ class EmbossingPlateProductViewSet(viewsets.ModelViewSet):
 
     queryset = EmbossingPlateProduct.objects.all()
     serializer_class = EmbossingPlateProductSerializer
+    permission_classes = [SuperuserFriendlyModelPermissions]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     ordering_fields = ["sort_order"]
     ordering = ["embossing_plate", "sort_order"]
