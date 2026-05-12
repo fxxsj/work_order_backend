@@ -36,9 +36,7 @@ from .priority import (
 
 # 权限常量
 from .permissions import (
-    UserRole,
     PermissionAction,
-    PermissionGroups,
     WORKORDER,
     TASK,
     PROCESS,
@@ -46,6 +44,22 @@ from .permissions import (
     PRODUCT,
     MATERIAL,
     SUPPLIER,
+)
+
+# Role codes
+from .role_codes import (
+    SALES,
+    SUPERVISOR,
+    MANAGER,
+    OPERATOR,
+    FINANCE,
+    INVENTORY,
+    QUALITY,
+    ADMIN,
+    ROLE_CODES,
+    ALL_ROLE_CODES,
+    CODE_TO_LABEL,
+    resolve_role_code,
 )
 
 # 错误码常量
@@ -66,9 +80,7 @@ __all__ = [
     'Priority',
     'WorkflowPriority',
     # 权限常量
-    'UserRole',
     'PermissionAction',
-    'PermissionGroups',
     'WORKORDER',
     'TASK',
     'PROCESS',
@@ -76,6 +88,19 @@ __all__ = [
     'PRODUCT',
     'MATERIAL',
     'SUPPLIER',
+    # Role codes
+    'SALES',
+    'SUPERVISOR',
+    'MANAGER',
+    'OPERATOR',
+    'FINANCE',
+    'INVENTORY',
+    'QUALITY',
+    'ADMIN',
+    'ROLE_CODES',
+    'ALL_ROLE_CODES',
+    'CODE_TO_LABEL',
+    'resolve_role_code',
     # 错误码常量
     'ErrorCodes',
 ]

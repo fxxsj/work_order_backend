@@ -101,7 +101,7 @@ def is_salesperson(user):
         except User.DoesNotExist:
             return False
     
-    return user.groups.filter(name='业务员').exists()
+    return user.groups.filter(name='sales').exists()
 
 
 def get_user_role(user):

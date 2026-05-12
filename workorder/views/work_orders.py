@@ -360,7 +360,7 @@ class WorkOrderViewSet(BaseViewSet):
 
         # 使用缓存优化权限查询
         def get_filtered_queryset():
-            if user.groups.filter(name="业务员").exists():
+            if user.groups.filter(name="sales").exists():
                 return queryset.filter(customer__salesperson=user)
 
             elif user.has_perm("workorder.change_workorder"):
@@ -532,7 +532,7 @@ class WorkOrderViewSet(BaseViewSet):
 
         # 未审核施工单数量（仅业务员可见，只统计自己负责的）
         pending_approval_count = 0
-        if request.user.groups.filter(name="业务员").exists():
+        if request.user.groups.filter(name="sales").exists():
             pending_approval_count = queryset.filter(
                 approval_status="submitted", customer__salesperson=request.user
             ).count()

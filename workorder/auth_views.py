@@ -6,12 +6,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User, Group, Permission
+from django.contrib.auth.models import User, Group
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
 from .serializers import UserSerializer
 from workorder.response import APIResponse
 from workorder.schema import standard_error_response, standard_success_response
+from workorder.constants.role_codes import resolve_role_code
 import re
 
 
@@ -178,8 +179,9 @@ class LoginView(APIView):
         if user is not None:
             refresh = RefreshToken.for_user(user)
 
-            # 获取用户所属的组
-            groups = list(user.groups.values_list('name', flat=True))
+            # 获取用户所属的角色代码
+            group_names = list(user.groups.values_list('name', flat=True))
+            role_codes = [r for r in (resolve_role_code(g) for g in group_names) if r]
             departments = _department_names(user)
 
             # 获取用户权限（用于前端权限控制）
@@ -197,10 +199,10 @@ class LoginView(APIView):
                 'last_name': user.last_name,
                 'is_staff': user.is_staff,
                 'is_superuser': user.is_superuser,
-                'groups': groups,
+                'role_codes': role_codes,
                 'departments': departments,
-                'is_salesperson': '业务员' in groups,
-                'permissions': permissions,  # 添加权限列表
+                'is_salesperson': 'sales' in role_codes,
+                'permissions': permissions,
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
             })
@@ -296,20 +298,18 @@ class TokenRefreshViewWithDocs(TokenRefreshView):
 def get_current_user(request):
     """获取当前登录用户信息"""
     if request.user.is_authenticated:
-        # 获取用户所属的组
-        groups = list(request.user.groups.values_list('name', flat=True))
+        # 获取用户所属的角色代码
+        group_names = list(request.user.groups.values_list('name', flat=True))
+        role_codes = [r for r in (resolve_role_code(g) for g in group_names) if r]
         departments = _department_names(request.user)
-        
+
         # 获取用户权限（用于前端权限控制）
         permissions = []
         if request.user.is_superuser:
-            # 超级用户拥有所有权限
             permissions = ['*']
         else:
-            # 获取用户的所有权限（包括通过组获得的权限）
-            # 使用 get_all_permissions() 获取所有权限字符串（格式：app_label.codename）
             permissions = list(request.user.get_all_permissions())
-        
+
         return APIResponse.success(data={
             'id': request.user.id,
             'username': request.user.username,
@@ -318,10 +318,10 @@ def get_current_user(request):
             'last_name': request.user.last_name,
             'is_staff': request.user.is_staff,
             'is_superuser': request.user.is_superuser,
-            'groups': groups,
+            'role_codes': role_codes,
             'departments': departments,
-            'is_salesperson': '业务员' in groups,
-            'permissions': permissions,  # 添加权限列表
+            'is_salesperson': 'sales' in role_codes,
+            'permissions': permissions,
         })
     else:
         return APIResponse.error('未登录', code=status.HTTP_401_UNAUTHORIZED)
@@ -406,7 +406,7 @@ def get_salespersons(request):
     """获取业务员列表"""
     try:
         # 获取"业务员"组
-        salesperson_group = Group.objects.filter(name='业务员').first()
+        salesperson_group = Group.objects.filter(name='sales').first()
         
         if salesperson_group:
             # 获取属于业务员组的用户

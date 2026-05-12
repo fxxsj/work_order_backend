@@ -112,7 +112,7 @@ class WorkOrderService:
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        if not user.groups.filter(name="业务员").exists():
+        if not user.groups.filter(name="sales").exists():
             raise ServiceError(
                 "只有业务员可以审核施工单",
                 code=status.HTTP_403_FORBIDDEN,

@@ -53,7 +53,7 @@ class CustomerViewSet(BaseViewSet):
             return queryset.select_related("salesperson")
 
         # 如果是业务员，只返回自己负责的客户
-        if self.request.user.groups.filter(name="业务员").exists():
+        if self.request.user.groups.filter(name="sales").exists():
             return queryset.filter(salesperson=self.request.user).select_related(
                 "salesperson"
             )

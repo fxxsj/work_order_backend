@@ -98,7 +98,7 @@ class WorkOrderFlowService:
         if user is None or not user.is_authenticated:
             raise ServiceError("请先登录后再审核施工单", code=status.HTTP_401_UNAUTHORIZED)
 
-        can_review_by_role = user.groups.filter(name="业务员").exists()
+        can_review_by_role = user.groups.filter(name="sales").exists()
         can_review_by_perm = user.is_superuser or user.has_perm("workorder.change_workorder")
         if not (can_review_by_role or can_review_by_perm):
             raise ServiceError("只有业务员或主管可以审核施工单", code=status.HTTP_403_FORBIDDEN)

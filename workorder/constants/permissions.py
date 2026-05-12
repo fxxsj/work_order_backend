@@ -6,30 +6,55 @@
 
 from django.utils.translation import gettext_lazy as _
 
+# 重新导出 role_codes 以保持兼容性
+from .role_codes import (
+    ROLE_CODES,
+    ALL_ROLE_CODES,
+    CODE_TO_LABEL,
+    SALES,
+    SUPERVISOR,
+    MANAGER,
+    OPERATOR,
+    FINANCE,
+    INVENTORY,
+    QUALITY,
+    ADMIN,
+    resolve_role_code,
+)
 
-class UserRole:
-    """用户角色常量"""
+# 为了兼容性保留中文别名（已废弃，不应在新代码中使用）
+from .role_codes import LABEL_TO_CODE
 
-    ADMIN = '系统管理员'
-    MANAGER = '经理'
-    SUPERVISOR = '主管'
-    OPERATOR = '操作员'
-    SALESPERSON = '业务员'
-    FINANCE = '财务'
-    WAREHOUSE = '仓储'
-    QUALITY = '质检'
+# ============================================================================
+# 以下常量已废弃，请使用 role_codes.py 中的常量
+# ============================================================================
 
-    CHOICES = [
-        (ADMIN, _('系统管理员')),
-        (MANAGER, _('经理')),
-        (SUPERVISOR, _('主管')),
-        (OPERATOR, _('操作员')),
-        (SALESPERSON, _('业务员')),
-        (FINANCE, _('财务')),
-        (WAREHOUSE, _('仓储')),
-        (QUALITY, _('质检')),
-    ]
+# 兼容性别名（废弃）
+UserRole = None  # 已废弃，请使用 role_codes 中的常量
 
+class _DeprecatedUserRole:
+    """废弃类，请使用 role_codes.ROLE_CODES"""
+    ADMIN = 'admin'
+    MANAGER = 'manager'
+    SUPERVISOR = 'supervisor'
+    OPERATOR = 'operator'
+    SALESPERSON = 'sales'
+    FINANCE = 'finance'
+    WAREHOUSE = 'inventory'
+    QUALITY = 'quality'
+
+    @classmethod
+    def to_code(cls, label):
+        """将中文标签转为 code（兼容旧代码）"""
+        return LABEL_TO_CODE.get(label)
+
+
+# PermissionGroups 已废弃
+PermissionGroups = None
+
+# ============================================================================
+# 权限操作常量（正常使用）
+# ============================================================================
 
 class PermissionAction:
     """权限操作常量"""
@@ -61,36 +86,3 @@ CUSTOMER = 'customer'
 PRODUCT = 'product'
 MATERIAL = 'material'
 SUPPLIER = 'supplier'
-
-
-# 权限组名称常量
-class PermissionGroups:
-    """权限组常量"""
-
-    SYSTEM_ADMINS = '系统管理员'
-    MANAGERS = '经理'
-    SUPERVISORS = '主管'
-    OPERATORS = '操作员'
-    SALESPERSONS = '业务员'
-    FINANCE = '财务'
-    WAREHOUSE = '仓储'
-    QUALITY = '质检'
-
-    LEGACY_ALIASES = {
-        'administrators': SYSTEM_ADMINS,
-        'managers': MANAGERS,
-        'supervisor': SUPERVISORS,
-        'operators': OPERATORS,
-        'salespersons': SALESPERSONS,
-    }
-
-    ALL = [
-        SYSTEM_ADMINS,
-        MANAGERS,
-        SUPERVISORS,
-        OPERATORS,
-        SALESPERSONS,
-        FINANCE,
-        WAREHOUSE,
-        QUALITY,
-    ]

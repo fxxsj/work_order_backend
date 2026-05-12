@@ -58,7 +58,7 @@ class BaseModelSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     """用户序列化器"""
 
-    groups = serializers.SerializerMethodField()
+    role_codes = serializers.SerializerMethodField()
     is_salesperson = serializers.SerializerMethodField()
 
     class Meta:
@@ -69,17 +69,22 @@ class UserSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "email",
-            "groups",
+            "role_codes",
             "is_salesperson",
         ]
 
-    def get_groups(self, obj) -> List[str]:
-        """获取用户所属的组"""
-        return list(obj.groups.values_list("name", flat=True))
+    def get_role_codes(self, obj) -> List[str]:
+        """获取用户所属的角色代码列表"""
+        from workorder.constants.role_codes import resolve_role_code
+        codes = [
+            resolve_role_code(name)
+            for name in obj.groups.values_list("name", flat=True)
+        ]
+        return [c for c in codes if c]
 
     def get_is_salesperson(self, obj) -> bool:
         """判断用户是否为业务员"""
-        return obj.groups.filter(name="业务员").exists()
+        return obj.groups.filter(name="sales").exists()
 
 
 class CustomerSerializer(serializers.ModelSerializer):
