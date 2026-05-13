@@ -28,11 +28,15 @@ class WorkOrderStatus:
 class WorkOrderApprovalStatus:
     """施工单审核状态常量"""
 
+    DRAFT = 'draft'
+    SUBMITTED = 'submitted'
     PENDING = 'pending'
     APPROVED = 'approved'
     REJECTED = 'rejected'
 
     CHOICES = [
+        (DRAFT, _('草稿')),
+        (SUBMITTED, _('已提交')),
         (PENDING, _('待审核')),
         (APPROVED, _('已通过')),
         (REJECTED, _('已拒绝')),
@@ -156,6 +160,28 @@ class StockTransactionStatus:
 
     CHOICES = [
         (PENDING, _('待处理')),
+        (COMPLETED, _('已完成')),
+        (CANCELLED, _('已取消')),
+    ]
+
+
+class SalesOrderStatus:
+    """销售订单状态常量"""
+
+    DRAFT = 'draft'
+    SUBMITTED = 'submitted'
+    APPROVED = 'approved'
+    REJECTED = 'rejected'
+    IN_PRODUCTION = 'in_production'
+    COMPLETED = 'completed'
+    CANCELLED = 'cancelled'
+
+    CHOICES = [
+        (DRAFT, _('草稿')),
+        (SUBMITTED, _('已提交')),
+        (APPROVED, _('已审核')),
+        (REJECTED, _('已拒绝')),
+        (IN_PRODUCTION, _('生产中')),
         (COMPLETED, _('已完成')),
         (CANCELLED, _('已取消')),
     ]

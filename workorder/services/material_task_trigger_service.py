@@ -8,7 +8,8 @@
 import re
 from django.db import transaction
 
-from ..models import WorkOrderTask
+from workorder.constants.status import TaskStatus
+from workorder.models import WorkOrderTask
 
 
 def parse_material_usage(usage_str: str) -> int:
@@ -48,17 +49,17 @@ def update_cutting_tasks_on_material_cut(material_instance) -> None:
                 material=material_instance.material,
                 work_order_process__work_order=material_instance.work_order,
                 auto_calculate_quantity=True,
-                status__in=["pending", "in_progress"],
+                status__in=[TaskStatus.PENDING, TaskStatus.IN_PROGRESS],
             )
         )
         for task in cutting_tasks:
             task.quantity_completed = quantity
             if task.production_quantity and quantity >= task.production_quantity:
-                task.status = "completed"
-            elif task.status == "pending":
-                task.status = "in_progress"
+                task.status = TaskStatus.COMPLETED
+            elif task.status == TaskStatus.PENDING:
+                task.status = TaskStatus.IN_PROGRESS
             task.save(update_fields=["quantity_completed", "status"])
-            if task.status == "completed":
+            if task.status == TaskStatus.COMPLETED:
                 task.work_order_process.check_and_update_status()
 
 
@@ -74,7 +75,7 @@ def complete_plate_tasks(
 
     只处理从"未确认"变为"已确认"的情况，由调用方确保前提条件。
     """
-    filters = {"task_type": "plate_making", "auto_calculate_quantity": True, "status__in": ["pending", "in_progress"]}
+    filters = {"task_type": "plate_making", "auto_calculate_quantity": True, "status__in": [TaskStatus.PENDING, TaskStatus.IN_PROGRESS]}
     # 只填充非 None 的参数
     if artwork is not None:
         filters["artwork"] = artwork
@@ -90,6 +91,6 @@ def complete_plate_tasks(
         for task in plate_tasks:
             if task.quantity_completed < 1:
                 task.quantity_completed = 1
-                task.status = "completed"
+                task.status = TaskStatus.COMPLETED
                 task.save(update_fields=["quantity_completed", "status"])
                 task.work_order_process.check_and_update_status()

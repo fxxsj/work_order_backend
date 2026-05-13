@@ -12,6 +12,7 @@ from django.db.models import Max
 from django.utils import timezone
 from rest_framework import status
 
+from workorder.constants.status import WorkOrderApprovalStatus, WorkOrderStatus
 from ..permissions.permission_utils import is_sales_user
 from ..models.base import Process
 from ..models.core import WorkOrder, WorkOrderMaterial, WorkOrderProcess
@@ -163,12 +164,12 @@ class WorkOrderService:
         work_order.approved_at = timezone.now()
         work_order.approval_comment = approval_comment
 
-        if approval_status == "approved" and work_order.status == "pending":
-            work_order.status = "in_progress"
+        if approval_status == WorkOrderApprovalStatus.APPROVED and work_order.status == WorkOrderStatus.PENDING:
+            work_order.status = WorkOrderStatus.IN_PROGRESS
 
         work_order.save()
 
-        if approval_status == "approved":
+        if approval_status == WorkOrderApprovalStatus.APPROVED:
             Notification.create_notification(
                 recipient=work_order.created_by,
                 notification_type="approval_passed",
@@ -202,7 +203,7 @@ class WorkOrderService:
 
     @staticmethod
     def resubmit_for_approval(*, work_order: WorkOrder, user) -> WorkOrder:
-        if work_order.approval_status != "rejected":
+        if work_order.approval_status != WorkOrderApprovalStatus.REJECTED:
             raise ServiceError(
                 "只有被拒绝的施工单才能重新提交审核",
                 code=status.HTTP_400_BAD_REQUEST,
@@ -215,7 +216,7 @@ class WorkOrderService:
                     code=status.HTTP_403_FORBIDDEN,
                 )
 
-        work_order.approval_status = "submitted"
+        work_order.approval_status = WorkOrderApprovalStatus.SUBMITTED
         work_order.approval_comment = ""
         work_order.save()
         return work_order

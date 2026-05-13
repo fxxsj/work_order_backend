@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from django.utils import timezone
 from rest_framework import status
 
+from workorder.constants.status import ProcessStatus, TaskStatus, WorkOrderStatus
 from ..models.core import ProcessLog, TaskLog, WorkOrderProcess
 from ..models.base import Department
 from .service_errors import ServiceError
@@ -31,14 +32,14 @@ class WorkOrderProcessService:
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        if process.status != "pending":
+        if process.status != ProcessStatus.PENDING:
             raise ServiceError(
                 "该工序已经开始或完成，不能重新开始",
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
         # 注意：任务在施工单审核通过时已生成，此处不再生成
-        process.status = "in_progress"
+        process.status = ProcessStatus.IN_PROGRESS
         process.actual_start_time = timezone.now()
         if operator_id:
             process.operator_id = operator_id
@@ -65,14 +66,14 @@ class WorkOrderProcessService:
         force_complete: bool = False,
         force_reason: str = "",
     ) -> WorkOrderProcess:
-        if process.status != "in_progress":
+        if process.status != ProcessStatus.IN_PROGRESS:
             raise ServiceError(
                 "只有进行中的工序才能完成",
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
         tasks = process.tasks.all()
-        incomplete_tasks = tasks.exclude(status="completed")
+        incomplete_tasks = tasks.exclude(status=TaskStatus.COMPLETED)
 
         if incomplete_tasks.exists():
             if process.check_and_update_status():
@@ -109,7 +110,7 @@ class WorkOrderProcessService:
                 )
 
             for task in incomplete_tasks:
-                task.status = "completed"
+                task.status = TaskStatus.COMPLETED
                 if task.production_quantity and not task.quantity_completed:
                     task.quantity_completed = task.production_quantity
                 task.save()
@@ -123,7 +124,7 @@ class WorkOrderProcessService:
 
         process.quantity_completed = quantity_completed
         process.quantity_defective = quantity_defective
-        process.status = "completed"
+        process.status = ProcessStatus.COMPLETED
         process.actual_end_time = timezone.now()
         process.save()
 
@@ -140,10 +141,10 @@ class WorkOrderProcessService:
 
         work_order = process.work_order
         all_processes_completed = (
-            work_order.order_processes.exclude(status="completed").count() == 0
+            work_order.order_processes.exclude(status=ProcessStatus.COMPLETED).count() == 0
         )
-        if all_processes_completed and work_order.status != "completed":
-            work_order.status = "completed"
+        if all_processes_completed and work_order.status != WorkOrderStatus.COMPLETED:
+            work_order.status = WorkOrderStatus.COMPLETED
             work_order.save()
 
         return process
@@ -180,7 +181,7 @@ class WorkOrderProcessService:
                     )
                     continue
 
-                if process.status != "pending":
+                if process.status != ProcessStatus.PENDING:
                     failed_processes.append(
                         {"process_id": process.id, "error": "该工序已经开始或完成，不能重新开始"}
                     )
@@ -188,7 +189,7 @@ class WorkOrderProcessService:
 
                 process.generate_tasks()
 
-                process.status = "in_progress"
+                process.status = ProcessStatus.IN_PROGRESS
                 process.actual_start_time = timezone.now()
                 if operator_id:
                     process.operator_id = operator_id

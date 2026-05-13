@@ -6,15 +6,16 @@ from collections.abc import Iterable
 
 from django.utils import timezone
 
+from workorder.constants.status import SalesOrderStatus, WorkOrderStatus
 from ..models.sales import SalesOrder
 
 
 class SalesOrderStatusService:
     """根据施工单和发货进度同步销售订单状态。"""
 
-    TERMINAL_STATUSES = {"cancelled"}
-    WORKFLOW_STATUSES = {"approved", "in_production", "completed"}
-    UNFINISHED_WORK_ORDER_STATUSES = {"pending", "in_progress", "paused"}
+    TERMINAL_STATUSES = {SalesOrderStatus.CANCELLED}
+    WORKFLOW_STATUSES = {SalesOrderStatus.APPROVED, SalesOrderStatus.IN_PRODUCTION, SalesOrderStatus.COMPLETED}
+    UNFINISHED_WORK_ORDER_STATUSES = {WorkOrderStatus.PENDING, WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.PAUSED}
 
     @staticmethod
     def get_work_orders_queryset(sales_order: SalesOrder):
@@ -82,7 +83,7 @@ class SalesOrderStatusService:
         next_status = current_status
 
         if all_delivered:
-            next_status = "completed"
+            next_status = SalesOrderStatus.COMPLETED
             if sales_order.actual_delivery_date is None:
                 sales_order.actual_delivery_date = timezone.now().date()
                 update_fields.append("actual_delivery_date")
@@ -91,17 +92,17 @@ class SalesOrderStatusService:
                 update_fields.append("completion_reason")
         elif (
             preserve_manual_completion
-            and current_status == "completed"
+            and current_status == SalesOrderStatus.COMPLETED
             and sales_order.completion_reason.strip()
         ):
-            next_status = "completed"
+            next_status = SalesOrderStatus.COMPLETED
         elif unfinished_work_orders:
-            next_status = "in_production"
+            next_status = SalesOrderStatus.IN_PRODUCTION
             if sales_order.actual_delivery_date is not None:
                 sales_order.actual_delivery_date = None
                 update_fields.append("actual_delivery_date")
         else:
-            next_status = "approved"
+            next_status = SalesOrderStatus.APPROVED
             if sales_order.actual_delivery_date is not None:
                 sales_order.actual_delivery_date = None
                 update_fields.append("actual_delivery_date")

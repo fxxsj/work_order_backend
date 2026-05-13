@@ -47,6 +47,12 @@ from ..models.system import (
     TaskAssignmentRule,
 )
 from ..models.base import Customer, Department
+from workorder.constants.status import (
+    SalesOrderStatus,
+    TaskStatus,
+    WorkOrderApprovalStatus,
+    WorkOrderStatus,
+)
 from .service_errors import ServiceError
 from .work_order_service import WorkOrderService
 from .dispatch_service import AutoDispatchService
@@ -64,10 +70,10 @@ class WorkOrderFlowService:
 
     # ========== 状态转换规则 ==========
     ALLOWED_STATUS_TRANSITIONS = {
-        "draft": ["submitted"],
-        "submitted": ["approved", "rejected"],
-        "rejected": ["submitted"],
-        "approved": ["submitted"],
+        WorkOrderApprovalStatus.DRAFT: [WorkOrderApprovalStatus.SUBMITTED],
+        WorkOrderApprovalStatus.SUBMITTED: [WorkOrderApprovalStatus.APPROVED, WorkOrderApprovalStatus.REJECTED],
+        WorkOrderApprovalStatus.REJECTED: [WorkOrderApprovalStatus.SUBMITTED],
+        WorkOrderApprovalStatus.APPROVED: [WorkOrderApprovalStatus.SUBMITTED],
     }
 
     @staticmethod
@@ -168,7 +174,7 @@ class WorkOrderFlowService:
                 "销售订单不存在", code=status.HTTP_404_NOT_FOUND
             ) from exc
 
-        if sales_order.status not in ["approved", "in_production"]:
+        if sales_order.status not in [SalesOrderStatus.APPROVED, SalesOrderStatus.IN_PRODUCTION]:
             raise ServiceError(
                 f"只有已审核或生产中的销售订单才能创建施工单，当前状态：{sales_order.status}",
                 code=status.HTTP_400_BAD_REQUEST,
@@ -218,8 +224,8 @@ class WorkOrderFlowService:
             priority=priority,
             notes=notes,
             created_by=created_by,
-            status="pending",  # 初始状态
-            approval_status="draft",  # 草稿，提交后才进入待审核
+            status=WorkOrderStatus.PENDING,  # 初始状态
+            approval_status=WorkOrderApprovalStatus.DRAFT,  # 草稿，提交后才进入待审核
         )
 
         logger.info(f"从销售订单 {sales_order.order_number} 创建施工单 {order_number}")
@@ -299,12 +305,12 @@ class WorkOrderFlowService:
 
         # 2. 验证状态
         WorkOrderFlowService._validate_status_transition(
-            work_order.approval_status, "submitted"
+            work_order.approval_status, WorkOrderApprovalStatus.SUBMITTED
         )
 
         # 3. 状态转换（数据完整性已在保存时验证）
         # 提交审核不删除任务；已投产变更的任务同步由复审通过后的专门流程处理。
-        work_order.approval_status = "submitted"
+        work_order.approval_status = WorkOrderApprovalStatus.SUBMITTED
         work_order.approved_by = None
         work_order.approved_at = None
         work_order.approval_comment = comment
@@ -379,7 +385,7 @@ class WorkOrderFlowService:
             user=approved_by,
         )
         WorkOrderFlowService._validate_status_transition(
-            work_order.approval_status, "approved"
+            work_order.approval_status, WorkOrderApprovalStatus.APPROVED
         )
 
         # 注意：数据完整性已在保存时验证，无需重复验证
@@ -394,11 +400,11 @@ class WorkOrderFlowService:
         )
 
         # 2. 状态转换
-        work_order.approval_status = "approved"
+        work_order.approval_status = WorkOrderApprovalStatus.APPROVED
         work_order.approved_by = approved_by
         work_order.approved_at = timezone.now()
         work_order.approval_comment = comment
-        work_order.status = "in_progress"
+        work_order.status = WorkOrderStatus.IN_PROGRESS
         work_order.save()
 
         # 3. 记录审核日志
@@ -456,21 +462,21 @@ class WorkOrderFlowService:
             user=rejected_by,
         )
         WorkOrderFlowService._validate_status_transition(
-            work_order.approval_status, "rejected"
+            work_order.approval_status, WorkOrderApprovalStatus.REJECTED
         )
 
         # 1. 状态转换
-        work_order.approval_status = "rejected"
+        work_order.approval_status = WorkOrderApprovalStatus.REJECTED
         work_order.approved_by = rejected_by
         work_order.approved_at = timezone.now()
         work_order.approval_comment = reason
-        work_order.status = "pending"  # 状态回到待开始
+        work_order.status = WorkOrderStatus.PENDING  # 状态回到待开始
         work_order.save()
 
         # 2. 记录拒绝日志
         WorkOrderApprovalLog.objects.create(
             work_order=work_order,
-            approval_status="rejected",
+            approval_status=WorkOrderApprovalStatus.REJECTED,
             approved_by=rejected_by,
             approval_comment=reason,
             rejection_reason=reason,
@@ -499,7 +505,7 @@ class WorkOrderFlowService:
         Returns:
             bool: 是否标记为已完成
         """
-        if work_order.status != "in_progress":
+        if work_order.status != WorkOrderStatus.IN_PROGRESS:
             return False
 
         # 检查是否所有任务都已完成
@@ -507,11 +513,11 @@ class WorkOrderFlowService:
             work_order_process__work_order=work_order
         ).count()
         completed_tasks = WorkOrderTask.objects.filter(
-            work_order_process__work_order=work_order, status="completed"
+            work_order_process__work_order=work_order, status=TaskStatus.COMPLETED
         ).count()
 
         if total_tasks == completed_tasks and total_tasks > 0:
-            work_order.status = "completed"
+            work_order.status = WorkOrderStatus.COMPLETED
             work_order.save()
 
             # 记录日志
@@ -831,7 +837,7 @@ class WorkOrderFlowService:
         # 获取所有未分派的正式任务
         tasks = WorkOrderTask.objects.filter(
             work_order_process__work_order=work_order,
-            status="pending",
+            status=TaskStatus.PENDING,
             assigned_department__isnull=True,
         )
 
