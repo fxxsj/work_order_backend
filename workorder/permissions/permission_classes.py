@@ -211,28 +211,17 @@ class WorkOrderAssetPermission(permissions.BasePermission):
 
 
 class WorkOrderProcessPermission(WorkOrderAssetPermission):
-    """
-    施工单工序权限：如果用户有编辑施工单的权限，就可以编辑其工序。
-    工序是施工单的一部分，逻辑上应该与施工单权限一致，因此继承通用资产权限。
-    """
-
+    """工序权限：继承 WorkOrderAssetPermission。"""
     pass
 
 
 class WorkOrderMaterialPermission(WorkOrderAssetPermission):
-    """
-    施工单物料权限：如果用户有编辑施工单的权限，就可以编辑其物料。
-    物料是施工单的一部分，逻辑上应该与施工单权限一致，因此继承通用资产权限。
-    """
-
+    """物料权限：继承 WorkOrderAssetPermission。"""
     pass
 
 
 class WorkOrderProductPermission(WorkOrderAssetPermission):
-    """
-    施工单产品权限：施工单产品是施工单的一部分，沿用施工单读写权限。
-    """
-
+    """产品权限：继承 WorkOrderAssetPermission。"""
     pass
 
 
