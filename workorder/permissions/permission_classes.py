@@ -389,18 +389,13 @@ class WorkOrderDataPermission(permissions.BasePermission):
             # 生产主管可以查看本部门有任务的施工单
             if request.user.has_perm("workorder.change_workorder"):
                 # 检查是否有本部门的任务
-                user_departments = (
-                    request.user.profile.departments.all()
-                    if hasattr(request.user, "profile")
-                    else []
-                )
-                if user_departments:
-                    # 检查施工单是否有任务分派到用户部门
+                user_department_ids = PermissionCache.get_user_departments(request.user)
+                if user_department_ids:
                     from .models import WorkOrderTask
 
                     has_department_task = WorkOrderTask.objects.filter(
                         work_order_process__work_order=obj,
-                        assigned_department__in=user_departments,
+                        assigned_department_id__in=user_department_ids,
                     ).exists()
                     if has_department_task:
                         return True

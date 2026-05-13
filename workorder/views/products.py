@@ -4,8 +4,7 @@
 包含产品、产品物料、产品组等视图集。
 """
 
-from rest_framework import permissions, status
-from rest_framework import filters
+from rest_framework import filters, permissions, status
 
 from ..models.products import (
     Product,
@@ -23,6 +22,7 @@ from ..serializers.products import (
 )
 from .assets import ImageAssetActionsMixin
 from .base_viewsets import BaseViewSet
+from workorder.permissions import SuperuserFriendlyModelPermissions
 from workorder.docs.products import (
     product_docs,
     product_group_docs,
@@ -42,7 +42,7 @@ class ProductViewSet(ImageAssetActionsMixin, BaseViewSet):
     image_parent_field = "product"
     filterset_fields = ["is_active"]
     search_fields = ["name", "code", "specification"]
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [SuperuserFriendlyModelPermissions]
     ordering_fields = ["code", "created_at"]
     ordering = ["code"]
 

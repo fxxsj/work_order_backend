@@ -102,6 +102,9 @@ class ProductAPITest(APITestCase):
 
     def setUp(self):
         """测试前准备"""
+        from django.contrib.contenttypes.models import ContentType
+        from django.contrib.auth.models import Permission
+
         # 创建测试用户
         self.user = User.objects.create_user(
             username='testuser',
@@ -112,6 +115,13 @@ class ProductAPITest(APITestCase):
             password='admin123',
             email='admin@test.com'
         )
+
+        # 给 testuser 赋予产品查看权限（SuperuserFriendlyModelPermissions 需要）
+        product_ct = ContentType.objects.get_for_model(Product)
+        view_perm = Permission.objects.get(
+            codename='view_product', content_type=product_ct
+        )
+        self.user.user_permissions.add(view_perm)
 
         # 创建测试数据
         self.product_data = {

@@ -24,8 +24,9 @@ from drf_spectacular.utils import (
     extend_schema_view,
     inline_serializer,
 )
-from rest_framework import filters, serializers, status, viewsets
+from rest_framework import filters, permissions, serializers, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAdminUser
 from workorder.response import APIResponse
 from workorder.docs.work_orders import (
     work_order_add_material_docs,
@@ -885,7 +886,7 @@ class WorkOrderViewSet(BaseViewSet):
         filename = request.query_params.get("filename")
         return export_work_orders(queryset, filename)
 
-    @action(detail=True, methods=["post"])
+    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
     @work_order_sync_preview_docs
     def sync_tasks_preview(self, request, pk=None):
         """预览任务同步变更（不执行同步）
@@ -927,10 +928,6 @@ class WorkOrderViewSet(BaseViewSet):
                 "已审核的施工单不能修改工序", code=status.HTTP_400_BAD_REQUEST
             )
 
-        # 权限检查
-        if not request.user.is_staff and not request.user.is_superuser:
-            return APIResponse.error("需要管理员权限", code=status.HTTP_403_FORBIDDEN)
-
         # 调用 TaskSyncService 计算预览
         preview = TaskSyncService.preview_sync(
             work_order, old_process_ids, new_process_ids
@@ -938,7 +935,7 @@ class WorkOrderViewSet(BaseViewSet):
 
         return APIResponse.success(data={"preview": preview})
 
-    @action(detail=True, methods=["post"])
+    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
     @work_order_sync_execute_docs
     def sync_tasks_execute(self, request, pk=None):
         """执行任务同步（需要用户确认）
@@ -985,10 +982,6 @@ class WorkOrderViewSet(BaseViewSet):
                 "需要确认后才能执行同步，请设置 confirmed=true",
                 code=status.HTTP_400_BAD_REQUEST,
             )
-
-        # 权限检查
-        if not request.user.is_staff and not request.user.is_superuser:
-            return APIResponse.error("需要管理员权限", code=status.HTTP_403_FORBIDDEN)
 
         # 执行同步
         try:
