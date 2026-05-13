@@ -329,6 +329,7 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
         verbose_name_plural = "施工单管理"
         ordering = ["-created_at"]
         permissions = [
+            ("approve_workorder", "可以审核施工单"),
             ("change_approved_workorder", "可以编辑已审核的施工单"),
         ]
         # 添加索引以优化查询性能

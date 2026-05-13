@@ -169,6 +169,9 @@ ROLE_CUSTOM_PERMISSIONS = {
         "WorkOrder": ["change_approved_workorder", "delete_workorder"],
         "SalesOrder": ["change_approved_salesorder"],
     },
+    "supervisor": {
+        "WorkOrder": ["approve_workorder"],
+    },
 }
 
 ROLE_ALIASES = {
