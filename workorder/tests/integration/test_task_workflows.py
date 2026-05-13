@@ -133,6 +133,9 @@ class TestWorkOrderTaskWorkflow:
         task.assigned_operator = operator
         task.save()
 
+        # Ensure new_dept handles the task's process
+        new_dept.processes.add(task.work_order_process.process)
+
         api_client.force_authenticate(user=supervisor)
         response = api_client.post(
             f"/api/v1/workorder-tasks/{task.id}/assign/",

@@ -41,7 +41,7 @@ class UserFactory(factory.django.DjangoModelFactory):
 
     @factory.post_generation
     def add_permissions(self, create, extracted, **kwargs):
-        """Optionally add basic workorder permissions to the user."""
+        """Optionally add permissions to the user."""
         if not create:
             return
 
@@ -58,15 +58,39 @@ class UserFactory(factory.django.DjangoModelFactory):
         try:
             from django.contrib.auth.models import Permission
             from django.contrib.contenttypes.models import ContentType
-            from workorder.models import WorkOrder
+            from django.apps import apps
 
-            content_type = ContentType.objects.get_for_model(WorkOrder)
-            permissions = Permission.objects.filter(
-                content_type=content_type,
-                codename__in=codenames
-            )
-            if permissions.exists():
-                self.user_permissions.add(*permissions)
+            for codename in codenames:
+                # Parse codename to extract action and model name
+                # e.g., "view_taskassignmentrule" -> action="view", model="TaskAssignmentRule"
+                parts = codename.split('_', 1)
+                if len(parts) != 2:
+                    continue
+                action, model_name = parts
+
+                # Convert model_name to proper case (e.g., taskassignmentrule -> TaskAssignmentRule)
+                # Try to find the model across all apps
+                model = None
+                for app_config in apps.get_app_configs():
+                    if app_config.label == 'workorder':
+                        try:
+                            model = app_config.get_model(model_name)
+                            break
+                        except LookupError:
+                            continue
+
+                if model is None:
+                    # Fallback to WorkOrder if model not found
+                    from workorder.models import WorkOrder
+                    model = WorkOrder
+
+                content_type = ContentType.objects.get_for_model(model)
+                permission = Permission.objects.filter(
+                    content_type=content_type,
+                    codename=codename
+                ).first()
+                if permission:
+                    self.user_permissions.add(permission)
         except Exception:
             # Permissions may not exist yet in some test contexts
             return

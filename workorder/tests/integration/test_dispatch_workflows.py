@@ -210,7 +210,7 @@ class TestAutoDispatchWorkflow:
             process=process, department=dept2, priority=2, is_active=False
         )
 
-        user = UserFactory(username="user")
+        user = UserFactory(username="user", add_permissions=["view_taskassignmentrule"])
         api_client.force_authenticate(user=user)
 
         # Query rules
