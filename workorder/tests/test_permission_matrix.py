@@ -16,8 +16,8 @@ ROLE_MATRIX_PATH = (
     PROJECT_ROOT
     / "backend"
     / "workorder"
-    / "migrations"
-    / "0055_normalize_role_groups.py"
+    / "permissions"
+    / "role_matrix.py"
 )
 
 

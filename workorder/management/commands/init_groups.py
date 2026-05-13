@@ -1,7 +1,5 @@
 """同步业务角色组和权限。"""
 
-from importlib import import_module
-
 from django.apps import apps
 from django.contrib.auth.management import create_permissions
 from django.contrib.auth.models import Group, Permission
@@ -9,20 +7,25 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.management.base import BaseCommand
 
 from workorder.constants.role_codes import ALL_ROLE_CODES, CODE_TO_LABEL
+from workorder.permissions.role_matrix import (
+    ROLE_ALIASES,
+    ROLE_CUSTOM_PERMISSIONS,
+    ROLE_PERMISSIONS,
+    STALE_PERMISSION_MODELS,
+)
 
 
 class Command(BaseCommand):
     help = "按预设矩阵同步系统业务角色组和权限"
 
     def handle(self, *args, **options):
-        matrix = import_module("workorder.migrations.0055_normalize_role_groups")
         create_permissions(
             apps.get_app_config("workorder"),
             verbosity=0,
             apps=apps,
         )
 
-        for role_code, model_actions in matrix.ROLE_PERMISSIONS.items():
+        for role_code, model_actions in ROLE_PERMISSIONS.items():
             group, _ = Group.objects.get_or_create(name=role_code)
             group.permissions.clear()
 
@@ -38,7 +41,7 @@ class Command(BaseCommand):
                     if permission:
                         group.permissions.add(permission)
 
-            for model_name, codenames in matrix.ROLE_CUSTOM_PERMISSIONS.get(
+            for model_name, codenames in ROLE_CUSTOM_PERMISSIONS.get(
                 role_code, {}
             ).items():
                 model = apps.get_model("workorder", model_name)
@@ -51,7 +54,7 @@ class Command(BaseCommand):
                     if permission:
                         group.permissions.add(permission)
 
-        for alias_name, target_name in matrix.ROLE_ALIASES.items():
+        for alias_name, target_name in ROLE_ALIASES.items():
             alias_group = Group.objects.filter(name=alias_name).first()
             target_group = Group.objects.filter(name=target_name).first()
             if not alias_group or not target_group:
@@ -62,7 +65,7 @@ class Command(BaseCommand):
 
         stale_content_types = ContentType.objects.filter(
             app_label="workorder",
-            model__in=matrix.STALE_PERMISSION_MODELS,
+            model__in=STALE_PERMISSION_MODELS,
         )
         Permission.objects.filter(content_type__in=stale_content_types).delete()
         stale_content_types.delete()

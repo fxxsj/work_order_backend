@@ -6,7 +6,7 @@ P1 优化：使用缓存减少权限检查的数据库查询
 """
 
 from rest_framework import permissions
-from .permission_utils import PermissionCache, PermissionUtils
+from ..permission_utils import PermissionCache, PermissionUtils
 
 
 class SuperuserFriendlyModelPermissions(permissions.DjangoModelPermissions):
@@ -410,6 +410,8 @@ class WorkOrderDataPermission(permissions.BasePermission):
             return False
 
         if request.method == "DELETE":
+            if obj.approval_status == "approved":
+                return False
             return request.user.has_perm("workorder.delete_workorder")
 
         # 写入操作：更严格的权限控制
