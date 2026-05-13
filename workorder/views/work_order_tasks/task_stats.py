@@ -13,6 +13,7 @@ from django.db.models import Avg, Count, F, Sum
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAdminUser
 from rest_framework.permissions import IsAuthenticated
 from workorder.response import APIResponse
 from workorder.docs.work_order_tasks_stats import (
@@ -66,7 +67,7 @@ class TaskStatsMixin:
         filename = request.query_params.get("filename")
         return export_tasks(queryset, filename)
 
-    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=["get"], permission_classes=[IsAdminUser])
     @task_assignment_history_docs
     def assignment_history(self, request):
         """分派历史查询：查询任务分派调整历史记录"""

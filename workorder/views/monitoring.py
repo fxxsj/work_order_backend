@@ -125,7 +125,7 @@ class BusinessMetricsViewSet(viewsets.GenericViewSet):
         metrics = BusinessMetrics.get_task_metrics(time_range)
         return APIResponse.success(data=metrics, message="任务业务指标获取成功")
 
-    @action(detail=False, methods=["get"])
+    @action(detail=False, methods=["get"], permission_classes=[IsAdminUser])
     @user_performance_docs
     def user_performance(self, request):
         """获取用户绩效指标"""
