@@ -7,7 +7,11 @@
 from rest_framework import filters, permissions, status
 from rest_framework.decorators import action
 
-from ..export_utils import export_products, import_products
+from ..import_export import export_model, import_model
+from ..import_export_configs import (
+    get_product_import_config,
+    PRODUCT_EXPORT_CONFIG,
+)
 from ..models.products import (
     Product,
     ProductGroup,
@@ -59,7 +63,7 @@ class ProductViewSet(ImageAssetActionsMixin, BaseViewSet):
     def export(self, request):
         """导出产品列表 Excel"""
         queryset = self.get_queryset()
-        return export_products(queryset)
+        return export_model(queryset, PRODUCT_EXPORT_CONFIG)
 
     @action(detail=False, methods=["post"])
     def import_products(self, request):
@@ -70,7 +74,8 @@ class ProductViewSet(ImageAssetActionsMixin, BaseViewSet):
                 "未上传文件",
                 code=status.HTTP_400_BAD_REQUEST,
             )
-        result = import_products(file, request.user)
+        config = get_product_import_config(Product)
+        result = import_model(file, config, request.user)
         if result['success_count'] == 0 and result['error_count'] > 0:
             return APIResponse.error(
                 f"导入失败: {result['errors'][0] if result['errors'] else '未知错误'}",

@@ -10,7 +10,11 @@ from rest_framework import status
 from rest_framework.decorators import action
 from workorder.response import APIResponse
 
-from workorder.export_utils import export_customers, import_customers
+from workorder.import_export import export_model, import_model
+from workorder.import_export_configs import (
+    CUSTOMER_EXPORT_CONFIG,
+    get_customer_import_config,
+)
 
 from workorder.docs.base import (
     customer_docs,
@@ -112,7 +116,7 @@ class CustomerViewSet(BaseViewSet):
     def export(self, request):
         """导出客户列表 Excel"""
         queryset = self.get_queryset()
-        return export_customers(queryset)
+        return export_model(queryset, CUSTOMER_EXPORT_CONFIG)
 
     @action(detail=False, methods=["post"])
     def import_customers(self, request):
@@ -123,7 +127,8 @@ class CustomerViewSet(BaseViewSet):
                 "未上传文件",
                 code=status.HTTP_400_BAD_REQUEST,
             )
-        result = import_customers(file, request.user)
+        config = get_customer_import_config(Customer)
+        result = import_model(file, config, request.user)
         if result['success_count'] == 0 and result['error_count'] > 0:
             return APIResponse.error(
                 f"导入失败: {result['errors'][0] if result['errors'] else '未知错误'}",
