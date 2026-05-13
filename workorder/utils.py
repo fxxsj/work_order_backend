@@ -5,9 +5,6 @@
 import logging
 from django.db import models, transaction, DatabaseError
 from django.utils import timezone
-from django.contrib.auth.models import User
-
-from workorder.constants.role_codes import SALES
 
 
 logger = logging.getLogger(__name__)
@@ -86,29 +83,6 @@ def generate_order_number(
     raise Exception(
         f"生成单号失败(模型={model_class.__name__}, 字段={field_name}): 超过最大重试次数"
     )
-
-
-def is_salesperson(user):
-    """
-    判断用户是否为业务员
-
-    Args:
-        user: User 实例或用户对象
-
-    Returns:
-        bool: 如果用户属于业务员角色，返回 True，否则返回 False
-    """
-    if not user or not user.is_authenticated:
-        return False
-
-    # 如果传入的是用户ID，获取用户对象
-    if isinstance(user, int):
-        try:
-            user = User.objects.get(pk=user)
-        except User.DoesNotExist:
-            return False
-
-    return user.groups.filter(name=SALES).exists()
 
 
 def get_user_role(user):

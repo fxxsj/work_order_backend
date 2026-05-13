@@ -26,7 +26,7 @@ from workorder.docs.base import (
     process_docs,
 )
 from workorder.permission_utils import PermissionUtils
-from workorder.constants.role_codes import SALES
+from workorder.permissions.permission_utils import is_sales_user
 
 from ..models.base import Customer, Department, Process
 from ..models.core import WorkOrder
@@ -64,7 +64,7 @@ class CustomerViewSet(BaseViewSet):
             return queryset.select_related("salesperson")
 
         # 如果是业务员，只返回自己负责的客户
-        if self.request.user.groups.filter(name=SALES).exists():
+        if is_sales_user(self.request.user):
             return queryset.filter(salesperson=self.request.user).select_related(
                 "salesperson"
             )

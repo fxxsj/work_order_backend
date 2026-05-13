@@ -60,7 +60,6 @@ from ..models.core import (
 from ..models.materials import Material
 from ..models.products import Product, ProductMaterial
 from ..models.sales import SalesOrder
-from ..constants.role_codes import SALES
 from ..permissions import (
     SuperuserFriendlyModelPermissions,
     WorkOrderDataPermission,
@@ -68,6 +67,7 @@ from ..permissions import (
     WorkOrderProcessPermission,
     WorkOrderTaskPermission,
 )
+from ..permissions.permission_utils import is_sales_user
 from ..serializers.base import ProcessSerializer
 from ..serializers.core import (
     ProcessLogSerializer,
@@ -362,7 +362,7 @@ class WorkOrderViewSet(BaseViewSet):
 
         # 使用缓存优化权限查询
         def get_filtered_queryset():
-            if user.groups.filter(name=SALES).exists():
+            if is_sales_user(user):
                 return queryset.filter(customer__salesperson=user)
 
             elif user.has_perm("workorder.change_workorder"):
@@ -534,7 +534,7 @@ class WorkOrderViewSet(BaseViewSet):
 
         # 未审核施工单数量（仅业务员可见，只统计自己负责的）
         pending_approval_count = 0
-        if request.user.groups.filter(name=SALES).exists():
+        if is_sales_user(request.user):
             pending_approval_count = queryset.filter(
                 approval_status="submitted", customer__salesperson=request.user
             ).count()

@@ -30,7 +30,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from rest_framework import status
 
-from ..constants.role_codes import SALES
+from ..permissions.permission_utils import is_sales_user
 from ..models.core import (
     WorkOrder,
     WorkOrderProcess,
@@ -99,7 +99,7 @@ class WorkOrderFlowService:
                 "请先登录后再审核施工单", code=status.HTTP_401_UNAUTHORIZED
             )
 
-        can_review_by_role = user.groups.filter(name=SALES).exists()
+        can_review_by_role = is_sales_user(user)
         can_review_by_perm = user.is_superuser or user.has_perm(
             "workorder.change_workorder"
         )

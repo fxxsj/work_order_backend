@@ -12,7 +12,7 @@ from django.db.models import Max
 from django.utils import timezone
 from rest_framework import status
 
-from ..constants.role_codes import SALES
+from ..permissions.permission_utils import is_sales_user
 from ..models.base import Process
 from ..models.core import WorkOrder, WorkOrderMaterial, WorkOrderProcess
 from ..models.materials import Material
@@ -115,7 +115,7 @@ class WorkOrderService:
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        if not user.groups.filter(name=SALES).exists():
+        if not is_sales_user(user):
             raise ServiceError(
                 "只有业务员可以审核施工单",
                 code=status.HTTP_403_FORBIDDEN,

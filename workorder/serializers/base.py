@@ -10,7 +10,8 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework import serializers
 
-from workorder.constants.role_codes import SALES, resolve_role_codes
+from workorder.constants.role_codes import resolve_role_codes
+from workorder.permissions.permission_utils import is_sales_user
 
 from ..models.base import Customer, Department, Process
 
@@ -81,7 +82,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_is_salesperson(self, obj) -> bool:
         """判断用户是否为业务员"""
-        return obj.groups.filter(name=SALES).exists()
+        return is_sales_user(obj)
 
 
 class CustomerSerializer(serializers.ModelSerializer):
