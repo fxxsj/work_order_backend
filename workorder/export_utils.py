@@ -222,17 +222,228 @@ def export_tasks(queryset, filename=None):
         # 设置数据单元格样式
         for col_num in range(1, len(headers) + 1):
             style_data_cell(ws.cell(row=row_num, column=col_num))
-    
+
     # 调整列宽
     column_widths = [18, 15, 10, 30, 15, 12, 12, 12, 12, 10, 20, 20, 30]
     for col_num, width in enumerate(column_widths, 1):
         ws.column_dimensions[get_column_letter(col_num)].width = width
-    
+
     # 冻结首行
     ws.freeze_panes = 'A2'
-    
+
     # 创建响应
     response = create_excel_response(filename)
     wb.save(response)
     return response
+
+
+def export_customers(queryset, filename=None):
+    """
+    导出客户列表到 Excel
+
+    Args:
+        queryset: 客户查询集
+        filename: 文件名（可选）
+
+    Returns:
+        HttpResponse: Excel 文件响应
+    """
+    if not OPENPYXL_AVAILABLE:
+        return HttpResponse(
+            'Excel 导出功能需要安装 openpyxl 库。请运行: pip install openpyxl',
+            status=500,
+            content_type='text/plain; charset=utf-8'
+        )
+
+    if filename is None:
+        filename = f'客户列表_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "客户列表"
+
+    # 表头
+    headers = ['名称', '联系人', '电话', '邮箱', '地址', '业务员', '备注', '创建时间']
+
+    # 写入表头
+    for col_num, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_num, value=header)
+        style_header_cell(cell)
+
+    # 写入数据
+    for row_num, customer in enumerate(queryset, 2):
+        ws.cell(row=row_num, column=1, value=customer.name or '')
+        ws.cell(row=row_num, column=2, value=customer.contact_person or '')
+        ws.cell(row=row_num, column=3, value=customer.phone or '')
+        ws.cell(row=row_num, column=4, value=customer.email or '')
+        ws.cell(row=row_num, column=5, value=customer.address or '')
+        ws.cell(row=row_num, column=6, value=customer.salesperson.username if customer.salesperson else '')
+        ws.cell(row=row_num, column=7, value=customer.notes or '')
+        ws.cell(row=row_num, column=8, value=customer.created_at.strftime('%Y-%m-%d %H:%M:%S') if customer.created_at else '')
+
+        # 设置数据单元格样式
+        for col_num in range(1, len(headers) + 1):
+            style_data_cell(ws.cell(row=row_num, column=col_num))
+
+    # 调整列宽
+    column_widths = [20, 12, 15, 25, 30, 12, 30, 20]
+    for col_num, width in enumerate(column_widths, 1):
+        ws.column_dimensions[get_column_letter(col_num)].width = width
+
+    # 冻结首行
+    ws.freeze_panes = 'A2'
+
+    # 创建响应
+    response = create_excel_response(filename)
+    wb.save(response)
+    return response
+
+
+def import_customers(file, user=None):
+    """
+    从 Excel 导入客户数据
+
+    Args:
+        file: 上传的 Excel 文件
+        user: 当前用户（用于业务员分配）
+
+    Returns:
+        dict: 包含 success_count, error_count, errors 的字典
+    """
+    if not OPENPYXL_AVAILABLE:
+        return {
+            'success_count': 0,
+            'error_count': 1,
+            'errors': ['Excel 导入功能需要安装 openpyxl 库。请运行: pip install openpyxl']
+        }
+
+    import io
+    from openpyxl import load_workbook
+    from openpyxl.utils.exceptions import InvalidFileException
+    from workorder.serializers.base import CustomerSerializer
+
+    try:
+        file_content = file.read()
+        if not file_content:
+            return {
+                'success_count': 0,
+                'error_count': 1,
+                'errors': ['文件内容为空']
+            }
+        try:
+            wb = load_workbook(io.BytesIO(file_content))
+        except Exception:
+            wb = Workbook(io.BytesIO(file_content))
+        ws = wb.active
+        if ws is None:
+            return {
+                'success_count': 0,
+                'error_count': 1,
+                'errors': ['Excel 文件格式不正确，无法读取工作表']
+            }
+
+        # 读取表头（第一行）
+        if ws.max_row < 1:
+            return {
+                'success_count': 0,
+                'error_count': 1,
+                'errors': ['Excel 文件为空或格式不正确']
+            }
+        first_row = ws[1]
+        if first_row is None:
+            return {
+                'success_count': 0,
+                'error_count': 1,
+                'errors': ['Excel 文件无法读取第一行']
+            }
+        headers = [cell.value for cell in first_row]
+        # 找到各列索引
+        col_map = {}
+        for idx, h in enumerate(headers, 1):
+            if h:
+                h_lower = str(h).strip().lower()
+                if '名称' in h_lower or 'name' in h_lower:
+                    col_map['name'] = idx
+                elif '联系人' in h_lower or 'contact' in h_lower:
+                    col_map['contact_person'] = idx
+                elif '电话' in h_lower or 'phone' in h_lower:
+                    col_map['phone'] = idx
+                elif '邮箱' in h_lower or 'email' in h_lower:
+                    col_map['email'] = idx
+                elif '地址' in h_lower or 'address' in h_lower:
+                    col_map['address'] = idx
+                elif '备注' in h_lower or 'notes' in h_lower:
+                    col_map['notes'] = idx
+
+        success_count = 0
+        error_count = 0
+        errors = []
+
+        # 从第二行开始读取数据
+        row_iterator = ws.iter_rows(min_row=2, values_only=True)
+        for row_num, row in enumerate(row_iterator, 2):
+            try:
+                if row is None:
+                    continue
+                data = {}
+                name_idx = col_map.get('name')
+                if name_idx and name_idx <= len(row):
+                    val = row[name_idx - 1]
+                    data['name'] = str(val).strip() if val else ''
+                contact_idx = col_map.get('contact_person')
+                if contact_idx and contact_idx <= len(row):
+                    val = row[contact_idx - 1]
+                    data['contact_person'] = str(val).strip() if val else ''
+                phone_idx = col_map.get('phone')
+                if phone_idx and phone_idx <= len(row):
+                    val = row[phone_idx - 1]
+                    data['phone'] = str(val).strip() if val else ''
+                email_idx = col_map.get('email')
+                if email_idx and email_idx <= len(row):
+                    val = row[email_idx - 1]
+                    data['email'] = str(val).strip() if val else ''
+                address_idx = col_map.get('address')
+                if address_idx and address_idx <= len(row):
+                    val = row[address_idx - 1]
+                    data['address'] = str(val).strip() if val else ''
+                notes_idx = col_map.get('notes')
+                if notes_idx and notes_idx <= len(row):
+                    val = row[notes_idx - 1]
+                    data['notes'] = str(val).strip() if val else ''
+
+                if not data.get('name'):
+                    errors.append(f'第{row_num}行: 客户名称不能为空')
+                    error_count += 1
+                    continue
+
+                serializer = CustomerSerializer(data=data)
+                if serializer.is_valid():
+                    serializer.save()
+                    success_count += 1
+                else:
+                    err_msg = '; '.join(f'{k}: {v[0]}' for k, v in serializer.errors.items())
+                    errors.append(f'第{row_num}行 ({data.get("name", "")}): {err_msg}')
+                    error_count += 1
+            except Exception as e:
+                errors.append(f'第{row_num}行: {str(e)}')
+                error_count += 1
+
+        return {
+            'success_count': success_count,
+            'error_count': error_count,
+            'errors': errors[:50]  # 最多返回50条错误
+        }
+
+    except InvalidFileException as e:
+        return {
+            'success_count': 0,
+            'error_count': 1,
+            'errors': [f'无效的 Excel 文件: {str(e)}']
+        }
+    except Exception as e:
+        return {
+            'success_count': 0,
+            'error_count': 1,
+            'errors': [f'文件读取失败: {str(e)}']
+        }
 
