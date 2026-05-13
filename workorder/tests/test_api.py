@@ -18,6 +18,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         """设置测试数据"""
         super().setUp()
         self.user = TestDataFactory.create_user()
+        self.admin_user = TestDataFactory.create_user(username='adminuser', is_superuser=True)
         self.client.force_login(self.user)
         self.customer = TestDataFactory.create_customer(salesperson=self.user)
         self.product = TestDataFactory.create_product()
@@ -230,7 +231,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
             status='pending'
         )
 
-        response = self.api_delete(f'/api/v1/workorders/{work_order.id}/', user=self.user)
+        response = self.api_delete(f'/api/v1/workorders/{work_order.id}/', user=self.admin_user)
 
         # 应该成功
         self.assertEqual(response.status_code, 204)
@@ -380,6 +381,7 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
         """设置测试数据"""
         super().setUp()
         self.user = TestDataFactory.create_user()
+        self.admin_user = TestDataFactory.create_user(username='wotask_admin', is_superuser=True)
         self.client.force_login(self.user)
         self.customer = TestDataFactory.create_customer(salesperson=self.user)
         self.work_order = TestDataFactory.create_workorder(
@@ -479,24 +481,31 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
             sequence=10
         )
 
-        task = WorkOrderTask.objects.create(
-            work_order_process=wo_process,
-            task_type='general',
-            work_content='测试任务',
-            production_quantity=100
-        )
-
         department, _ = Department.objects.get_or_create(
             code='TEST',
             defaults={'name': '测试部门'}
         )
+        department.processes.add(self.process)
+
+        task = WorkOrderTask.objects.create(
+            work_order_process=wo_process,
+            task_type='general',
+            work_content='测试任务',
+            production_quantity=100,
+            assigned_department=department,
+        )
+
+        # 给 admin_user 创建 UserProfile 并加入部门（满足 assign_to_operator 的部门检查）
+        from workorder.models.system import UserProfile
+        profile, _ = UserProfile.objects.get_or_create(user=self.admin_user)
+        profile.departments.add(department)
 
         data = {
             'assigned_department': department.id,
-            'assigned_operator': self.user.id
+            'assigned_operator': self.admin_user.id
         }
 
-        response = self.api_post(f'/api/v1/workorder-tasks/{task.id}/assign/', data, user=self.user)
+        response = self.api_post(f'/api/v1/workorder-tasks/{task.id}/assign/', data, user=self.admin_user)
 
         # 应该成功
         self.assertEqual(response.status_code, 200)

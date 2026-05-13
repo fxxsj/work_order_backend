@@ -10,15 +10,9 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from workorder.urls import router
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FLUTTER_SRC = PROJECT_ROOT / "flutter" / "lib" / "src"
-ROLE_MATRIX_PATH = (
-    PROJECT_ROOT
-    / "backend"
-    / "workorder"
-    / "permissions"
-    / "role_matrix.py"
-)
+ROLE_MATRIX_PATH = PROJECT_ROOT / "workorder" / "permissions" / "role_matrix.py"
 
 
 def _load_role_matrix():
