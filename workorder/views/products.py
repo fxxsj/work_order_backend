@@ -5,7 +5,9 @@
 """
 
 from rest_framework import filters, permissions, status
+from rest_framework.decorators import action
 
+from ..export_utils import export_products, import_products
 from ..models.products import (
     Product,
     ProductGroup,
@@ -13,6 +15,7 @@ from ..models.products import (
     ProductImage,
     ProductMaterial,
 )
+from ..response import APIResponse
 from ..serializers.products import (
     ProductGroupItemSerializer,
     ProductGroupSerializer,
@@ -50,6 +53,35 @@ class ProductViewSet(ImageAssetActionsMixin, BaseViewSet):
         queryset = super().get_queryset()
         return queryset.prefetch_related(
             "default_materials__material", "default_processes", "images"
+        )
+
+    @action(detail=False, methods=["get"])
+    def export(self, request):
+        """导出产品列表 Excel"""
+        queryset = self.get_queryset()
+        return export_products(queryset)
+
+    @action(detail=False, methods=["post"])
+    def import_products(self, request):
+        """导入产品 Excel"""
+        file = request.FILES.get('file')
+        if not file:
+            return APIResponse.error(
+                "未上传文件",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        result = import_products(file, request.user)
+        if result['success_count'] == 0 and result['error_count'] > 0:
+            return APIResponse.error(
+                f"导入失败: {result['errors'][0] if result['errors'] else '未知错误'}",
+                code=status.HTTP_400_BAD_REQUEST,
+                data=result,
+            )
+        created = result.get('created_count', 0)
+        updated = result.get('updated_count', 0)
+        return APIResponse.success(
+            message=f"导入完成: 新增 {created} 条, 更新 {updated} 条, 失败 {result['error_count']} 条",
+            data=result,
         )
 
 
