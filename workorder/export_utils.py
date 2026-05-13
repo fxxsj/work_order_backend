@@ -320,7 +320,7 @@ def import_customers(file, user=None):
     import io
     from openpyxl import load_workbook
     from openpyxl.utils.exceptions import InvalidFileException
-    from workorder.serializers.base import CustomerSerializer
+    from workorder.models.base import Customer
 
     try:
         file_content = file.read()
@@ -375,9 +375,11 @@ def import_customers(file, user=None):
                 elif '备注' in h_lower or 'notes' in h_lower:
                     col_map['notes'] = idx
 
-        success_count = 0
+        created_count = 0
+        updated_count = 0
         error_count = 0
         errors = []
+        imported_names = set()  # 跟踪本轮导入的客户名称，用于检测重复行
 
         # 从第二行开始读取数据
         row_iterator = ws.iter_rows(min_row=2, values_only=True)
@@ -416,20 +418,45 @@ def import_customers(file, user=None):
                     error_count += 1
                     continue
 
-                serializer = CustomerSerializer(data=data)
-                if serializer.is_valid():
-                    serializer.save()
-                    success_count += 1
-                else:
-                    err_msg = '; '.join(f'{k}: {v[0]}' for k, v in serializer.errors.items())
-                    errors.append(f'第{row_num}行 ({data.get("name", "")}): {err_msg}')
+                # 检查本批次内是否有重复名称
+                name_lower = data['name'].lower()
+                if name_lower in imported_names:
+                    errors.append(f'第{row_num}行: 客户名称 "{data["name"]}" 在本次导入中已出现，将跳过')
                     error_count += 1
+                    continue
+                imported_names.add(name_lower)
+
+                # 按名称查找是否已存在（不区分大小写）
+                existing = Customer.objects.filter(name__iexact=data['name']).first()
+
+                if existing:
+                    # 更新现有客户
+                    for field in ['contact_person', 'phone', 'email', 'address', 'notes']:
+                        if field in data:
+                            setattr(existing, field, data[field])
+                    existing.save()
+                    updated_count += 1
+                else:
+                    # 创建新客户
+                    Customer.objects.create(
+                        name=data['name'],
+                        contact_person=data.get('contact_person', ''),
+                        phone=data.get('phone', ''),
+                        email=data.get('email', ''),
+                        address=data.get('address', ''),
+                        notes=data.get('notes', ''),
+                        salesperson=user if user and user.is_authenticated else None,
+                    )
+                    created_count += 1
+
             except Exception as e:
                 errors.append(f'第{row_num}行: {str(e)}')
                 error_count += 1
 
         return {
-            'success_count': success_count,
+            'success_count': created_count + updated_count,
+            'created_count': created_count,
+            'updated_count': updated_count,
             'error_count': error_count,
             'errors': errors[:50]  # 最多返回50条错误
         }

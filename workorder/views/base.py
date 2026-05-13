@@ -130,8 +130,10 @@ class CustomerViewSet(BaseViewSet):
                 code=status.HTTP_400_BAD_REQUEST,
                 data=result,
             )
+        created = result.get('created_count', 0)
+        updated = result.get('updated_count', 0)
         return APIResponse.success(
-            message=f"导入完成: 成功 {result['success_count']} 条, 失败 {result['error_count']} 条",
+            message=f"导入完成: 新增 {created} 条, 更新 {updated} 条, 失败 {result['error_count']} 条",
             data=result,
         )
 
