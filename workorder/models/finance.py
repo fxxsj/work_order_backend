@@ -17,6 +17,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from .base import TimeStampedModel
+from workorder.constants.status import InvoiceStatus, PaymentPlanStatus, StatementStatus
 
 
 class CostCenter(TimeStampedModel, models.Model):
@@ -208,14 +209,7 @@ class Invoice(TimeStampedModel, models.Model):
         ("electronic", "电子发票"),
     ]
 
-    STATUS_CHOICES = [
-        ("draft", "待开具"),
-        ("issued", "已开具"),
-        ("sent", "已发送"),
-        ("received", "已收到"),
-        ("cancelled", "已作废"),
-        ("refunded", "已红冲"),
-    ]
+    STATUS_CHOICES = InvoiceStatus.CHOICES
 
     @classmethod
     def generate_invoice_number(cls):
@@ -265,7 +259,7 @@ class Invoice(TimeStampedModel, models.Model):
     # 开票信息
     issue_date = models.DateField("开票日期", null=True, blank=True)
     status = models.CharField(
-        "状态", max_length=20, choices=STATUS_CHOICES, default="draft"
+        "状态", max_length=20, choices=STATUS_CHOICES, default=InvoiceStatus.DRAFT
     )
 
     # 客户开票信息
@@ -440,12 +434,8 @@ class PaymentPlan(models.Model):
     status = models.CharField(
         "状态",
         max_length=20,
-        choices=[
-            ("pending", "待收款"),
-            ("partial", "部分收款"),
-            ("completed", "已完成"),
-        ],
-        default="pending",
+        choices=PaymentPlanStatus.CHOICES,
+        default=PaymentPlanStatus.PENDING,
     )
     paid_amount = models.DecimalField(
         "已收金额", max_digits=12, decimal_places=2, default=0
@@ -464,11 +454,11 @@ class PaymentPlan(models.Model):
     def update_status(self):
         """更新收款状态"""
         if self.paid_amount >= self.plan_amount:
-            self.status = "completed"
+            self.status = PaymentPlanStatus.COMPLETED
         elif self.paid_amount > 0:
-            self.status = "partial"
+            self.status = PaymentPlanStatus.PARTIAL
         else:
-            self.status = "pending"
+            self.status = PaymentPlanStatus.PENDING
         self.save()
 
 
@@ -480,12 +470,7 @@ class Statement(models.Model):
         ("supplier", "供应商对账单"),
     ]
 
-    STATUS_CHOICES = [
-        ("draft", "草稿"),
-        ("sent", "已发送"),
-        ("confirmed", "已确认"),
-        ("disputed", "有异议"),
-    ]
+    STATUS_CHOICES = StatementStatus.CHOICES
 
     @classmethod
     def generate_statement_number(cls):
@@ -539,7 +524,7 @@ class Statement(models.Model):
     )
 
     status = models.CharField(
-        "状态", max_length=20, choices=STATUS_CHOICES, default="draft"
+        "状态", max_length=20, choices=STATUS_CHOICES, default=StatementStatus.DRAFT
     )
 
     # 确认信息

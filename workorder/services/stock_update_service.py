@@ -8,7 +8,7 @@
 import logging
 from django.db import transaction
 
-from workorder.constants.status import MaterialPurchaseStatus, TaskStatus
+from workorder.constants.status import MaterialPurchaseStatus, TaskStatus, TaskType
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class StockUpdateService:
         with transaction.atomic():
             packaging_tasks = (
                 work_order_process.tasks.filter(
-                    task_type="packaging", status=TaskStatus.COMPLETED
+                    task_type=TaskType.PACKAGING, status=TaskStatus.COMPLETED
                 )
                 .select_related("product")
                 .all()
@@ -129,7 +129,7 @@ class StockUpdateService:
         with transaction.atomic():
             cutting_tasks = (
                 work_order_process.tasks.filter(
-                    task_type="cutting", status=TaskStatus.COMPLETED
+                    task_type=TaskType.CUTTING, status=TaskStatus.COMPLETED
                 )
                 .select_related("material")
                 .all()

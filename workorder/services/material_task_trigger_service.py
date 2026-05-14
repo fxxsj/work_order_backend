@@ -8,7 +8,7 @@
 import re
 from django.db import transaction
 
-from workorder.constants.status import TaskStatus
+from workorder.constants.status import TaskStatus, TaskType
 from workorder.models import WorkOrderTask
 
 
@@ -45,7 +45,7 @@ def update_cutting_tasks_on_material_cut(material_instance) -> None:
         cutting_tasks = (
             WorkOrderTask.objects.select_for_update()
             .filter(
-                task_type="cutting",
+                task_type=TaskType.CUTTING,
                 material=material_instance.material,
                 work_order_process__work_order=material_instance.work_order,
                 auto_calculate_quantity=True,
@@ -75,7 +75,7 @@ def complete_plate_tasks(
 
     只处理从"未确认"变为"已确认"的情况，由调用方确保前提条件。
     """
-    filters = {"task_type": "plate_making", "auto_calculate_quantity": True, "status__in": [TaskStatus.PENDING, TaskStatus.IN_PROGRESS]}
+    filters = {"task_type": TaskType.PLATE_MAKING, "auto_calculate_quantity": True, "status__in": [TaskStatus.PENDING, TaskStatus.IN_PROGRESS]}
     # 只填充非 None 的参数
     if artwork is not None:
         filters["artwork"] = artwork

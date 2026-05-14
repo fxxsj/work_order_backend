@@ -10,6 +10,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from datetime import timedelta
 
+from workorder.constants.status import TaskStatus
 from ..models.core import WorkOrder, WorkOrderProcess, WorkOrderTask, ProcessLog
 from ..models.system import WorkOrderApprovalLog
 from ..services.realtime_notification import (
@@ -154,7 +155,7 @@ class DeadlineWarningService:
         # 检查逾期但未完成的任务（使用工序计划结束时间）
         overdue_tasks = WorkOrderTask.objects.filter(
             work_order_process__planned_end_time__lt=now,
-            status__in=["pending", "in_progress"],
+            status__in=[TaskStatus.PENDING, TaskStatus.IN_PROGRESS],
         )
         
         for task in overdue_tasks:

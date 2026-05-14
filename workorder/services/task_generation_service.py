@@ -12,6 +12,8 @@
 import re
 from django.db import transaction
 
+from workorder.constants.status import TaskStatus, TaskType
+
 
 class TaskGenerationService:
     """工序任务生成服务
@@ -80,45 +82,45 @@ class TaskGenerationService:
             for artwork in work_order.artworks.all():
                 tasks.append(WorkOrderTask(
                     work_order_process=work_order_process,
-                    task_type="plate_making",
+                    task_type=TaskType.PLATE_MAKING,
                     artwork=artwork,
                     work_content=f"{order_number}制版审核",
                     production_quantity=1,
                     quantity_completed=0,
-                    status="pending",
+                    status=TaskStatus.PENDING,
                     auto_calculate_quantity=True,
                 ))
             for die in work_order.dies.all():
                 tasks.append(WorkOrderTask(
                     work_order_process=work_order_process,
-                    task_type="plate_making",
+                    task_type=TaskType.PLATE_MAKING,
                     die=die,
                     work_content=f"{order_number}制版审核",
                     production_quantity=1,
                     quantity_completed=0,
-                    status="pending",
+                    status=TaskStatus.PENDING,
                     auto_calculate_quantity=True,
                 ))
             for foiling_plate in work_order.foiling_plates.all():
                 tasks.append(WorkOrderTask(
                     work_order_process=work_order_process,
-                    task_type="plate_making",
+                    task_type=TaskType.PLATE_MAKING,
                     foiling_plate=foiling_plate,
                     work_content=f"{order_number}制版审核",
                     production_quantity=1,
                     quantity_completed=0,
-                    status="pending",
+                    status=TaskStatus.PENDING,
                     auto_calculate_quantity=True,
                 ))
             for embossing_plate in work_order.embossing_plates.all():
                 tasks.append(WorkOrderTask(
                     work_order_process=work_order_process,
-                    task_type="plate_making",
+                    task_type=TaskType.PLATE_MAKING,
                     embossing_plate=embossing_plate,
                     work_content=f"{order_number}制版审核",
                     production_quantity=1,
                     quantity_completed=0,
-                    status="pending",
+                    status=TaskStatus.PENDING,
                     auto_calculate_quantity=True,
                 ))
 
@@ -131,12 +133,12 @@ class TaskGenerationService:
                     )
                     tasks.append(WorkOrderTask(
                         work_order_process=work_order_process,
-                        task_type="cutting",
+                        task_type=TaskType.CUTTING,
                         material=material_item.material,
                         work_content=f"{order_number}开料",
                         production_quantity=quantity,
                         quantity_completed=0,
-                        status="pending",
+                        status=TaskStatus.PENDING,
                         auto_calculate_quantity=True,
                     ))
 
@@ -145,12 +147,12 @@ class TaskGenerationService:
             for artwork in work_order.artworks.all():
                 tasks.append(WorkOrderTask(
                     work_order_process=work_order_process,
-                    task_type="printing",
+                    task_type=TaskType.PRINTING,
                     artwork=artwork,
                     work_content=f"{order_number}印刷",
                     production_quantity=production_quantity,
                     quantity_completed=0,
-                    status="pending",
+                    status=TaskStatus.PENDING,
                     auto_calculate_quantity=False,
                 ))
 
@@ -159,12 +161,12 @@ class TaskGenerationService:
             for foiling_plate in work_order.foiling_plates.all():
                 tasks.append(WorkOrderTask(
                     work_order_process=work_order_process,
-                    task_type="foiling",
+                    task_type=TaskType.FOILING,
                     foiling_plate=foiling_plate,
                     work_content=f"{order_number}烫金",
                     production_quantity=production_quantity,
                     quantity_completed=0,
-                    status="pending",
+                    status=TaskStatus.PENDING,
                     auto_calculate_quantity=False,
                 ))
 
@@ -173,12 +175,12 @@ class TaskGenerationService:
             for embossing_plate in work_order.embossing_plates.all():
                 tasks.append(WorkOrderTask(
                     work_order_process=work_order_process,
-                    task_type="embossing",
+                    task_type=TaskType.EMBOSSING,
                     embossing_plate=embossing_plate,
                     work_content=f"{order_number}压凸",
                     production_quantity=production_quantity,
                     quantity_completed=0,
-                    status="pending",
+                    status=TaskStatus.PENDING,
                     auto_calculate_quantity=False,
                 ))
 
@@ -187,12 +189,12 @@ class TaskGenerationService:
             for die in work_order.dies.all():
                 tasks.append(WorkOrderTask(
                     work_order_process=work_order_process,
-                    task_type="die_cutting",
+                    task_type=TaskType.DIE_CUTTING,
                     die=die,
                     work_content=f"{order_number}模切",
                     production_quantity=production_quantity,
                     quantity_completed=0,
-                    status="pending",
+                    status=TaskStatus.PENDING,
                     auto_calculate_quantity=False,
                 ))
 
@@ -201,12 +203,12 @@ class TaskGenerationService:
             for product_item in work_order.products.all():
                 tasks.append(WorkOrderTask(
                     work_order_process=work_order_process,
-                    task_type="packaging",
+                    task_type=TaskType.PACKAGING,
                     product=product_item.product,
                     work_content=f"{product_item.product.name}包装",
                     production_quantity=product_item.quantity,
                     quantity_completed=0,
-                    status="pending",
+                    status=TaskStatus.PENDING,
                     auto_calculate_quantity=False,
                 ))
 
@@ -214,11 +216,11 @@ class TaskGenerationService:
             # 其他工序：生成通用任务
             tasks.append(WorkOrderTask(
                 work_order_process=work_order_process,
-                task_type="general",
+                task_type=TaskType.GENERAL,
                 work_content=f"{process.name}：{order_number}",
                 production_quantity=production_quantity,
                 quantity_completed=0,
-                status="pending",
+                status=TaskStatus.PENDING,
                 auto_calculate_quantity=False,
             ))
 

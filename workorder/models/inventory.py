@@ -14,6 +14,12 @@ from django.contrib.auth.models import User
 from django.db import models, transaction
 from django.utils import timezone
 
+from workorder.constants.status import (
+    DeliveryOrderModelStatus,
+    StockInStatus,
+    StockOutStatus,
+)
+
 from .base import TimeStampedModel
 
 
@@ -118,13 +124,7 @@ class ProductStock(TimeStampedModel, models.Model):
 class StockIn(models.Model):
     """入库单"""
 
-    STATUS_CHOICES = [
-        ("draft", "草稿"),
-        ("submitted", "已提交"),
-        ("approved", "已审核"),
-        ("completed", "已完成"),
-        ("cancelled", "已取消"),
-    ]
+    STATUS_CHOICES = StockInStatus.CHOICES
 
     @classmethod
     def generate_order_number(cls):
@@ -147,7 +147,7 @@ class StockIn(models.Model):
     )
     stock_in_date = models.DateField("入库日期", default=timezone.now)
     status = models.CharField(
-        "状态", max_length=20, choices=STATUS_CHOICES, default="draft"
+        "状态", max_length=20, choices=STATUS_CHOICES, default=StockInStatus.DRAFT
     )
 
     # 审核信息
@@ -205,13 +205,7 @@ class StockOut(models.Model):
         ("defective", "次品出库"),
     ]
 
-    STATUS_CHOICES = [
-        ("draft", "草稿"),
-        ("submitted", "已提交"),
-        ("approved", "已审核"),
-        ("completed", "已完成"),
-        ("cancelled", "已取消"),
-    ]
+    STATUS_CHOICES = StockOutStatus.CHOICES
 
     @classmethod
     def generate_order_number(cls):
@@ -239,7 +233,7 @@ class StockOut(models.Model):
     )
     stock_out_date = models.DateField("出库日期", default=timezone.now)
     status = models.CharField(
-        "状态", max_length=20, choices=STATUS_CHOICES, default="draft"
+        "状态", max_length=20, choices=STATUS_CHOICES, default=StockOutStatus.DRAFT
     )
 
     # 审核信息
@@ -285,14 +279,7 @@ class StockOut(models.Model):
 class DeliveryOrder(TimeStampedModel, models.Model):
     """发货单"""
 
-    STATUS_CHOICES = [
-        ("pending", "待发货"),
-        ("shipped", "已发货"),
-        ("in_transit", "运输中"),
-        ("received", "已签收"),
-        ("rejected", "拒收"),
-        ("returned", "已退货"),
-    ]
+    STATUS_CHOICES = DeliveryOrderModelStatus.CHOICES
 
     @classmethod
     def generate_order_number(cls):
@@ -318,7 +305,7 @@ class DeliveryOrder(TimeStampedModel, models.Model):
     )
     delivery_date = models.DateField("发货日期", null=True, blank=True)
     status = models.CharField(
-        "状态", max_length=20, choices=STATUS_CHOICES, default="pending"
+        "状态", max_length=20, choices=STATUS_CHOICES, default=DeliveryOrderModelStatus.PENDING
     )
 
     # 收货信息
