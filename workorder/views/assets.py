@@ -386,92 +386,63 @@ class EmbossingPlateViewSet(
 
 
 @artwork_product_docs
-class ArtworkProductViewSet(viewsets.ModelViewSet):
+class _ProductRelationViewSet(viewsets.ModelViewSet):
+    """Base ViewSet for plate/artwork product relations.
+
+    Subclasses must set:
+        queryset, serializer_class, product_relation_field
+    """
+
+    permission_classes = [SuperuserFriendlyModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = ["sort_order"]
+    product_relation_field: str = ""
+
+    def get_filterset(self):
+        from django_filters import FilterSet
+
+        class AutoFilterSet(FilterSet):
+            class Meta:
+                model = self.queryset.model
+                fields = [self.product_relation_field, "product"]
+
+        return AutoFilterSet
+
+    @property
+    def ordering(self):
+        return [self.product_relation_field, "sort_order"]
+
+
+class ArtworkProductViewSet(_ProductRelationViewSet):
     """图稿产品视图集"""
 
     queryset = ArtworkProduct.objects.all()
     serializer_class = ArtworkProductSerializer
-    permission_classes = [SuperuserFriendlyModelPermissions]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    ordering_fields = ["sort_order"]
-    ordering = ["artwork", "sort_order"]
-
-    def get_filterset(self):
-        """延迟创建 FilterSet，避免模块加载时的关系解析问题"""
-        from django_filters import FilterSet
-
-        class ArtworkProductFilterSet(FilterSet):
-            class Meta:
-                model = ArtworkProduct
-                fields = ["artwork", "product"]
-
-        return ArtworkProductFilterSet
+    product_relation_field = "artwork"
 
 
 @die_product_docs
-class DieProductViewSet(viewsets.ModelViewSet):
+class DieProductViewSet(_ProductRelationViewSet):
     """刀模产品视图集"""
 
     queryset = DieProduct.objects.all()
     serializer_class = DieProductSerializer
-    permission_classes = [SuperuserFriendlyModelPermissions]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    ordering_fields = ["sort_order"]
-    ordering = ["die", "sort_order"]
-
-    def get_filterset(self):
-        """延迟创建 FilterSet，避免模块加载时的关系解析问题"""
-        from django_filters import FilterSet
-
-        class DieProductFilterSet(FilterSet):
-            class Meta:
-                model = DieProduct
-                fields = ["die", "product"]
-
-        return DieProductFilterSet
+    product_relation_field = "die"
 
 
 @foiling_product_docs
-class FoilingPlateProductViewSet(viewsets.ModelViewSet):
+class FoilingPlateProductViewSet(_ProductRelationViewSet):
     """烫金版产品视图集"""
 
     queryset = FoilingPlateProduct.objects.all()
     serializer_class = FoilingPlateProductSerializer
-    permission_classes = [SuperuserFriendlyModelPermissions]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    ordering_fields = ["sort_order"]
-    ordering = ["foiling_plate", "sort_order"]
-
-    def get_filterset(self):
-        """延迟创建 FilterSet，避免模块加载时的关系解析问题"""
-        from django_filters import FilterSet
-
-        class FoilingPlateProductFilterSet(FilterSet):
-            class Meta:
-                model = FoilingPlateProduct
-                fields = ["foiling_plate", "product"]
-
-        return FoilingPlateProductFilterSet
+    product_relation_field = "foiling_plate"
 
 
 @embossing_product_docs
-class EmbossingPlateProductViewSet(viewsets.ModelViewSet):
+class EmbossingPlateProductViewSet(_ProductRelationViewSet):
     """压凸版产品视图集"""
 
     queryset = EmbossingPlateProduct.objects.all()
     serializer_class = EmbossingPlateProductSerializer
-    permission_classes = [SuperuserFriendlyModelPermissions]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    ordering_fields = ["sort_order"]
-    ordering = ["embossing_plate", "sort_order"]
-
-    def get_filterset(self):
-        """延迟创建 FilterSet，避免模块加载时的关系解析问题"""
-        from django_filters import FilterSet
-
-        class EmbossingPlateProductFilterSet(FilterSet):
-            class Meta:
-                model = EmbossingPlateProduct
-                fields = ["embossing_plate", "product"]
-
-        return EmbossingPlateProductFilterSet
+    product_relation_field = "embossing_plate"

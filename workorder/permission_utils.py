@@ -205,3 +205,57 @@ class PermissionUtils:
     @staticmethod
     def _prefix(path):
         return f"{path}__" if path else ""
+
+
+def apply_data_scope(
+    queryset,
+    user,
+    *,
+    customer_path=None,
+    sales_order_path=None,
+    work_order_path=None,
+    ownership_paths=(),
+    bypass_check=None,
+):
+    """Apply user-based data scope filtering to a queryset.
+
+    Unified replacement for _scope_finance_queryset and _apply_user_scope.
+
+    Args:
+        queryset: The base queryset to filter.
+        user: The current request user.
+        customer_path: FK path to Customer model for salesperson scoping.
+        sales_order_path: FK path to SalesOrder for order scoping.
+        work_order_path: FK path to WorkOrder for work order scoping.
+        ownership_paths: Tuple of FK paths for direct ownership checks.
+        bypass_check: Optional callable(user) -> bool. If returns True,
+            the queryset is returned unfiltered (e.g. for finance users).
+    """
+    if not user.is_authenticated:
+        return queryset.none()
+    if user.is_superuser:
+        return queryset
+    if bypass_check and bypass_check(user):
+        return queryset
+
+    scope = Q()
+    if customer_path:
+        scope |= PermissionUtils.build_customer_scope_q(user, customer_path)
+    if sales_order_path:
+        scope |= PermissionUtils.build_sales_order_scope_q(user, sales_order_path)
+    if work_order_path:
+        scope |= PermissionUtils.build_work_order_scope_q(user, work_order_path)
+    for ownership_path in ownership_paths:
+        scope |= Q(**{ownership_path: user})
+
+    if not scope.children:
+        return queryset.none()
+    return queryset.filter(scope).distinct()
+
+
+def apply_department_scope(queryset, department_id, path):
+    """Filter queryset to a specific department along the given relation path."""
+    if not department_id:
+        return queryset
+    filter_key = f"{path}__id"
+    return queryset.filter(**{filter_key: department_id}).distinct()

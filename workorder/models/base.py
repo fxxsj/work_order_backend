@@ -9,8 +9,18 @@
 """
 
 from django.contrib.auth.models import User
-from django.db import models
+from django.db import models, transaction
+from django.utils import timezone
 from workorder.models.audit import AuditMixin
+
+
+class _SignalSafeQuerySet(models.QuerySet):
+    """禁止使用 update() 绕过 signals 的 QuerySet。"""
+
+    def update(self, **kwargs):
+        raise RuntimeError(
+            "禁止使用 update() 绕过 signals，请改用 save() 或业务服务方法。"
+        )
 
 
 class TimeStampedModel(models.Model):
@@ -22,6 +32,64 @@ class TimeStampedModel(models.Model):
 
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+class ConfirmableMixin(models.Model):
+    """确认状态抽象 Mixin
+
+    为模型提供 confirmed / confirmed_by / confirmed_at 三个字段。
+    子类可以通过 related_name_confirm 类属性覆盖 ForeignKey 的 related_name。
+    默认 related_name 为 "%(class)s_confirmed"。
+    """
+
+    confirmed = models.BooleanField(
+        "已确认", default=False, help_text="设计部是否已确认"
+    )
+    confirmed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="%(class)s_confirmed",
+        verbose_name="确认人",
+    )
+    confirmed_at = models.DateTimeField("确认时间", null=True, blank=True)
+
+    class Meta:
+        abstract = True
+
+
+class GenerateCodeMixin(models.Model):
+    """编码自动生成 Mixin
+
+    子类设置 code_prefix（如 "DIE"、"FP"、"EP"），
+    generate_code() 生成 prefix + YYYYMM + 3位序号。
+    """
+    code_prefix = ""
+
+    @classmethod
+    def generate_code(cls):
+        prefix = f"{cls.code_prefix}{timezone.now().strftime('%Y%m')}"
+        with transaction.atomic():
+            last = (
+                cls.objects.filter(code__startswith=prefix)
+                .order_by("-code")
+                .select_for_update()
+                .first()
+            )
+            prefix_len = len(cls.code_prefix) + 6
+            if last and len(last.code) >= prefix_len + 3:
+                try:
+                    last_number = int(last.code[prefix_len:])
+                    new_number = last_number + 1
+                except (ValueError, IndexError):
+                    new_number = 1
+            else:
+                new_number = 1
+            return f"{prefix}{new_number:03d}"
 
     class Meta:
         abstract = True

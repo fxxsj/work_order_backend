@@ -22,6 +22,8 @@ from ..models.assets import (
     FoilingPlateImage,
     FoilingPlateProduct,
 )
+from .base import PlateAssetSerializer, create_image_serializer, create_product_serializer
+from ..utils import format_color_display
 
 
 class ArtworkProductSerializer(serializers.ModelSerializer):
@@ -35,22 +37,9 @@ class ArtworkProductSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class ArtworkImageSerializer(serializers.ModelSerializer):
-    """图稿图片序列化器"""
-
-    class Meta:
-        model = ArtworkImage
-        fields = ["id", "image", "sort_order", "description", "created_at"]
-        read_only_fields = ["id", "created_at"]
-
-
-class DieImageSerializer(serializers.ModelSerializer):
-    """刀模图片序列化器"""
-
-    class Meta:
-        model = DieImage
-        fields = ["id", "image", "sort_order", "description", "created_at"]
-        read_only_fields = ["id", "created_at"]
+# 资产图片序列化器（工厂生成，字段配置统一）
+ArtworkImageSerializer = create_image_serializer(ArtworkImage, "ArtworkImageSerializer")
+DieImageSerializer = create_image_serializer(DieImage, "DieImageSerializer")
 
 
 class ArtworkSerializer(serializers.ModelSerializer):
@@ -119,39 +108,7 @@ class ArtworkSerializer(serializers.ModelSerializer):
 
     def get_color_display(self, obj) -> str:
         """生成色数显示文本，格式：CMK+928C,金色（5色）"""
-        parts = []
-        total_count = 0
-
-        # CMYK颜色：按照固定顺序C、M、Y、K排列
-        if obj.cmyk_colors:
-            cmyk_order = ["C", "M", "Y", "K"]  # 固定顺序：1C2M3Y4K
-            cmyk_sorted = [c for c in cmyk_order if c in obj.cmyk_colors]
-            if cmyk_sorted:
-                cmyk_str = "".join(cmyk_sorted)  # 按固定顺序连接，如：CMK
-                parts.append(cmyk_str)
-                total_count += len(obj.cmyk_colors)
-
-        # 其他颜色：用逗号分隔
-        if obj.other_colors:
-            other_colors_list = [c.strip() for c in obj.other_colors if c and c.strip()]
-            if other_colors_list:
-                other_colors_str = ",".join(other_colors_list)  # 用逗号分隔
-                parts.append(other_colors_str)
-                total_count += len(other_colors_list)
-
-        # 组合显示：如果有CMYK和其他颜色，用+号连接
-        if len(parts) > 1:
-            result = "+".join(parts)
-        elif len(parts) == 1:
-            result = parts[0]
-        else:
-            return "-"
-
-        # 添加色数统计
-        if total_count > 0:
-            result += f"（{total_count}色）"
-
-        return result
+        return format_color_display(obj.cmyk_colors, obj.other_colors) or "-"
 
     def get_die_names(self, obj) -> List[str]:
         """获取所有刀模名称"""
@@ -231,45 +188,28 @@ class ArtworkSerializer(serializers.ModelSerializer):
         return artwork
 
 
-class DieProductSerializer(serializers.ModelSerializer):
-    """刀模产品序列化器"""
-
-    product_name = serializers.SerializerMethodField()
-    product_code = serializers.SerializerMethodField()
-    relation_type_display = serializers.CharField(
-        source="get_relation_type_display", read_only=True
-    )
-
-    class Meta:
-        model = DieProduct
-        fields = "__all__"
-
-    def get_product_name(self, obj) -> Optional[str]:
-        return obj.product.name if obj.product else None
-
-    def get_product_code(self, obj) -> Optional[str]:
-        return obj.product.code if obj.product else None
+DieProductSerializer = create_product_serializer(
+    DieProduct,
+    "DieProductSerializer",
+    extra_fields={
+        'relation_type_display': serializers.CharField(
+            source="get_relation_type_display", read_only=True
+        ),
+    },
+)
 
 
-class DieSerializer(serializers.ModelSerializer):
-    """刀模序列化器
+class DieSerializer(PlateAssetSerializer):
+    """刀模序列化器"""
 
-    提供完整的字段验证和业务规则检查。
-    """
+    plate_model = Die
+    plate_name_verbose = "刀模"
+    product_model = DieProduct
+    product_fk_field = "die"
+    use_transaction = True
 
     products = DieProductSerializer(many=True, read_only=True)
     images = DieImageSerializer(many=True, read_only=True)
-    products_data = serializers.ListField(
-        child=serializers.DictField(),
-        write_only=True,
-        required=False,
-        help_text='产品列表数据，格式：[{"product": 1, "quantity": 2, "relation_type": "imposition"}]',
-    )
-    # 确认人名称（只读）
-    confirmed_by_name = serializers.CharField(
-        source="confirmed_by.username", read_only=True, allow_null=True
-    )
-    # 刀模类型显示名称
     die_type_display = serializers.CharField(
         source="get_die_type_display", read_only=True
     )
@@ -277,416 +217,53 @@ class DieSerializer(serializers.ModelSerializer):
     class Meta:
         model = Die
         fields = "__all__"
-        # code 字段不在 read_only_fields 中，允许自定义输入
 
-    def validate_name(self, value):
-        """验证刀模名称"""
-        if not value or not value.strip():
-            raise serializers.ValidationError("刀模名称不能为空")
-        if len(value) > 200:
-            raise serializers.ValidationError("刀模名称不能超过200个字符")
-        return value.strip()
-
-    def validate_code(self, value):
-        """验证刀模编码"""
-        if value:
-            value = value.strip()
-            if len(value) > 50:
-                raise serializers.ValidationError("刀模编码不能超过50个字符")
-            # 检查编码唯一性（排除当前实例）
-            queryset = Die.objects.filter(code=value)
-            if self.instance:
-                queryset = queryset.exclude(pk=self.instance.pk)
-            if queryset.exists():
-                raise serializers.ValidationError("该刀模编码已存在")
-        return value
-
-    def validate_size(self, value):
-        """验证尺寸字段长度"""
-        if value and len(value) > 100:
-            raise serializers.ValidationError("尺寸不能超过100个字符")
-        return value.strip() if value else value
-
-    def validate_material(self, value):
-        """验证材质字段长度"""
-        if value and len(value) > 100:
-            raise serializers.ValidationError("材质不能超过100个字符")
-        return value.strip() if value else value
-
-    def validate_thickness(self, value):
-        """验证厚度字段长度"""
-        if value and len(value) > 50:
-            raise serializers.ValidationError("厚度不能超过50个字符")
-        return value.strip() if value else value
-
-    def validate(self, attrs):
-        """对象级验证：已确认刀模不允许修改关键字段"""
-        if self.instance and self.instance.confirmed:
-            # 已确认的刀模，检查是否修改了关键字段
-            protected_fields = ["code", "name", "size", "material", "thickness"]
-            for field in protected_fields:
-                if field in attrs:
-                    old_value = getattr(self.instance, field, None) or ""
-                    new_value = attrs.get(field, "") or ""
-                    if old_value != new_value:
-                        raise serializers.ValidationError(
-                            {
-                                field: f"已确认的刀模不允许修改{Die._meta.get_field(field).verbose_name}"
-                            }
-                        )
-        return attrs
-
-    def create(self, validated_data):
-        """创建刀模，如果编码为空则自动生成，并创建关联产品"""
-        from django.db import transaction
-
-        products_data = validated_data.pop("products_data", [])
-
-        # 如果编码为空，自动生成
-        if not validated_data.get("code"):
-            validated_data["code"] = Die.generate_code()
-
-        with transaction.atomic():
-            die = super().create(validated_data)
-
-            # 创建关联产品
-            for idx, product_data in enumerate(products_data):
-                DieProduct.objects.create(
-                    die=die,
-                    product_id=product_data.get("product"),
-                    quantity=product_data.get("quantity", 1),
-                    relation_type=product_data.get("relation_type", "exclusive"),
-                    sort_order=idx,
-                )
-
-        return die
-
-    def update(self, instance, validated_data):
-        """更新刀模，处理产品列表"""
-        from django.db import transaction
-
-        products_data = validated_data.pop("products_data", None)
-
-        with transaction.atomic():
-            die = super().update(instance, validated_data)
-
-            # 如果提供了产品数据，更新产品列表
-            if products_data is not None:
-                # 删除现有产品关联
-                DieProduct.objects.filter(die=die).delete()
-
-                # 创建新的产品关联
-                for idx, product_data in enumerate(products_data):
-                    DieProduct.objects.create(
-                        die=die,
-                        product_id=product_data.get("product"),
-                        quantity=product_data.get("quantity", 1),
-                        relation_type=product_data.get("relation_type", "exclusive"),
-                        sort_order=idx,
-                    )
-
-        return die
+    def _build_product_kwargs(self, product_data, index):
+        return {
+            "product_id": product_data.get("product"),
+            "quantity": product_data.get("quantity", 1),
+            "relation_type": product_data.get("relation_type", "exclusive"),
+            "sort_order": index,
+        }
 
 
-class FoilingPlateImageSerializer(serializers.ModelSerializer):
-    """烫金版图片序列化器"""
-
-    class Meta:
-        model = FoilingPlateImage
-        fields = ["id", "image", "sort_order", "description", "created_at"]
-        read_only_fields = ["id", "created_at"]
+FoilingPlateImageSerializer = create_image_serializer(FoilingPlateImage, "FoilingPlateImageSerializer")
+FoilingPlateProductSerializer = create_product_serializer(FoilingPlateProduct, "FoilingPlateProductSerializer")
 
 
-class FoilingPlateProductSerializer(serializers.ModelSerializer):
-    """烫金版产品序列化器"""
+class FoilingPlateSerializer(PlateAssetSerializer):
+    """烫金版序列化器"""
 
-    product_name = serializers.SerializerMethodField()
-    product_code = serializers.SerializerMethodField()
-
-    class Meta:
-        model = FoilingPlateProduct
-        fields = "__all__"
-
-    def get_product_name(self, obj) -> Optional[str]:
-        return obj.product.name if obj.product else None
-
-    def get_product_code(self, obj) -> Optional[str]:
-        return obj.product.code if obj.product else None
-
-
-class FoilingPlateSerializer(serializers.ModelSerializer):
-    """烫金版序列化器
-
-    提供完整的字段验证和业务规则检查。
-    """
+    plate_model = FoilingPlate
+    plate_name_verbose = "烫金版"
+    product_model = FoilingPlateProduct
+    product_fk_field = "foiling_plate"
+    use_transaction = False
 
     products = FoilingPlateProductSerializer(many=True, read_only=True)
     images = FoilingPlateImageSerializer(many=True, read_only=True)
-    products_data = serializers.ListField(
-        child=serializers.DictField(),
-        write_only=True,
-        required=False,
-        help_text='产品列表数据，格式：[{"product": 1, "quantity": 2}]',
-    )
-    # 确认人名称（只读）
-    confirmed_by_name = serializers.CharField(
-        source="confirmed_by.username", read_only=True, allow_null=True
-    )
 
     class Meta:
         model = FoilingPlate
         fields = "__all__"
-        # code 字段不在 read_only_fields 中，允许自定义输入
-
-    def validate_name(self, value):
-        """验证烫金版名称"""
-        if not value or not value.strip():
-            raise serializers.ValidationError("烫金版名称不能为空")
-        if len(value) > 200:
-            raise serializers.ValidationError("烫金版名称不能超过200个字符")
-        return value.strip()
-
-    def validate_code(self, value):
-        """验证烫金版编码"""
-        if value:
-            value = value.strip()
-            if len(value) > 50:
-                raise serializers.ValidationError("烫金版编码不能超过50个字符")
-            # 检查编码唯一性（排除当前实例）
-            queryset = FoilingPlate.objects.filter(code=value)
-            if self.instance:
-                queryset = queryset.exclude(pk=self.instance.pk)
-            if queryset.exists():
-                raise serializers.ValidationError("该烫金版编码已存在")
-        return value
-
-    def validate_size(self, value):
-        """验证尺寸字段长度"""
-        if value and len(value) > 100:
-            raise serializers.ValidationError("尺寸不能超过100个字符")
-        return value.strip() if value else value
-
-    def validate_material(self, value):
-        """验证材质字段长度"""
-        if value and len(value) > 100:
-            raise serializers.ValidationError("材质不能超过100个字符")
-        return value.strip() if value else value
-
-    def validate_thickness(self, value):
-        """验证厚度字段长度"""
-        if value and len(value) > 50:
-            raise serializers.ValidationError("厚度不能超过50个字符")
-        return value.strip() if value else value
-
-    def validate(self, attrs):
-        """对象级验证：已确认烫金版不允许修改关键字段"""
-        if self.instance and self.instance.confirmed:
-            # 已确认的烫金版，检查是否修改了关键字段
-            protected_fields = ["code", "name", "size", "material", "thickness"]
-            for field in protected_fields:
-                if field in attrs:
-                    old_value = getattr(self.instance, field, None) or ""
-                    new_value = attrs.get(field, "") or ""
-                    if old_value != new_value:
-                        raise serializers.ValidationError(
-                            {
-                                field: f"已确认的烫金版不允许修改{FoilingPlate._meta.get_field(field).verbose_name}"
-                            }
-                        )
-        return attrs
-
-    def create(self, validated_data):
-        """创建烫金版，如果编码为空则自动生成，并创建关联产品"""
-        products_data = validated_data.pop("products_data", [])
-
-        # 如果编码为空，自动生成
-        if not validated_data.get("code"):
-            validated_data["code"] = FoilingPlate.generate_code()
-
-        foiling_plate = super().create(validated_data)
-
-        # 创建关联产品
-        for idx, product_data in enumerate(products_data):
-            FoilingPlateProduct.objects.create(
-                foiling_plate=foiling_plate,
-                product_id=product_data.get("product"),
-                quantity=product_data.get("quantity", 1),
-                sort_order=idx,
-            )
-
-        return foiling_plate
-
-    def update(self, instance, validated_data):
-        """更新烫金版，处理产品列表"""
-        products_data = validated_data.pop("products_data", None)
-
-        foiling_plate = super().update(instance, validated_data)
-
-        # 如果提供了产品数据，更新产品列表
-        if products_data is not None:
-            # 删除现有产品关联
-            FoilingPlateProduct.objects.filter(foiling_plate=foiling_plate).delete()
-
-            # 创建新的产品关联
-            for idx, product_data in enumerate(products_data):
-                FoilingPlateProduct.objects.create(
-                    foiling_plate=foiling_plate,
-                    product_id=product_data.get("product"),
-                    quantity=product_data.get("quantity", 1),
-                    sort_order=idx,
-                )
-
-        return foiling_plate
 
 
-class EmbossingPlateImageSerializer(serializers.ModelSerializer):
-    """压凸版图片序列化器"""
-
-    class Meta:
-        model = EmbossingPlateImage
-        fields = ["id", "image", "sort_order", "description", "created_at"]
-        read_only_fields = ["id", "created_at"]
+EmbossingPlateImageSerializer = create_image_serializer(EmbossingPlateImage, "EmbossingPlateImageSerializer")
+EmbossingPlateProductSerializer = create_product_serializer(EmbossingPlateProduct, "EmbossingPlateProductSerializer")
 
 
-class EmbossingPlateProductSerializer(serializers.ModelSerializer):
-    """压凸版产品序列化器"""
+class EmbossingPlateSerializer(PlateAssetSerializer):
+    """压凸版序列化器"""
 
-    product_name = serializers.SerializerMethodField()
-    product_code = serializers.SerializerMethodField()
-
-    class Meta:
-        model = EmbossingPlateProduct
-        fields = "__all__"
-
-    def get_product_name(self, obj) -> Optional[str]:
-        return obj.product.name if obj.product else None
-
-    def get_product_code(self, obj) -> Optional[str]:
-        return obj.product.code if obj.product else None
-
-
-class EmbossingPlateSerializer(serializers.ModelSerializer):
-    """压凸版序列化器
-
-    提供完整的字段验证和业务规则检查。
-    """
+    plate_model = EmbossingPlate
+    plate_name_verbose = "压凸版"
+    product_model = EmbossingPlateProduct
+    product_fk_field = "embossing_plate"
+    use_transaction = False
 
     products = EmbossingPlateProductSerializer(many=True, read_only=True)
     images = EmbossingPlateImageSerializer(many=True, read_only=True)
-    products_data = serializers.ListField(
-        child=serializers.DictField(),
-        write_only=True,
-        required=False,
-        help_text='产品列表数据，格式：[{"product": 1, "quantity": 2}]',
-    )
-    # 确认人名称（只读）
-    confirmed_by_name = serializers.CharField(
-        source="confirmed_by.username", read_only=True, allow_null=True
-    )
 
     class Meta:
         model = EmbossingPlate
         fields = "__all__"
-        # code 字段不在 read_only_fields 中，允许自定义输入
-
-    def validate_name(self, value):
-        """验证压凸版名称"""
-        if not value or not value.strip():
-            raise serializers.ValidationError("压凸版名称不能为空")
-        if len(value) > 200:
-            raise serializers.ValidationError("压凸版名称不能超过200个字符")
-        return value.strip()
-
-    def validate_code(self, value):
-        """验证压凸版编码"""
-        if value:
-            value = value.strip()
-            if len(value) > 50:
-                raise serializers.ValidationError("压凸版编码不能超过50个字符")
-            # 检查编码唯一性（排除当前实例）
-            queryset = EmbossingPlate.objects.filter(code=value)
-            if self.instance:
-                queryset = queryset.exclude(pk=self.instance.pk)
-            if queryset.exists():
-                raise serializers.ValidationError("该压凸版编码已存在")
-        return value
-
-    def validate_size(self, value):
-        """验证尺寸字段长度"""
-        if value and len(value) > 100:
-            raise serializers.ValidationError("尺寸不能超过100个字符")
-        return value.strip() if value else value
-
-    def validate_material(self, value):
-        """验证材质字段长度"""
-        if value and len(value) > 100:
-            raise serializers.ValidationError("材质不能超过100个字符")
-        return value.strip() if value else value
-
-    def validate_thickness(self, value):
-        """验证厚度字段长度"""
-        if value and len(value) > 50:
-            raise serializers.ValidationError("厚度不能超过50个字符")
-        return value.strip() if value else value
-
-    def validate(self, attrs):
-        """对象级验证：已确认压凸版不允许修改关键字段"""
-        if self.instance and self.instance.confirmed:
-            # 已确认的压凸版，检查是否修改了关键字段
-            protected_fields = ["code", "name", "size", "material", "thickness"]
-            for field in protected_fields:
-                if field in attrs:
-                    old_value = getattr(self.instance, field, None) or ""
-                    new_value = attrs.get(field, "") or ""
-                    if old_value != new_value:
-                        raise serializers.ValidationError(
-                            {
-                                field: f"已确认的压凸版不允许修改{EmbossingPlate._meta.get_field(field).verbose_name}"
-                            }
-                        )
-        return attrs
-
-    def create(self, validated_data):
-        """创建压凸版，如果编码为空则自动生成，并创建关联产品"""
-        products_data = validated_data.pop("products_data", [])
-
-        # 如果编码为空，自动生成
-        if not validated_data.get("code"):
-            validated_data["code"] = EmbossingPlate.generate_code()
-
-        embossing_plate = super().create(validated_data)
-
-        # 创建关联产品
-        for idx, product_data in enumerate(products_data):
-            EmbossingPlateProduct.objects.create(
-                embossing_plate=embossing_plate,
-                product_id=product_data.get("product"),
-                quantity=product_data.get("quantity", 1),
-                sort_order=idx,
-            )
-
-        return embossing_plate
-
-    def update(self, instance, validated_data):
-        """更新压凸版，处理产品列表"""
-        products_data = validated_data.pop("products_data", None)
-
-        embossing_plate = super().update(instance, validated_data)
-
-        # 如果提供了产品数据，更新产品列表
-        if products_data is not None:
-            # 删除现有产品关联
-            EmbossingPlateProduct.objects.filter(
-                embossing_plate=embossing_plate
-            ).delete()
-
-            # 创建新的产品关联
-            for idx, product_data in enumerate(products_data):
-                EmbossingPlateProduct.objects.create(
-                    embossing_plate=embossing_plate,
-                    product_id=product_data.get("product"),
-                    quantity=product_data.get("quantity", 1),
-                    sort_order=idx,
-                )
-
-        return embossing_plate

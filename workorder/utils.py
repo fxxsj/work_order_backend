@@ -102,3 +102,40 @@ def get_user_role(user):
     if groups.exists():
         return groups.first().name
     return None
+
+
+def format_color_display(cmyk_colors, other_colors):
+    """格式化 CMYK + 专色为显示文本
+
+    示例输出: "CMK+928C,金色（5色）"
+
+    Args:
+        cmyk_colors: CMYK 颜色列表，如 ["C", "M", "K"]
+        other_colors: 专色列表，如 ["928C", "金色"]
+
+    Returns:
+        str: 格式化后的颜色显示文本，无颜色时返回 None
+    """
+    parts = []
+    total_count = 0
+
+    if cmyk_colors:
+        cmyk_order = ["C", "M", "Y", "K"]
+        cmyk_sorted = [c for c in cmyk_order if c in cmyk_colors]
+        if cmyk_sorted:
+            parts.append("".join(cmyk_sorted))
+            total_count += len(cmyk_colors)
+
+    if other_colors:
+        other_list = [c.strip() for c in other_colors if c and c.strip()]
+        if other_list:
+            parts.append(",".join(other_list))
+            total_count += len(other_list)
+
+    if not parts:
+        return None
+
+    result = "+".join(parts)
+    if total_count > 0:
+        result += f"（{total_count}色）"
+    return result

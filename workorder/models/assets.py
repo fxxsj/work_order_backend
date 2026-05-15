@@ -17,19 +17,10 @@ from django.db import models, transaction
 from django.db.models import Max
 from django.utils import timezone
 
-from .base import TimeStampedModel
+from .base import ConfirmableMixin, GenerateCodeMixin, TimeStampedModel, _SignalSafeQuerySet
 
 
-class _SignalSafeQuerySet(models.QuerySet):
-    """禁止使用 update() 绕过 signals 的 QuerySet。"""
-
-    def update(self, **kwargs):
-        raise RuntimeError(
-            "禁止使用 update() 绕过 signals，请改用 save() 或业务服务方法。"
-        )
-
-
-class Artwork(TimeStampedModel, models.Model):
+class Artwork(ConfirmableMixin, TimeStampedModel, models.Model):
     """图稿信息"""
 
     base_code = models.CharField(
@@ -79,19 +70,6 @@ class Artwork(TimeStampedModel, models.Model):
         verbose_name="关联压凸版",
         help_text="该图稿关联的压凸版",
     )
-    # 图稿确认相关字段
-    confirmed = models.BooleanField(
-        "已确认", default=False, help_text="设计部是否已确认该图稿"
-    )
-    confirmed_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="confirmed_artworks",
-        verbose_name="确认人",
-    )
-    confirmed_at = models.DateTimeField("确认时间", null=True, blank=True)
     notes = models.TextField("备注", blank=True)
 
     objects = _SignalSafeQuerySet.as_manager()
@@ -227,8 +205,10 @@ class ArtworkProduct(models.Model):
         )
 
 
-class Die(models.Model):
+class Die(ConfirmableMixin, GenerateCodeMixin, models.Model):
     """刀模信息"""
+
+    code_prefix = "DIE"
 
     DIE_TYPE_CHOICES = [
         ("combined", "拼版刀模"),  # 多产品同时切割，一次模切产出多种产品
@@ -265,24 +245,6 @@ class Die(models.Model):
     thickness = models.CharField(
         "厚度", max_length=50, blank=True, help_text="刀模厚度，如：3mm、5mm等"
     )
-    # 刀模确认相关字段
-    confirmed = models.BooleanField(
-        "已确认",
-        default=False,
-        help_text="设计部是否已确认该刀模，确认后关键字段不可修改",
-    )
-    confirmed_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="confirmed_dies",
-        verbose_name="确认人",
-        help_text="确认该刀模的用户",
-    )
-    confirmed_at = models.DateTimeField(
-        "确认时间", null=True, blank=True, help_text="刀模被确认的时间"
-    )
     notes = models.TextField("备注", blank=True, help_text="刀模的补充说明信息")
     created_at = models.DateTimeField(
         "创建时间", auto_now_add=True, help_text="刀模记录创建时间"
@@ -308,31 +270,6 @@ class Die(models.Model):
 
     def __str__(self):
         return f"{self.code} - {self.name}"
-
-    @classmethod
-    def generate_code(cls):
-        """生成刀模编码：格式 DIE + yyyymm + 3位自增序号"""
-        now = timezone.now()
-        prefix = f"DIE{now.strftime('%Y%m')}"
-
-        with transaction.atomic():
-            last_die = (
-                cls.objects.filter(code__startswith=prefix)
-                .order_by("-code")
-                .select_for_update()
-                .first()
-            )
-
-            if last_die and len(last_die.code) >= 12:
-                try:
-                    last_number = int(last_die.code[9:])  # DIE + yyyymm = 9位
-                    new_number = last_number + 1
-                except (ValueError, IndexError):
-                    new_number = 1
-            else:
-                new_number = 1
-
-            return f"{prefix}{new_number:03d}"
 
     def save(self, *args, **kwargs):
         """保存时自动生成刀模编码"""
@@ -413,8 +350,10 @@ class DieProduct(models.Model):
         return f"{self.die.name} - {self.product.name} ({self.quantity}个)"
 
 
-class FoilingPlate(TimeStampedModel, models.Model):
+class FoilingPlate(ConfirmableMixin, GenerateCodeMixin, TimeStampedModel, models.Model):
     """烫金版信息"""
+
+    code_prefix = "FP"
 
     FOILING_TYPE_CHOICES = [
         ("gold", "烫金"),
@@ -439,19 +378,6 @@ class FoilingPlate(TimeStampedModel, models.Model):
     thickness = models.CharField(
         "厚度", max_length=50, blank=True, help_text="如：3mm、5mm等"
     )
-    # 烫金版确认相关字段
-    confirmed = models.BooleanField(
-        "已确认", default=False, help_text="设计部是否已确认该烫金版"
-    )
-    confirmed_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="confirmed_foiling_plates",
-        verbose_name="确认人",
-    )
-    confirmed_at = models.DateTimeField("确认时间", null=True, blank=True)
     notes = models.TextField("备注", blank=True)
 
     objects = _SignalSafeQuerySet.as_manager()
@@ -472,33 +398,7 @@ class FoilingPlate(TimeStampedModel, models.Model):
     def __str__(self):
         return f"{self.code} - {self.name}"
 
-    @classmethod
-    def generate_code(cls):
-        """生成烫金版编码：格式 FP + yyyymm + 3位自增序号"""
-        now = timezone.now()
-        prefix = f"FP{now.strftime('%Y%m')}"
-
-        with transaction.atomic():
-            last_plate = (
-                cls.objects.filter(code__startswith=prefix)
-                .order_by("-code")
-                .select_for_update()
-                .first()
-            )
-
-            if last_plate and len(last_plate.code) >= 11:
-                try:
-                    last_number = int(last_plate.code[8:])  # FP + yyyymm = 8位
-                    new_number = last_number + 1
-                except (ValueError, IndexError):
-                    new_number = 1
-            else:
-                new_number = 1
-
-            return f"{prefix}{new_number:03d}"
-
     def save(self, *args, **kwargs):
-        """保存时自动生成烫金版编码"""
         if not self.code:
             self.code = self.generate_code()
         super().save(*args, **kwargs)
@@ -567,8 +467,10 @@ class FoilingPlateProduct(models.Model):
         return f"{self.foiling_plate.name} - {self.product.name} ({self.quantity}个)"
 
 
-class EmbossingPlate(TimeStampedModel, models.Model):
+class EmbossingPlate(ConfirmableMixin, GenerateCodeMixin, TimeStampedModel, models.Model):
     """压凸版信息"""
+
+    code_prefix = "EP"
 
     code = models.CharField("压凸版编码", max_length=50, unique=True, blank=True)
     name = models.CharField("压凸版名称", max_length=200)
@@ -581,19 +483,6 @@ class EmbossingPlate(TimeStampedModel, models.Model):
     thickness = models.CharField(
         "厚度", max_length=50, blank=True, help_text="如：3mm、5mm等"
     )
-    # 压凸版确认相关字段
-    confirmed = models.BooleanField(
-        "已确认", default=False, help_text="设计部是否已确认该压凸版"
-    )
-    confirmed_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="confirmed_embossing_plates",
-        verbose_name="确认人",
-    )
-    confirmed_at = models.DateTimeField("确认时间", null=True, blank=True)
     notes = models.TextField("备注", blank=True)
 
     objects = _SignalSafeQuerySet.as_manager()
@@ -614,33 +503,7 @@ class EmbossingPlate(TimeStampedModel, models.Model):
     def __str__(self):
         return f"{self.code} - {self.name}"
 
-    @classmethod
-    def generate_code(cls):
-        """生成压凸版编码：格式 EP + yyyymm + 3位自增序号"""
-        now = timezone.now()
-        prefix = f"EP{now.strftime('%Y%m')}"
-
-        with transaction.atomic():
-            last_plate = (
-                cls.objects.filter(code__startswith=prefix)
-                .order_by("-code")
-                .select_for_update()
-                .first()
-            )
-
-            if last_plate and len(last_plate.code) >= 11:
-                try:
-                    last_number = int(last_plate.code[8:])  # EP + yyyymm = 8位
-                    new_number = last_number + 1
-                except (ValueError, IndexError):
-                    new_number = 1
-            else:
-                new_number = 1
-
-            return f"{prefix}{new_number:03d}"
-
     def save(self, *args, **kwargs):
-        """保存时自动生成压凸版编码"""
         if not self.code:
             self.code = self.generate_code()
         super().save(*args, **kwargs)

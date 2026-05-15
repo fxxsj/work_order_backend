@@ -23,6 +23,8 @@ from ..models.core import (
 )
 from ..models.products import Product
 from ..models.sales import SalesOrderItem
+from ..utils import format_color_display
+from .base import WorkOrderProductInfoMixin
 
 
 class ProcessLogSerializer(serializers.ModelSerializer):
@@ -149,83 +151,31 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
             return obj.subtasks.count()
         return 0
 
-    def get_artwork_code(self, obj) -> Optional[str]:
-        """获取图稿编码"""
-        if obj.artwork:
-            return obj.artwork.get_full_code()
-        return None
+    @staticmethod
+    def _related_field(relation_name, field_name, method=False):
+        """Generate a get_xxx method for SerializerMethodField."""
+        def getter(self, obj):
+            related = getattr(obj, relation_name, None)
+            if related is None:
+                return None
+            if method:
+                return getattr(related, field_name)()
+            return getattr(related, field_name, None)
+        return getter
 
-    def get_artwork_name(self, obj) -> Optional[str]:
-        """获取图稿名称"""
-        if obj.artwork:
-            return obj.artwork.name
-        return None
-
-    def get_artwork_confirmed(self, obj) -> Optional[bool]:
-        """获取图稿确认状态"""
-        if obj.artwork:
-            return obj.artwork.confirmed
-        return None
-
-    def get_die_code(self, obj) -> Optional[str]:
-        """获取刀模编码"""
-        if obj.die:
-            return obj.die.code
-        return None
-
-    def get_die_name(self, obj) -> Optional[str]:
-        """获取刀模名称"""
-        if obj.die:
-            return obj.die.name
-        return None
-
-    def get_product_code(self, obj) -> Optional[str]:
-        """获取产品编码"""
-        if obj.product:
-            return obj.product.code
-        return None
-
-    def get_product_name(self, obj) -> Optional[str]:
-        """获取产品名称"""
-        if obj.product:
-            return obj.product.name
-        return None
-
-    def get_material_code(self, obj) -> Optional[str]:
-        """获取物料编码"""
-        if obj.material:
-            return obj.material.code
-        return None
-
-    def get_material_name(self, obj) -> Optional[str]:
-        """获取物料名称"""
-        if obj.material:
-            return obj.material.name
-        return None
-
-    def get_foiling_plate_code(self, obj) -> Optional[str]:
-        """获取烫金版编码"""
-        if obj.foiling_plate:
-            return obj.foiling_plate.code
-        return None
-
-    def get_foiling_plate_name(self, obj) -> Optional[str]:
-        """获取烫金版名称"""
-        if obj.foiling_plate:
-            return obj.foiling_plate.name
-        return None
-
-    def get_embossing_plate_code(self, obj) -> Optional[str]:
-        """获取压凸版编码"""
-        if obj.embossing_plate:
-            return obj.embossing_plate.code
-        return None
-
-    def get_embossing_plate_name(self, obj) -> Optional[str]:
-        """获取压凸版名称"""
-        if obj.embossing_plate:
-            return obj.embossing_plate.name
-        return None
+    get_artwork_code = _related_field.__func__('artwork', 'get_full_code', method=True)
+    get_artwork_name = _related_field.__func__('artwork', 'name')
+    get_artwork_confirmed = _related_field.__func__('artwork', 'confirmed')
+    get_die_code = _related_field.__func__('die', 'code')
+    get_die_name = _related_field.__func__('die', 'name')
+    get_product_code = _related_field.__func__('product', 'code')
+    get_product_name = _related_field.__func__('product', 'name')
+    get_material_code = _related_field.__func__('material', 'code')
+    get_material_name = _related_field.__func__('material', 'name')
+    get_foiling_plate_code = _related_field.__func__('foiling_plate', 'code')
+    get_foiling_plate_name = _related_field.__func__('foiling_plate', 'name')
+    get_embossing_plate_code = _related_field.__func__('embossing_plate', 'code')
+    get_embossing_plate_name = _related_field.__func__('embossing_plate', 'name')
 
     def get_material_purchase_status(self, obj) -> Optional[str]:
         """获取物料采购状态"""
@@ -439,7 +389,7 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
         ]
 
 
-class WorkOrderListSerializer(serializers.ModelSerializer):
+class WorkOrderListSerializer(WorkOrderProductInfoMixin, serializers.ModelSerializer):
     """施工单列表序列化器（精简版）"""
 
     customer_name = serializers.CharField(source="customer.name", read_only=True)
@@ -506,41 +456,9 @@ class WorkOrderListSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
-    def get_progress_percentage(self, obj) -> int:
-        return obj.get_progress_percentage()
-
-    def get_product_name(self, obj) -> Optional[str]:
-        """如果有多个产品，显示为 'xx款拼版'，否则显示单个产品名称"""
-        products = obj.products.all()
-        if products.count() > 1:
-            return f"{products.count()}款拼版"
-        elif products.count() == 1:
-            first_product = products.first()
-            return first_product.product.name if first_product.product else None
-        return None
-
-    def get_quantity(self, obj) -> float:
-        """返回所有产品的数量总和"""
-        products = obj.products.all()
-        if products.exists():
-            return sum(p.quantity for p in products)
-        return 0
-
-    def get_unit(self, obj) -> str:
-        """返回第一个产品的单位"""
-        products = obj.products.all()
-        if products.exists():
-            return products.first().unit
-        return "件"
-
-    def get_total_task_count(self, obj) -> int:
-        """获取总任务数量"""
-        from ..models import WorkOrderTask
-
-        return WorkOrderTask.objects.filter(work_order_process__work_order=obj).count()
 
 
-class WorkOrderDetailSerializer(serializers.ModelSerializer):
+class WorkOrderDetailSerializer(WorkOrderProductInfoMixin, serializers.ModelSerializer):
     """施工单详情序列化器（完整版）"""
 
     customer_name = serializers.CharField(source="customer.name", read_only=True)
@@ -618,44 +536,11 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         model = WorkOrder
         fields = "__all__"
 
-    def get_progress_percentage(self, obj) -> int:
-        return obj.get_progress_percentage()
-
     def get_customer_detail(self, obj) -> Optional[Dict[str, Any]]:
         """获取客户详细信息"""
         from .base import CustomerSerializer
 
         return CustomerSerializer(obj.customer).data if obj.customer else None
-
-    def get_product_name(self, obj) -> Optional[str]:
-        """如果有多个产品，显示为 'xx款拼版'，否则显示单个产品名称"""
-        products = obj.products.all()
-        if products.count() > 1:
-            return f"{products.count()}款拼版"
-        elif products.count() == 1:
-            first_product = products.first()
-            return first_product.product.name if first_product.product else None
-        return None
-
-    def get_quantity(self, obj) -> float:
-        """返回所有产品的数量总和"""
-        products = obj.products.all()
-        if products.exists():
-            return sum(p.quantity for p in products)
-        return 0
-
-    def get_unit(self, obj) -> str:
-        """返回第一个产品的单位"""
-        products = obj.products.all()
-        if products.exists():
-            return products.first().unit
-        return "件"
-
-    def get_total_task_count(self, obj) -> int:
-        """获取总任务数量"""
-        from ..models import WorkOrderTask
-
-        return WorkOrderTask.objects.filter(work_order_process__work_order=obj).count()
 
     def get_sales_order_numbers(self, obj) -> List[str]:
         """获取来源客户订单号"""
@@ -758,13 +643,24 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         """获取关联发票数量"""
         return obj.invoices.count()
 
-    def get_artwork_names(self, obj) -> List[str]:
-        """获取所有图稿名称"""
-        return [artwork.name for artwork in obj.artworks.all()]
+    @staticmethod
+    def _m2m_list(relation_name, field_name):
+        """Generate a get_xxx method that returns a list of field values from a M2M relation."""
+        def getter(self, obj):
+            manager = getattr(obj, relation_name)
+            return [getattr(item, field_name) for item in manager.all()]
+        return getter
 
-    def get_artwork_codes(self, obj) -> List[str]:
-        """获取所有图稿编码（完整编码，包含版本号）"""
-        return [artwork.get_full_code() for artwork in obj.artworks.all()]
+    @staticmethod
+    def _m2m_method_list(relation_name, method_name):
+        """Generate a get_xxx method that returns a list of method call results from a M2M relation."""
+        def getter(self, obj):
+            manager = getattr(obj, relation_name)
+            return [getattr(item, method_name)() for item in manager.all()]
+        return getter
+
+    get_artwork_names = _m2m_list.__func__('artworks', 'name')
+    get_artwork_codes = _m2m_method_list.__func__('artworks', 'get_full_code')
 
     def get_artwork_details(self, obj) -> List[Dict[str, Any]]:
         """获取图稿详细信息（包含确认状态）"""
@@ -788,110 +684,23 @@ class WorkOrderDetailSerializer(serializers.ModelSerializer):
         artworks = obj.artworks.all()
         if not artworks:
             return None
-
-        # 获取所有图稿的色数显示，用逗号分隔
         color_displays = []
         for artwork in artworks:
-            # 使用与ArtworkSerializer相同的逻辑生成色数显示
-            parts = []
-            total_count = 0
-
-            # CMYK颜色：按照固定顺序C、M、Y、K排列
-            if artwork.cmyk_colors:
-                cmyk_order = ["C", "M", "Y", "K"]
-                cmyk_sorted = [c for c in cmyk_order if c in artwork.cmyk_colors]
-                if cmyk_sorted:
-                    cmyk_str = "".join(cmyk_sorted)
-                    parts.append(cmyk_str)
-                    total_count += len(artwork.cmyk_colors)
-
-            # 其他颜色：用逗号分隔
-            if artwork.other_colors:
-                other_colors_list = [
-                    c.strip() for c in artwork.other_colors if c and c.strip()
-                ]
-                if other_colors_list:
-                    other_colors_str = ",".join(other_colors_list)
-                    parts.append(other_colors_str)
-                    total_count += len(other_colors_list)
-
-            # 组合显示
-            if len(parts) > 1:
-                result = "+".join(parts)
-            elif len(parts) == 1:
-                result = parts[0]
-            else:
-                continue
-
-            # 添加色数统计
-            if total_count > 0:
-                result += f"（{total_count}色）"
-
-            color_displays.append(result)
-
+            display = format_color_display(artwork.cmyk_colors, artwork.other_colors)
+            if display:
+                color_displays.append(display)
         return ", ".join(color_displays) if color_displays else None
 
     def get_printing_colors_display(self, obj) -> Optional[str]:
         """生成印刷色数显示格式"""
-        parts = []
-        total_count = 0
+        return format_color_display(obj.printing_cmyk_colors, obj.printing_other_colors)
 
-        # CMYK颜色：按照固定顺序C、M、Y、K排列
-        if obj.printing_cmyk_colors:
-            cmyk_order = ["C", "M", "Y", "K"]
-            cmyk_sorted = [c for c in cmyk_order if c in obj.printing_cmyk_colors]
-            if cmyk_sorted:
-                cmyk_str = "".join(cmyk_sorted)
-                parts.append(cmyk_str)
-                total_count += len(obj.printing_cmyk_colors)
-
-        # 其他颜色：用逗号分隔
-        if obj.printing_other_colors:
-            other_colors_list = [
-                c.strip() for c in obj.printing_other_colors if c and c.strip()
-            ]
-            if other_colors_list:
-                other_colors_str = ",".join(other_colors_list)
-                parts.append(other_colors_str)
-                total_count += len(other_colors_list)
-
-        # 组合显示
-        if len(parts) > 1:
-            result = "+".join(parts)
-        elif len(parts) == 1:
-            result = parts[0]
-        else:
-            return None
-
-        # 添加色数统计
-        if total_count > 0:
-            result += f"（{total_count}色）"
-
-        return result
-
-    def get_die_names(self, obj) -> List[str]:
-        """获取所有刀模名称"""
-        return [die.name for die in obj.dies.all()]
-
-    def get_die_codes(self, obj) -> List[str]:
-        """获取所有刀模编码"""
-        return [die.code for die in obj.dies.all()]
-
-    def get_foiling_plate_names(self, obj) -> List[str]:
-        """获取所有烫金版名称"""
-        return [plate.name for plate in obj.foiling_plates.all()]
-
-    def get_foiling_plate_codes(self, obj) -> List[str]:
-        """获取所有烫金版编码"""
-        return [plate.code for plate in obj.foiling_plates.all()]
-
-    def get_embossing_plate_names(self, obj) -> List[str]:
-        """获取所有压凸版名称"""
-        return [plate.name for plate in obj.embossing_plates.all()]
-
-    def get_embossing_plate_codes(self, obj) -> List[str]:
-        """获取所有压凸版编码"""
-        return [plate.code for plate in obj.embossing_plates.all()]
+    get_die_names = _m2m_list.__func__('dies', 'name')
+    get_die_codes = _m2m_list.__func__('dies', 'code')
+    get_foiling_plate_names = _m2m_list.__func__('foiling_plates', 'name')
+    get_foiling_plate_codes = _m2m_list.__func__('foiling_plates', 'code')
+    get_embossing_plate_names = _m2m_list.__func__('embossing_plates', 'name')
+    get_embossing_plate_codes = _m2m_list.__func__('embossing_plates', 'code')
 
     def get_approval_logs(self, obj) -> List[Dict[str, Any]]:
         """获取审核历史记录"""

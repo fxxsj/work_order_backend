@@ -251,6 +251,217 @@ class DepartmentSerializer(serializers.ModelSerializer):
         return attrs
 
 
+def create_image_serializer(model_class, name=None):
+    """工厂：创建标准资产图片序列化器
+
+    所有资产图片序列化器共享相同的字段配置：
+    fields = ["id", "image", "sort_order", "description", "created_at"]
+    read_only_fields = ["id", "created_at"]
+    """
+    Meta = type('Meta', (), {
+        'model': model_class,
+        'fields': ["id", "image", "sort_order", "description", "created_at"],
+        'read_only_fields': ["id", "created_at"],
+    })
+    cls_name = name or f"{model_class.__name__}Serializer"
+    return type(cls_name, (serializers.ModelSerializer,), {'Meta': Meta})
+
+
+def create_product_serializer(model_class, name=None, extra_fields=None):
+    """工厂：创建版-产品关联序列化器
+
+    内置 product_name / product_code SerializerMethodField。
+    可通过 extra_fields 添加额外字段（如 DieProduct 的 relation_type_display）。
+    """
+    attrs = {
+        'product_name': serializers.SerializerMethodField(),
+        'product_code': serializers.SerializerMethodField(),
+    }
+    if extra_fields:
+        attrs.update(extra_fields)
+
+    def get_product_name(self, obj):
+        return obj.product.name if obj.product else None
+
+    def get_product_code(self, obj):
+        return obj.product.code if obj.product else None
+
+    Meta = type('Meta', (), {'model': model_class, 'fields': '__all__'})
+    cls_name = name or f"{model_class.__name__}Serializer"
+    return type(cls_name, (serializers.ModelSerializer,), {
+        'Meta': Meta, **attrs,
+        'get_product_name': get_product_name,
+        'get_product_code': get_product_code,
+    })
+
+
+class PlateAssetSerializer(serializers.ModelSerializer):
+    """版类资产序列化器基类
+
+    子类必须设置:
+        - plate_model: Django 模型类
+        - plate_name_verbose: 中文名（如 "刀模"）
+        - product_model: 产品关联模型类
+        - product_fk_field: FK 字段名（如 "die"）
+        - use_transaction: 是否用 transaction.atomic()（默认 True）
+    """
+
+    plate_model = None
+    plate_name_verbose = ""
+    product_model = None
+    product_fk_field = ""
+    use_transaction = True
+
+    confirmed_by_name = serializers.CharField(
+        source="confirmed_by.username", read_only=True, allow_null=True
+    )
+    products_data = serializers.ListField(
+        child=serializers.DictField(),
+        write_only=True,
+        required=False,
+    )
+
+    class Meta:
+        abstract = True
+
+    def validate_name(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError(
+                f"{self.plate_name_verbose}名称不能为空"
+            )
+        if len(value) > 200:
+            raise serializers.ValidationError(
+                f"{self.plate_name_verbose}名称不能超过200个字符"
+            )
+        return value.strip()
+
+    def validate_code(self, value):
+        if value:
+            value = value.strip()
+            if len(value) > 50:
+                raise serializers.ValidationError(
+                    f"{self.plate_name_verbose}编码不能超过50个字符"
+                )
+            queryset = self.plate_model.objects.filter(code=value)
+            if self.instance:
+                queryset = queryset.exclude(pk=self.instance.pk)
+            if queryset.exists():
+                raise serializers.ValidationError(
+                    f"该{self.plate_name_verbose}编码已存在"
+                )
+        return value
+
+    def validate_size(self, value):
+        if value and len(value) > 100:
+            raise serializers.ValidationError("尺寸不能超过100个字符")
+        return value.strip() if value else value
+
+    def validate_material(self, value):
+        if value and len(value) > 100:
+            raise serializers.ValidationError("材质不能超过100个字符")
+        return value.strip() if value else value
+
+    def validate_thickness(self, value):
+        if value and len(value) > 50:
+            raise serializers.ValidationError("厚度不能超过50个字符")
+        return value.strip() if value else value
+
+    def validate(self, attrs):
+        if self.instance and self.instance.confirmed:
+            protected_fields = ["code", "name", "size", "material", "thickness"]
+            for field in protected_fields:
+                if field in attrs:
+                    old_value = getattr(self.instance, field, None) or ""
+                    new_value = attrs.get(field, "") or ""
+                    if old_value != new_value:
+                        verbose = self.plate_model._meta.get_field(field).verbose_name
+                        raise serializers.ValidationError({
+                            field: f"已确认的{self.plate_name_verbose}不允许修改{verbose}"
+                        })
+        return attrs
+
+    def _build_product_kwargs(self, product_data, index):
+        """构建产品关联创建参数，子类可覆盖（如 Die 需添加 relation_type）"""
+        return {
+            "product_id": product_data.get("product"),
+            "quantity": product_data.get("quantity", 1),
+            "sort_order": index,
+        }
+
+    def create(self, validated_data):
+        from django.db import transaction
+
+        products_data = validated_data.pop("products_data", [])
+        if not validated_data.get("code"):
+            validated_data["code"] = self.plate_model.generate_code()
+
+        def _do_create():
+            obj = super().create(validated_data)
+            for idx, pd in enumerate(products_data):
+                kwargs = self._build_product_kwargs(pd, idx)
+                kwargs[self.product_fk_field] = obj
+                self.product_model.objects.create(**kwargs)
+            return obj
+
+        if self.use_transaction:
+            with transaction.atomic():
+                return _do_create()
+        return _do_create()
+
+    def update(self, instance, validated_data):
+        from django.db import transaction
+
+        products_data = validated_data.pop("products_data", None)
+
+        def _do_update():
+            obj = super().update(instance, validated_data)
+            if products_data is not None:
+                filter_kwargs = {self.product_fk_field: obj}
+                self.product_model.objects.filter(**filter_kwargs).delete()
+                for idx, pd in enumerate(products_data):
+                    kwargs = self._build_product_kwargs(pd, idx)
+                    kwargs[self.product_fk_field] = obj
+                    self.product_model.objects.create(**kwargs)
+            return obj
+
+        if self.use_transaction:
+            with transaction.atomic():
+                return _do_update()
+        return _do_update()
+
+
+class WorkOrderProductInfoMixin:
+    """WorkOrder 列表/详情序列化器共享的计算字段"""
+
+    def get_progress_percentage(self, obj):
+        return obj.get_progress_percentage()
+
+    def get_product_name(self, obj):
+        products = obj.products.all()
+        if products.count() > 1:
+            return f"{products.count()}款拼版"
+        elif products.count() == 1:
+            first_product = products.first()
+            return first_product.product.name if first_product.product else None
+        return None
+
+    def get_quantity(self, obj):
+        products = obj.products.all()
+        if products.exists():
+            return sum(p.quantity for p in products)
+        return 0
+
+    def get_unit(self, obj):
+        products = obj.products.all()
+        if products.exists():
+            return products.first().unit
+        return "件"
+
+    def get_total_task_count(self, obj):
+        from ..models import WorkOrderTask
+        return WorkOrderTask.objects.filter(work_order_process__work_order=obj).count()
+
+
 class ProcessSerializer(serializers.ModelSerializer):
     """工序序列化器
 

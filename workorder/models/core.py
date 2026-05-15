@@ -32,19 +32,11 @@ from django.db.models import Max
 from django.utils import timezone
 from rest_framework import status
 from workorder.models.audit import AuditMixin
-from workorder.models.base import TimeStampedModel
+from workorder.models.base import TimeStampedModel, _SignalSafeQuerySet
 
 # 配置日志记录器
 logger = logging.getLogger(__name__)
 
-
-class _SignalSafeQuerySet(models.QuerySet):
-    """禁止使用 update() 绕过 signals 的 QuerySet。"""
-
-    def update(self, **kwargs):
-        raise RuntimeError(
-            "禁止使用 update() 绕过 signals，请改用 save() 或业务服务方法。"
-        )
 
 # 导入 Process 和 Department 模型用于验证和分派
 try:

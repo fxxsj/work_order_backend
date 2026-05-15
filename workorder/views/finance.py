@@ -18,7 +18,7 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from workorder.permission_utils import PermissionUtils
+from workorder.permission_utils import PermissionUtils, apply_data_scope
 from workorder.permissions import SuperuserFriendlyModelPermissions
 from workorder.response import APIResponse
 from workorder.docs.finance import (
@@ -76,24 +76,15 @@ def _scope_finance_queryset(
     work_order_path=None,
     ownership_paths=(),
 ):
-    if not user.is_authenticated:
-        return queryset.none()
-    if user.is_superuser or PermissionUtils.is_finance_user(user):
-        return queryset
-
-    scope = Q()
-    if customer_path:
-        scope |= PermissionUtils.build_customer_scope_q(user, customer_path)
-    if sales_order_path:
-        scope |= PermissionUtils.build_sales_order_scope_q(user, sales_order_path)
-    if work_order_path:
-        scope |= PermissionUtils.build_work_order_scope_q(user, work_order_path)
-    for ownership_path in ownership_paths:
-        scope |= Q(**{ownership_path: user})
-
-    if not scope.children:
-        return queryset.none()
-    return queryset.filter(scope).distinct()
+    return apply_data_scope(
+        queryset,
+        user,
+        customer_path=customer_path,
+        sales_order_path=sales_order_path,
+        work_order_path=work_order_path,
+        ownership_paths=ownership_paths,
+        bypass_check=PermissionUtils.is_finance_user,
+    )
 
 
 @cost_center_docs
