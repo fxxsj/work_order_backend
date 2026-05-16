@@ -228,7 +228,7 @@ class PurchaseOrderViewSet(BaseViewSet):
         from workorder.constants.status import MaterialPurchaseStatus
 
         for item in order.items.select_related("work_order_material").all():
-            if item.work_order_material:
+            if item.work_order_material and item.work_order_material.purchase_status == MaterialPurchaseStatus.PENDING:
                 item.work_order_material.purchase_status = (
                     MaterialPurchaseStatus.ORDERED
                 )

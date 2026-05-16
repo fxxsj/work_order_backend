@@ -90,17 +90,25 @@ class ProcurementService:
                 }
 
             item = material_map[mat.id]
-            # 累计 work_order 信息
-            if not any(w["id"] == wom.work_order_id for w in item["work_orders"]):
+            # 解析物料用量
+            qty = _parse_material_usage(wom.material_usage)
+
+            # 累计 work_order 信息（含需求量）
+            existing_wo = next(
+                (w for w in item["work_orders"] if w["id"] == wom.work_order_id),
+                None
+            )
+            if existing_wo:
+                existing_wo["quantity"] += qty
+            else:
                 item["work_orders"].append(
                     {
                         "id": wom.work_order_id,
                         "order_number": wom.work_order.order_number,
+                        "quantity": qty,
                     }
                 )
 
-            # 解析物料用量
-            qty = _parse_material_usage(wom.material_usage)
             item["total_required"] += qty
 
             # 根据采购状态累计

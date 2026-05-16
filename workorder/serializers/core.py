@@ -647,7 +647,9 @@ class WorkOrderDetailSerializer(WorkOrderProductInfoMixin, serializers.ModelSeri
     def get_purchase_order_summaries(self, obj) -> List[Dict[str, Any]]:
         """获取关联采购单摘要"""
         if hasattr(obj, "prefetched_purchase_orders"):
-            purchase_orders = obj.prefetched_purchase_orders
+            purchase_orders = (
+                obj.prefetched_purchase_orders.annotate(items_count=Count("items"))
+            )
         else:
             purchase_orders = (
                 obj.purchase_orders.select_related("supplier")
@@ -662,7 +664,7 @@ class WorkOrderDetailSerializer(WorkOrderProductInfoMixin, serializers.ModelSeri
                 "status_display": po.get_status_display(),
                 "supplier_name": po.supplier.name if po.supplier else None,
                 "total_amount": str(po.total_amount),
-                "items_count": getattr(po, "items_count", po.items.count()),
+                "items_count": po.items_count,
             }
             for po in purchase_orders
         ]
