@@ -554,6 +554,19 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
 
             item.save()
 
+            # 回写施工单物料采购状态
+            if item.work_order_material:
+                from workorder.constants.status import MaterialPurchaseStatus
+
+                wom = item.work_order_material
+                if item.status == "received":
+                    wom.purchase_status = MaterialPurchaseStatus.RECEIVED
+                    wom.received_date = timezone.now().date()
+                    wom.save(update_fields=["purchase_status", "received_date"])
+                elif item.status == "partial":
+                    wom.purchase_status = MaterialPurchaseStatus.ORDERED
+                    wom.save(update_fields=["purchase_status"])
+
             # 检查采购单是否全部收货完成
             self._check_purchase_order_completion()
 

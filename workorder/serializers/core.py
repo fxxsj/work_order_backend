@@ -6,7 +6,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from rest_framework import serializers
 
 from ..models.assets import ArtworkProduct
@@ -524,6 +524,7 @@ class WorkOrderDetailSerializer(WorkOrderProductInfoMixin, serializers.ModelSeri
     settled_sales_order_count = serializers.SerializerMethodField()
     unsettled_sales_order_count = serializers.SerializerMethodField()
     invoice_count = serializers.SerializerMethodField()
+    purchase_order_summaries = serializers.SerializerMethodField()
 
     progress_percentage = serializers.SerializerMethodField()
     # 多产品合并显示字段（用于基本信息显示）
@@ -642,6 +643,29 @@ class WorkOrderDetailSerializer(WorkOrderProductInfoMixin, serializers.ModelSeri
     def get_invoice_count(self, obj) -> int:
         """获取关联发票数量"""
         return obj.invoices.count()
+
+    def get_purchase_order_summaries(self, obj) -> List[Dict[str, Any]]:
+        """获取关联采购单摘要"""
+        if hasattr(obj, "prefetched_purchase_orders"):
+            purchase_orders = obj.prefetched_purchase_orders
+        else:
+            purchase_orders = (
+                obj.purchase_orders.select_related("supplier")
+                .annotate(items_count=Count("items"))
+                .all()
+            )
+        return [
+            {
+                "id": po.id,
+                "number": po.order_number,
+                "status": po.status,
+                "status_display": po.get_status_display(),
+                "supplier_name": po.supplier.name if po.supplier else None,
+                "total_amount": str(po.total_amount),
+                "items_count": getattr(po, "items_count", po.items.count()),
+            }
+            for po in purchase_orders
+        ]
 
     @staticmethod
     def _m2m_list(relation_name, field_name):

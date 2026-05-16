@@ -55,6 +55,7 @@ from ..serializers.materials import (
     ReturnProcessSerializer,
     SupplierSerializer,
 )
+from ..services.service_errors import ServiceError
 from .base_viewsets import BaseViewSet
 
 
@@ -222,6 +223,20 @@ class PurchaseOrderViewSet(BaseViewSet):
         else:
             order.ordered_date = timezone.now().date()
         order.save()
+
+        # 回写施工单物料采购状态为"已下单"
+        from workorder.constants.status import MaterialPurchaseStatus
+
+        for item in order.items.select_related("work_order_material").all():
+            if item.work_order_material:
+                item.work_order_material.purchase_status = (
+                    MaterialPurchaseStatus.ORDERED
+                )
+                item.work_order_material.purchase_date = timezone.now().date()
+                item.work_order_material.save(
+                    update_fields=["purchase_status", "purchase_date"]
+                )
+
         return APIResponse.success(message="下单成功")
 
     @action(detail=True, methods=["post"])
@@ -345,6 +360,142 @@ class PurchaseOrderViewSet(BaseViewSet):
         order.status = "cancelled"
         order.save()
         return APIResponse.success(message="取消成功")
+
+    @action(detail=False, methods=["post"])
+    def create_from_work_order(self, request):
+        """从施工单创建采购单
+
+        按物料默认供应商自动分组，每组生成一个采购单。
+        自动关联 PurchaseOrderItem.work_order_material，打通回写链路。
+        """
+        from workorder.constants.status import MaterialPurchaseStatus
+
+        work_order_id = request.data.get("work_order_id")
+        material_ids = request.data.get("material_ids")
+        notes = request.data.get("notes", "")
+
+        if not work_order_id:
+            return APIResponse.error(
+                "缺少 work_order_id 参数", code=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            from ..models.core import WorkOrder
+
+            work_order = WorkOrder.objects.get(pk=work_order_id)
+        except WorkOrder.DoesNotExist:
+            return APIResponse.error(
+                "施工单不存在", code=status.HTTP_404_NOT_FOUND
+            )
+
+        # 查询待采购的施工单物料
+        wo_materials = work_order.materials.select_related(
+            "material", "material__default_supplier"
+        ).filter(purchase_status=MaterialPurchaseStatus.PENDING)
+
+        if material_ids:
+            wo_materials = wo_materials.filter(material_id__in=material_ids)
+
+        if not wo_materials.exists():
+            return APIResponse.error(
+                "没有待采购的物料", code=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 校验每个物料都有默认供应商
+        missing_supplier = []
+        for wom in wo_materials:
+            if not wom.material.default_supplier:
+                missing_supplier.append(wom.material.name)
+
+        if missing_supplier:
+            return APIResponse.error(
+                f"以下物料没有默认供应商，请先配置: {', '.join(missing_supplier)}",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 按供应商分组
+        supplier_groups = {}
+        for wom in wo_materials:
+            supplier = wom.material.default_supplier
+            if supplier.id not in supplier_groups:
+                supplier_groups[supplier.id] = {"supplier": supplier, "items": []}
+            supplier_groups[supplier.id]["items"].append(wom)
+
+        # 解析可选的每项数量覆盖
+        quantity_overrides = {}
+        for item_override in request.data.get("items", []):
+            wom_id = item_override.get("work_order_material_id")
+            qty = item_override.get("quantity")
+            if wom_id and qty:
+                quantity_overrides[wom_id] = qty
+
+        created_orders = []
+        with transaction.atomic():
+            for group_data in supplier_groups.values():
+                po = PurchaseOrder.objects.create(
+                    supplier=group_data["supplier"],
+                    work_order=work_order,
+                    status="draft",
+                    notes=notes,
+                )
+
+                for wom in group_data["items"]:
+                    # 解析物料用量字符串，提取数量
+                    from ..services.task_generation_service import (
+                        TaskGenerationService,
+                    )
+
+                    quantity = quantity_overrides.get(
+                        wom.id,
+                        TaskGenerationService._parse_material_usage(
+                            wom.material_usage or ""
+                        ) or 1,
+                    )
+                    PurchaseOrderItem.objects.create(
+                        purchase_order=po,
+                        material=wom.material,
+                        quantity=quantity,
+                        unit_price=wom.material.unit_price or 0,
+                        work_order_material=wom,
+                    )
+
+                po.update_total_amount()
+                created_orders.append(po)
+
+        # 返回创建的采购单摘要
+        result = []
+        for po in created_orders:
+            po = PurchaseOrder.objects.select_related("supplier").get(pk=po.id)
+            result.append(
+                {
+                    "id": po.id,
+                    "order_number": po.order_number,
+                    "supplier_name": po.supplier.name,
+                    "total_amount": str(po.total_amount),
+                    "items_count": po.items.count(),
+                }
+            )
+
+        return APIResponse.success(
+            data={"purchase_orders": result, "total_count": len(result)},
+            message=f"成功创建 {len(result)} 个采购单",
+        )
+
+    @action(detail=False, methods=["get"])
+    def procurement_summary(self, request):
+        """获取采购需求汇总"""
+        from workorder.services.procurement_service import ProcurementService
+
+        result = ProcurementService.get_procurement_summary()
+        return APIResponse.success(data=result)
+
+    @action(detail=False, methods=["get"])
+    def delay_warnings(self, request):
+        """获取采购延迟预警"""
+        from workorder.services.procurement_service import ProcurementService
+
+        result = ProcurementService.get_delay_warnings()
+        return APIResponse.success(data=result)
 
     @action(detail=False, methods=["get"])
     @materials_low_stock_docs

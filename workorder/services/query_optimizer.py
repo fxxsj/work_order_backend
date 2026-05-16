@@ -52,6 +52,8 @@ class QueryOptimizer:
         
         if include_details:
             # 详细信息需要更复杂的prefetch_related
+            from ..models.materials import PurchaseOrder
+
             queryset = queryset.prefetch_related(
                 # 产品信息
                 Prefetch(
@@ -97,7 +99,14 @@ class QueryOptimizer:
                     'materials',
                     queryset=WorkOrder.materials.through.objects.select_related('material'),
                     to_attr='ordered_materials'
-                )
+                ),
+
+                # 采购单信息
+                Prefetch(
+                    'purchase_orders',
+                    queryset=PurchaseOrder.objects.select_related('supplier'),
+                    to_attr='prefetched_purchase_orders'
+                ),
             )
         
         return queryset

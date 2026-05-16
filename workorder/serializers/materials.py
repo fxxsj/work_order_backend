@@ -254,6 +254,9 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
     remaining_quantity = serializers.DecimalField(
         max_digits=12, decimal_places=3, read_only=True
     )
+    work_order_material_id = serializers.PrimaryKeyRelatedField(
+        source="work_order_material", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = PurchaseOrderItem
@@ -316,6 +319,9 @@ class PurchaseOrderListSerializer(serializers.ModelSerializer):
     work_order_number = serializers.CharField(
         source="work_order.order_number", read_only=True, allow_null=True
     )
+    work_order_id = serializers.IntegerField(
+        source="work_order.id", read_only=True, allow_null=True
+    )
 
     # 优化：使用注解字段，避免N+1查询
     items_count = serializers.IntegerField(read_only=True)
@@ -370,6 +376,7 @@ class PurchaseOrderDetailSerializer(serializers.ModelSerializer):
                 material_id=item_data.get("material"),
                 quantity=item_data.get("quantity", 0),
                 unit_price=item_data.get("unit_price", 0),
+                work_order_material_id=item_data.get("work_order_material"),
             )
 
         # 更新总金额
@@ -398,6 +405,7 @@ class PurchaseOrderDetailSerializer(serializers.ModelSerializer):
                     material_id=item_data.get("material"),
                     quantity=item_data.get("quantity", 0),
                     unit_price=item_data.get("unit_price", 0),
+                    work_order_material_id=item_data.get("work_order_material"),
                 )
 
             # 更新总金额
