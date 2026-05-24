@@ -9,11 +9,14 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User, Group
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
+from django.conf import settings
+from datetime import timedelta
 from .serializers import UserSerializer
 from workorder.response import APIResponse
 from workorder.schema import standard_error_response, standard_success_response
 from workorder.constants.role_codes import SALES, resolve_role_codes
 import re
+import time
 
 
 class EmptySerializer(serializers.Serializer):
@@ -46,6 +49,9 @@ login_data_serializer = inline_serializer(
         "permissions": serializers.ListField(child=serializers.CharField()),
         "access": serializers.CharField(),
         "refresh": serializers.CharField(),
+        "access_expires_at": serializers.IntegerField(
+            help_text="Access token expiration timestamp in seconds"
+        ),
     },
 )
 
@@ -132,6 +138,9 @@ token_refresh_response_serializer = inline_serializer(
     fields={
         "access": serializers.CharField(),
         "refresh": serializers.CharField(required=False),
+        "access_expires_at": serializers.IntegerField(
+            help_text="Access token expiration timestamp in seconds"
+        ),
     },
 )
 
@@ -140,6 +149,14 @@ def _department_names(user):
     if not hasattr(user, "profile"):
         return []
     return list(user.profile.departments.values_list("name", flat=True))
+
+
+def _get_access_token_expires_at():
+    """获取 access token 过期时间戳（Unix timestamp）"""
+    access_lifetime = settings.SIMPLE_JWT.get("ACCESS_TOKEN_LIFETIME", timedelta(minutes=5))
+    # 将 timedelta 转换为秒
+    expires_in_seconds = int(access_lifetime.total_seconds())
+    return int(time.time()) + expires_in_seconds
 
 
 class LoginView(APIView):
@@ -211,6 +228,7 @@ class LoginView(APIView):
                     "permissions": permissions,
                     "access": str(refresh.access_token),
                     "refresh": str(refresh),
+                    "access_expires_at": _get_access_token_expires_at(),
                 }
             )
         else:
@@ -285,7 +303,12 @@ class TokenRefreshViewWithDocs(TokenRefreshView):
         },
     )
     def post(self, request, *args, **kwargs):
-        return super().post(request, *args, **kwargs)
+        # 调用父类获取标准响应
+        response = super().post(request, *args, **kwargs)
+        # 在响应中添加 access_expires_at
+        if response.status_code == 200:
+            response.data["access_expires_at"] = _get_access_token_expires_at()
+        return response
 
 
 @extend_schema(

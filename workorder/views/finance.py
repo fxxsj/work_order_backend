@@ -384,15 +384,19 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 & (Q(attachment="") | Q(attachment__isnull=True)),
             ),
             pending_receipt_count=Count("id", filter=Q(status__in=["issued", "sent"])),
-            pending_payment_count=Count(
-                "id",
-                filter=Q(status__in=actionable_statuses)
-                & Q(received_payment_amount__lt=F("total_amount")),
-            ),
         )
+        
+        # 兜底空值
+        summary["total_amount"] = summary["total_amount"] or Decimal("0")
+        summary["tax_amount"] = summary["tax_amount"] or Decimal("0")
+        
+        # 由于 received_payment_amount 是一个聚合字段，Django 不允许直接在 aggregate 中对其使用 filter (嵌套聚合)
+        # 所以我们单独计算 pending_payment_count
+        summary["pending_payment_count"] = pending_payment_queryset.count()
+
         pending_payment_amount = Decimal("0")
-        for total_amount, received_amount in pending_payment_queryset.values_list(
-            "total_amount", "received_payment_amount"
+        for _, total_amount, received_amount in pending_payment_queryset.values_list(
+            "id", "total_amount", "received_payment_amount"
         ):
             gap = (total_amount or Decimal("0")) - (received_amount or Decimal("0"))
             if gap > 0:
@@ -484,11 +488,17 @@ class PaymentViewSet(viewsets.ModelViewSet):
             total_amount=Sum("amount"),
             applied_amount=Sum("applied_amount"),
             remaining_amount=Sum("remaining_amount"),
-            pending_writeoff_count=Count("id", filter=Q(remaining_amount__gt=0)),
             missing_invoice_link_count=Count(
                 "id", filter=Q(invoice__isnull=True) & Q(sales_order__isnull=False)
             ),
         )
+        
+        # 兜底空值
+        summary["total_amount"] = summary["total_amount"] or Decimal("0")
+        summary["applied_amount"] = summary["applied_amount"] or Decimal("0")
+        summary["remaining_amount"] = summary["remaining_amount"] or Decimal("0")
+        
+        summary["pending_writeoff_count"] = queryset.filter(remaining_amount__gt=0).count()
         summary["pending_writeoff_amount"] = queryset.filter(
             remaining_amount__gt=0
         ).aggregate(total=Sum("remaining_amount"))["total"] or Decimal("0")
