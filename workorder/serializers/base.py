@@ -396,7 +396,7 @@ class PlateAssetSerializer(serializers.ModelSerializer):
             validated_data["code"] = self.plate_model.generate_code()
 
         def _do_create():
-            obj = super().create(validated_data)
+            obj = super(PlateAssetSerializer, self).create(validated_data)
             for idx, pd in enumerate(products_data):
                 kwargs = self._build_product_kwargs(pd, idx)
                 kwargs[self.product_fk_field] = obj
@@ -414,7 +414,7 @@ class PlateAssetSerializer(serializers.ModelSerializer):
         products_data = validated_data.pop("products_data", None)
 
         def _do_update():
-            obj = super().update(instance, validated_data)
+            obj = super(PlateAssetSerializer, self).update(instance, validated_data)
             if products_data is not None:
                 filter_kwargs = {self.product_fk_field: obj}
                 self.product_model.objects.filter(**filter_kwargs).delete()
