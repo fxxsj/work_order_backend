@@ -112,7 +112,15 @@ class CustomerSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("客户名称至少需要2个字符")
         if len(value) > 200:
             raise serializers.ValidationError("客户名称不能超过200个字符")
-        return value.strip()
+        value = value.strip()
+        # 去重检查：检查是否存在相同名称的客户（不区分大小写）
+        queryset = Customer.objects.filter(name__iexact=value)
+        if self.instance:
+            # 编辑时排除自身
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError("该客户名称已存在")
+        return value
 
     def validate_phone(self, value):
         """验证联系电话"""

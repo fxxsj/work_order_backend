@@ -59,19 +59,23 @@ def build_error_payload(
 
 
 def extract_first_error_message(data: Any) -> Optional[str]:
+    """提取第一个错误消息，返回友好的错误提示（不包含字段名）"""
     if not isinstance(data, dict):
         return None
 
+    # 遍历字典，找到第一个列表或字符串值
     for key, value in data.items():
         if isinstance(value, list) and value:
-            return f"{key}: {value[0]}"
+            # 返回列表中的第一个错误消息
+            return str(value[0])
         if isinstance(value, str) and value:
-            return f"{key}: {value}"
+            return value
         if isinstance(value, dict):
             nested = extract_first_error_message(value)
             if nested:
-                return f"{key}: {nested}"
+                return nested
 
+    # 处理特殊情况
     if "detail" in data and isinstance(data["detail"], str):
         return data["detail"]
     if "non_field_errors" in data and isinstance(data["non_field_errors"], list):

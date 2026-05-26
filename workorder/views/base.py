@@ -97,7 +97,7 @@ class CustomerViewSet(BaseViewSet):
     def destroy(self, request, *args, **kwargs):
         """删除客户
 
-        检查：客户是否有关联的施工单
+        检查客户是否有关联的各类业务单据
         """
         instance = self.get_object()
 
@@ -107,6 +107,51 @@ class CustomerViewSet(BaseViewSet):
         if WorkOrder.objects.filter(customer=instance).exists():
             return APIResponse.error(
                 "该客户有关联的施工单，不可删除",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 检查是否有关联的销售订单
+        from ..models.sales import SalesOrder
+
+        if SalesOrder.objects.filter(customer=instance).exists():
+            return APIResponse.error(
+                "该客户有关联的销售订单，不可删除",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 检查是否有关联的发票
+        from ..models.finance import Invoice
+
+        if Invoice.objects.filter(customer=instance).exists():
+            return APIResponse.error(
+                "该客户有关联的发票，不可删除",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 检查是否有关联的收款记录
+        from ..models.finance import Payment
+
+        if Payment.objects.filter(customer=instance).exists():
+            return APIResponse.error(
+                "该客户有关联的收款记录，不可删除",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 检查是否有关联的对账单
+        from ..models.finance import Statement
+
+        if Statement.objects.filter(customer=instance).exists():
+            return APIResponse.error(
+                "该客户有关联的对账单，不可删除",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 检查是否有关联的发货单
+        from ..models.inventory import DeliveryOrder
+
+        if DeliveryOrder.objects.filter(customer=instance).exists():
+            return APIResponse.error(
+                "该客户有关联的发货单，不可删除",
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -141,6 +186,33 @@ class CustomerViewSet(BaseViewSet):
             message=f"导入完成: 新增 {created} 条, 更新 {updated} 条, 失败 {result['error_count']} 条",
             data=result,
         )
+
+    @action(detail=False, methods=["get"])
+    def check_name(self, request):
+        """检查客户名称是否已存在（用于表单实时验证）
+
+        Query params:
+            name: 客户名称
+            exclude_id: 排除的客户ID（编辑时传入）
+        """
+        name = request.query_params.get("name", "").strip()
+        if not name:
+            return APIResponse.error(
+                "请提供客户名称",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        exclude_id = request.query_params.get("exclude_id")
+        queryset = Customer.objects.filter(name__iexact=name)
+
+        if exclude_id:
+            try:
+                queryset = queryset.exclude(pk=int(exclude_id))
+            except ValueError:
+                pass
+
+        exists = queryset.exists()
+        return APIResponse.success(data={"exists": exists})
 
 
 @department_docs

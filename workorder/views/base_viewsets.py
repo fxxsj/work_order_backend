@@ -83,7 +83,8 @@ class BaseViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         response = super().destroy(request, *args, **kwargs)
         if response.status_code == status.HTTP_204_NO_CONTENT:
-            return APIResponse.success(message='删除成功', data=None, code=status.HTTP_204_NO_CONTENT)
+            # HTTP 204 规范禁止携带响应体，改为返回 200 + 标准 JSON
+            return APIResponse.success(message='删除成功', data=None, code=status.HTTP_200_OK)
         return self._wrap_response(response)
 
 

@@ -628,10 +628,6 @@ class PurchaseReceiveRecordViewSet(BaseViewSet):
             return APIResponse.error(
                 f"合格数量({qualified_qty}) + 不合格数量({unqualified_qty}) 必须等于收货数量({record.received_quantity})",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={
-                    "error": f"合格数量({qualified_qty}) + 不合格数量({unqualified_qty}) "
-                    f"必须等于收货数量({record.received_quantity})",
-                },
             )
 
         # 确认质检
@@ -712,9 +708,6 @@ class PurchaseReceiveRecordViewSet(BaseViewSet):
             return APIResponse.error(
                 f"退货数量({return_qty})不能超过不合格数量({record.unqualified_quantity})",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={
-                    "error": f"退货数量({return_qty})不能超过不合格数量({record.unqualified_quantity})",
-                },
             )
 
         success = record.process_return(

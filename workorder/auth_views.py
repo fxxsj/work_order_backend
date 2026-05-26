@@ -159,6 +159,27 @@ def _get_access_token_expires_at():
     return int(time.time()) + expires_in_seconds
 
 
+def _build_user_data(user):
+    """构建统一的用户信息字典，所有返回用户信息的接口均使用此函数，确保字段一致。"""
+    group_names = list(user.groups.values_list("name", flat=True))
+    role_codes = resolve_role_codes(group_names)
+    departments = _department_names(user)
+    permissions = ["*"] if user.is_superuser else list(user.get_all_permissions())
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "is_staff": user.is_staff,
+        "is_superuser": user.is_superuser,
+        "role_codes": role_codes,
+        "departments": departments,
+        "is_salesperson": SALES in role_codes,
+        "permissions": permissions,
+    }
+
+
 class LoginView(APIView):
     """用户登录视图"""
 
@@ -201,36 +222,12 @@ class LoginView(APIView):
         if user is not None:
             refresh = RefreshToken.for_user(user)
 
-            # 获取用户所属的角色代码
-            group_names = list(user.groups.values_list("name", flat=True))
-            role_codes = resolve_role_codes(group_names)
-            departments = _department_names(user)
+            user_data = _build_user_data(user)
+            user_data["access"] = str(refresh.access_token)
+            user_data["refresh"] = str(refresh)
+            user_data["access_expires_at"] = _get_access_token_expires_at()
 
-            # 获取用户权限（用于前端权限控制）
-            permissions = []
-            if user.is_superuser:
-                permissions = ["*"]
-            else:
-                permissions = list(user.get_all_permissions())
-
-            return APIResponse.success(
-                data={
-                    "id": user.id,
-                    "username": user.username,
-                    "email": user.email,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
-                    "is_staff": user.is_staff,
-                    "is_superuser": user.is_superuser,
-                    "role_codes": role_codes,
-                    "departments": departments,
-                    "is_salesperson": SALES in role_codes,
-                    "permissions": permissions,
-                    "access": str(refresh.access_token),
-                    "refresh": str(refresh),
-                    "access_expires_at": _get_access_token_expires_at(),
-                }
-            )
+            return APIResponse.success(data=user_data)
         else:
             return APIResponse.error(
                 "用户名或密码错误", code=status.HTTP_401_UNAUTHORIZED
@@ -303,11 +300,16 @@ class TokenRefreshViewWithDocs(TokenRefreshView):
         },
     )
     def post(self, request, *args, **kwargs):
-        # 调用父类获取标准响应
+        # 调用父类获取原始 JWT 响应
         response = super().post(request, *args, **kwargs)
-        # 在响应中添加 access_expires_at
+        # 包装为标准格式，并附加 access_expires_at
         if response.status_code == 200:
-            response.data["access_expires_at"] = _get_access_token_expires_at()
+            return APIResponse.success(
+                data={
+                    **response.data,
+                    "access_expires_at": _get_access_token_expires_at(),
+                }
+            )
         return response
 
 
@@ -332,33 +334,7 @@ class TokenRefreshViewWithDocs(TokenRefreshView):
 def get_current_user(request):
     """获取当前登录用户信息"""
     if request.user.is_authenticated:
-        # 获取用户所属的角色代码
-        group_names = list(request.user.groups.values_list("name", flat=True))
-        role_codes = resolve_role_codes(group_names)
-        departments = _department_names(request.user)
-
-        # 获取用户权限（用于前端权限控制）
-        permissions = []
-        if request.user.is_superuser:
-            permissions = ["*"]
-        else:
-            permissions = list(request.user.get_all_permissions())
-
-        return APIResponse.success(
-            data={
-                "id": request.user.id,
-                "username": request.user.username,
-                "email": request.user.email,
-                "first_name": request.user.first_name,
-                "last_name": request.user.last_name,
-                "is_staff": request.user.is_staff,
-                "is_superuser": request.user.is_superuser,
-                "role_codes": role_codes,
-                "departments": departments,
-                "is_salesperson": SALES in role_codes,
-                "permissions": permissions,
-            }
-        )
+        return APIResponse.success(data=_build_user_data(request.user))
     else:
         return APIResponse.error("未登录", code=status.HTTP_401_UNAUTHORIZED)
 
@@ -599,28 +575,8 @@ def update_profile(request):
 
         request.user.save()
 
-        # 返回更新后的用户信息
-        groups = list(request.user.groups.values_list("name", flat=True))
-        departments = _department_names(request.user)
-        permissions = (
-            ["*"]
-            if request.user.is_superuser
-            else list(request.user.get_all_permissions())
-        )
-
         return APIResponse.success(
-            data={
-                "id": request.user.id,
-                "username": request.user.username,
-                "email": request.user.email,
-                "first_name": request.user.first_name,
-                "last_name": request.user.last_name,
-                "is_staff": request.user.is_staff,
-                "is_superuser": request.user.is_superuser,
-                "groups": groups,
-                "departments": departments,
-                "permissions": permissions,
-            },
+            data=_build_user_data(request.user),
             message="个人信息更新成功",
         )
     except Exception as e:

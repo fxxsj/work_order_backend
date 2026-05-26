@@ -183,9 +183,6 @@ class TaskActionsMixin:
             return APIResponse.error(
                 f"更新后完成数量（{new_quantity_completed}）不能超过生产数量（{task.production_quantity}）",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={
-                    "error": f"更新后完成数量（{new_quantity_completed}）不能超过生产数量（{task.production_quantity}）"
-                },
             )
 
         # 记录更新前的状态和数量
@@ -498,9 +495,6 @@ class TaskActionsMixin:
             return APIResponse.error(
                 f"子任务数量总和（{total_split_quantity}）不能超过父任务数量（{task.production_quantity}）",
                 code=status.HTTP_400_BAD_REQUEST,
-                data={
-                    "error": f"子任务数量总和（{total_split_quantity}）不能超过父任务数量（{task.production_quantity}）"
-                },
             )
 
         # 创建子任务

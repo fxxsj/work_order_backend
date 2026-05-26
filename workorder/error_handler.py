@@ -35,16 +35,28 @@ def custom_exception_handler(exc, context):
     if response is not None:
         # DRF 异常（如 APIException）
         message = str(exc.detail) if hasattr(exc, 'detail') else str(exc)
-        if response.status_code == 400 and hasattr(response.data, 'items'):
+
+        # 处理字段级验证错误（400 状态码且数据是字典）
+        errors = None
+        if response.status_code == 400 and isinstance(response.data, dict):
+            # 直接将字典格式的字段错误放到 errors 中
+            # 例如: {"name": ["该客户名称已存在"]} -> errors: {"name": ["该客户名称已存在"]}
             derived_message = extract_first_error_message(response.data)
             if derived_message:
                 message = derived_message
+            # 检查是否是 DRF ValidationError 的字典格式
+            if any(isinstance(v, (list, str)) for v in response.data.values()):
+                errors = response.data
+            else:
+                errors = {'detail': response.data}
+        elif response.status_code >= 400:
+            errors = {'detail': response.data} if not isinstance(response.data, dict) else response.data
 
         custom_response_data = {
             'success': False,
             'code': response.status_code,
             'message': message,
-            'errors': response.data if hasattr(response.data, 'items') else {'detail': response.data},
+            'errors': errors or {},
             'data': None,
             'timestamp': timezone.now().isoformat(),
         }
