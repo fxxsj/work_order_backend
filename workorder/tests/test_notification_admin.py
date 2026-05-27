@@ -218,6 +218,42 @@ def test_create_notification_preserves_system_announcement_title():
 
 
 @pytest.mark.django_db
+def test_system_notification_admin_publish_list_and_revoke():
+    client = APIClient()
+    admin = UserFactory(is_staff=True)
+    user = UserFactory(is_staff=False)
+    client.force_authenticate(user=admin)
+
+    create_response = client.post(
+        "/api/v1/system-notifications/create_announcement/",
+        {
+            "title": "系统维护",
+            "content": "今晚 23:00 维护",
+            "recipient_ids": [admin.id, user.id],
+            "priority": "high",
+            "expires_in_days": 1,
+        },
+        format="json",
+    )
+
+    assert create_response.status_code == status.HTTP_201_CREATED
+    batch_id = create_response.data["data"]["batch_id"]
+    assert Notification.objects.filter(data__batch_id=batch_id).count() == 2
+
+    list_response = client.get("/api/v1/system-notifications/")
+    assert list_response.status_code == status.HTTP_200_OK
+    rows = list_response.data["data"]["results"]
+    assert rows[0]["batch_id"] == batch_id
+    assert rows[0]["recipient_count"] == 2
+    assert rows[0]["priority"] == "high"
+
+    revoke_response = client.delete(f"/api/v1/system-notifications/{batch_id}/revoke/")
+    assert revoke_response.status_code == status.HTTP_200_OK
+    assert revoke_response.data["data"]["count"] == 2
+    assert Notification.objects.filter(data__batch_id=batch_id).count() == 0
+
+
+@pytest.mark.django_db
 def test_run_notification_maintenance_command(capsys):
     call_command("run_notification_maintenance")
     captured = capsys.readouterr()

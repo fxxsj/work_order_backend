@@ -10,7 +10,7 @@ from datetime import timedelta
 
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.db.models import Q
+from django.db.models import Count, Max, Q, Sum
 from django.utils import timezone
 from django_filters import rest_framework as django_filters
 from django_filters.rest_framework import DjangoFilterBackend
@@ -77,6 +77,33 @@ class NotificationSerializer:
             "task_id": notification.task_id,
             "purchase_order_id": notification.purchase_order_id,
             "data": notification.data or {},
+        }
+
+
+class SystemNotificationAdminSerializer:
+    """系统通知管理列表序列化器。"""
+
+    @staticmethod
+    def serialize_row(row):
+        data = row.get("data") or {}
+        return {
+            "id": data.get("batch_id") or row["max_id"],
+            "batch_id": data.get("batch_id") or row["max_id"],
+            "notification_type": row["notification_type"],
+            "notification_type_display": "系统通知",
+            "priority": row["priority"],
+            "priority_display": dict(Notification.PRIORITY_CHOICES).get(
+                row["priority"], row["priority"]
+            ),
+            "title": row["title"],
+            "content": row["content"],
+            "recipient_count": row["recipient_count"],
+            "read_count": row["read_count"] or 0,
+            "unread_count": row["recipient_count"] - (row["read_count"] or 0),
+            "is_sent": bool(row["sent_count"] or 0),
+            "created_at": row["created_at"].isoformat(),
+            "expires_at": row["expires_at"].isoformat() if row["expires_at"] else None,
+            "data": data,
         }
 
 
@@ -378,7 +405,98 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
     """系统通知管理视图集"""
 
     permission_classes = [IsSystemNotificationAdmin]
+    pagination_class = NotificationPagination
     serializer_class = EmptySerializer
+    filter_backends = []
+    search_fields = ["title", "content"]
+    ordering_fields = [
+        "created_at",
+        "priority",
+        "title",
+        "recipient_count",
+        "read_count",
+    ]
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        """系统通知管理列表按发布批次聚合。"""
+        queryset = Notification.objects.filter(notification_type="system")
+
+        priority = self.request.query_params.get("priority")
+        if priority:
+            queryset = queryset.filter(priority=priority)
+
+        kind = self.request.query_params.get("kind")
+        if kind:
+            queryset = queryset.filter(data__kind=kind)
+
+        start_date = self.request.query_params.get("start_date")
+        if start_date:
+            queryset = queryset.filter(created_at__date__gte=start_date)
+
+        end_date = self.request.query_params.get("end_date")
+        if end_date:
+            queryset = queryset.filter(created_at__date__lte=end_date)
+
+        search = self.request.query_params.get("search")
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) | Q(content__icontains=search)
+            )
+
+        return queryset
+
+    def _get_announcement_queryset(self):
+        return self.get_queryset().filter(data__kind__in=["announcement", "urgent_alert"])
+
+    def _get_batch_queryset(self, batch_id):
+        return Notification.objects.filter(
+            notification_type="system",
+            data__batch_id=str(batch_id),
+        )
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        ordering = self.request.query_params.get("ordering") or "-created_at"
+        allowed = {field.lstrip("-") for field in self.ordering_fields}
+        if ordering.lstrip("-") not in allowed:
+            ordering = "-created_at"
+        return queryset.order_by(ordering)
+
+    def list(self, request):
+        queryset = self.filter_queryset(self._get_announcement_queryset())
+        rows = list(
+            queryset.values(
+                "data",
+                "notification_type",
+                "priority",
+                "title",
+                "content",
+                "expires_at",
+            )
+            .annotate(
+                max_id=Max("id"),
+                created_at=Max("created_at"),
+                recipient_count=Count("id"),
+                read_count=Count("id", filter=Q(is_read=True)),
+                sent_count=Count("id", filter=Q(is_sent=True)),
+            )
+            .order_by()
+        )
+        ordering = request.query_params.get("ordering") or "-created_at"
+        reverse = ordering.startswith("-")
+        sort_key = ordering.lstrip("-")
+        if sort_key in {field.lstrip("-") for field in self.ordering_fields}:
+            rows.sort(key=lambda row: row.get(sort_key) or 0, reverse=reverse)
+
+        page = self.paginate_queryset(rows)
+        if page is not None:
+            data = [SystemNotificationAdminSerializer.serialize_row(row) for row in page]
+            paginated = self.get_paginated_response(data)
+            return APIResponse.success(data=paginated.data)
+
+        data = [SystemNotificationAdminSerializer.serialize_row(row) for row in rows]
+        return APIResponse.success(data=data)
 
     def _serialize_settings(self, settings):
         return {
@@ -399,19 +517,24 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
         recipient_ids = request.data.get("recipient_ids")
         only_staff = bool(request.data.get("only_staff", False))
         expires_in_days = request.data.get("expires_in_days")
+        priority = request.data.get("priority") or "normal"
 
         if not title:
             return APIResponse.error("缺少 title", code=status.HTTP_400_BAD_REQUEST)
         if not content:
             return APIResponse.error("缺少 content", code=status.HTTP_400_BAD_REQUEST)
+        if priority not in dict(Notification.PRIORITY_CHOICES):
+            return APIResponse.error("priority 不合法", code=status.HTTP_400_BAD_REQUEST)
 
         recipients = User.objects.all()
         if only_staff:
             recipients = recipients.filter(is_staff=True)
         if recipient_ids:
             recipients = recipients.filter(id__in=recipient_ids)
+        recipient_ids_for_policy = list(recipients.values_list("id", flat=True))
 
         now = timezone.now()
+        batch_id = secrets.token_urlsafe(12)
         expires_at = None
         if expires_in_days is not None:
             try:
@@ -424,20 +547,20 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
             Notification(
                 recipient=recipient,
                 notification_type="system",
-                priority="normal",
+                priority=priority,
                 title=title,
                 content=content,
                 expires_at=expires_at,
-                data={"kind": "announcement"},
+                data={"kind": "announcement", "batch_id": batch_id},
             )
             for recipient in recipients.iterator()
         ]
 
         Notification.objects.bulk_create(notifications, batch_size=1000)
-        Notification.apply_retention_policy([recipient.id for recipient in recipients])
+        Notification.apply_retention_policy(recipient_ids_for_policy)
 
         return APIResponse.success(
-            data={"count": len(notifications)},
+            data={"count": len(notifications), "batch_id": batch_id},
             message="系统公告已创建",
             code=status.HTTP_201_CREATED,
         )
@@ -460,6 +583,8 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
             recipients = recipients.filter(is_staff=True)
         if recipient_ids:
             recipients = recipients.filter(id__in=recipient_ids)
+        recipient_ids_for_policy = list(recipients.values_list("id", flat=True))
+        batch_id = secrets.token_urlsafe(12)
 
         notifications = [
             Notification(
@@ -468,17 +593,30 @@ class SystemNotificationViewSet(viewsets.GenericViewSet):
                 priority="urgent",
                 title=title,
                 content=content,
-                data={"kind": "urgent_alert"},
+                data={"kind": "urgent_alert", "batch_id": batch_id},
             )
             for recipient in recipients.iterator()
         ]
         Notification.objects.bulk_create(notifications, batch_size=1000)
-        Notification.apply_retention_policy([recipient.id for recipient in recipients])
+        Notification.apply_retention_policy(recipient_ids_for_policy)
 
         return APIResponse.success(
-            data={"count": len(notifications)},
+            data={"count": len(notifications), "batch_id": batch_id},
             message="紧急警报已发送",
             code=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["delete"])
+    def revoke(self, request, pk=None):
+        """撤回系统公告批次。"""
+        queryset = self._get_batch_queryset(pk)
+        deleted_count = queryset.count()
+        if deleted_count == 0:
+            return APIResponse.error("通知不存在", code=status.HTTP_404_NOT_FOUND)
+        queryset.delete()
+        return APIResponse.success(
+            data={"count": deleted_count},
+            message="系统通知已撤回",
         )
 
     @action(detail=False, methods=["get"])

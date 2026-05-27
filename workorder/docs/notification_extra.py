@@ -15,6 +15,16 @@ from workorder.schema import standard_error_response, standard_success_response
 
 
 system_notification_docs = extend_schema_view(
+    list=extend_schema(
+        tags=["通知"],
+        summary="获取系统通知发布记录",
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("SystemNotificationAdminListResponse"),
+                description="系统通知发布记录",
+            )
+        },
+    ),
     create_announcement=extend_schema(
         tags=["通知"],
         summary="创建系统公告",
@@ -28,6 +38,11 @@ system_notification_docs = extend_schema_view(
                 ),
                 "only_staff": serializers.BooleanField(required=False, default=False),
                 "expires_in_days": serializers.IntegerField(required=False),
+                "priority": serializers.ChoiceField(
+                    choices=["low", "normal", "high", "urgent"],
+                    required=False,
+                    default="normal",
+                ),
             },
         ),
         examples=[
@@ -88,6 +103,20 @@ system_notification_docs = extend_schema_view(
             400: OpenApiResponse(
                 response=standard_error_response("SystemUrgentAlertBadRequest"),
                 description="请求无效",
+            ),
+        },
+    ),
+    revoke=extend_schema(
+        tags=["通知"],
+        summary="撤回系统通知发布批次",
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response("SystemNotificationRevokeResponse"),
+                description="撤回成功",
+            ),
+            404: OpenApiResponse(
+                response=standard_error_response("SystemNotificationRevokeNotFound"),
+                description="通知不存在",
             ),
         },
     ),
