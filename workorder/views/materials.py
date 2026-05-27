@@ -7,6 +7,7 @@
 from django.db import transaction
 from django.db.models import Case, Count, F, FloatField, Sum, When
 from django.utils import timezone
+from django_filters import CharFilter, DateFromToRangeFilter, FilterSet
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, pagination, status
 from rest_framework.decorators import action
@@ -57,6 +58,18 @@ from ..serializers.materials import (
 )
 from ..services.service_errors import ServiceError
 from .base_viewsets import BaseViewSet
+
+
+class PurchaseOrderFilterSet(FilterSet):
+    supplier_name = CharFilter(field_name="supplier__name", lookup_expr="icontains")
+    ordered_date = DateFromToRangeFilter()
+    expected_date = DateFromToRangeFilter()
+    actual_received_date = DateFromToRangeFilter()
+    created_at = DateFromToRangeFilter()
+
+    class Meta:
+        model = PurchaseOrder
+        fields = ["supplier", "status", "work_order"]
 
 
 @material_docs
@@ -128,20 +141,27 @@ class PurchaseOrderViewSet(BaseViewSet):
     """采购单视图集（优化版）"""
 
     queryset = PurchaseOrder.objects.all()
-    search_fields = ["order_number", "supplier__name"]
-    ordering_fields = ["created_at", "order_number", "total_amount"]
+    search_fields = [
+        "order_number",
+        "supplier__name",
+        "supplier__code",
+        "work_order__order_number",
+    ]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "order_number",
+        "supplier__name",
+        "status",
+        "work_order__order_number",
+        "total_amount",
+        "items_count",
+        "ordered_date",
+        "expected_date",
+        "actual_received_date",
+    ]
     ordering = ["-created_at"]
-
-    def get_filterset(self):
-        """延迟创建 FilterSet，避免模块加载时的关系解析问题"""
-        from django_filters import FilterSet
-
-        class PurchaseOrderFilterSet(FilterSet):
-            class Meta:
-                model = PurchaseOrder
-                fields = ["supplier", "status", "work_order"]
-
-        return PurchaseOrderFilterSet
+    filterset_class = PurchaseOrderFilterSet
 
     def get_serializer_class(self):
         """根据 action 返回不同的序列化器"""
