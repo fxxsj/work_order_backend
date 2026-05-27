@@ -92,6 +92,32 @@ class CostItemSerializer(serializers.ModelSerializer):
         model = CostItem
         fields = "__all__"
 
+    def validate(self, data):
+        """验证成本项目数据"""
+        code = data.get("code")
+        if code is not None:
+            code = code.strip()
+            if len(code) < 2 or len(code) > 50:
+                raise serializers.ValidationError(
+                    {"code": "成本项目编码长度必须为 2-50 个字符"}
+                )
+            data["code"] = code
+
+        name = data.get("name")
+        if name is not None:
+            name = name.strip()
+            if len(name) < 2 or len(name) > 100:
+                raise serializers.ValidationError(
+                    {"name": "成本项目名称长度必须为 2-100 个字符"}
+                )
+            data["name"] = name
+
+        description = data.get("description")
+        if description is not None:
+            data["description"] = description.strip()
+
+        return data
+
 
 class ProductionCostSerializer(serializers.ModelSerializer):
     """生产成本序列化器"""

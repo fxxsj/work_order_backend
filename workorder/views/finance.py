@@ -142,6 +142,17 @@ class CostItemViewSet(viewsets.ModelViewSet):
     queryset = CostItem.objects.all()
     serializer_class = CostItemSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = [
+        "code",
+        "name",
+        "type",
+        "allocation_method",
+        "is_active",
+        "created_at",
+        "updated_at",
+    ]
+    ordering = ["code"]
 
     def get_queryset(self):
         """支持搜索和过滤"""
@@ -156,6 +167,11 @@ class CostItemViewSet(viewsets.ModelViewSet):
         cost_type = self.request.query_params.get("type")
         if cost_type:
             queryset = queryset.filter(type=cost_type)
+
+        # 按分摊方法过滤
+        allocation_method = self.request.query_params.get("allocation_method")
+        if allocation_method:
+            queryset = queryset.filter(allocation_method=allocation_method)
 
         # 搜索
         search = self.request.query_params.get("search")
