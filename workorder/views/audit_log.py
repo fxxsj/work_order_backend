@@ -10,6 +10,7 @@ Date: 2026-03-04
 import logging
 from datetime import datetime, timedelta
 from django.utils import timezone
+from django_filters import CharFilter, DateFilter, DateTimeFilter, FilterSet, NumberFilter
 from rest_framework import status
 from workorder.response import APIResponse
 from rest_framework.decorators import action
@@ -27,6 +28,44 @@ from .base_viewsets import ReadOnlyBaseViewSet
 logger = logging.getLogger(__name__)
 
 
+class AuditLogFilterSet(FilterSet):
+    """审计日志过滤器。"""
+
+    action_type = CharFilter(field_name='action_type')
+    user = NumberFilter(field_name='user')
+    user_id = NumberFilter(field_name='user')
+    username = CharFilter(field_name='username', lookup_expr='icontains')
+    model = CharFilter(field_name='content_type__model')
+    content_type = NumberFilter(field_name='content_type')
+    object_id = CharFilter(field_name='object_id')
+    ip_address = CharFilter(field_name='ip_address')
+    request_method = CharFilter(field_name='request_method')
+    request_path = CharFilter(field_name='request_path', lookup_expr='icontains')
+    start_date = DateFilter(field_name='created_at', lookup_expr='date__gte')
+    end_date = DateFilter(field_name='created_at', lookup_expr='date__lte')
+    created_at_after = DateTimeFilter(field_name='created_at', lookup_expr='gte')
+    created_at_before = DateTimeFilter(field_name='created_at', lookup_expr='lte')
+
+    class Meta:
+        model = AuditLog
+        fields = [
+            'action_type',
+            'user',
+            'user_id',
+            'username',
+            'model',
+            'content_type',
+            'object_id',
+            'ip_address',
+            'request_method',
+            'request_path',
+            'start_date',
+            'end_date',
+            'created_at_after',
+            'created_at_before',
+        ]
+
+
 class AuditLogViewSet(ReadOnlyBaseViewSet):
     """
     审计日志视图集
@@ -42,9 +81,25 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
 
     queryset = AuditLog.objects.all()
     serializer_class = None
-    filterset_fields = ['action_type', 'user']
-    search_fields = ['object_repr', 'username', 'ip_address']
-    ordering_fields = ['created_at', 'action_type']
+    filterset_class = AuditLogFilterSet
+    search_fields = [
+        'object_repr',
+        'object_id',
+        'username',
+        'ip_address',
+        'request_method',
+        'request_path',
+        'content_type__model',
+    ]
+    ordering_fields = [
+        'created_at',
+        'action_type',
+        'username',
+        'content_type__model',
+        'object_id',
+        'ip_address',
+        'request_method',
+    ]
     ordering = ['-created_at']
 
     def get_serializer_class(self):
@@ -60,39 +115,6 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
 
         # 自动优化查询
         queryset = queryset.select_related('user', 'content_type')
-
-        # 时间范围过滤
-        start_date = self.request.query_params.get('start_date')
-        end_date = self.request.query_params.get('end_date')
-
-        if start_date:
-            try:
-                start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-                queryset = queryset.filter(created_at__gte=start_date)
-            except ValueError:
-                pass
-
-        if end_date:
-            try:
-                end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-                queryset = queryset.filter(created_at__lte=end_date)
-            except ValueError:
-                pass
-
-        # 模型过滤
-        model = self.request.query_params.get('model')
-        if model:
-            queryset = queryset.filter(content_type__model=model)
-
-        # 对象ID过滤
-        object_id = self.request.query_params.get('object_id')
-        if object_id:
-            queryset = queryset.filter(object_id=object_id)
-
-        # IP地址过滤
-        ip_address = self.request.query_params.get('ip_address')
-        if ip_address:
-            queryset = queryset.filter(ip_address=ip_address)
 
         return queryset
 
@@ -163,7 +185,7 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
         - 按用户统计
         - 按日期统计
         """
-        queryset = self.get_queryset()
+        queryset = self.filter_queryset(self.get_queryset())
 
         # 总操作数
         total_count = queryset.count()

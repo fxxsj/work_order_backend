@@ -95,9 +95,12 @@ class AuditLogListSerializer(serializers.ModelSerializer):
             'action_type',
             'username',
             'content_type_name',
+            'object_id',
             'object_repr',
             'changed_fields',
             'ip_address',
+            'request_method',
+            'request_path',
             'created_at',
         ]
 
