@@ -109,7 +109,7 @@ class ProductGroupViewSet(BaseViewSet):
     serializer_class = ProductGroupSerializer
     filterset_fields = ["is_active"]
     search_fields = ["name", "code"]
-    ordering_fields = ["code", "created_at"]
+    ordering_fields = ["code", "name", "is_active", "created_at", "updated_at"]
     ordering = ["code"]
 
 
