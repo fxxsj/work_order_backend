@@ -12,8 +12,10 @@ from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.db.models import Q
 from django.utils import timezone
+from django_filters import rest_framework as django_filters
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
-from rest_framework import permissions, status, viewsets
+from rest_framework import filters, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import serializers
@@ -57,7 +59,9 @@ class NotificationSerializer:
         return {
             "id": notification.id,
             "notification_type": notification.notification_type,
+            "notification_type_display": notification.get_notification_type_display(),
             "priority": notification.priority,
+            "priority_display": notification.get_priority_display(),
             "title": notification.title,
             "content": notification.content,
             "is_read": notification.is_read,
@@ -65,8 +69,14 @@ class NotificationSerializer:
                 notification.read_at.isoformat() if notification.read_at else None
             ),
             "created_at": notification.created_at.isoformat(),
+            "expires_at": (
+                notification.expires_at.isoformat() if notification.expires_at else None
+            ),
             "work_order_id": notification.work_order_id,
+            "work_order_process_id": notification.work_order_process_id,
             "task_id": notification.task_id,
+            "purchase_order_id": notification.purchase_order_id,
+            "data": notification.data or {},
         }
 
 
@@ -97,6 +107,54 @@ class IsSystemNotificationAdmin(permissions.BasePermission):
         return any(user.has_perm(code) for code in self.permission_codes)
 
 
+class NotificationFilterSet(django_filters.FilterSet):
+    """用户通知列表筛选。"""
+
+    is_read = django_filters.BooleanFilter(field_name="is_read")
+    notification_type = django_filters.CharFilter(field_name="notification_type")
+    priority = django_filters.CharFilter(field_name="priority")
+    work_order = django_filters.NumberFilter(field_name="work_order_id")
+    work_order_id = django_filters.NumberFilter(field_name="work_order_id")
+    task = django_filters.NumberFilter(field_name="task_id")
+    task_id = django_filters.NumberFilter(field_name="task_id")
+    purchase_order = django_filters.NumberFilter(field_name="purchase_order_id")
+    purchase_order_id = django_filters.NumberFilter(field_name="purchase_order_id")
+    start_date = django_filters.DateFilter(
+        field_name="created_at",
+        lookup_expr="date__gte",
+    )
+    end_date = django_filters.DateFilter(
+        field_name="created_at",
+        lookup_expr="date__lte",
+    )
+    created_at_after = django_filters.IsoDateTimeFilter(
+        field_name="created_at",
+        lookup_expr="gte",
+    )
+    created_at_before = django_filters.IsoDateTimeFilter(
+        field_name="created_at",
+        lookup_expr="lte",
+    )
+
+    class Meta:
+        model = Notification
+        fields = [
+            "is_read",
+            "notification_type",
+            "priority",
+            "work_order",
+            "work_order_id",
+            "task",
+            "task_id",
+            "purchase_order",
+            "purchase_order_id",
+            "start_date",
+            "end_date",
+            "created_at_after",
+            "created_at_before",
+        ]
+
+
 @extend_schema_view(
     list=extend_schema(
         tags=["通知"],
@@ -116,19 +174,40 @@ class NotificationViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = NotificationPagination
     serializer_class = EmptySerializer
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
+    filterset_class = NotificationFilterSet
+    search_fields = [
+        "title",
+        "content",
+        "notification_type",
+        "priority",
+        "work_order__order_number",
+        "task__work_content",
+        "purchase_order__order_number",
+    ]
+    ordering_fields = [
+        "created_at",
+        "read_at",
+        "notification_type",
+        "priority",
+        "is_read",
+    ]
+    ordering = ["-created_at"]
 
     def get_queryset(self):
         """获取当前用户的通知查询集"""
         if getattr(self, "swagger_fake_view", False):
             return Notification.objects.none()
         Notification.apply_retention_policy([self.request.user.id])
-        return Notification.objects.filter(recipient=self.request.user).order_by(
-            "-created_at"
-        )
+        return Notification.objects.filter(recipient=self.request.user)
 
     def list(self, request):
         """获取通知列表"""
-        notifications = self.get_queryset()
+        notifications = self.filter_queryset(self.get_queryset())
 
         # 分页
         page = self.paginate_queryset(notifications)
@@ -160,8 +239,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
         """标记通知为已读"""
         try:
             notification = self.get_queryset().get(id=pk)
-            notification.is_read = True
-            notification.save(update_fields=["is_read"])
+            notification.mark_as_read()
 
             return APIResponse.success(
                 data={
@@ -185,7 +263,10 @@ class NotificationViewSet(viewsets.GenericViewSet):
     )
     def mark_all_read(self, request):
         """标记所有通知为已读"""
-        count = self.get_queryset().filter(is_read=False).update(is_read=True)
+        count = self.get_queryset().filter(is_read=False).update(
+            is_read=True,
+            read_at=timezone.now(),
+        )
 
         return APIResponse.success(data={"count": count}, message=f"已标记 {count} 条通知为已读")
 
@@ -261,7 +342,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
     )
     def statistics(self, request):
         """获取通知统计"""
-        queryset = self.get_queryset()
+        queryset = self.filter_queryset(self.get_queryset())
 
         # 简化版统计，避免使用可能导致阻塞的导入
         return APIResponse.success(
@@ -269,6 +350,8 @@ class NotificationViewSet(viewsets.GenericViewSet):
                 "total_count": queryset.count(),
                 "unread_count": queryset.filter(is_read=False).count(),
                 "read_count": queryset.filter(is_read=True).count(),
+                "urgent_count": queryset.filter(priority="urgent").count(),
+                "high_count": queryset.filter(priority="high").count(),
             }
         )
 
