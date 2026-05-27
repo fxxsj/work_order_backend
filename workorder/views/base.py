@@ -233,7 +233,14 @@ class DepartmentViewSet(BaseViewSet):
     serializer_class = DepartmentSerializer
     filterset_fields = ["is_active", "parent"]
     search_fields = ["name", "code"]
-    ordering_fields = ["sort_order", "code"]
+    ordering_fields = [
+        "sort_order",
+        "code",
+        "name",
+        "parent__name",
+        "is_active",
+        "created_at",
+    ]
     ordering = ["sort_order", "code"]
 
     def get_queryset(self):
