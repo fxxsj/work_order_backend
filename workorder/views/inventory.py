@@ -322,6 +322,19 @@ class StockInViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = StockInSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = [
+        "order_number",
+        "work_order__order_number",
+        "work_order__customer__name",
+        "stock_in_date",
+        "status",
+        "operator__username",
+        "submitted_at",
+        "approved_at",
+        "created_at",
+    ]
+    ordering = ["-created_at"]
 
     def get_serializer_class(self):
         """根据操作选择序列化器"""
