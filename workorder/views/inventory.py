@@ -13,7 +13,8 @@
 from django.db import transaction
 from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
-from rest_framework import status, viewsets
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from workorder.permission_utils import PermissionUtils, apply_data_scope, apply_department_scope
 from workorder.response import APIResponse
@@ -104,6 +105,24 @@ class ProductStockViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = ProductStockSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "quantity",
+        "reserved_quantity",
+        "min_stock_level",
+        "unit_cost",
+        "location",
+        "production_date",
+        "expiry_date",
+        "status",
+        "batch_no",
+        "product__name",
+        "product__code",
+        "work_order__order_number",
+    ]
+    ordering = ["-created_at"]
 
     def get_serializer_class(self):
         """根据操作选择序列化器"""
