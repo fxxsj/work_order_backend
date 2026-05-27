@@ -668,6 +668,24 @@ class StatementViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = StatementSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = [
+        "statement_number",
+        "statement_type",
+        "customer__name",
+        "supplier__name",
+        "period",
+        "start_date",
+        "end_date",
+        "opening_balance",
+        "total_debit",
+        "total_credit",
+        "closing_balance",
+        "status",
+        "created_at",
+        "confirmed_at",
+    ]
+    ordering = ["-period"]
 
     def get_serializer_class(self):
         """根据操作选择序列化器"""
@@ -775,9 +793,13 @@ class StatementViewSet(viewsets.ModelViewSet):
             pending_confirm_count=Count("id", filter=Q(status__in=["draft", "sent"])),
             disputed_count=Count("id", filter=Q(status="disputed")),
             confirmed_count=Count("id", filter=Q(status="confirmed")),
-            total_amount=Sum("total_amount"),
+            total_debit=Sum("total_debit"),
+            total_credit=Sum("total_credit"),
             closing_balance=Sum("closing_balance"),
         )
+        summary["total_debit"] = summary["total_debit"] or Decimal("0")
+        summary["total_credit"] = summary["total_credit"] or Decimal("0")
+        summary["closing_balance"] = summary["closing_balance"] or Decimal("0")
         by_status = (
             queryset.values("status").annotate(count=Count("id")).order_by("status")
         )

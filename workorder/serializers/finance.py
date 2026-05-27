@@ -489,6 +489,8 @@ class StatementCreateSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "opening_balance",
+            "total_debit",
+            "total_credit",
             "notes",
         ]
 
