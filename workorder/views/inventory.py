@@ -620,6 +620,21 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
     )
     serializer_class = DeliveryOrderSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = [
+        "order_number",
+        "customer__name",
+        "sales_order__order_number",
+        "delivery_date",
+        "status",
+        "logistics_company",
+        "tracking_number",
+        "freight",
+        "package_count",
+        "created_at",
+        "updated_at",
+    ]
+    ordering = ["-created_at"]
 
     def get_serializer_class(self):
         """根据操作选择序列化器"""
