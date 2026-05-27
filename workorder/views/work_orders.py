@@ -14,7 +14,7 @@ from decimal import Decimal
 from django.db import models
 from django.db.models import Avg, Count, F, Max, Q, Sum
 from django.utils import timezone
-from django_filters import CharFilter, FilterSet, NumberFilter
+from django_filters import CharFilter, DateFilter, FilterSet, NumberFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
@@ -93,8 +93,22 @@ from .sales import _scope_sales_orders
 
 class WorkOrderFilterSet(FilterSet):
     approval_status = CharFilter(method="filter_approval_status")
+    customer_name = CharFilter(field_name="customer__name", lookup_expr="icontains")
     product = NumberFilter(method="filter_product")
     process = NumberFilter(method="filter_process")
+    sales_order = NumberFilter(field_name="sales_order")
+    order_date_after = DateFilter(field_name="order_date", lookup_expr="gte")
+    order_date_before = DateFilter(field_name="order_date", lookup_expr="lte")
+    delivery_date_after = DateFilter(field_name="delivery_date", lookup_expr="gte")
+    delivery_date_before = DateFilter(field_name="delivery_date", lookup_expr="lte")
+    actual_delivery_date_after = DateFilter(
+        field_name="actual_delivery_date", lookup_expr="gte"
+    )
+    actual_delivery_date_before = DateFilter(
+        field_name="actual_delivery_date", lookup_expr="lte"
+    )
+    created_at_after = DateFilter(field_name="created_at", lookup_expr="date__gte")
+    created_at_before = DateFilter(field_name="created_at", lookup_expr="date__lte")
 
     class Meta:
         model = WorkOrder
@@ -104,8 +118,10 @@ class WorkOrderFilterSet(FilterSet):
             "customer",
             "manager",
             "approval_status",
+            "customer_name",
             "product",
             "process",
+            "sales_order",
         ]
 
     def filter_product(self, queryset, name, value):
@@ -321,8 +337,30 @@ class WorkOrderViewSet(BaseViewSet):
         "products__product__name",
         "products__product__code",
         "customer__name",
+        "customer__code",
+        "sales_order__order_number",
+        "manager__username",
     ]
-    ordering_fields = ["created_at", "order_date", "delivery_date", "order_number"]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "order_date",
+        "delivery_date",
+        "actual_delivery_date",
+        "order_number",
+        "customer__name",
+        "customer__salesperson__username",
+        "products__product__name",
+        "status",
+        "priority",
+        "approval_status",
+        "production_quantity",
+        "defective_quantity",
+        "total_amount",
+        "manager__username",
+        "approved_at",
+        "sales_order__order_number",
+    ]
     ordering = ["-created_at"]
 
     def get_serializer_class(self):
