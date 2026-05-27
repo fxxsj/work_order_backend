@@ -312,9 +312,20 @@ class DieViewSet(PlateMakingConfirmMixin, ImageAssetActionsMixin, BaseViewSet):
     queryset = Die.objects.all()
     serializer_class = DieSerializer
     permission_classes = [WorkOrderSupportingDataPermission]
-    filterset_fields = ["confirmed"]
+    filterset_fields = ["confirmed", "die_type"]
     search_fields = ["code", "name", "size", "material"]
-    ordering_fields = ["created_at", "code", "name"]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "code",
+        "name",
+        "die_type",
+        "size",
+        "material",
+        "thickness",
+        "confirmed",
+        "confirmed_at",
+    ]
     ordering = ["-created_at"]
 
     def get_queryset(self):
