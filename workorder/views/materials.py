@@ -65,8 +65,16 @@ class MaterialViewSet(BaseViewSet):
 
     queryset = Material.objects.all()
     serializer_class = MaterialSerializer
+    filterset_fields = ["is_active", "default_supplier", "need_cutting"]
     search_fields = ["name", "code", "specification"]
-    ordering_fields = ["code", "created_at", "stock_quantity"]
+    ordering_fields = [
+        "code",
+        "name",
+        "unit",
+        "unit_price",
+        "stock_quantity",
+        "created_at",
+    ]
     ordering = ["code"]
 
     def get_queryset(self):

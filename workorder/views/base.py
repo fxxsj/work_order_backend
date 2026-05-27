@@ -47,7 +47,14 @@ class CustomerViewSet(BaseViewSet):
     serializer_class = CustomerSerializer
     permission_classes = [CustomerDataPermission]
     search_fields = ["name", "contact_person", "phone"]
-    ordering_fields = ["created_at", "name"]
+    ordering_fields = [
+        "created_at",
+        "name",
+        "contact_person",
+        "phone",
+        "email",
+        "salesperson__username",
+    ]
     ordering = ["-created_at"]
 
     def get_queryset(self):
