@@ -965,6 +965,24 @@ class QualityInspectionViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = QualityInspectionSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = [
+        "inspection_number",
+        "inspection_type",
+        "work_order__order_number",
+        "work_order__customer__name",
+        "product__name",
+        "batch_no",
+        "inspection_date",
+        "inspector__username",
+        "result",
+        "inspection_quantity",
+        "passed_quantity",
+        "failed_quantity",
+        "defective_rate",
+        "created_at",
+    ]
+    ordering = ["-inspection_date"]
 
     def get_serializer_class(self):
         """根据操作选择序列化器"""
