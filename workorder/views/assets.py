@@ -353,13 +353,14 @@ class FoilingPlateViewSet(
     queryset = FoilingPlate.objects.all()
     serializer_class = FoilingPlateSerializer
     permission_classes = [WorkOrderSupportingDataPermission]
-    filterset_fields = ["confirmed"]
+    filterset_fields = ["confirmed", "foiling_type"]
     search_fields = ["code", "name", "size", "material"]
     ordering_fields = [
         "created_at",
         "updated_at",
         "code",
         "name",
+        "foiling_type",
         "size",
         "material",
         "thickness",
