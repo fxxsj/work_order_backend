@@ -152,19 +152,68 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
     """生产成本视图集"""
 
     queryset = ProductionCost.objects.select_related(
-        "work_order", "calculated_by"
-    ).all()
+        "work_order", "work_order__customer", "calculated_by"
+    ).prefetch_related("work_order__products__product")
     serializer_class = ProductionCostSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = [
+        "period",
+        "work_order__order_number",
+        "work_order__customer__name",
+        "material_cost",
+        "labor_cost",
+        "equipment_cost",
+        "overhead_cost",
+        "total_cost",
+        "standard_cost",
+        "variance",
+        "variance_rate",
+        "calculated_at",
+        "created_at",
+        "updated_at",
+    ]
+    ordering = ["-period"]
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        return _scope_finance_queryset(
+        queryset = _scope_finance_queryset(
             queryset,
             self.request.user,
             work_order_path="work_order",
             ownership_paths=("calculated_by",),
         )
+
+        period = self.request.query_params.get("period")
+        if period:
+            queryset = queryset.filter(period=period)
+
+        period_start = self.request.query_params.get("period_start")
+        if period_start:
+            queryset = queryset.filter(period__gte=period_start)
+
+        period_end = self.request.query_params.get("period_end")
+        if period_end:
+            queryset = queryset.filter(period__lte=period_end)
+
+        customer = self.request.query_params.get("customer")
+        if customer:
+            queryset = queryset.filter(work_order__customer_id=customer)
+
+        work_order = self.request.query_params.get("work_order")
+        if work_order:
+            queryset = queryset.filter(work_order_id=work_order)
+
+        search = self.request.query_params.get("search")
+        if search:
+            queryset = queryset.filter(
+                Q(work_order__order_number__icontains=search)
+                | Q(work_order__customer__name__icontains=search)
+                | Q(period__icontains=search)
+                | Q(notes__icontains=search)
+            )
+
+        return queryset
 
     def get_serializer_class(self):
         """根据操作选择序列化器"""

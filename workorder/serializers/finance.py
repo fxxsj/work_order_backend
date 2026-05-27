@@ -73,10 +73,14 @@ class ProductionCostSerializer(serializers.ModelSerializer):
         source="work_order.order_number", read_only=True
     )
     customer_name = serializers.SerializerMethodField()
+    product_name = serializers.SerializerMethodField()
     calculated_by_name = serializers.CharField(
         source="calculated_by.username", read_only=True, allow_null=True
     )
     variance_rate_formatted = serializers.SerializerMethodField()
+    actual_cost = serializers.DecimalField(
+        source="total_cost", max_digits=12, decimal_places=2, read_only=True
+    )
 
     class Meta:
         model = ProductionCost
@@ -88,6 +92,19 @@ class ProductionCostSerializer(serializers.ModelSerializer):
         if obj.work_order and obj.work_order.customer:
             return obj.work_order.customer.name
         return None
+
+    def get_product_name(self, obj) -> Optional[str]:
+        """获取施工单产品摘要"""
+        if not obj.work_order:
+            return None
+        products = obj.work_order.products.select_related("product").all()
+        if not products:
+            return None
+        first = products[0]
+        first_name = first.product.name if first.product_id else None
+        if products.count() > 1 and first_name:
+            return f"{first_name} 等{products.count()}款"
+        return first_name
 
     def get_variance_rate_formatted(self, obj) -> str:
         """格式化差异率显示"""
