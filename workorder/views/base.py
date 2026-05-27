@@ -359,7 +359,16 @@ class ProcessViewSet(BaseViewSet):
     serializer_class = ProcessSerializer
     filterset_fields = ["is_active", "is_builtin", "task_generation_rule"]
     search_fields = ["name", "code", "description"]
-    ordering_fields = ["sort_order", "code", "created_at"]
+    ordering_fields = [
+        "sort_order",
+        "code",
+        "name",
+        "standard_duration",
+        "is_active",
+        "is_builtin",
+        "task_generation_rule",
+        "created_at",
+    ]
     ordering = ["sort_order", "code"]
 
     @action(detail=False, methods=["get"])
