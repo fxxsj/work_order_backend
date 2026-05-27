@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
+from django_filters import CharFilter, DateFromToRangeFilter, FilterSet
 from rest_framework import status
 from rest_framework.decorators import action
 from workorder.response import APIResponse
@@ -37,6 +38,18 @@ from ..services.sales_order_status_service import SalesOrderStatusService
 from .base_viewsets import BaseViewSet
 
 
+class SalesOrderFilterSet(FilterSet):
+    customer_name = CharFilter(field_name="customer__name", lookup_expr="icontains")
+    order_date = DateFromToRangeFilter()
+    delivery_date = DateFromToRangeFilter()
+    actual_delivery_date = DateFromToRangeFilter()
+    created_at = DateFromToRangeFilter()
+
+    class Meta:
+        model = SalesOrder
+        fields = ["customer", "status", "payment_status"]
+
+
 def _scope_sales_orders(queryset, user):
     if not user.is_authenticated:
         return queryset.none()
@@ -52,26 +65,43 @@ class SalesOrderViewSet(BaseViewSet):
     """销售订单视图集"""
 
     queryset = SalesOrder.objects.all()
-    search_fields = ["order_number", "customer__name"]
-    ordering_fields = ["created_at", "order_date", "delivery_date"]
+    search_fields = [
+        "order_number",
+        "customer__name",
+        "customer__code",
+        "contract_number",
+    ]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "order_number",
+        "customer__name",
+        "status",
+        "payment_status",
+        "order_date",
+        "delivery_date",
+        "actual_delivery_date",
+        "subtotal",
+        "tax_amount",
+        "discount_amount",
+        "total_amount",
+        "paid_amount",
+        "payment_date",
+        "items_count",
+        "work_order_count",
+    ]
     ordering = ["-created_at"]
-
-    def get_filterset(self):
-        """动态创建 FilterSet，避免模块加载时的关系解析问题"""
-        from django_filters import FilterSet
-
-        class SalesOrderFilterSet(FilterSet):
-            class Meta:
-                model = SalesOrder
-                fields = ["customer", "status", "payment_status"]
-
-        return SalesOrderFilterSet
+    filterset_class = SalesOrderFilterSet
 
     def get_queryset(self):
         """优化查询"""
         queryset = SalesOrder.objects.select_related(
             "customer", "submitted_by", "approved_by", "created_by"
         ).prefetch_related("items", "items__product", "source_work_orders")
+        queryset = queryset.annotate(
+            items_count=Count("items", distinct=True),
+            work_order_count=Count("source_work_orders", distinct=True),
+        )
         return _scope_sales_orders(queryset, self.request.user)
 
     def get_serializer_class(self):
