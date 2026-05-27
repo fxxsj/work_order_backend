@@ -92,13 +92,33 @@ def _scope_finance_queryset(
 class CostCenterViewSet(viewsets.ModelViewSet):
     """成本中心视图集"""
 
-    queryset = CostCenter.objects.all()
+    queryset = CostCenter.objects.select_related("manager", "parent").all()
     serializer_class = CostCenterSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = [
+        "code",
+        "name",
+        "type",
+        "manager__username",
+        "parent__name",
+        "is_active",
+        "created_at",
+        "updated_at",
+    ]
+    ordering = ["code"]
 
     def get_queryset(self):
         """支持搜索和过滤"""
         queryset = super().get_queryset()
+
+        center_type = self.request.query_params.get("type")
+        if center_type:
+            queryset = queryset.filter(type=center_type)
+
+        parent_id = self.request.query_params.get("parent")
+        if parent_id:
+            queryset = queryset.filter(parent_id=parent_id)
 
         # 只显示启用的成本中心
         is_active = self.request.query_params.get("is_active")
