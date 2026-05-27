@@ -16,7 +16,8 @@ from decimal import Decimal
 from django.db.models import Count, DecimalField, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
-from rest_framework import status, viewsets
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from workorder.permission_utils import PermissionUtils, apply_data_scope
 from workorder.permissions import SuperuserFriendlyModelPermissions
@@ -252,6 +253,22 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     )
     serializer_class = InvoiceSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = [
+        "invoice_number",
+        "invoice_code",
+        "invoice_type",
+        "customer__name",
+        "amount",
+        "tax_amount",
+        "total_amount",
+        "issue_date",
+        "status",
+        "created_at",
+        "updated_at",
+        "received_payment_amount",
+    ]
+    ordering = ["-created_at"]
 
     def get_serializer_class(self):
         """根据操作选择序列化器"""
@@ -354,7 +371,12 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             invoice.approved_at = timezone.now()
         else:
             invoice.status = "cancelled"
-            invoice.approval_comment = approval_comment
+            if approval_comment:
+                invoice.notes = (
+                    f"{invoice.notes}\n审核意见: {approval_comment}"
+                    if invoice.notes
+                    else f"审核意见: {approval_comment}"
+                )
 
         invoice.save()
 
