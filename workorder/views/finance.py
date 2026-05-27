@@ -444,6 +444,20 @@ class PaymentViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = PaymentSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = [
+        "payment_number",
+        "customer__name",
+        "sales_order__order_number",
+        "invoice__invoice_number",
+        "amount",
+        "applied_amount",
+        "remaining_amount",
+        "payment_method",
+        "payment_date",
+        "created_at",
+    ]
+    ordering = ["-payment_date"]
 
     def get_serializer_class(self):
         """根据操作选择序列化器"""
@@ -544,6 +558,17 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
     queryset = PaymentPlan.objects.select_related("sales_order").all()
     serializer_class = PaymentPlanSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = [
+        "sales_order__order_number",
+        "sales_order__customer__name",
+        "plan_amount",
+        "paid_amount",
+        "plan_date",
+        "status",
+        "created_at",
+    ]
+    ordering = ["plan_date"]
 
     def get_queryset(self):
         """支持过滤"""
