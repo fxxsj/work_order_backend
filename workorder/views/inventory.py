@@ -67,6 +67,7 @@ from workorder.serializers.inventory import (
     QualityInspectionUpdateSerializer,
     StockInCreateSerializer,
     StockInSerializer,
+    StockOutCreateSerializer,
     StockOutSerializer,
     upsert_delivery_exception_resolution,
 )
@@ -458,6 +459,26 @@ class StockOutViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = StockOutSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = [
+        "order_number",
+        "out_type",
+        "delivery_order__order_number",
+        "delivery_order__customer__name",
+        "stock_out_date",
+        "status",
+        "operator__username",
+        "submitted_at",
+        "approved_at",
+        "created_at",
+    ]
+    ordering = ["-created_at"]
+
+    def get_serializer_class(self):
+        """根据操作选择序列化器"""
+        if self.action in ["create", "update", "partial_update"]:
+            return StockOutCreateSerializer
+        return StockOutSerializer
 
     def get_queryset(self):
         """支持过滤"""
@@ -473,6 +494,14 @@ class StockOutViewSet(viewsets.ModelViewSet):
         if out_type:
             queryset = queryset.filter(out_type=out_type)
 
+        # 按日期范围过滤
+        start_date = self.request.query_params.get("start_date")
+        end_date = self.request.query_params.get("end_date")
+        if start_date:
+            queryset = queryset.filter(stock_out_date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(stock_out_date__lte=end_date)
+
         search = self.request.query_params.get("search")
         if search:
             queryset = queryset.filter(
@@ -482,6 +511,24 @@ class StockOutViewSet(viewsets.ModelViewSet):
             )
 
         return queryset
+
+    @action(detail=True, methods=["post"])
+    def submit(self, request, pk=None):
+        """提交出库单"""
+        stock_out = self.get_object()
+
+        if stock_out.status != "draft":
+            return APIResponse.error(
+                "只有草稿状态的出库单可以提交", code=status.HTTP_400_BAD_REQUEST
+            )
+
+        stock_out.status = "submitted"
+        stock_out.submitted_by = request.user
+        stock_out.submitted_at = timezone.now()
+        stock_out.save()
+
+        serializer = self.get_serializer(stock_out)
+        return APIResponse.success(data=serializer.data, message="出库单提交成功")
 
     @action(detail=True, methods=["post"])
     @stock_out_approve_docs

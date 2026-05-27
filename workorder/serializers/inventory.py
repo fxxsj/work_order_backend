@@ -283,6 +283,24 @@ class StockOutSerializer(serializers.ModelSerializer):
         read_only_fields = ["order_number"]
 
 
+class StockOutCreateSerializer(serializers.ModelSerializer):
+    """出库单创建/更新序列化器"""
+
+    class Meta:
+        model = StockOut
+        fields = ["out_type", "delivery_order", "stock_out_date", "notes"]
+
+    def validate(self, data):
+        """验证出库单数据"""
+        out_type = data.get("out_type", "delivery")
+        delivery_order = data.get("delivery_order")
+        if out_type == "delivery" and delivery_order is None:
+            raise serializers.ValidationError(
+                {"delivery_order": "发货出库必须关联发货单"}
+            )
+        return data
+
+
 # ==================== 发货管理序列化器 ====================
 
 
@@ -713,6 +731,7 @@ __all__ = [
     "StockInSerializer",
     "StockInCreateSerializer",
     "StockOutSerializer",
+    "StockOutCreateSerializer",
     # 发货管理
     "DeliveryItemSerializer",
     "DeliveryOrderSerializer",

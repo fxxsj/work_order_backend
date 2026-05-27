@@ -62,6 +62,7 @@ from .inventory import (
     QualityInspectionUpdateSerializer,
     StockInCreateSerializer,
     StockInSerializer,
+    StockOutCreateSerializer,
     StockOutSerializer,
 )
 from .materials import (
@@ -155,6 +156,7 @@ __all__ = [
     "StockInSerializer",
     "StockInCreateSerializer",
     "StockOutSerializer",
+    "StockOutCreateSerializer",
     "DeliveryItemSerializer",
     "DeliveryOrderSerializer",
     "DeliveryOrderListSerializer",
