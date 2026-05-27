@@ -34,10 +34,26 @@ class ProcessLogSerializer(serializers.ModelSerializer):
     log_type_display = serializers.CharField(
         source="get_log_type_display", read_only=True
     )
+    work_order_number = serializers.CharField(
+        source="work_order_process.work_order.order_number", read_only=True
+    )
+    process_name = serializers.CharField(
+        source="work_order_process.process.name", read_only=True
+    )
+    process_code = serializers.CharField(
+        source="work_order_process.process.code", read_only=True
+    )
+    work_order_process_label = serializers.SerializerMethodField()
 
     class Meta:
         model = ProcessLog
         fields = "__all__"
+
+    def get_work_order_process_label(self, obj) -> Optional[str]:
+        """获取施工单工序显示名"""
+        if obj.work_order_process:
+            return str(obj.work_order_process)
+        return None
 
 
 class TaskLogSerializer(serializers.ModelSerializer):

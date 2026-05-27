@@ -61,10 +61,32 @@ from ..throttling import ApprovalRateThrottle, CreateRateThrottle, ExportRateThr
 class ProcessLogViewSet(viewsets.ReadOnlyModelViewSet):
     """工序日志视图集（只读）"""
 
-    queryset = ProcessLog.objects.all()
+    queryset = ProcessLog.objects.select_related(
+        "work_order_process",
+        "work_order_process__work_order",
+        "work_order_process__process",
+        "operator",
+    ).all()
     serializer_class = ProcessLogSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
     filterset_fields = ["work_order_process", "log_type", "operator"]
-    ordering_fields = ["created_at"]
+    search_fields = [
+        "content",
+        "operator__username",
+        "work_order_process__work_order__order_number",
+        "work_order_process__process__name",
+        "work_order_process__process__code",
+    ]
+    ordering_fields = [
+        "created_at",
+        "log_type",
+        "operator__username",
+        "work_order_process__work_order__order_number",
+        "work_order_process__process__name",
+    ]
     ordering = ["-created_at"]
