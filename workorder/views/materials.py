@@ -92,7 +92,15 @@ class SupplierViewSet(BaseViewSet):
     pagination_class = pagination.PageNumberPagination
     filterset_fields = ["status"]
     search_fields = ["name", "code", "contact_person", "phone", "email"]
-    ordering_fields = ["created_at", "name", "code"]
+    ordering_fields = [
+        "created_at",
+        "name",
+        "code",
+        "contact_person",
+        "phone",
+        "email",
+        "status",
+    ]
     ordering = ["-created_at"]
 
     def get_queryset(self):
