@@ -226,9 +226,18 @@ class ArtworkViewSet(PlateMakingConfirmMixin, ImageAssetActionsMixin, BaseViewSe
     queryset = Artwork.objects.all()
     serializer_class = ArtworkSerializer
     permission_classes = [WorkOrderSupportingDataPermission]
-    filterset_fields = ["base_code", "version"]
-    search_fields = ["base_code", "name", "imposition_size"]
-    ordering_fields = ["created_at", "base_code", "version", "name"]
+    filterset_fields = ["base_code", "version", "confirmed"]
+    search_fields = ["base_code", "name", "imposition_size", "notes"]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "base_code",
+        "version",
+        "name",
+        "imposition_size",
+        "confirmed",
+        "confirmed_at",
+    ]
     ordering = ["-base_code", "-version"]
 
     @action(detail=True, methods=["post"])
