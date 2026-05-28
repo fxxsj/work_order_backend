@@ -48,6 +48,9 @@ class QueryOptimizer:
             'created_by',
             'approved_by',
             'sales_order',
+            'product_group_item',
+            'product_group_item__product_group',
+            'product_group_item__product',
         )
         
         if include_details:

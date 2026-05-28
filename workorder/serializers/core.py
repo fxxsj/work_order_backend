@@ -479,6 +479,7 @@ class WorkOrderDetailSerializer(WorkOrderProductInfoMixin, serializers.ModelSeri
 
     customer_name = serializers.CharField(source="customer.name", read_only=True)
     customer_detail = serializers.SerializerMethodField()
+    product_group_item_display = serializers.SerializerMethodField()
     manager_name = serializers.CharField(
         source="manager.username", read_only=True, allow_null=True
     )
@@ -558,6 +559,16 @@ class WorkOrderDetailSerializer(WorkOrderProductInfoMixin, serializers.ModelSeri
         from .base import CustomerSerializer
 
         return CustomerSerializer(obj.customer).data if obj.customer else None
+
+    def get_product_group_item_display(self, obj) -> Optional[str]:
+        """获取产品组子项显示名称"""
+        item = obj.product_group_item
+        if not item:
+            return None
+        group_name = item.product_group.name if item.product_group else None
+        product_name = item.product.name if item.product else None
+        parts = [part for part in [group_name, item.item_name, product_name] if part]
+        return " - ".join(parts) if parts else None
 
     def get_sales_order_numbers(self, obj) -> List[str]:
         """获取来源客户订单号"""
