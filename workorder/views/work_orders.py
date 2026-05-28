@@ -337,7 +337,6 @@ class WorkOrderViewSet(BaseViewSet):
         "products__product__name",
         "products__product__code",
         "customer__name",
-        "customer__code",
         "sales_order__order_number",
         "manager__username",
     ]
