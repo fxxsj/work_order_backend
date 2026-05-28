@@ -15,7 +15,7 @@ from django.utils import timezone
 from django_filters import rest_framework as django_filters
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
-from rest_framework import filters, permissions, status, viewsets
+from rest_framework import filters, mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import serializers
@@ -401,7 +401,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
 
 
 @system_notification_docs
-class SystemNotificationViewSet(viewsets.GenericViewSet):
+class SystemNotificationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     """系统通知管理视图集"""
 
     permission_classes = [IsSystemNotificationAdmin]

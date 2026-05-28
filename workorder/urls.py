@@ -86,6 +86,7 @@ router.register(r'delivery-items', DeliveryItemViewSet, basename='delivery-item'
 router.register(r'quality-inspections', QualityInspectionViewSet, basename='quality-inspection')
 
 router.register(r'system-notifications', SystemNotificationViewSet, basename='system-notifications')
+router.register(r'notification-admin', SystemNotificationViewSet, basename='notification-admin')
 router.register(r'user-notification-settings', UserNotificationSettingsViewSet, basename='user-notification-settings')
 router.register(r'notification-templates', NotificationTemplateViewSet, basename='notification-templates')
 
