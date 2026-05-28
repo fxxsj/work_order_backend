@@ -57,6 +57,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_display = [
         "code",
         "name",
+        "product_type",
         "specification",
         "unit",
         "unit_price",
@@ -66,16 +67,24 @@ class ProductAdmin(admin.ModelAdmin):
         "created_at",
     ]
     search_fields = ["code", "name", "specification"]
-    list_filter = ["is_active", "unit", "created_at"]
+    list_filter = ["is_active", "product_type", "unit", "product_group", "created_at"]
     list_editable = ["unit_price", "stock_quantity", "min_stock_quantity", "is_active"]
     ordering = ["code"]
     filter_horizontal = ["default_processes"]
+    autocomplete_fields = ["product_group"]
     inlines = [ProductMaterialInline, ProductImageInline]
 
     fieldsets = (
         (
             "基本信息",
             {"fields": ("code", "name", "specification", "unit", "unit_price")},
+        ),
+        (
+            "产品类型与分组",
+            {
+                "fields": ("product_type", "product_group"),
+                "description": "单品可独立销售；套装主产品用于下单；套装子产品用于生产",
+            },
         ),
         (
             "库存信息",

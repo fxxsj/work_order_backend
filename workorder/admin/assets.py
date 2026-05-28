@@ -8,27 +8,49 @@
 - EmbossingPlateAdmin: 压凸版管理
 
 及相关的 Inline 类：
+- ArtworkImageInline: 图稿图片内联
 - ArtworkProductInline: 图稿产品关联内联
+- DieImageInline: 刀模图片内联
 - DieProductInline: 刀模产品关联内联
+- FoilingPlateImageInline: 烫金版图片内联
 - FoilingPlateProductInline: 烫金版产品关联内联
+- EmbossingPlateImageInline: 压凸版图片内联
 - EmbossingPlateProductInline: 压凸版产品关联内联
 """
 
 from django.contrib import admin
+from django.utils.html import format_html
 
 from ..models import (
     Artwork,
+    ArtworkImage,
     ArtworkProduct,
     Die,
+    DieImage,
     DieProduct,
     EmbossingPlate,
+    EmbossingPlateImage,
     EmbossingPlateProduct,
     FoilingPlate,
+    FoilingPlateImage,
     FoilingPlateProduct,
 )
 from .mixins import FixedInlineModelAdminMixin
 
 # ==================== Inline 类 ====================
+
+
+class AssetImageInlineMixin(FixedInlineModelAdminMixin):
+    """资产图片内联公共配置"""
+
+    extra = 1
+    fields = ["image", "description", "sort_order"]
+
+
+class ArtworkImageInline(AssetImageInlineMixin, admin.TabularInline):
+    """图稿图片内联"""
+
+    model = ArtworkImage
 
 
 class ArtworkProductInline(FixedInlineModelAdminMixin, admin.TabularInline):
@@ -39,12 +61,24 @@ class ArtworkProductInline(FixedInlineModelAdminMixin, admin.TabularInline):
     fields = ["product", "imposition_quantity", "sort_order"]
 
 
+class DieImageInline(AssetImageInlineMixin, admin.TabularInline):
+    """刀模图片内联"""
+
+    model = DieImage
+
+
 class DieProductInline(FixedInlineModelAdminMixin, admin.TabularInline):
     """刀模产品关联内联"""
 
     model = DieProduct
     extra = 1
-    fields = ["product", "quantity", "sort_order"]
+    fields = ["product", "quantity", "relation_type", "sort_order"]
+
+
+class FoilingPlateImageInline(AssetImageInlineMixin, admin.TabularInline):
+    """烫金版图片内联"""
+
+    model = FoilingPlateImage
 
 
 class FoilingPlateProductInline(FixedInlineModelAdminMixin, admin.TabularInline):
@@ -53,6 +87,12 @@ class FoilingPlateProductInline(FixedInlineModelAdminMixin, admin.TabularInline)
     model = FoilingPlateProduct
     extra = 1
     fields = ["product", "quantity", "sort_order"]
+
+
+class EmbossingPlateImageInline(AssetImageInlineMixin, admin.TabularInline):
+    """压凸版图片内联"""
+
+    model = EmbossingPlateImage
 
 
 class EmbossingPlateProductInline(FixedInlineModelAdminMixin, admin.TabularInline):
@@ -66,6 +106,20 @@ class EmbossingPlateProductInline(FixedInlineModelAdminMixin, admin.TabularInlin
 # ==================== Admin 类 ====================
 
 
+@admin.display(description="确认状态")
+def confirmed_badge(obj):
+    """确认状态徽章（供资产 Admin 复用）"""
+    if obj.confirmed:
+        return format_html(
+            '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
+            'background-color: #67C23A;">已确认</span>'
+        )
+    return format_html(
+        '<span style="padding: 3px 8px; border-radius: 3px; color: white; '
+        'background-color: #909399;">待确认</span>'
+    )
+
+
 @admin.register(Artwork)
 class ArtworkAdmin(admin.ModelAdmin):
     """图稿管理"""
@@ -75,10 +129,11 @@ class ArtworkAdmin(admin.ModelAdmin):
         "name",
         "color_display",
         "imposition_size",
+        "confirmed_badge",
         "created_at",
     ]
     search_fields = ["base_code", "name", "imposition_size"]
-    list_filter = ["created_at", "version"]
+    list_filter = ["confirmed", "created_at", "version"]
     ordering = ["-base_code", "-version"]
     readonly_fields = [
         "base_code",
@@ -87,7 +142,7 @@ class ArtworkAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     ]
-    inlines = [ArtworkProductInline]
+    inlines = [ArtworkImageInline, ArtworkProductInline]
 
     fieldsets = (
         (
@@ -104,8 +159,18 @@ class ArtworkAdmin(admin.ModelAdmin):
                 )
             },
         ),
+        (
+            "关联版材",
+            {
+                "fields": ("dies", "foiling_plates", "embossing_plates"),
+                "classes": ("collapse",),
+            },
+        ),
+        ("确认状态", {"fields": ("confirmed", "confirmed_by", "confirmed_at")}),
         ("其他", {"fields": ("notes", "created_at", "updated_at")}),
     )
+
+    confirmed_badge = confirmed_badge
 
     @admin.display(description="图稿编码")
     def full_code_display(self, obj):
@@ -165,17 +230,32 @@ class ArtworkAdmin(admin.ModelAdmin):
 class DieAdmin(admin.ModelAdmin):
     """刀模管理"""
 
-    list_display = ["code", "name", "size", "material", "thickness", "created_at"]
+    list_display = [
+        "code",
+        "name",
+        "die_type",
+        "size",
+        "material",
+        "thickness",
+        "confirmed_badge",
+        "created_at",
+    ]
     search_fields = ["code", "name", "size", "material"]
-    list_filter = ["material", "created_at"]
+    list_filter = ["die_type", "material", "confirmed", "created_at"]
     ordering = ["-created_at"]
     readonly_fields = ["code", "created_at", "updated_at"]
-    inlines = [DieProductInline]
+    inlines = [DieImageInline, DieProductInline]
 
     fieldsets = (
-        ("基本信息", {"fields": ("code", "name", "size", "material", "thickness")}),
+        (
+            "基本信息",
+            {"fields": ("code", "name", "die_type", "size", "material", "thickness")},
+        ),
+        ("确认状态", {"fields": ("confirmed", "confirmed_by", "confirmed_at")}),
         ("其他", {"fields": ("notes", "created_at", "updated_at")}),
     )
+
+    confirmed_badge = confirmed_badge
 
     def save_model(self, request, obj, form, change):
         """保存时自动生成编码"""
@@ -195,13 +275,14 @@ class FoilingPlateAdmin(admin.ModelAdmin):
         "size",
         "material",
         "thickness",
+        "confirmed_badge",
         "created_at",
     ]
     search_fields = ["code", "name", "size", "material"]
-    list_filter = ["foiling_type", "material", "created_at"]
+    list_filter = ["foiling_type", "material", "confirmed", "created_at"]
     ordering = ["-created_at"]
     readonly_fields = ["code", "created_at", "updated_at"]
-    inlines = [FoilingPlateProductInline]
+    inlines = [FoilingPlateImageInline, FoilingPlateProductInline]
 
     fieldsets = (
         (
@@ -217,8 +298,11 @@ class FoilingPlateAdmin(admin.ModelAdmin):
                 )
             },
         ),
+        ("确认状态", {"fields": ("confirmed", "confirmed_by", "confirmed_at")}),
         ("其他", {"fields": ("notes", "created_at", "updated_at")}),
     )
+
+    confirmed_badge = confirmed_badge
 
     def save_model(self, request, obj, form, change):
         """保存时自动生成编码"""
@@ -231,17 +315,28 @@ class FoilingPlateAdmin(admin.ModelAdmin):
 class EmbossingPlateAdmin(admin.ModelAdmin):
     """压凸版管理"""
 
-    list_display = ["code", "name", "size", "material", "thickness", "created_at"]
+    list_display = [
+        "code",
+        "name",
+        "size",
+        "material",
+        "thickness",
+        "confirmed_badge",
+        "created_at",
+    ]
     search_fields = ["code", "name", "size", "material"]
-    list_filter = ["material", "created_at"]
+    list_filter = ["material", "confirmed", "created_at"]
     ordering = ["-created_at"]
     readonly_fields = ["code", "created_at", "updated_at"]
-    inlines = [EmbossingPlateProductInline]
+    inlines = [EmbossingPlateImageInline, EmbossingPlateProductInline]
 
     fieldsets = (
         ("基本信息", {"fields": ("code", "name", "size", "material", "thickness")}),
+        ("确认状态", {"fields": ("confirmed", "confirmed_by", "confirmed_at")}),
         ("其他", {"fields": ("notes", "created_at", "updated_at")}),
     )
+
+    confirmed_badge = confirmed_badge
 
     def save_model(self, request, obj, form, change):
         """保存时自动生成编码"""

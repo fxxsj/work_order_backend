@@ -18,6 +18,7 @@ from django.utils.html import format_html
 
 from ..models import (
     Material,
+    MaterialStockLog,
     MaterialSupplier,
     PurchaseOrder,
     PurchaseOrderItem,
@@ -60,11 +61,41 @@ class MaterialAdmin(admin.ModelAdmin):
         "unit",
         "unit_price",
         "stock_quantity",
+        "min_stock_quantity",
+        "default_supplier",
+        "need_cutting",
         "created_at",
     ]
     search_fields = ["code", "name", "specification"]
-    list_filter = ["unit", "created_at"]
+    list_filter = ["unit", "need_cutting", "default_supplier", "created_at"]
     list_editable = ["unit_price", "stock_quantity"]
+    autocomplete_fields = ["default_supplier"]
+    readonly_fields = ["created_at", "updated_at"]
+
+    fieldsets = (
+        (
+            "基本信息",
+            {"fields": ("code", "name", "specification", "unit", "unit_price")},
+        ),
+        (
+            "库存信息",
+            {
+                "fields": ("stock_quantity", "min_stock_quantity"),
+                "description": "物料的库存管理信息",
+            },
+        ),
+        (
+            "采购信息",
+            {
+                "fields": ("default_supplier", "lead_time_days", "need_cutting"),
+            },
+        ),
+        ("其他", {"fields": ("notes",)}),
+        (
+            "系统信息",
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
 
 
 @admin.register(Supplier)
@@ -431,3 +462,25 @@ class PurchaseReceiveRecordAdmin(admin.ModelAdmin):
     @admin.display(description="物料")
     def material_name(self, obj):
         return obj.material.name
+
+
+@admin.register(MaterialStockLog)
+class MaterialStockLogAdmin(admin.ModelAdmin):
+    """物料库存变更日志管理"""
+
+    list_display = [
+        "material",
+        "change_type",
+        "quantity",
+        "old_quantity",
+        "new_quantity",
+        "work_order",
+        "created_by",
+        "created_at",
+    ]
+    list_filter = ["change_type", "created_at"]
+    list_select_related = ["material", "work_order", "created_by"]
+    search_fields = ["material__name", "material__code", "reason", "created_by__username"]
+    autocomplete_fields = ["material", "work_order", "created_by"]
+    readonly_fields = ["created_at"]
+    ordering = ["-created_at"]

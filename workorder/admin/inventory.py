@@ -40,7 +40,17 @@ class DeliveryItemInline(FixedInlineModelAdminMixin, admin.TabularInline):
 
     model = DeliveryItem
     extra = 1
-    fields = ["product", "quantity", "unit", "unit_price", "subtotal"]
+    fields = [
+        "product",
+        "sales_order_item",
+        "quantity",
+        "unit",
+        "unit_price",
+        "subtotal",
+        "stock_batch",
+        "notes",
+    ]
+    readonly_fields = ["subtotal"]
 
 
 # ==================== Admin 类 ====================
@@ -134,8 +144,14 @@ class StockInAdmin(admin.ModelAdmin):
     ordering = ["-created_at"]
 
     fieldsets = (
-        ("基本信息", {"fields": ("order_number", "work_order", "status", "stock_in_date")}),
-        ("审核信息", {"fields": ("submitted_by", "submitted_at", "approved_by", "approved_at")}),
+        (
+            "基本信息",
+            {"fields": ("order_number", "work_order", "status", "stock_in_date")},
+        ),
+        (
+            "审核信息",
+            {"fields": ("submitted_by", "submitted_at", "approved_by", "approved_at")},
+        ),
         ("其他信息", {"fields": ("operator", "notes")}),
         (
             "系统信息",
@@ -191,7 +207,10 @@ class StockOutAdmin(admin.ModelAdmin):
             {"fields": ("order_number", "out_type", "delivery_order", "status")},
         ),
         ("日期信息", {"fields": ("stock_out_date",)}),
-        ("审核信息", {"fields": ("submitted_by", "submitted_at", "approved_by", "approved_at")}),
+        (
+            "审核信息",
+            {"fields": ("submitted_by", "submitted_at", "approved_by", "approved_at")},
+        ),
         ("其他信息", {"fields": ("notes",)}),
         (
             "系统信息",
@@ -250,21 +269,23 @@ class DeliveryOrderAdmin(admin.ModelAdmin):
         ),
         (
             "物流信息",
-            {"fields": ("logistics_company", "tracking_number", "logistics_fee")},
+            {"fields": ("logistics_company", "tracking_number", "freight")},
         ),
-        ("发货信息", {"fields": ("delivery_date", "freight", "package_count")}),
+        (
+            "发货信息",
+            {"fields": ("delivery_date", "package_count", "package_weight")},
+        ),
         (
             "签收信息",
             {
                 "fields": (
-                    "received",
                     "received_date",
                     "received_notes",
                     "receiver_signature",
                 )
             },
         ),
-        ("其他信息", {"fields": ("notes", "attachment")}),
+        ("其他信息", {"fields": ("notes",)}),
         (
             "系统信息",
             {

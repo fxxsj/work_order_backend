@@ -62,7 +62,15 @@ class WorkOrderProductInline(FixedInlineModelAdminMixin, admin.TabularInline):
 
     model = WorkOrderProduct
     extra = 1
-    fields = ["product", "quantity", "unit", "specification", "sort_order"]
+    fields = [
+        "product",
+        "quantity",
+        "unit",
+        "specification",
+        "source_type",
+        "sales_order_item",
+        "sort_order",
+    ]
 
 
 class WorkOrderMaterialInline(FixedInlineModelAdminMixin, admin.TabularInline):
@@ -106,13 +114,21 @@ class WorkOrderAdmin(admin.ModelAdmin):
     list_filter = [
         "status",
         "priority",
+        "approval_status",
         "order_date",
         "delivery_date",
         "created_at",
         "manager",
     ]
 
-    list_select_related = ["customer", "manager", "created_by"]
+    list_select_related = [
+        "customer",
+        "manager",
+        "created_by",
+        "sales_order",
+        "product_group_item",
+        "approved_by",
+    ]
 
     @admin.display(description="制表人")
     def manager_display(self, obj):
@@ -144,9 +160,23 @@ class WorkOrderAdmin(admin.ModelAdmin):
         "customer__name",
         "products__product__name",
         "products__product__code",
+        "approved_by__username",
+        "approved_by__first_name",
+        "approved_by__last_name",
     ]
 
-    autocomplete_fields = ["customer", "manager", "created_by"]
+    autocomplete_fields = [
+        "customer",
+        "manager",
+        "created_by",
+        "sales_order",
+        "product_group_item",
+        "approved_by",
+        "artworks",
+        "dies",
+        "foiling_plates",
+        "embossing_plates",
+    ]
 
     readonly_fields = [
         "order_number",
@@ -154,6 +184,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
         "updated_at",
         "created_by",
         "progress_display",
+        "approved_at",
     ]
 
     date_hierarchy = "order_date"
@@ -161,7 +192,28 @@ class WorkOrderAdmin(admin.ModelAdmin):
     inlines = [WorkOrderProductInline, WorkOrderProcessInline, WorkOrderMaterialInline]
 
     fieldsets = (
-        ("基本信息", {"fields": ("order_number", "customer")}),
+        (
+            "基本信息",
+            {
+                "fields": (
+                    "order_number",
+                    "customer",
+                    "sales_order",
+                    "product_group_item",
+                )
+            },
+        ),
+        (
+            "印刷信息",
+            {
+                "fields": (
+                    "printing_type",
+                    "printing_cmyk_colors",
+                    "printing_other_colors",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
         (
             "图稿、刀模、烫金版和压凸版",
             {
@@ -169,7 +221,22 @@ class WorkOrderAdmin(admin.ModelAdmin):
                 "description": "关联的图稿（CTP版）、刀模（模切）、烫金版和压凸版，支持多个。根据工序选择自动显示和验证。",
             },
         ),
-        ("状态与优先级", {"fields": ("status", "priority", "manager")}),
+        (
+            "状态与优先级",
+            {"fields": ("status", "priority", "urgency_reason", "manager")},
+        ),
+        (
+            "审核信息",
+            {
+                "fields": (
+                    "approval_status",
+                    "approved_by",
+                    "approved_at",
+                    "approval_comment",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
         (
             "日期信息",
             {
@@ -244,9 +311,14 @@ class WorkOrderAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """优化查询"""
         qs = super().get_queryset(request)
-        return qs.select_related("customer", "manager", "created_by").prefetch_related(
-            "products__product"
-        )
+        return qs.select_related(
+            "customer",
+            "manager",
+            "created_by",
+            "sales_order",
+            "product_group_item",
+            "approved_by",
+        ).prefetch_related("products__product")
 
 
 @admin.register(WorkOrderProcess)
@@ -288,7 +360,14 @@ class WorkOrderProcessAdmin(admin.ModelAdmin):
 
     autocomplete_fields = ["work_order", "process", "operator", "department"]
 
-    readonly_fields = ["created_at", "updated_at", "duration_hours"]
+    readonly_fields = [
+        "created_at",
+        "updated_at",
+        "duration_hours",
+        "source_product_process_id",
+        "process_snapshot",
+        "source_version",
+    ]
 
     date_hierarchy = "actual_start_time"
 
@@ -313,6 +392,17 @@ class WorkOrderProcessAdmin(admin.ModelAdmin):
         ),
         ("数量统计", {"fields": ("quantity_completed", "quantity_defective")}),
         ("其他", {"fields": ("notes",)}),
+        (
+            "版本快照",
+            {
+                "fields": (
+                    "source_product_process_id",
+                    "process_snapshot",
+                    "source_version",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
         (
             "系统信息",
             {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
@@ -455,6 +545,7 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
         "work_content",
         "assigned_department",
         "assigned_operator",
+        "parent_task",
         "artwork",
         "die",
         "product",
@@ -523,9 +614,10 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
         "embossing_plate",
         "assigned_department",
         "assigned_operator",
+        "parent_task",
     ]
 
-    readonly_fields = ["created_at", "updated_at"]
+    readonly_fields = ["created_at", "updated_at", "version"]
 
     fieldsets = (
         (
@@ -535,7 +627,7 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
         (
             "任务分派",
             {
-                "fields": ("assigned_department", "assigned_operator"),
+                "fields": ("assigned_department", "assigned_operator", "parent_task"),
                 "description": "任务分派到哪个部门和操作员。如果未分派，任务生成时会根据工序自动分派。",
             },
         ),
@@ -561,12 +653,23 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
                     "quantity_completed",
                     "quantity_defective",
                     "auto_calculate_quantity",
+                    "stock_accounted_quantity",
                 )
             },
         ),
         (
+            "生产要求",
+            {
+                "fields": ("production_requirements",),
+                "classes": ("collapse",),
+            },
+        ),
+        (
             "系统信息",
-            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+            {
+                "fields": ("version", "created_at", "updated_at"),
+                "classes": ("collapse",),
+            },
         ),
     )
 
@@ -603,15 +706,9 @@ class TaskLogAdmin(admin.ModelAdmin):
         """优化查询"""
         qs = super().get_queryset(request)
         return qs.select_related(
-            "work_order_process",
-            "work_order_process__work_order",
-            "work_order_process__process",
-            "artwork",
-            "die",
-            "product",
-            "material",
-            "foiling_plate",
-            "embossing_plate",
-            "assigned_department",
-            "assigned_operator",
+            "task",
+            "task__work_order_process",
+            "task__work_order_process__work_order",
+            "task__work_order_process__process",
+            "operator",
         )

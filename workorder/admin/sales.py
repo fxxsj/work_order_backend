@@ -10,6 +10,7 @@
 """
 
 from django.contrib import admin
+from django.db.models import Count
 from django.utils.html import format_html
 
 from ..models import SalesOrder, SalesOrderItem
@@ -149,6 +150,11 @@ class SalesOrderAdmin(admin.ModelAdmin):
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
 
+    def get_queryset(self, request):
+        """优化查询性能"""
+        qs = super().get_queryset(request)
+        return qs.annotate(_items_count=Count("items"))
+
     @admin.display(description="客户")
     def customer_name(self, obj):
         """显示客户名称"""
@@ -185,10 +191,10 @@ class SalesOrderAdmin(admin.ModelAdmin):
         """显示审核人"""
         return obj.approved_by.username if obj.approved_by else "-"
 
-    @admin.display(description="明细数量")
+    @admin.display(description="明细数量", ordering="_items_count")
     def items_count(self, obj):
-        """显示明细数量"""
-        return obj.items.count()
+        """显示明细数量（优化版）"""
+        return getattr(obj, "_items_count", obj.items.count())
 
 
 @admin.register(SalesOrderItem)

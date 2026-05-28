@@ -18,6 +18,7 @@ Django Admin 管理界面按业务领域拆分。
 """
 
 # 应用 Django admin 检查器补丁
+from django.contrib import admin
 from django.contrib.admin.options import ModelAdmin
 
 # Django admin 补丁（必须在最前）
@@ -57,6 +58,7 @@ from .inventory import (
 )
 from .materials import (
     MaterialAdmin,
+    MaterialStockLogAdmin,
     MaterialSupplierAdmin,
     PurchaseOrderAdmin,
     PurchaseOrderItemAdmin,
@@ -70,6 +72,7 @@ from .products import (
     ProductStockLogAdmin,
 )
 from .sales import SalesOrderAdmin, SalesOrderItemAdmin
+from .site import configure_admin_site
 from .system import (
     NotificationAdmin,
     NotificationTemplateAdmin,
@@ -78,6 +81,8 @@ from .system import (
     UserProfileAdmin,
     WorkOrderApprovalLogAdmin,
 )
+
+configure_admin_site(admin.site)
 
 __all__ = [
     # Mixins
@@ -99,6 +104,7 @@ __all__ = [
     "PurchaseOrderAdmin",
     "PurchaseOrderItemAdmin",
     "PurchaseReceiveRecordAdmin",
+    "MaterialStockLogAdmin",
     # Asset Admins
     "ArtworkAdmin",
     "DieAdmin",
@@ -140,4 +146,5 @@ __all__ = [
     "AuditLogAdmin",
     "AuditLogExportAdmin",
     "AuditLogSettingsAdmin",
+    "configure_admin_site",
 ]

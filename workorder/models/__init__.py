@@ -15,12 +15,16 @@ Models 模块
 
 from .assets import (
     Artwork,
+    ArtworkImage,
     ArtworkProduct,
     Die,
+    DieImage,
     DieProduct,
     EmbossingPlate,
+    EmbossingPlateImage,
     EmbossingPlateProduct,
     FoilingPlate,
+    FoilingPlateImage,
     FoilingPlateProduct,
 )
 from .audit import AuditLog, AuditLogExport, AuditLogSettings
@@ -57,6 +61,7 @@ from .inventory import (
 )
 from .materials import (
     Material,
+    MaterialStockLog,
     MaterialSupplier,
     PurchaseOrder,
     PurchaseOrderItem,
@@ -102,14 +107,19 @@ __all__ = [
     "PurchaseOrder",
     "PurchaseOrderItem",
     "PurchaseReceiveRecord",
+    "MaterialStockLog",
     # 资产模型
     "Artwork",
+    "ArtworkImage",
     "ArtworkProduct",
     "Die",
+    "DieImage",
     "DieProduct",
     "FoilingPlate",
+    "FoilingPlateImage",
     "FoilingPlateProduct",
     "EmbossingPlate",
+    "EmbossingPlateImage",
     "EmbossingPlateProduct",
     # 核心业务模型
     "WorkOrder",
