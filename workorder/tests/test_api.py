@@ -233,8 +233,8 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
 
         response = self.api_delete(f'/api/v1/workorders/{work_order.id}/', user=self.admin_user)
 
-        # 删除成功返回 200 OK + 标准 JSON（HTTP 204 规范禁止携带响应体）
-        self.assertEqual(response.status_code, 200)
+        # 删除成功返回 204 No Content
+        self.assertEqual(response.status_code, 204)
 
         # 验证已删除
         self.assertFalse(WorkOrder.objects.filter(id=work_order.id).exists())
