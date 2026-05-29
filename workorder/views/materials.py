@@ -57,6 +57,7 @@ from ..serializers.materials import (
     SupplierSerializer,
 )
 from ..services.service_errors import ServiceError
+from ..services.approval_service import ApprovalService
 from .base_viewsets import BaseViewSet
 
 

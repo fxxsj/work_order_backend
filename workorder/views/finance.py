@@ -22,6 +22,8 @@ from rest_framework.decorators import action
 from workorder.permission_utils import PermissionUtils, apply_data_scope
 from workorder.permissions import SuperuserFriendlyModelPermissions
 from workorder.response import APIResponse
+from workorder.services.approval_service import ApprovalService
+from workorder.services.service_errors import ServiceError
 from workorder.docs.finance import (
     cost_center_docs,
     cost_item_docs,
@@ -946,8 +948,6 @@ class StatementViewSet(viewsets.ModelViewSet):
             )
             opening_balance = previous.closing_balance if previous else 0
 
-            from workorder.services.approval_service import ApprovalService
-            from workorder.services.service_errors import ServiceError
             from workorder.models import SalesOrder
 
             orders = (
