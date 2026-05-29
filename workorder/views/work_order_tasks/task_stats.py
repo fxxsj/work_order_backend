@@ -25,6 +25,8 @@ from workorder.docs.work_order_tasks_stats import (
 
 from workorder.export_utils import export_tasks
 from workorder.models import WorkOrderTask
+from workorder.permission_utils import PermissionCache
+from workorder.permissions.permission_utils import is_manager_user
 from workorder.throttling import ExportRateThrottle
 
 logger = logging.getLogger(__name__)
@@ -462,15 +464,13 @@ class TaskStatsMixin:
         # 获取部门ID参数
         department_id = request.query_params.get("department_id")
 
+        user_department_scope = PermissionCache.get_user_department_scope(request.user)
+
         # 如果没有指定部门，使用用户所属的第一个部门
         if not department_id:
-            user_departments = (
-                request.user.profile.departments.all()
-                if hasattr(request.user, "profile")
-                else []
-            )
-            if user_departments.exists():
-                department_id = user_departments.first().id
+            user_departments = PermissionCache.get_user_departments(request.user)
+            if user_departments:
+                department_id = user_departments[0]
             else:
                 return APIResponse.error("未指定部门且用户不属于任何部门", code=status.HTTP_400_BAD_REQUEST)
 
@@ -487,8 +487,16 @@ class TaskStatsMixin:
         except Department.DoesNotExist:
             return APIResponse.error("部门不存在", code=status.HTTP_404_NOT_FOUND)
 
+        if not request.user.is_superuser and not is_manager_user(request.user):
+            if department.id not in user_department_scope:
+                return APIResponse.error("您没有权限查看该部门工作负载统计", code=status.HTTP_403_FORBIDDEN)
+
+        department_scope = [department.id] + [
+            descendant.id for descendant in department.get_descendants()
+        ]
+
         # Check cache first
-        cache_key = f"{self.DEPT_WORKLOAD_CACHE_PREFIX}:{department_id}"
+        cache_key = f"{self.DEPT_WORKLOAD_CACHE_PREFIX}:{department_id}:{','.join(map(str, sorted(department_scope)))}"
         cached_data = cache.get(cache_key)
 
         if cached_data is not None:
@@ -499,7 +507,7 @@ class TaskStatsMixin:
 
         # 获取部门的所有任务（使用 select_related 优化查询）
         tasks = (
-            WorkOrderTask.objects.filter(assigned_department_id=department_id)
+            WorkOrderTask.objects.filter(assigned_department_id__in=department_scope)
             .select_related(
                 "assigned_operator", "assigned_department", "work_order_process"
             )
@@ -555,7 +563,7 @@ class TaskStatsMixin:
         # 按操作员分组统计
         operators_data = (
             User.objects.filter(
-                assigned_tasks__assigned_department_id=department_id, is_active=True
+                assigned_tasks__assigned_department_id__in=department_scope, is_active=True
             )
             .exclude(is_superuser=True)
             .annotate(

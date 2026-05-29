@@ -225,7 +225,6 @@ ROLE_ALIASES = {
     "operators": "operator",
     "managers": "manager",
     "administrators": "admin",
-    "warehouse": "inventory",
 }
 
 STALE_PERMISSION_MODELS = {

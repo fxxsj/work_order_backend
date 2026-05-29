@@ -7,6 +7,7 @@
 """
 from django.core.management.base import BaseCommand
 from django.core.management import call_command
+from django.contrib.auth.models import Group
 from django.contrib.auth.models import User
 from workorder.models import UserProfile, Department
 
@@ -24,23 +25,23 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         force = options.get('force', False)
         
-        # 用户与部门的映射关系
-        user_dept_mapping = {
-            'business_user': 'business',
-            'finance_user': 'finance',
-            'design_user': 'design',
-            'purchase_user': 'purchase',
-            'logistics_user': 'logistics',
-            'production_user': 'production',
-            'cutting_user': 'cutting',
-            'printing_user': 'printing',
-            'outsourcing_user': 'outsourcing',
-            'die_cutting_user': 'die_cutting',
-            'packaging_user': 'packaging',
+        # 用户与部门、角色组的映射关系
+        user_mapping = {
+            'business_user': {'department': 'business', 'role': 'sales'},
+            'finance_user': {'department': 'finance', 'role': 'finance'},
+            'design_user': {'department': 'design', 'role': 'design'},
+            'purchase_user': {'department': 'purchase', 'role': 'procurement'},
+            'quality_user': {'department': 'quality', 'role': 'quality'},
+            'warehouse_user': {'department': 'warehouse', 'role': 'inventory'},
+            'production_user': {'department': 'production', 'role': 'supervisor'},
+            'cutting_user': {'department': 'cutting', 'role': 'operator'},
+            'printing_user': {'department': 'printing', 'role': 'operator'},
+            'outsourcing_user': {'department': 'outsourcing', 'role': 'operator'},
+            'die_cutting_user': {'department': 'die_cutting', 'role': 'operator'},
+            'packaging_user': {'department': 'packaging', 'role': 'operator'},
         }
-        
         # 检查是否已有用户（排除超级用户）
-        existing_users = User.objects.filter(username__in=user_dept_mapping.keys())
+        existing_users = User.objects.filter(username__in=user_mapping.keys())
         if existing_users.exists() and not force:
             self.stdout.write(
                 self.style.WARNING(
@@ -61,24 +62,28 @@ class Command(BaseCommand):
             if force and existing_users.exists():
                 self.stdout.write('正在删除现有用户...')
                 UserProfile.objects.filter(user__in=existing_users).delete()
+                deleted_count = existing_users.count()
                 existing_users.delete()
                 self.stdout.write(
-                    self.style.SUCCESS(f'✓ 已删除 {existing_users.count()} 个现有用户')
+                    self.style.SUCCESS(f'✓ 已删除 {deleted_count} 个现有用户')
                 )
             
             # 1. 从 fixtures 加载用户数据
             self.stdout.write('正在从 fixtures 加载用户数据...')
-            call_command('loaddata', 'workorder/fixtures/initial_users.json', verbosity=0)
+            call_command('loaddata', 'initial_users', verbosity=0)
             self.stdout.write(self.style.SUCCESS('✓ 用户数据加载完成'))
             
-            # 2. 为每个用户创建 UserProfile 并关联部门
-            self.stdout.write('正在创建用户扩展信息并关联部门...')
+            # 2. 为每个用户创建 UserProfile，关联部门和角色组
+            self.stdout.write('正在创建用户扩展信息并关联部门/角色组...')
             created_count = 0
             updated_count = 0
+            role_updated_count = 0
             
-            for username, dept_code in user_dept_mapping.items():
+            for username, config in user_mapping.items():
                 try:
                     user = User.objects.get(username=username)
+                    dept_code = config['department']
+                    role_code = config['role']
                     
                     # 获取或创建 UserProfile
                     profile, created = UserProfile.objects.get_or_create(user=user)
@@ -88,21 +93,32 @@ class Command(BaseCommand):
                         department = Department.objects.get(code=dept_code)
                         profile.departments.clear()
                         profile.departments.add(department)
+
+                        group = Group.objects.get(name=role_code)
+                        user.groups.clear()
+                        user.groups.add(group)
+                        role_updated_count += 1
                         
                         if created:
                             created_count += 1
                             self.stdout.write(
-                                f'  ✓ 创建用户扩展信息: {username} → {department.name}'
+                                f'  ✓ 创建用户扩展信息: {username} → {department.name} / {role_code}'
                             )
                         else:
                             updated_count += 1
                             self.stdout.write(
-                                f'  ✓ 更新用户扩展信息: {username} → {department.name}'
+                                f'  ✓ 更新用户扩展信息: {username} → {department.name} / {role_code}'
                             )
                     except Department.DoesNotExist:
                         self.stdout.write(
                             self.style.WARNING(
                                 f'  ⚠ 部门 {dept_code} 不存在，跳过用户 {username}'
+                            )
+                        )
+                    except Group.DoesNotExist:
+                        self.stdout.write(
+                            self.style.WARNING(
+                                f'  ⚠ 角色组 {role_code} 不存在，请先执行迁移或 init_groups，跳过用户 {username}'
                             )
                         )
                         
@@ -122,6 +138,7 @@ class Command(BaseCommand):
             self.stdout.write(f'创建用户扩展信息: {created_count} 个')
             if updated_count > 0:
                 self.stdout.write(f'更新用户扩展信息: {updated_count} 个')
+            self.stdout.write(f'同步用户角色组: {role_updated_count} 个')
             self.stdout.write('')
             self.stdout.write('所有用户的默认密码为: 123456')
             self.stdout.write('')
@@ -131,4 +148,3 @@ class Command(BaseCommand):
                 self.style.ERROR(f'✗ 加载失败: {e}')
             )
             raise
-

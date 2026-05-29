@@ -63,10 +63,25 @@
     "model": "auth.user",
     "pk": null,
     "fields": {
-      "username": "logistics_user",
-      "first_name": "运输",
+      "username": "quality_user",
+      "first_name": "质检",
       "last_name": "员",
-      "email": "logistics@example.com",
+      "email": "quality@example.com",
+      "password": "pbkdf2_sha256$600000$3dPUM5VmtX689q7C32c6cO$P9DhAlR1DM7eG8eTIMsvZrZs14aQQ1SBb2ZGD0SDoX4=",
+      "is_staff": true,
+      "is_active": true,
+      "is_superuser": false,
+      "date_joined": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": null,
+    "fields": {
+      "username": "warehouse_user",
+      "first_name": "仓储",
+      "last_name": "员",
+      "email": "warehouse@example.com",
       "password": "pbkdf2_sha256$600000$3dPUM5VmtX689q7C32c6cO$P9DhAlR1DM7eG8eTIMsvZrZs14aQQ1SBb2ZGD0SDoX4=",
       "is_staff": true,
       "is_active": true,

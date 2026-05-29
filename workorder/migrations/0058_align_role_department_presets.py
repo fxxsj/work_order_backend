@@ -86,7 +86,15 @@ def align_department_presets(apps, schema_editor):
             "parent": None,
         },
     )
-    Department.objects.filter(code="logistics").update(sort_order=12)
+    Department.objects.update_or_create(
+        code="warehouse",
+        defaults={
+            "name": "仓储物流部",
+            "sort_order": 12,
+            "is_active": True,
+            "parent": None,
+        },
+    )
 
     design_department = Department.objects.filter(code="design").first()
     ctp_process = Process.objects.filter(code="CTP").first()

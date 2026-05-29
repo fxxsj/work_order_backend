@@ -17,7 +17,7 @@ except ImportError:
         {'name': '财务部', 'code': 'finance', 'sort_order': 2, 'parent': None},
         {'name': '设计部', 'code': 'design', 'sort_order': 3, 'parent': None},
         {'name': '采购部', 'code': 'purchase', 'sort_order': 4, 'parent': None},
-        {'name': '运输部', 'code': 'logistics', 'sort_order': 11, 'parent': None},
+        {'name': '仓储物流部', 'code': 'warehouse', 'sort_order': 12, 'parent': None},
     ]
     PRESET_PRODUCTION_DEPARTMENT = {
         'name': '生产部',
@@ -42,8 +42,8 @@ except ImportError:
 def load_departments_forward(apps, schema_editor):
     """加载预设部门数据，建立层级关系
     
-    部门结构（共11个部门）：
-    - 管理部门（5个，顶层）：业务部、财务部、设计部、采购部、运输部
+    部门结构：
+    - 管理部门（顶层）：业务部、财务部、设计部、采购部、仓储物流部等
     - 生产部（1个，父部门）
       - 裁切车间（子部门）
       - 印刷车间（子部门）

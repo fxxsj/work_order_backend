@@ -15,6 +15,7 @@ from ..models.base import Department
 from ..models.system import Notification
 from ..services.service_errors import ServiceError
 from ..permission_utils import PermissionCache
+from ..permissions.permission_utils import is_manager_user
 from rest_framework import status
 
 logger = logging.getLogger(__name__)
@@ -83,7 +84,7 @@ class TaskAssignmentService:
             ServiceError: 无权限时抛出（code=status.HTTP_403_FORBIDDEN）
         """
         # 超级管理员
-        if user.is_superuser:
+        if user.is_superuser or is_manager_user(user):
             return True
 
         # 施工单创建人
@@ -93,7 +94,7 @@ class TaskAssignmentService:
 
         # 检查是否是任务所属部门的主管
         if task.assigned_department:
-            if PermissionCache.is_user_in_department(user, task.assigned_department.id):
+            if PermissionCache.is_department_in_user_scope(user, task.assigned_department.id):
                 # 检查是否有 change_workorder 权限（主管权限）
                 if user.has_perm('workorder.change_workorder'):
                     return True
@@ -399,7 +400,7 @@ class TaskAssignmentService:
             ).values_list('id', flat=True))
 
         # 部门主管可以分配本部门任务
-        if PermissionCache.is_user_in_department(user, department_id):
+        if PermissionCache.is_department_in_user_scope(user, department_id):
             if user.has_perm('workorder.change_workorder'):
                 return list(WorkOrderTask.objects.filter(
                     assigned_department_id=department_id,
@@ -565,8 +566,8 @@ class TaskAssignmentService:
         if not user.is_authenticated:
             return []
 
-        # 获取用户所属部门
-        user_departments = PermissionCache.get_user_departments(user)
+        # 获取用户所属部门及子孙部门
+        user_departments = PermissionCache.get_user_department_scope(user)
 
         if not user_departments:
             return []

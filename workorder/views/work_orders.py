@@ -67,7 +67,8 @@ from ..permissions import (
     WorkOrderProcessPermission,
     WorkOrderTaskPermission,
 )
-from ..permissions.permission_utils import is_sales_user
+from ..permission_utils import PermissionCache
+from ..permissions.permission_utils import is_manager_user, is_sales_user
 from ..serializers.base import ProcessSerializer
 from ..serializers.core import (
     ProcessLogSerializer,
@@ -393,8 +394,8 @@ class WorkOrderViewSet(BaseViewSet):
         user = self.request.user
         cache_key = f"workorder_queryset_{user.id}_{user.is_superuser}"
 
-        # 管理员可以查看所有数据
-        if user.is_superuser:
+        # 管理员和经理可以查看所有数据
+        if user.is_superuser or is_manager_user(user):
             return queryset
 
         # 使用缓存优化权限查询
@@ -403,16 +404,14 @@ class WorkOrderViewSet(BaseViewSet):
                 return queryset.filter(customer__salesperson=user)
 
             elif user.has_perm("workorder.change_workorder"):
-                user_departments = (
-                    user.profile.departments.all() if hasattr(user, "profile") else []
-                )
-                if user_departments:
+                department_scope = PermissionCache.get_user_department_scope(user)
+                if department_scope:
                     # 使用优化的子查询，添加 select_related 优化跨表查询性能
                     from ..models.core import WorkOrderTask
 
                     work_order_ids = (
                         WorkOrderTask.objects.filter(
-                            assigned_department__in=user_departments
+                            assigned_department_id__in=department_scope
                         )
                         .select_related(
                             "work_order_process"  # 优化跨表查询，避免N+1问题

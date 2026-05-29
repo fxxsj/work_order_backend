@@ -182,6 +182,99 @@ class TestWorkOrderTaskWorkflow:
         assert claimable_task.id in claimable_ids
         assert other_task.id not in claimable_ids
 
+    def test_operator_center_filters_claimable_tasks_by_search(self, api_client):
+        """
+        GIVEN: Operator has multiple claimable tasks in their department
+        WHEN: Operator opens operator center with a search query
+        THEN: Both assigned and claimable task lists respect the same filter
+        """
+        dept = DepartmentFactory(name="Printing")
+        operator = UserFactory(
+            username="operator_center_search_user",
+            departments=[dept],
+            add_permissions=["view_workorder"],
+        )
+
+        matched_task = WorkOrderTaskFactory(
+            status="pending",
+            work_content="特殊覆膜任务",
+        )
+        matched_task.assigned_department = dept
+        matched_task.assigned_operator = None
+        matched_task.save()
+
+        unmatched_task = WorkOrderTaskFactory(
+            status="pending",
+            work_content="普通印刷任务",
+        )
+        unmatched_task.assigned_department = dept
+        unmatched_task.assigned_operator = None
+        unmatched_task.save()
+
+        api_client.force_authenticate(user=operator)
+        response = api_client.get(
+            "/api/v1/workorder-tasks/operator_center/?search=特殊覆膜"
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        claimable_ids = {
+            item["id"] for item in response.data["data"]["claimable_tasks"]
+        }
+        assert matched_task.id in claimable_ids
+        assert unmatched_task.id not in claimable_ids
+
+    def test_operator_center_returns_meta_and_respects_limits(self, api_client):
+        """
+        GIVEN: Operator has more assigned and claimable tasks than requested
+        WHEN: Operator opens operator center with small limits
+        THEN: Response contains list metadata and only returns the requested number
+        """
+        dept = DepartmentFactory(name="Printing")
+        operator = UserFactory(
+            username="operator_center_limit_user",
+            departments=[dept],
+            add_permissions=["view_workorder"],
+        )
+
+        for index in range(3):
+            task = WorkOrderTaskFactory(
+                status="pending",
+                work_content=f"我的任务 {index}",
+            )
+            task.assigned_department = dept
+            task.assigned_operator = operator
+            task.save()
+
+        for index in range(4):
+            task = WorkOrderTaskFactory(
+                status="pending",
+                work_content=f"可认领任务 {index}",
+            )
+            task.assigned_department = dept
+            task.assigned_operator = None
+            task.save()
+
+        api_client.force_authenticate(user=operator)
+        response = api_client.get(
+            "/api/v1/workorder-tasks/operator_center/?my_limit=2&claimable_limit=3"
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.data["data"]
+        assert len(data["my_tasks"]) == 2
+        assert len(data["claimable_tasks"]) == 3
+        assert data["summary"]["my_total"] == 3
+        assert data["summary"]["my_pending"] == 3
+        assert data["summary"]["claimable_count"] == 4
+        assert data["meta"]["my_count"] == 3
+        assert data["meta"]["my_returned"] == 2
+        assert data["meta"]["my_limit"] == 2
+        assert data["meta"]["my_has_more"] is True
+        assert data["meta"]["claimable_count"] == 4
+        assert data["meta"]["claimable_returned"] == 3
+        assert data["meta"]["claimable_limit"] == 3
+        assert data["meta"]["claimable_has_more"] is True
+
     def test_cross_department_task_claim_is_rejected(self, api_client):
         """
         GIVEN: A task assigned to another department

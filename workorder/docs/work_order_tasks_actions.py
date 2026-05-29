@@ -141,6 +141,20 @@ task_claimable_docs = extend_schema(
 task_operator_center_docs = extend_schema(
     tags=["任务"],
     summary="操作员任务中心",
+    parameters=[
+        OpenApiParameter(
+            name="my_limit",
+            type=OpenApiTypes.INT,
+            description="我的任务返回数量上限，默认 100，最大 500",
+            required=False,
+        ),
+        OpenApiParameter(
+            name="claimable_limit",
+            type=OpenApiTypes.INT,
+            description="可认领任务返回数量上限，默认 50，最大 500",
+            required=False,
+        ),
+    ],
     responses={
         200: OpenApiResponse(
             response=standard_success_response("TaskOperatorCenterResponse"),

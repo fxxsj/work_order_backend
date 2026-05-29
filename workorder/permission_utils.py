@@ -41,8 +41,39 @@ class PermissionCache:
         return departments
 
     @staticmethod
+    def get_user_department_scope(user, timeout=1800):
+        """获取用户可管理的部门范围。
+
+        返回用户直接所属部门及其所有子孙部门 ID，用于任务列表、任务操作、
+        可领取任务和主管看板等范围过滤。
+        """
+        if not user.is_authenticated:
+            return []
+
+        cache_key = f'user_department_scope_{user.id}'
+        department_scope = cache.get(cache_key)
+
+        if department_scope is None:
+            departments = PermissionCache.get_user_departments(user, timeout)
+            if not departments:
+                department_scope = []
+            else:
+                from workorder.models.base import Department
+
+                scoped_ids = set(departments)
+                for department in Department.objects.filter(id__in=departments):
+                    scoped_ids.update(
+                        descendant.id for descendant in department.get_descendants()
+                    )
+                department_scope = list(scoped_ids)
+
+            cache.set(cache_key, department_scope, timeout)
+
+        return department_scope
+
+    @staticmethod
     def is_user_in_department(user, department_id, timeout=1800):
-        """检查用户是否属于指定部门（带缓存）
+        """检查用户是否直接属于指定部门（带缓存）
 
         Args:
             user: 用户对象
@@ -56,14 +87,22 @@ class PermissionCache:
         return department_id in departments
 
     @staticmethod
+    def is_department_in_user_scope(user, department_id, timeout=1800):
+        """检查指定部门是否在用户所属部门及子孙部门范围内。"""
+        department_scope = PermissionCache.get_user_department_scope(user, timeout)
+        return department_id in department_scope
+
+    @staticmethod
     def clear_user_cache(user):
         """清除用户权限相关缓存
 
         Args:
             user: 用户对象
         """
-        cache_key = f'user_departments_{user.id}'
-        cache.delete(cache_key)
+        cache.delete_many([
+            f'user_departments_{user.id}',
+            f'user_department_scope_{user.id}',
+        ])
 
     @staticmethod
     def clear_all_user_cache():
@@ -71,6 +110,7 @@ class PermissionCache:
         # 在用户部门变更时调用
         # 例如：用户被添加到新部门或从部门移除
         cache.delete_many([key for key in cache.keys('user_departments_*')])
+        cache.delete_many([key for key in cache.keys('user_department_scope_*')])
 
 
 class PermissionUtils:
@@ -167,7 +207,7 @@ class PermissionUtils:
         scope = Q(**{f"{prefix}created_by": user}) | Q(
             **{f"{prefix}customer__salesperson": user}
         )
-        department_ids = PermissionCache.get_user_departments(user)
+        department_ids = PermissionCache.get_user_department_scope(user)
         if department_ids:
             scope |= Q(
                 **{
@@ -183,7 +223,7 @@ class PermissionUtils:
         scope = Q(**{f"{prefix}created_by": user}) | Q(
             **{f"{prefix}customer__salesperson": user}
         )
-        department_ids = PermissionCache.get_user_departments(user)
+        department_ids = PermissionCache.get_user_department_scope(user)
         if department_ids:
             scope |= Q(
                 **{f"{prefix}order_processes__department_id__in": department_ids}
@@ -193,7 +233,7 @@ class PermissionUtils:
     @staticmethod
     def build_department_scope_q(user, relation_paths):
         """按部门关系构建数据范围。"""
-        department_ids = PermissionCache.get_user_departments(user)
+        department_ids = PermissionCache.get_user_department_scope(user)
         scope = Q()
         if not department_ids:
             return scope

@@ -24,7 +24,9 @@ from workorder.response import APIResponse
 
 from workorder.services.service_errors import ServiceError
 from workorder.models.core import WorkOrderTask
+from workorder.permission_utils import PermissionCache
 from workorder.permissions import WorkOrderTaskPermission
+from workorder.permissions.permission_utils import is_manager_user
 from workorder.serializers.core import TaskAssignmentSerializer, WorkOrderTaskSerializer
 from workorder.schema import standard_error_response, standard_success_response
 from workorder.services.task_assignment import TaskAssignmentService
@@ -229,7 +231,6 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         "production_requirements",
         "work_order_process__work_order__order_number",
         "work_order_process__work_order__customer__name",
-        "work_order_process__work_order__customer__code",
         "work_order_process__process__name",
         "assigned_department__name",
         "assigned_operator__username",
@@ -303,8 +304,8 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         queryset = super().get_queryset()
         user = self.request.user
 
-        # 管理员可以查看所有任务
-        if user.is_superuser:
+        # 管理员和经理可以查看所有任务
+        if user.is_superuser or is_manager_user(user):
             return queryset
 
         # 操作员只能查看自己分派的任务
@@ -312,13 +313,11 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             queryset = queryset.filter(assigned_operator=user)
         # 生产主管可以查看本部门的所有任务
         else:
-            user_departments = (
-                user.profile.departments.all() if hasattr(user, "profile") else []
-            )
-            if user_departments:
+            department_scope = PermissionCache.get_user_department_scope(user)
+            if department_scope:
                 # 可以查看本部门的任务或自己创建的施工单的任务
                 queryset = queryset.filter(
-                    Q(assigned_department__in=user_departments)
+                    Q(assigned_department_id__in=department_scope)
                     | Q(work_order_process__work_order__created_by=user)
                 )
             else:
@@ -659,68 +658,101 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         from workorder.services.task_assignment import TaskAssignmentService
 
         user = request.user
+        my_limit = self._get_operator_center_limit("my_limit", 100)
+        claimable_limit = self._get_operator_center_limit("claimable_limit", 50)
 
-        # Get user's departments
-        user_departments = (
-            user.profile.departments.all() if hasattr(user, "profile") else []
-        )
-        if not user_departments:
+        # Get user's department scope
+        department_scope = PermissionCache.get_user_department_scope(user)
+        if not department_scope:
             return APIResponse.success(
                 data={
                     "detail": "您未分配到任何部门",
                     "my_tasks": [],
                     "claimable_tasks": [],
                     "summary": {},
+                    "meta": {
+                        "my_count": 0,
+                        "my_returned": 0,
+                        "my_limit": my_limit,
+                        "my_has_more": False,
+                        "claimable_count": 0,
+                        "claimable_returned": 0,
+                        "claimable_limit": claimable_limit,
+                        "claimable_has_more": False,
+                    },
                 },
                 code=status.HTTP_200_OK,
             )
 
         # Get my assigned tasks
-        my_tasks_qs = self.get_queryset().filter(assigned_operator=user)
-        my_tasks_qs = self.filter_queryset(my_tasks_qs)
-        my_tasks_qs = my_tasks_qs.select_related(
+        my_tasks_filtered_qs = self.get_queryset().filter(assigned_operator=user)
+        my_tasks_filtered_qs = self.filter_queryset(my_tasks_filtered_qs)
+        my_total_count = my_tasks_filtered_qs.count()
+        my_pending_count = my_tasks_filtered_qs.filter(status="pending").count()
+        my_in_progress_count = my_tasks_filtered_qs.filter(status="in_progress").count()
+        my_completed_count = my_tasks_filtered_qs.filter(status="completed").count()
+        my_tasks_qs = my_tasks_filtered_qs.select_related(
             "assigned_department",
             "work_order_process",
             "work_order_process__work_order",
             "work_order_process__process",
-        )[
-            :100
-        ]  # Limit to 100 most recent
+        )[:my_limit]
 
         # Get claimable tasks (unassigned in user's departments). Do not use
         # get_queryset() here: for operators it filters to assigned_operator=user,
         # which would hide every unassigned claimable task.
         claimable_ids = TaskAssignmentService.get_claimable_tasks_for_user(user)
-        claimable_tasks_qs = self.queryset.filter(
+        claimable_tasks_filtered_qs = self.queryset.filter(
             id__in=claimable_ids,
             assigned_operator__isnull=True,
             status="pending",
         ).order_by("-created_at")
-        claimable_tasks_qs = claimable_tasks_qs.select_related(
+        claimable_tasks_filtered_qs = self.filter_queryset(claimable_tasks_filtered_qs)
+        claimable_total_count = claimable_tasks_filtered_qs.count()
+        claimable_tasks_qs = claimable_tasks_filtered_qs.select_related(
             "assigned_department",
             "work_order_process",
             "work_order_process__work_order",
             "work_order_process__process",
-        )[
-            :50
-        ]  # Limit to 50 claimable tasks
+        )[:claimable_limit]
 
         # Serialize
         my_serializer = self.get_serializer(my_tasks_qs, many=True)
         claimable_serializer = self.get_serializer(claimable_tasks_qs, many=True)
 
         # Calculate summary
-        my_tasks = list(my_tasks_qs)
         summary = {
-            "my_total": len(my_tasks),
-            "my_pending": sum(1 for t in my_tasks if t.status == "pending"),
-            "my_in_progress": sum(1 for t in my_tasks if t.status == "in_progress"),
-            "my_completed": sum(1 for t in my_tasks if t.status == "completed"),
-            "claimable_count": len(claimable_ids),
+            "my_total": my_total_count,
+            "my_pending": my_pending_count,
+            "my_in_progress": my_in_progress_count,
+            "my_completed": my_completed_count,
+            "claimable_count": claimable_total_count,
         }
 
         return APIResponse.success(data={
                 "my_tasks": my_serializer.data,
                 "claimable_tasks": claimable_serializer.data,
                 "summary": summary,
+                "meta": {
+                    "my_count": my_total_count,
+                    "my_returned": len(my_serializer.data),
+                    "my_limit": my_limit,
+                    "my_has_more": my_total_count > my_limit,
+                    "claimable_count": claimable_total_count,
+                    "claimable_returned": len(claimable_serializer.data),
+                    "claimable_limit": claimable_limit,
+                    "claimable_has_more": claimable_total_count > claimable_limit,
+                },
             })
+
+    def _get_operator_center_limit(self, param_name, default, max_value=500):
+        raw_value = self.request.query_params.get(param_name)
+        if raw_value in (None, ""):
+            return default
+        try:
+            parsed = int(raw_value)
+        except (TypeError, ValueError):
+            return default
+        if parsed <= 0:
+            return default
+        return min(parsed, max_value)

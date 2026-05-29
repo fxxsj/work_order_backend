@@ -39,7 +39,7 @@ PRESET_MANAGEMENT_DEPARTMENTS = [
     {'name': '设计部', 'code': 'design', 'sort_order': 3, 'parent': None},
     {'name': '采购部', 'code': 'purchase', 'sort_order': 4, 'parent': None},
     {'name': '质检部', 'code': 'quality', 'sort_order': 11, 'parent': None},
-    {'name': '运输部', 'code': 'logistics', 'sort_order': 12, 'parent': None},
+    {'name': '仓储物流部', 'code': 'warehouse', 'sort_order': 12, 'parent': None},
 ]
 
 # 生产部（父部门，1个）

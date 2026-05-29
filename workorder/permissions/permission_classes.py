@@ -7,6 +7,7 @@ P1 优化：使用缓存减少权限检查的数据库查询
 
 from rest_framework import permissions
 from ..permission_utils import PermissionCache, PermissionUtils
+from .permission_utils import is_manager_user
 
 
 class SuperuserFriendlyModelPermissions(permissions.DjangoModelPermissions):
@@ -263,10 +264,8 @@ class WorkOrderTaskPermission(permissions.BasePermission):
 
         # 读取操作：检查数据权限
         if request.method in permissions.SAFE_METHODS:
-            # 管理员可以查看所有任务
-            if request.user.is_superuser or request.user.has_perm(
-                "workorder.view_workorder"
-            ):
+            # 管理员和经理可以查看所有任务
+            if request.user.is_superuser or is_manager_user(request.user):
                 return True
 
             # 操作员只能查看自己分派的任务
@@ -276,7 +275,7 @@ class WorkOrderTaskPermission(permissions.BasePermission):
             # 生产主管可以查看本部门的任务
             if obj.assigned_department:
                 # P1 优化: 使用缓存检查用户是否属于该部门
-                if PermissionCache.is_user_in_department(
+                if PermissionCache.is_department_in_user_scope(
                     request.user, obj.assigned_department.id
                 ):
                     return True
@@ -289,7 +288,7 @@ class WorkOrderTaskPermission(permissions.BasePermission):
 
         # 写入操作：更严格的权限控制
         # 管理员可以操作所有任务
-        if request.user.is_superuser:
+        if request.user.is_superuser or is_manager_user(request.user):
             return True
 
         # 操作员只能更新自己分派的任务
@@ -299,7 +298,7 @@ class WorkOrderTaskPermission(permissions.BasePermission):
         # 生产主管可以更新本部门的所有任务
         if obj.assigned_department:
             # P1 优化: 使用缓存检查用户是否属于该部门
-            if PermissionCache.is_user_in_department(
+            if PermissionCache.is_department_in_user_scope(
                 request.user, obj.assigned_department.id
             ):
                 # 检查是否有 change_workorder 权限（生产主管）
@@ -315,7 +314,7 @@ class WorkOrderTaskPermission(permissions.BasePermission):
             # 检查是否是跨部门操作
             if obj.assigned_department:
                 # P1 优化: 使用缓存检查跨部门操作
-                user_departments = PermissionCache.get_user_departments(request.user)
+                user_departments = PermissionCache.get_user_department_scope(request.user)
                 if obj.assigned_department.id not in user_departments:
                     # 跨部门操作，需要特殊权限（这里允许有 change_workorder 权限的用户）
                     return True
@@ -360,8 +359,8 @@ class WorkOrderDataPermission(permissions.BasePermission):
         if not request.user.is_authenticated:
             return False
 
-        # 管理员可以查看所有数据
-        if request.user.is_superuser:
+        # 管理员和经理可以查看所有数据
+        if request.user.is_superuser or is_manager_user(request.user):
             return True
 
         # 读取操作：数据权限
@@ -378,9 +377,9 @@ class WorkOrderDataPermission(permissions.BasePermission):
             # 生产主管可以查看本部门有任务的施工单
             if request.user.has_perm("workorder.change_workorder"):
                 # 检查是否有本部门的任务
-                user_department_ids = PermissionCache.get_user_departments(request.user)
+                user_department_ids = PermissionCache.get_user_department_scope(request.user)
                 if user_department_ids:
-                    from .models import WorkOrderTask
+                    from workorder.models import WorkOrderTask
 
                     has_department_task = WorkOrderTask.objects.filter(
                         work_order_process__work_order=obj,

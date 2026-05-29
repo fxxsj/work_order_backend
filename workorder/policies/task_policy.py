@@ -6,11 +6,13 @@ from __future__ import annotations
 
 from typing import Iterable, Optional, Tuple
 
+from workorder.permission_utils import PermissionCache
+from workorder.permissions.permission_utils import is_manager_user
 from workorder.services.service_errors import ServiceError
 
 
 def ensure_user_can_modify_task(user, task, action_label: str) -> None:
-    if user.is_superuser:
+    if user.is_superuser or is_manager_user(user):
         return
 
     if task.assigned_operator == user:
@@ -19,11 +21,10 @@ def ensure_user_can_modify_task(user, task, action_label: str) -> None:
     work_order = task.work_order_process.work_order
 
     if task.assigned_department:
-        user_departments = (
-            user.profile.departments.all() if hasattr(user, "profile") else []
-        )
         if (
-            task.assigned_department in user_departments
+            PermissionCache.is_department_in_user_scope(
+                user, task.assigned_department_id
+            )
             and user.has_perm("workorder.change_workorder")
         ):
             return
