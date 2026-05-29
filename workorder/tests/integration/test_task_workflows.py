@@ -26,6 +26,15 @@ def make_salesperson(user, customer):
         customer.salesperson = user
         customer.save(update_fields=["salesperson"])
 
+def make_supervisor(user):
+    from workorder.constants.role_codes import SUPERVISOR
+    from django.contrib.auth.models import Group, Permission
+    group, _ = Group.objects.get_or_create(name=SUPERVISOR)
+    user.groups.add(group)
+    perm = Permission.objects.filter(codename='approve_workorder').first()
+    if perm:
+        user.user_permissions.add(perm)
+
 
 @pytest.mark.django_db
 @pytest.mark.integration
@@ -45,7 +54,7 @@ class TestWorkOrderTaskWorkflow:
             approval_status="submitted", created_by=supervisor, processes=1
         )
         WorkOrderProductFactory(work_order=workorder, quantity=100)
-        make_salesperson(supervisor, workorder.customer)
+        make_supervisor(supervisor)
 
         # Act: Approve workorder
         api_client.force_authenticate(user=supervisor)

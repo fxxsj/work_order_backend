@@ -10,10 +10,10 @@ from workorder.tests.factories import UserFactory, WorkOrderFactory, WorkOrderPr
 @pytest.mark.django_db
 @pytest.mark.integration
 class TestInventoryWorkflow:
-    def test_stock_in_approve_creates_product_stock(self, api_client):
+    def test_stock_in_confirm_creates_product_stock(self, api_client):
         """
         GIVEN: A submitted stock-in record
-        WHEN: Approve the stock-in
+        WHEN: Confirm the stock-in
         THEN: ProductStock records are created for work order products
         """
         user = UserFactory(is_superuser=True)
@@ -29,8 +29,9 @@ class TestInventoryWorkflow:
         )
 
         api_client.force_authenticate(user=user)
-        response = api_client.post(f"/api/v1/stock-ins/{stock_in.id}/approve/", format="json")
-
+        response = api_client.post(f"/api/v1/stock-ins/{stock_in.id}/confirm/", format="json")
+        if response.status_code != status.HTTP_200_OK:
+            print("Response:", response.data if hasattr(response, 'data') else response.content)
         assert response.status_code == status.HTTP_200_OK
         stock_in.refresh_from_db()
         assert stock_in.status == "completed"

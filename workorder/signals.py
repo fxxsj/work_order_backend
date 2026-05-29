@@ -53,7 +53,7 @@ def cache_work_order_status(sender, instance, **kwargs):
 
 @receiver(post_save, sender=WorkOrder)
 def sync_sales_order_status_on_work_order_change(sender, instance, created, **kwargs):
-    """施工单状态或审核状态变化后，自动同步关联销售订单状态。"""
+    """施工单状态或审核状态变化后，自动同步关联客户订单状态。"""
     previous_status = getattr(instance, "_previous_status", None)
     previous_approval_status = getattr(instance, "_previous_approval_status", None)
     previous_sales_order_id = getattr(instance, "_previous_sales_order_id", None)

@@ -291,9 +291,9 @@ class PaymentPlanAdmin(admin.ModelAdmin):
         ),
     )
 
-    @admin.display(description="销售订单")
+    @admin.display(description="客户订单")
     def sales_order_number(self, obj):
-        """显示销售订单号"""
+        """显示客户订单号"""
         return obj.sales_order.order_number if obj.sales_order else "-"
 
     @admin.display(description="客户")

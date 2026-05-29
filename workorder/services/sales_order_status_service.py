@@ -1,4 +1,4 @@
-"""销售订单状态同步服务。"""
+"""客户订单状态同步服务。"""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from ..models.sales import SalesOrder
 
 
 class SalesOrderStatusService:
-    """根据施工单和发货进度同步销售订单状态。"""
+    """根据施工单和发货进度同步客户订单状态。"""
 
     TERMINAL_STATUSES = {SalesOrderStatus.CANCELLED}
     WORKFLOW_STATUSES = {SalesOrderStatus.APPROVED, SalesOrderStatus.IN_PRODUCTION, SalesOrderStatus.COMPLETED}
@@ -19,12 +19,12 @@ class SalesOrderStatusService:
 
     @staticmethod
     def get_work_orders_queryset(sales_order: SalesOrder):
-        """获取与销售订单关联的施工单。"""
+        """获取与客户订单关联的施工单。"""
         return sales_order.get_related_work_orders_queryset()
 
     @staticmethod
     def get_sales_orders_for_work_order(work_order) -> list[SalesOrder]:
-        """获取与施工单关联的销售订单，兼容 FK 和过渡期 M2M。"""
+        """获取与施工单关联的客户订单，兼容 FK 和过渡期 M2M。"""
         return work_order.get_related_sales_orders()
 
     @staticmethod
@@ -44,7 +44,7 @@ class SalesOrderStatusService:
 
     @staticmethod
     def sync_status_for_work_order(work_order) -> list[str]:
-        """同步某个施工单关联的所有销售订单状态。"""
+        """同步某个施工单关联的所有客户订单状态。"""
         statuses = []
         for sales_order in SalesOrderStatusService.get_sales_orders_for_work_order(
             work_order
@@ -54,7 +54,7 @@ class SalesOrderStatusService:
 
     @staticmethod
     def sync_status_for_sales_orders(sales_orders: Iterable[SalesOrder]) -> list[str]:
-        """批量同步销售订单状态。"""
+        """批量同步客户订单状态。"""
         statuses = []
         for sales_order in sales_orders:
             statuses.append(SalesOrderStatusService.sync_status(sales_order))
@@ -66,7 +66,7 @@ class SalesOrderStatusService:
         *,
         preserve_manual_completion: bool = True,
     ) -> str:
-        """同步销售订单状态。"""
+        """同步客户订单状态。"""
         current_status = sales_order.status
         if current_status in SalesOrderStatusService.TERMINAL_STATUSES:
             return current_status

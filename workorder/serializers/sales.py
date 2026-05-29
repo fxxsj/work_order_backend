@@ -1,7 +1,7 @@
 """
-销售订单序列化器模块
+客户订单序列化器模块
 
-包含销售订单和销售订单明细的序列化器。
+包含客户订单和客户订单明细的序列化器。
 """
 
 from typing import List
@@ -12,7 +12,7 @@ from ..models.sales import SalesOrder, SalesOrderItem
 
 
 class SalesOrderItemSerializer(serializers.ModelSerializer):
-    """销售订单明细序列化器"""
+    """客户订单明细序列化器"""
 
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_code = serializers.CharField(source="product.code", read_only=True)
@@ -28,13 +28,13 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
         }
 
     def update(self, instance, validated_data):
-        """禁止在更新时修改关联销售订单"""
+        """禁止在更新时修改关联客户订单"""
         validated_data.pop("sales_order", None)
         return super().update(instance, validated_data)
 
 
 class SalesOrderListSerializer(serializers.ModelSerializer):
-    """销售订单列表序列化器"""
+    """客户订单列表序列化器"""
 
     customer_name = serializers.CharField(source="customer.name", read_only=True)
     customer_code = serializers.CharField(source="customer.code", read_only=True)
@@ -57,7 +57,7 @@ class SalesOrderListSerializer(serializers.ModelSerializer):
 
 
 class SalesOrderDetailSerializer(serializers.ModelSerializer):
-    """销售订单详情序列化器"""
+    """客户订单详情序列化器"""
 
     customer_name = serializers.CharField(source="customer.name", read_only=True)
     customer_contact = serializers.CharField(
@@ -260,13 +260,13 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        """创建销售订单及其明细"""
+        """创建客户订单及其明细"""
         items_data = validated_data.pop("items", [])
 
         try:
             sales_order = SalesOrder.objects.create(**validated_data)
         except Exception as e:
-            raise serializers.ValidationError(f"创建销售订单失败: {str(e)}")
+            raise serializers.ValidationError(f"创建客户订单失败: {str(e)}")
 
         # 创建订单明细
         for i, item_data in enumerate(items_data):
@@ -287,10 +287,10 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         return sales_order
 
     def update(self, instance, validated_data):
-        """更新销售订单及其明细"""
+        """更新客户订单及其明细"""
         items_data = validated_data.pop("items", None)
 
-        # 更新销售订单基本信息
+        # 更新客户订单基本信息
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()

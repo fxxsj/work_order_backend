@@ -39,7 +39,7 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
     @staticmethod
     def _ensure_sales_order_visible(*, sales_order_id, user) -> None:
         if not sales_order_id:
-            raise ServiceError("请提供销售订单ID", code=status.HTTP_400_BAD_REQUEST)
+            raise ServiceError("请提供客户订单ID", code=status.HTTP_400_BAD_REQUEST)
 
         queryset = SalesOrder.objects.filter(id=sales_order_id)
         if user.is_superuser or PermissionUtils.is_finance_user(user):
@@ -51,18 +51,18 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
 
         if not visible:
             raise ServiceError(
-                "销售订单不存在或无权访问", code=status.HTTP_404_NOT_FOUND
+                "客户订单不存在或无权访问", code=status.HTTP_404_NOT_FOUND
             )
 
     @staticmethod
     def _ensure_work_order_writable(*, work_order: WorkOrder, user) -> None:
         if user.is_superuser:
             return
-        if work_order.created_by_id == user.id:
+        if work_order.created_by_id == user.id and user.has_perm("workorder.submit_workorder"):
             return
-        if user.has_perm("workorder.change_workorder"):
+        if user.has_perm("workorder.submit_workorder"):
             return
-        raise ServiceError("无权操作该施工单", code=status.HTTP_403_FORBIDDEN)
+        raise ServiceError("您没有提交审核的权限", code=status.HTTP_403_FORBIDDEN)
 
     @staticmethod
     def _validate_approval_permissions(*, work_order: WorkOrder, user) -> None:
@@ -71,12 +71,18 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
                 '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。',
                 code=status.HTTP_400_BAD_REQUEST,
             )
+        
+        if not user.is_superuser and not user.has_perm("workorder.approve_workorder"):
+            raise ServiceError(
+                "您没有审核施工单的权限",
+                code=status.HTTP_403_FORBIDDEN,
+            )
 
-    # ========== 流程 1: 从销售订单创建施工单 ==========
+    # ========== 流程 1: 从客户订单创建施工单 ==========
     @action(detail=False, methods=["post"])
     def create_from_sales_order(self, request):
         """
-        从销售订单创建施工单
+        从客户订单创建施工单
 
         请求体：
         {
@@ -95,7 +101,7 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             self._require_permission(
                 request.user,
                 "workorder.add_workorder",
-                "无权从销售订单创建施工单",
+                "无权从客户订单创建施工单",
             )
             self._ensure_sales_order_visible(
                 sales_order_id=request.data.get("sales_order_id"),
@@ -131,11 +137,11 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    # ========== 批量从销售订单创建施工单 ==========
+    # ========== 批量从客户订单创建施工单 ==========
     @action(detail=False, methods=["post"])
     def create_from_sales_orders(self, request):
         """
-        批量从销售订单创建施工单
+        批量从客户订单创建施工单
 
         请求体：
         {
@@ -159,7 +165,7 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             self._require_permission(
                 request.user,
                 "workorder.add_workorder",
-                "无权从销售订单创建施工单",
+                "无权从客户订单创建施工单",
             )
             for sales_order_id in sales_order_ids:
                 self._ensure_sales_order_visible(

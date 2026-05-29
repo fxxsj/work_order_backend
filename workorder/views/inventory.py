@@ -34,11 +34,11 @@ from workorder.docs.inventory import (
     quality_complete_docs,
     quality_inspection_docs,
     quality_summary_docs,
-    stock_in_approve_docs,
+    stock_in_confirm_docs,
     stock_in_docs,
-    stock_in_summary_docs,
     stock_in_submit_docs,
-    stock_out_approve_docs,
+    stock_in_summary_docs,
+    stock_out_confirm_docs,
     stock_out_docs,
     stock_out_summary_docs,
 )
@@ -319,7 +319,7 @@ class StockInViewSet(viewsets.ModelViewSet):
         "work_order__customer",
         "operator",
         "submitted_by",
-        "approved_by",
+        "confirmed_by",
     ).all()
     serializer_class = StockInSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
@@ -390,20 +390,31 @@ class StockInViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data=serializer.data, message="入库单提交成功")
 
     @action(detail=True, methods=["post"])
-    @stock_in_approve_docs
-    def approve(self, request, pk=None):
-        """审核入库单"""
+    @stock_in_confirm_docs
+    def confirm(self, request, pk=None):
+        """确认入库单"""
         stock_in = self.get_object()
 
         if stock_in.status != "submitted":
             return APIResponse.error(
-                "只有已提交状态的入库单可以审核", code=status.HTTP_400_BAD_REQUEST
+                "只有已提交状态的入库单可以确认", code=status.HTTP_400_BAD_REQUEST
             )
+
+        # 前置条件检查：关联施工单的采购单必须已审核通过
+        work_order = stock_in.work_order
+        related_purchase_orders = work_order.purchase_orders.exclude(status="cancelled")
+        if related_purchase_orders.exists():
+            has_approved_po = related_purchase_orders.filter(status="approved").exists()
+            if not has_approved_po:
+                return APIResponse.error(
+                    "关联的采购单尚未审核通过，无法确认入库",
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
 
         with transaction.atomic():
             stock_in.status = "completed"
-            stock_in.approved_by = request.user
-            stock_in.approved_at = timezone.now()
+            stock_in.confirmed_by = request.user
+            stock_in.confirmed_at = timezone.now()
             stock_in.save()
 
             # 创建 ProductStock 记录（按施工单产品拆分批次）
@@ -425,7 +436,7 @@ class StockInViewSet(viewsets.ModelViewSet):
                 )
 
         serializer = self.get_serializer(stock_in)
-        return APIResponse.success(data=serializer.data, message="入库单审核成功")
+        return APIResponse.success(data=serializer.data, message="入库单确认成功")
 
     @action(detail=False, methods=["get"])
     @stock_in_summary_docs
@@ -455,7 +466,7 @@ class StockOutViewSet(viewsets.ModelViewSet):
         "delivery_order__customer",
         "operator",
         "submitted_by",
-        "approved_by",
+        "confirmed_by",
     ).all()
     serializer_class = StockOutSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
@@ -531,19 +542,19 @@ class StockOutViewSet(viewsets.ModelViewSet):
         return APIResponse.success(data=serializer.data, message="出库单提交成功")
 
     @action(detail=True, methods=["post"])
-    @stock_out_approve_docs
-    def approve(self, request, pk=None):
-        """审核出库单"""
+    @stock_out_confirm_docs
+    def confirm(self, request, pk=None):
+        """确认出库单"""
         stock_out = self.get_object()
 
         if stock_out.status != "submitted":
             return APIResponse.error(
-                "只有已提交状态的出库单可以审核", code=status.HTTP_400_BAD_REQUEST
+                "只有已提交状态的出库单可以确认", code=status.HTTP_400_BAD_REQUEST
             )
 
         if stock_out.out_type != "delivery" or not stock_out.delivery_order_id:
             return APIResponse.error(
-                "当前仅支持【发货出库】的审核扣减库存", code=status.HTTP_400_BAD_REQUEST
+                "当前仅支持【发货出库】的确认扣减库存", code=status.HTTP_400_BAD_REQUEST
             )
 
         delivery_order = stock_out.delivery_order
@@ -616,8 +627,8 @@ class StockOutViewSet(viewsets.ModelViewSet):
                     item.sales_order_item.save(update_fields=["delivered_quantity"])
 
             stock_out.status = "completed"
-            stock_out.approved_by = request.user
-            stock_out.approved_at = timezone.now()
+            stock_out.confirmed_by = request.user
+            stock_out.confirmed_at = timezone.now()
             if not stock_out.operator_id:
                 stock_out.operator = request.user
             stock_out.save()
@@ -628,7 +639,7 @@ class StockOutViewSet(viewsets.ModelViewSet):
             delivery_order.save(update_fields=["status", "delivery_date", "updated_at"])
 
         serializer = self.get_serializer(stock_out)
-        return APIResponse.success(data=serializer.data, message="出库单审核成功")
+        return APIResponse.success(data=serializer.data, message="出库单确认成功")
 
     @action(detail=False, methods=["get"])
     @stock_out_summary_docs
@@ -804,7 +815,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
                         code=status.HTTP_400_BAD_REQUEST,
                     )
 
-                # 2. 更新销售订单明细已发货数量
+                # 2. 更新客户订单明细已发货数量
                 if item.sales_order_item:
                     item.sales_order_item.delivered_quantity += item.quantity
                     item.sales_order_item.save()
@@ -833,7 +844,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
 
             delivery_order.save()
 
-            # 5. 检查销售订单是否全部发货完成
+            # 5. 检查客户订单是否全部发货完成
             self._update_sales_order_status(delivery_order.sales_order)
 
         serializer = self.get_serializer(delivery_order)
@@ -846,7 +857,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         )
 
     def _update_sales_order_status(self, sales_order):
-        """更新销售订单发货状态"""
+        """更新客户订单发货状态"""
         if not sales_order:
             return
         SalesOrderStatusService.sync_status(
@@ -922,7 +933,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
                         notes=f"拒收回退: {delivery_order.order_number}",
                     )
 
-                # 2. 回退销售订单明细的已发货数量
+                # 2. 回退客户订单明细的已发货数量
                 if item.sales_order_item:
                     item.sales_order_item.delivered_quantity -= item.quantity
                     if item.sales_order_item.delivered_quantity < 0:
@@ -934,7 +945,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
             delivery_order.received_notes = f"拒收原因: {reject_reason}"
             delivery_order.save()
 
-            # 4. 更新销售订单状态
+            # 4. 更新客户订单状态
             if delivery_order.sales_order:
                 SalesOrderStatusService.sync_status(
                     delivery_order.sales_order,

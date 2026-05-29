@@ -208,13 +208,17 @@ class PurchaseOrderViewSet(BaseViewSet):
     def submit(self, request, pk=None):
         """提交采购单"""
         order = self.get_object()
-        if order.status != "draft":
-            return APIResponse.error("只有草稿状态的采购单可以提交", code=status.HTTP_400_BAD_REQUEST)
+        if order.approval_status not in ["draft", "rejected"]:
+            return APIResponse.error("只有草稿或已拒绝状态的采购单可以提交", code=status.HTTP_400_BAD_REQUEST)
 
-        order.status = "submitted"
-        order.submitted_by = request.user
-        order.submitted_at = timezone.now()
-        order.save()
+        service = ApprovalService(PurchaseOrder)
+        try:
+            order = service.submit_for_approval(order, request.user)
+            order.rejection_reason = ""
+            order.save(update_fields=["rejection_reason"])
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code)
+        
         return APIResponse.success(message="提交成功")
 
     @action(detail=True, methods=["post"])
@@ -222,13 +226,15 @@ class PurchaseOrderViewSet(BaseViewSet):
     def approve(self, request, pk=None):
         """批准采购单"""
         order = self.get_object()
-        if order.status != "submitted":
+        if order.approval_status != "submitted":
             return APIResponse.error("只有已提交状态的采购单可以批准", code=status.HTTP_400_BAD_REQUEST)
 
-        order.status = "approved"
-        order.approved_by = request.user
-        order.approved_at = timezone.now()
-        order.save()
+        service = ApprovalService(PurchaseOrder)
+        try:
+            order = service.approve(order, request.user)
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code)
+            
         return APIResponse.success(message="批准成功")
 
     @action(detail=True, methods=["post"])
@@ -236,21 +242,26 @@ class PurchaseOrderViewSet(BaseViewSet):
     def reject(self, request, pk=None):
         """拒绝采购单"""
         order = self.get_object()
-        if order.status != "submitted":
+        if order.approval_status != "submitted":
             return APIResponse.error("只有已提交状态的采购单可以拒绝", code=status.HTTP_400_BAD_REQUEST)
 
-        order.status = "draft"  # 退回草稿
-        order.rejection_reason = request.data.get("rejection_reason", "")
-        order.save()
-        return APIResponse.success(message="已拒绝，采购单已退回草稿状态")
+        service = ApprovalService(PurchaseOrder)
+        try:
+            order = service.reject(order, request.user, request.data.get("rejection_reason", ""))
+            order.rejection_reason = request.data.get("rejection_reason", "")
+            order.save(update_fields=["rejection_reason"])
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code)
+            
+        return APIResponse.success(message="已拒绝，采购单已退回")
 
     @action(detail=True, methods=["post"])
     @purchase_order_place_docs
     def place_order(self, request, pk=None):
         """下单"""
         order = self.get_object()
-        if order.status != "approved":
-            return APIResponse.error("只有已批准状态的采购单可以下单", code=status.HTTP_400_BAD_REQUEST)
+        if order.approval_status != "approved" or order.status not in ["pending", "draft", "ordered"]:
+            return APIResponse.error("只有已批准且未下单的采购单可以下单", code=status.HTTP_400_BAD_REQUEST)
 
         order.status = "ordered"
         ordered_date = request.data.get("ordered_date")

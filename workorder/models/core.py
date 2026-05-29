@@ -32,7 +32,7 @@ from django.db.models import Max
 from django.utils import timezone
 from rest_framework import status
 from workorder.models.audit import AuditMixin
-from workorder.models.base import TimeStampedModel, _SignalSafeQuerySet
+from workorder.models.base import TimeStampedModel, _SignalSafeQuerySet, ApprovalFieldsMixin
 
 # 配置日志记录器
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ APPROVED_ORDER_EDITABLE_FIELDS = [
 ]
 
 
-class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
+class WorkOrder(AuditMixin, TimeStampedModel, ApprovalFieldsMixin, models.Model):
     """印刷施工单"""
 
     STATUS_CHOICES = [
@@ -98,7 +98,7 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
         "workorder.Customer",
         on_delete=models.PROTECT,
         verbose_name="客户",
-        help_text="销售订单客户快照，创建施工单时自动复制，请勿手动修改",
+        help_text="客户订单客户快照，创建施工单时自动复制，请勿手动修改",
     )
     sales_order = models.ForeignKey(
         "workorder.SalesOrder",
@@ -191,11 +191,11 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
     order_date = models.DateField(
         "下单日期",
         default=date.today,
-        help_text="销售订单日期快照，创建施工单时自动复制，请勿手动修改",
+        help_text="客户订单日期快照，创建施工单时自动复制，请勿手动修改",
     )
     delivery_date = models.DateField(
         "交货日期",
-        help_text="销售订单交期快照，创建施工单时自动复制，请勿手动修改",
+        help_text="客户订单交期快照，创建施工单时自动复制，请勿手动修改",
     )
     actual_delivery_date = models.DateField("实际交货日期", null=True, blank=True)
 
@@ -211,7 +211,7 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
         max_digits=12,
         decimal_places=2,
         default=0,
-        help_text="销售订单金额快照，创建施工单时自动复制，请勿手动修改",
+        help_text="客户订单金额快照，创建施工单时自动复制，请勿手动修改",
     )
 
     # 文件附件
@@ -231,13 +231,7 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
 
     notes = models.TextField("备注", blank=True)
 
-    # 业务员审核相关字段
-    APPROVAL_STATUS_CHOICES = [
-        ("draft", "草稿"),
-        ("submitted", "待审核"),
-        ("approved", "已通过"),
-        ("rejected", "已拒绝"),
-    ]
+
 
     # 审核状态转换规则 - 集中管理状态转换
     APPROVAL_STATUS_TRANSITIONS = {
@@ -286,23 +280,6 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
                 code=status.HTTP_403_FORBIDDEN,
             )
 
-    approval_status = models.CharField(
-        "审核状态", max_length=20, choices=APPROVAL_STATUS_CHOICES, default="draft"
-    )
-    approved_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="approved_orders",
-        verbose_name="审核人",
-        help_text="业务员审核人",
-    )
-    approved_at = models.DateTimeField("审核时间", null=True, blank=True)
-    approval_comment = models.TextField(
-        "审核意见", blank=True, help_text="业务员审核意见"
-    )
-
     urgency_reason = models.TextField(
         "紧急原因", blank=True, help_text="标记为紧急订单的原因"
     )
@@ -322,6 +299,7 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
         ordering = ["-created_at"]
         permissions = [
             ("approve_workorder", "可以审核施工单"),
+            ("submit_workorder", "可以提交施工单审核"),
             ("change_approved_workorder", "可以编辑已审核的施工单"),
         ]
         # 添加索引以优化查询性能
@@ -351,7 +329,7 @@ class WorkOrder(AuditMixin, TimeStampedModel, models.Model):
         return f"{self.order_number}"
 
     def get_related_sales_orders(self):
-        """获取来源销售订单。"""
+        """获取来源客户订单。"""
         if not self.sales_order_id:
             return []
         return [self.sales_order]

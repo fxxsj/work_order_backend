@@ -297,7 +297,7 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
         if not data.get("customer"):
             raise serializers.ValidationError({"customer": "必须选择客户"})
 
-        # 如果选择了销售订单，自动填充客户开票信息
+        # 如果选择了客户订单，自动填充客户开票信息
         sales_order = data.get("sales_order")
         if sales_order and sales_order.customer:
             customer = sales_order.customer

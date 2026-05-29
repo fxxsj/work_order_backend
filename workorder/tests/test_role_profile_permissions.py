@@ -47,7 +47,7 @@ class RoleProfilePermissionTest(TestCase):
         return {"HTTP_AUTHORIZATION": f"Bearer {refresh.access_token}"}
 
     def test_sales_can_create_workorder_from_sales_order(self):
-        """销售：从销售订单生成施工单"""
+        """销售：从客户订单生成施工单"""
         user = self._get_user_with_role("sales")
         self.assertTrue(user.has_perm("workorder.add_workorder"))
 
@@ -153,7 +153,7 @@ class WorkOrderFlowActionPermissionTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_sales_can_create_from_sales_order_with_permission(self):
-        """有 add_workorder 权限的销售可以创建（但会遇到销售订单可见性限制）"""
+        """有 add_workorder 权限的销售可以创建（但会遇到客户订单可见性限制）"""
         user = self._create_user_with_role("sales")
         response = self.api_client.post(
             "/api/v1/workorders-flow/create_from_sales_order/",

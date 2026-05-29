@@ -242,7 +242,7 @@ class Command(BaseCommand):
             FoilingPlateProduct.objects.create(foiling_plate=foiling, product=product)
             EmbossingPlateProduct.objects.create(embossing_plate=embossing, product=product)
 
-            # === 销售订单 ===
+            # === 客户订单 ===
             sales_order = SalesOrder.objects.create(
                 order_number=SalesOrder.generate_order_number(),
                 customer=customers[0],

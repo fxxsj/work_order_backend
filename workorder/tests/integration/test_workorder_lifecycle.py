@@ -25,6 +25,15 @@ def make_salesperson(user, customer):
         customer.salesperson = user
         customer.save(update_fields=["salesperson"])
 
+def make_supervisor(user):
+    from workorder.constants.role_codes import SUPERVISOR
+    from django.contrib.auth.models import Group, Permission
+    group, _ = Group.objects.get_or_create(name=SUPERVISOR)
+    user.groups.add(group)
+    perm = Permission.objects.filter(codename='approve_workorder').first()
+    if perm:
+        user.user_permissions.add(perm)
+
 
 @pytest.mark.django_db
 @pytest.mark.integration
@@ -63,7 +72,7 @@ class TestWorkOrderLifecycle:
         workorder_id = response.data["data"]["id"]
         workorder = WorkOrder.objects.get(id=workorder_id)
         WorkOrderProductFactory(work_order=workorder, product=product, quantity=100)
-        make_salesperson(supervisor, customer)
+        make_supervisor(supervisor)
 
         # Add processes manually (API might not support nested creation)
         wop = WorkOrderProcessFactory(
@@ -158,7 +167,7 @@ class TestWorkOrderLifecycle:
         workorder_id = response.data["data"]["id"]
         workorder = WorkOrder.objects.get(id=workorder_id)
         WorkOrderProductFactory(work_order=workorder, quantity=100)
-        make_salesperson(supervisor, customer)
+        make_supervisor(supervisor)
 
         # Create multiple processes
         WorkOrderProcessFactory(work_order=workorder, process=process1, tasks=1)

@@ -63,7 +63,7 @@ class WorkOrderFlowServiceTest(TestCase):
         )
         self.product.default_processes.add(self.process)
 
-        # 创建销售订单
+        # 创建客户订单
         self.sales_order = SalesOrder.objects.create(
             order_number="SO20260303001",
             customer=self.customer,
@@ -74,7 +74,7 @@ class WorkOrderFlowServiceTest(TestCase):
             created_by=self.salesperson,
         )
 
-        # 添加销售订单明细
+        # 添加客户订单明细
         SalesOrderItem.objects.create(
             sales_order=self.sales_order,
             product=self.product,
@@ -82,10 +82,10 @@ class WorkOrderFlowServiceTest(TestCase):
             unit_price=10.0,
         )
 
-    # ========== 测试流程 1: 从销售订单创建施工单 ==========
+    # ========== 测试流程 1: 从客户订单创建施工单 ==========
 
     def test_create_from_sales_order_success(self):
-        """测试成功从销售订单创建施工单"""
+        """测试成功从客户订单创建施工单"""
         work_order = WorkOrderFlowService.create_from_sales_order(
             sales_order_id=self.sales_order.id,
             production_quantity=100,
@@ -117,8 +117,8 @@ class WorkOrderFlowServiceTest(TestCase):
         self.assertTrue(work_order.order_number.endswith("001"))
 
     def test_create_from_sales_order_invalid_status(self):
-        """测试销售订单状态不正确时创建失败"""
-        # 修改销售订单状态
+        """测试客户订单状态不正确时创建失败"""
+        # 修改客户订单状态
         self.sales_order.status = "cancelled"
         self.sales_order.save()
 
@@ -130,10 +130,10 @@ class WorkOrderFlowServiceTest(TestCase):
                 created_by=self.creator,
             )
 
-        self.assertIn("只有已审核或生产中的销售订单才能创建施工单", str(context.exception))
+        self.assertIn("只有已审核或生产中的客户订单才能创建施工单", str(context.exception))
 
     def test_create_from_sales_order_not_found(self):
-        """测试销售订单不存在时创建失败"""
+        """测试客户订单不存在时创建失败"""
         with self.assertRaises(ServiceError) as context:
             WorkOrderFlowService.create_from_sales_order(
                 sales_order_id=99999,  # 不存在的ID
@@ -141,7 +141,7 @@ class WorkOrderFlowServiceTest(TestCase):
                 created_by=self.creator,
             )
 
-        self.assertIn("销售订单不存在", str(context.exception))
+        self.assertIn("客户订单不存在", str(context.exception))
 
     # ========== 测试流程 2: 提交审核 ==========
 
@@ -165,7 +165,7 @@ class WorkOrderFlowServiceTest(TestCase):
         self.assertEqual(updated_work_order.approval_status, "submitted")
 
     def test_create_from_sales_order_with_selected_items(self):
-        """测试按选定订单明细创建施工单，并同步销售订单状态"""
+        """测试按选定订单明细创建施工单，并同步客户订单状态"""
         sales_item = self.sales_order.items.first()
 
         work_order = WorkOrderFlowService.create_from_sales_order(
@@ -272,7 +272,7 @@ class WorkOrderFlowServiceTest(TestCase):
         self.assertIn("不允许的状态转换", str(context.exception))
 
     def test_work_order_signal_syncs_sales_order_status(self):
-        """测试施工单状态变化通过 signal 自动同步销售订单状态"""
+        """测试施工单状态变化通过 signal 自动同步客户订单状态"""
         work_order = WorkOrder.objects.create(
             order_number="WO20260303099",
             customer=self.customer,
@@ -295,7 +295,7 @@ class WorkOrderFlowServiceTest(TestCase):
         self.assertEqual(self.sales_order.status, "approved")
 
     def test_work_order_fk_relation_syncs_sales_order_status(self):
-        """测试仅通过 sales_order FK 关联时也能同步销售订单状态"""
+        """测试仅通过 sales_order FK 关联时也能同步客户订单状态"""
         work_order = WorkOrder.objects.create(
             order_number="WO20260303100",
             customer=self.customer,
@@ -318,7 +318,7 @@ class WorkOrderFlowServiceTest(TestCase):
         self.assertEqual(self.sales_order.status, "approved")
 
     def test_sales_order_related_work_orders_deduplicates_fk_and_m2m(self):
-        """测试销售订单读取关联施工单时基于 FK 返回结果。"""
+        """测试客户订单读取关联施工单时基于 FK 返回结果。"""
         work_order = WorkOrder.objects.create(
             order_number="WO20260303101",
             customer=self.customer,
@@ -528,8 +528,8 @@ class WorkOrderFlowIntegrationTest(TestCase):
         )
 
     def test_complete_flow_from_sales_order_to_completion(self):
-        """测试完整流程：从销售订单到施工单完成"""
-        # 1. 从销售订单创建施工单
+        """测试完整流程：从客户订单到施工单完成"""
+        # 1. 从客户订单创建施工单
         work_order = WorkOrderFlowService.create_from_sales_order(
             sales_order_id=self.sales_order.id,
             production_quantity=100,

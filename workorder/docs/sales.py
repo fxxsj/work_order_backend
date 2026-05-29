@@ -1,5 +1,5 @@
 """
-销售订单相关视图集的 OpenAPI 文档定义。
+客户订单相关视图集的 OpenAPI 文档定义。
 """
 
 from drf_spectacular.utils import (
@@ -21,15 +21,15 @@ from workorder.serializers.sales import (
 sales_order_docs = extend_schema_view(
     list=extend_schema(
         tags=["销售"],
-        summary="获取销售订单列表",
+        summary="获取客户订单列表",
         responses={
             200: OpenApiResponse(
                 response=standard_success_response("SalesOrderListResponse"),
-                description="销售订单列表",
+                description="客户订单列表",
                 examples=[
                     OpenApiExample(
                         name="示例响应",
-                        summary="销售订单分页列表",
+                        summary="客户订单分页列表",
                         value={
                             "success": True,
                             "code": 200,
@@ -59,19 +59,19 @@ sales_order_docs = extend_schema_view(
     ),
     retrieve=extend_schema(
         tags=["销售"],
-        summary="获取销售订单详情",
+        summary="获取客户订单详情",
         responses={
             200: OpenApiResponse(
                 response=standard_success_response(
                     "SalesOrderDetailResponse", SalesOrderDetailSerializer
                 ),
-                description="销售订单详情",
+                description="客户订单详情",
             )
         },
     ),
     create=extend_schema(
         tags=["销售"],
-        summary="创建销售订单",
+        summary="创建客户订单",
         responses={
             201: OpenApiResponse(
                 response=standard_success_response(
@@ -89,7 +89,7 @@ sales_order_docs = extend_schema_view(
 
 sales_order_submit_docs = extend_schema(
     tags=["销售"],
-    summary="提交销售订单",
+    summary="提交客户订单",
     responses={
         200: OpenApiResponse(
             response=standard_success_response("SalesOrderSubmitResponse"),
@@ -104,7 +104,7 @@ sales_order_submit_docs = extend_schema(
 
 sales_order_approve_docs = extend_schema(
     tags=["销售"],
-    summary="审核销售订单",
+    summary="审核客户订单",
     request=inline_serializer(
         name="SalesOrderApproveRequest",
         fields={
@@ -133,7 +133,7 @@ sales_order_approve_docs = extend_schema(
 
 sales_order_reject_docs = extend_schema(
     tags=["销售"],
-    summary="拒绝销售订单",
+    summary="拒绝客户订单",
     request=inline_serializer(
         name="SalesOrderRejectRequest",
         fields={"reason": serializers.CharField()},
@@ -237,11 +237,11 @@ sales_order_update_payment_docs = extend_schema(
 
 sales_order_summary_docs = extend_schema(
     tags=["销售"],
-    summary="销售订单汇总",
+    summary="客户订单汇总",
     responses={
         200: OpenApiResponse(
             response=standard_success_response("SalesOrderSummaryResponse"),
-            description="销售订单汇总",
+            description="客户订单汇总",
         )
     },
 )
@@ -249,7 +249,7 @@ sales_order_summary_docs = extend_schema(
 sales_order_item_docs = extend_schema_view(
     list=extend_schema(
         tags=["销售"],
-        summary="获取销售订单明细列表",
+        summary="获取客户订单明细列表",
         responses={
             200: OpenApiResponse(
                 response=standard_success_response("SalesOrderItemListResponse"),
@@ -259,7 +259,7 @@ sales_order_item_docs = extend_schema_view(
     ),
     retrieve=extend_schema(
         tags=["销售"],
-        summary="获取销售订单明细详情",
+        summary="获取客户订单明细详情",
         responses={
             200: OpenApiResponse(
                 response=standard_success_response(

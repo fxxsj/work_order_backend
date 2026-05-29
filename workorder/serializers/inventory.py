@@ -226,8 +226,8 @@ class StockInSerializer(serializers.ModelSerializer):
     submitted_by_name = serializers.CharField(
         source="submitted_by.username", read_only=True, allow_null=True
     )
-    approved_by_name = serializers.CharField(
-        source="approved_by.username", read_only=True, allow_null=True
+    confirmed_by_name = serializers.CharField(
+        source="confirmed_by.username", read_only=True, allow_null=True
     )
 
     class Meta:
@@ -273,8 +273,8 @@ class StockOutSerializer(serializers.ModelSerializer):
     submitted_by_name = serializers.CharField(
         source="submitted_by.username", read_only=True, allow_null=True
     )
-    approved_by_name = serializers.CharField(
-        source="approved_by.username", read_only=True, allow_null=True
+    confirmed_by_name = serializers.CharField(
+        source="confirmed_by.username", read_only=True, allow_null=True
     )
 
     class Meta:
@@ -402,6 +402,7 @@ class DeliveryOrderListSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "order_number",
+
             "customer_id",
             "customer_name",
             "sales_order_id",
@@ -476,16 +477,16 @@ class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """验证创建数据"""
-        # 必须选择客户和销售订单
+        # 必须选择客户和客户订单
         if not data.get("customer"):
             raise serializers.ValidationError({"customer": "必须选择客户"})
         if not data.get("sales_order"):
-            raise serializers.ValidationError({"sales_order": "必须选择销售订单"})
+            raise serializers.ValidationError({"sales_order": "必须选择客户订单"})
         sales_order = data.get("sales_order")
         allowed_statuses = {"approved", "in_production", "completed"}
         if sales_order and sales_order.status not in allowed_statuses:
             raise serializers.ValidationError(
-                {"sales_order": "只有已审核、生产中或已完成的销售订单才能创建发货单"}
+                {"sales_order": "只有已审核、生产中或已完成的客户订单才能创建发货单"}
             )
 
         # 收货人信息必填

@@ -280,8 +280,14 @@ class WorkOrderApprovalLog(models.Model):
         related_name="approval_logs",
         verbose_name="施工单",
     )
+    APPROVAL_STATUS_CHOICES = [
+        ("draft", "草稿"),
+        ("submitted", "待审核"),
+        ("approved", "已审核"),
+        ("rejected", "已拒绝"),
+    ]
     approval_status = models.CharField(
-        "审核状态", max_length=20, choices=WorkOrder.APPROVAL_STATUS_CHOICES
+        "审核状态", max_length=20, choices=APPROVAL_STATUS_CHOICES
     )
     approved_by = models.ForeignKey(
         User,
@@ -306,7 +312,7 @@ class WorkOrderApprovalLog(models.Model):
         ordering = ["-approved_at", "-created_at"]
 
     def __str__(self):
-        status_display = dict(WorkOrder.APPROVAL_STATUS_CHOICES).get(
+        status_display = dict(self.APPROVAL_STATUS_CHOICES).get(
             self.approval_status, self.approval_status
         )
         return f"{self.work_order.order_number} - {status_display} - {self.approved_by.username if self.approved_by else '未知'}"

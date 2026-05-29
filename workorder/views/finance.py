@@ -422,15 +422,19 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         """提交发票"""
         invoice = self.get_object()
 
-        if invoice.status != "draft":
+        if invoice.approval_status not in ["draft", "rejected"]:
             return APIResponse.error(
-                "只有草稿状态的发票可以提交", code=status.HTTP_400_BAD_REQUEST
+                "只有草稿或已拒绝状态的发票可以提交", code=status.HTTP_400_BAD_REQUEST
             )
 
-        invoice.status = "issued"
-        invoice.submitted_by = request.user
-        invoice.submitted_at = timezone.now()
-        invoice.save()
+        service = ApprovalService(Invoice)
+        try:
+            invoice = service.submit_for_approval(invoice, request.user)
+            if invoice.status == "draft":
+                invoice.status = "issued"
+            invoice.save(update_fields=["status"])
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code)
 
         serializer = self.get_serializer(invoice)
         return APIResponse.success(data=serializer.data, message="发票提交成功")
@@ -441,29 +445,31 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         """审核发票"""
         invoice = self.get_object()
 
-        if invoice.status != "issued":
+        if invoice.approval_status != "submitted":
             return APIResponse.error(
-                "只有已开具状态的发票可以审核", code=status.HTTP_400_BAD_REQUEST
+                "只有已提交状态的发票可以审核", code=status.HTTP_400_BAD_REQUEST
             )
 
-        # 获取审核意见
-        approval_comment = request.data.get("approval_comment")
+        approval_comment = request.data.get("approval_comment", "")
         approved = request.data.get("approved", True)
 
-        if approved:
-            invoice.status = "received"
-            invoice.approved_by = request.user
-            invoice.approved_at = timezone.now()
-        else:
-            invoice.status = "cancelled"
-            if approval_comment:
-                invoice.notes = (
-                    f"{invoice.notes}\n审核意见: {approval_comment}"
-                    if invoice.notes
-                    else f"审核意见: {approval_comment}"
-                )
-
-        invoice.save()
+        service = ApprovalService(Invoice)
+        try:
+            if approved:
+                invoice = service.approve(invoice, request.user, approval_comment)
+                invoice.status = "received"
+            else:
+                invoice = service.reject(invoice, request.user, approval_comment, approval_comment)
+                invoice.status = "cancelled"
+                if approval_comment:
+                    invoice.notes = (
+                        f"{invoice.notes}\n审核意见: {approval_comment}"
+                        if invoice.notes
+                        else f"审核意见: {approval_comment}"
+                    )
+            invoice.save(update_fields=["status", "notes"])
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code)
 
         serializer = self.get_serializer(invoice)
         return APIResponse.success(data=serializer.data, message="发票审核成功")
@@ -940,6 +946,8 @@ class StatementViewSet(viewsets.ModelViewSet):
             )
             opening_balance = previous.closing_balance if previous else 0
 
+            from workorder.services.approval_service import ApprovalService
+            from workorder.services.service_errors import ServiceError
             from workorder.models import SalesOrder
 
             orders = (

@@ -160,15 +160,15 @@ class StockIn(models.Model):
         verbose_name="提交人",
     )
     submitted_at = models.DateTimeField("提交时间", null=True, blank=True)
-    approved_by = models.ForeignKey(
+    confirmed_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="approved_stock_ins",
-        verbose_name="审核人",
+        related_name="confirmed_stock_ins",
+        verbose_name="确认人",
     )
-    approved_at = models.DateTimeField("审核时间", null=True, blank=True)
+    confirmed_at = models.DateTimeField("确认时间", null=True, blank=True)
 
     operator = models.ForeignKey(
         User,
@@ -246,15 +246,15 @@ class StockOut(models.Model):
         verbose_name="提交人",
     )
     submitted_at = models.DateTimeField("提交时间", null=True, blank=True)
-    approved_by = models.ForeignKey(
+    confirmed_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="approved_stock_outs",
-        verbose_name="审核人",
+        related_name="confirmed_stock_outs",
+        verbose_name="确认人",
     )
-    approved_at = models.DateTimeField("审核时间", null=True, blank=True)
+    confirmed_at = models.DateTimeField("确认时间", null=True, blank=True)
 
     operator = models.ForeignKey(
         User,
@@ -298,7 +298,7 @@ class DeliveryOrder(TimeStampedModel, models.Model):
         "workorder.SalesOrder",
         on_delete=models.CASCADE,
         related_name="delivery_orders",
-        verbose_name="销售订单",
+        verbose_name="客户订单",
     )
     customer = models.ForeignKey(
         "workorder.Customer", on_delete=models.PROTECT, verbose_name="客户"
@@ -378,7 +378,7 @@ class DeliveryItem(models.Model):
         null=True,
         blank=True,
         related_name="delivery_items",
-        verbose_name="销售订单明细",
+        verbose_name="客户订单明细",
     )
     quantity = models.DecimalField("发货数量", max_digits=10, decimal_places=2)
     unit = models.CharField("单位", max_length=20, default="件")

@@ -1,7 +1,7 @@
 """
-销售订单视图集
+客户订单视图集
 
-包含销售订单的视图集。
+包含客户订单的视图集。
 """
 
 from decimal import Decimal
@@ -35,6 +35,8 @@ from ..serializers.sales import (
     SalesOrderListSerializer,
 )
 from ..services.sales_order_status_service import SalesOrderStatusService
+from ..services.approval_service import ApprovalService
+from ..services.service_errors import ServiceError
 from .base_viewsets import BaseViewSet
 
 
@@ -62,7 +64,7 @@ def _scope_sales_orders(queryset, user):
 
 @sales_order_docs
 class SalesOrderViewSet(BaseViewSet):
-    """销售订单视图集"""
+    """客户订单视图集"""
 
     queryset = SalesOrder.objects.all()
     search_fields = [
@@ -111,20 +113,20 @@ class SalesOrderViewSet(BaseViewSet):
         return SalesOrderDetailSerializer
 
     def perform_create(self, serializer):
-        """创建销售订单时自动设置创建人"""
+        """创建客户订单时自动设置创建人"""
         serializer.save(created_by=self.request.user)
 
     @action(detail=False, methods=["get"])
     @sales_order_summary_docs
     def summary(self, request):
-        """销售订单汇总"""
+        """客户订单汇总"""
         queryset = self.filter_queryset(self.get_queryset())
         summary = queryset.aggregate(
             total_count=Count("id"),
-            draft_count=Count("id", filter=Q(status="draft")),
-            submitted_count=Count("id", filter=Q(status="submitted")),
-            approved_count=Count("id", filter=Q(status="approved")),
-            rejected_count=Count("id", filter=Q(status="rejected")),
+            draft_count=Count("id", filter=Q(approval_status="draft")),
+            submitted_count=Count("id", filter=Q(approval_status="submitted")),
+            approved_count=Count("id", filter=Q(approval_status="approved", status="pending")),
+            rejected_count=Count("id", filter=Q(approval_status="rejected")),
             in_production_count=Count("id", filter=Q(status="in_production")),
             completed_count=Count("id", filter=Q(status="completed")),
             cancelled_count=Count("id", filter=Q(status="cancelled")),
@@ -137,9 +139,9 @@ class SalesOrderViewSet(BaseViewSet):
     @action(detail=True, methods=["post"])
     @sales_order_submit_docs
     def submit(self, request, pk=None):
-        """提交销售订单"""
+        """提交客户订单"""
         sales_order = self.get_object()
-        if sales_order.status not in ["draft", "rejected"]:
+        if sales_order.approval_status not in ["draft", "rejected"]:
             return APIResponse.error(
                 "只有草稿或已拒绝状态的订单才能提交", code=status.HTTP_400_BAD_REQUEST
             )
@@ -149,16 +151,14 @@ class SalesOrderViewSet(BaseViewSet):
         if errors:
             return APIResponse.error("订单数据验证失败", code=status.HTTP_400_BAD_REQUEST, errors=errors)
 
-        # 更新订单状态
-        sales_order.status = "submitted"
-        sales_order.submitted_by = request.user
-        sales_order.submitted_at = timezone.now()
-        # 清理上次审核信息
-        sales_order.approved_by = None
-        sales_order.approved_at = None
-        sales_order.approval_comment = ""
-        sales_order.rejection_reason = ""
-        sales_order.save()
+        # 使用审核服务
+        service = ApprovalService(SalesOrder)
+        try:
+            sales_order = service.submit_for_approval(sales_order, request.user)
+            sales_order.rejection_reason = ""
+            sales_order.save(update_fields=["rejection_reason"])
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code)
 
         serializer = self.get_serializer(sales_order)
         return APIResponse.success(data=serializer.data)
@@ -166,9 +166,9 @@ class SalesOrderViewSet(BaseViewSet):
     @action(detail=True, methods=["post"])
     @sales_order_approve_docs
     def approve(self, request, pk=None):
-        """审核通过销售订单"""
+        """审核通过客户订单"""
         sales_order = self.get_object()
-        if sales_order.status != "submitted":
+        if sales_order.approval_status != "submitted":
             return APIResponse.error("只有已提交状态的订单才能审核", code=status.HTTP_400_BAD_REQUEST)
 
         # 再次验证订单数据完整性
@@ -176,13 +176,14 @@ class SalesOrderViewSet(BaseViewSet):
         if errors:
             return APIResponse.error("订单数据验证失败", code=status.HTTP_400_BAD_REQUEST, errors=errors)
 
-        # 更新订单状态
-        sales_order.status = "approved"
-        sales_order.approved_by = request.user
-        sales_order.approved_at = timezone.now()
-        sales_order.approval_comment = request.data.get("approval_comment", "")
-        sales_order.completion_reason = ""
-        sales_order.save()
+        # 使用审核服务
+        service = ApprovalService(SalesOrder)
+        try:
+            sales_order = service.approve(sales_order, request.user, request.data.get("approval_comment", ""))
+            sales_order.completion_reason = ""
+            sales_order.save(update_fields=["completion_reason"])
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code)
 
         serializer = self.get_serializer(sales_order)
         return APIResponse.success(data=serializer.data)
@@ -190,22 +191,23 @@ class SalesOrderViewSet(BaseViewSet):
     @action(detail=True, methods=["post"])
     @sales_order_reject_docs
     def reject(self, request, pk=None):
-        """拒绝销售订单"""
+        """拒绝客户订单"""
         sales_order = self.get_object()
-        if sales_order.status != "submitted":
+        if sales_order.approval_status != "submitted":
             return APIResponse.error("只有已提交状态的订单才能拒绝", code=status.HTTP_400_BAD_REQUEST)
 
         reason = request.data.get("reason")
         if not reason:
             return APIResponse.error("请提供拒绝原因", code=status.HTTP_400_BAD_REQUEST)
 
-        # 更新订单状态为已拒绝
-        sales_order.status = "rejected"
-        sales_order.approved_by = request.user
-        sales_order.approved_at = timezone.now()
-        sales_order.approval_comment = request.data.get("approval_comment", "")
-        sales_order.rejection_reason = reason
-        sales_order.save()
+        # 使用审核服务
+        service = ApprovalService(SalesOrder)
+        try:
+            sales_order = service.reject(sales_order, request.user, reason, request.data.get("approval_comment", ""))
+            sales_order.rejection_reason = reason
+            sales_order.save(update_fields=["rejection_reason"])
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code)
 
         serializer = self.get_serializer(sales_order)
         return APIResponse.success(data=serializer.data)
@@ -215,8 +217,8 @@ class SalesOrderViewSet(BaseViewSet):
     def start_production(self, request, pk=None):
         """根据关联施工单同步生产状态。"""
         sales_order = self.get_object()
-        if sales_order.status not in ["approved", "in_production"]:
-            return APIResponse.error("只有已审核或生产中的订单才能同步生产状态", code=status.HTTP_400_BAD_REQUEST)
+        if sales_order.approval_status != "approved" or sales_order.status in ["completed", "cancelled"]:
+            return APIResponse.error("只有已审核且未完成/取消的订单才能同步生产状态", code=status.HTTP_400_BAD_REQUEST)
         if not sales_order.get_related_work_orders_queryset().exists():
             return APIResponse.error("请先创建施工单，系统会自动同步为生产中", code=status.HTTP_400_BAD_REQUEST)
 
@@ -270,7 +272,7 @@ class SalesOrderViewSet(BaseViewSet):
         return len(errors) == 0, errors
 
     def _reduce_product_stock(self, sales_order):
-        """销售订单审核通过后，减少产品库存数量
+        """客户订单审核通过后，减少产品库存数量
 
         规则：
         - 遍历订单明细，减少对应产品的库存数量
@@ -298,7 +300,7 @@ class SalesOrderViewSet(BaseViewSet):
                         product.reduce_stock(
                             quantity=quantity,
                             user=None,
-                            reason=f"销售订单{sales_order.order_number}审核通过，出库{quantity}{product.unit}",
+                            reason=f"客户订单{sales_order.order_number}审核通过，出库{quantity}{product.unit}",
                         )
                     elif hasattr(product, "stock_quantity"):
                         product.stock_quantity = max(0, product.stock_quantity - quantity)
@@ -321,7 +323,7 @@ class SalesOrderViewSet(BaseViewSet):
         from django.db import transaction
 
         # 只有已审核、生产中状态的订单才需要恢复库存
-        if sales_order.status not in ["approved", "in_production"]:
+        if sales_order.approval_status != "approved" or sales_order.status in ["completed", "cancelled"]:
             return
 
         items = sales_order.items.all()
@@ -343,7 +345,7 @@ class SalesOrderViewSet(BaseViewSet):
                         product.add_stock(
                             quantity=quantity,
                             user=None,
-                            reason=f"销售订单{sales_order.order_number}取消，库存回滚{quantity}{product.unit}",
+                            reason=f"客户订单{sales_order.order_number}取消，库存回滚{quantity}{product.unit}",
                         )
                     elif hasattr(product, "stock_quantity"):
                         product.stock_quantity = product.stock_quantity + quantity
@@ -360,9 +362,9 @@ class SalesOrderViewSet(BaseViewSet):
     def complete(self, request, pk=None):
         """完成订单"""
         sales_order = self.get_object()
-        if sales_order.status not in ["approved", "in_production"]:
+        if sales_order.approval_status != "approved" or sales_order.status in ["completed", "cancelled"]:
             return APIResponse.error(
-                "只有已审核或生产中的订单才能完成", code=status.HTTP_400_BAD_REQUEST
+                "只有已审核且未完成/取消的订单才能完成", code=status.HTTP_400_BAD_REQUEST
             )
 
         all_delivered = SalesOrderStatusService.all_items_delivered(sales_order)
@@ -423,7 +425,7 @@ class SalesOrderViewSet(BaseViewSet):
 
 @sales_order_item_docs
 class SalesOrderItemViewSet(BaseViewSet):
-    """销售订单明细视图集"""
+    """客户订单明细视图集"""
 
     queryset = SalesOrderItem.objects.all()
     serializer_class = SalesOrderItemSerializer
@@ -447,17 +449,17 @@ class SalesOrderItemViewSet(BaseViewSet):
         return queryset.filter(scope).distinct()
 
     def perform_create(self, serializer):
-        """创建明细后更新销售订单总金额"""
+        """创建明细后更新客户订单总金额"""
         item = serializer.save()
         item.sales_order.update_totals()
 
     def perform_update(self, serializer):
-        """更新明细后更新销售订单总金额"""
+        """更新明细后更新客户订单总金额"""
         item = serializer.save()
         item.sales_order.update_totals()
 
     def perform_destroy(self, instance):
-        """删除明细后更新销售订单总金额"""
+        """删除明细后更新客户订单总金额"""
         sales_order = instance.sales_order
         super().perform_destroy(instance)
         sales_order.update_totals()

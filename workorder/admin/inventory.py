@@ -132,14 +132,14 @@ class StockInAdmin(admin.ModelAdmin):
         "work_order",
         "stock_in_date",
         "submitted_by",
-        "approved_by_name",
+        "confirmed_by_name",
         "operator",
         "created_at",
     ]
     search_fields = ["order_number", "work_order__order_number", "notes"]
-    list_filter = ["status", "stock_in_date", "approved_at", "created_at"]
-    list_select_related = ["work_order", "approved_by", "submitted_by", "operator"]
-    autocomplete_fields = ["work_order", "approved_by", "submitted_by", "operator"]
+    list_filter = ["status", "stock_in_date", "confirmed_at", "created_at"]
+    list_select_related = ["work_order", "confirmed_by", "submitted_by", "operator"]
+    autocomplete_fields = ["work_order", "confirmed_by", "submitted_by", "operator"]
     readonly_fields = ["order_number", "created_at"]
     ordering = ["-created_at"]
 
@@ -150,7 +150,7 @@ class StockInAdmin(admin.ModelAdmin):
         ),
         (
             "审核信息",
-            {"fields": ("submitted_by", "submitted_at", "approved_by", "approved_at")},
+            {"fields": ("submitted_by", "submitted_at", "confirmed_by", "confirmed_at")},
         ),
         ("其他信息", {"fields": ("operator", "notes")}),
         (
@@ -173,10 +173,10 @@ class StockInAdmin(admin.ModelAdmin):
         }
     )
 
-    @admin.display(description="审核人")
-    def approved_by_name(self, obj):
-        """显示审核人"""
-        return obj.approved_by.username if obj.approved_by else "-"
+    @admin.display(description="确认人")
+    def confirmed_by_name(self, obj):
+        """显示确认人"""
+        return obj.confirmed_by.username if obj.confirmed_by else "-"
 
 
 @admin.register(StockOut)
@@ -190,14 +190,14 @@ class StockOutAdmin(admin.ModelAdmin):
         "delivery_order",
         "stock_out_date",
         "submitted_by",
-        "approved_by",
+        "confirmed_by",
         "operator",
         "created_at",
     ]
     search_fields = ["order_number", "delivery_order__order_number", "notes"]
     list_filter = ["out_type", "status", "stock_out_date", "created_at"]
-    list_select_related = ["delivery_order", "submitted_by", "approved_by", "operator"]
-    autocomplete_fields = ["delivery_order", "submitted_by", "approved_by", "operator"]
+    list_select_related = ["delivery_order", "submitted_by", "confirmed_by", "operator"]
+    autocomplete_fields = ["delivery_order", "submitted_by", "confirmed_by", "operator"]
     readonly_fields = ["order_number", "created_at"]
     ordering = ["-created_at"]
 
@@ -209,7 +209,7 @@ class StockOutAdmin(admin.ModelAdmin):
         ("日期信息", {"fields": ("stock_out_date",)}),
         (
             "审核信息",
-            {"fields": ("submitted_by", "submitted_at", "approved_by", "approved_at")},
+            {"fields": ("submitted_by", "submitted_at", "confirmed_by", "confirmed_at")},
         ),
         ("其他信息", {"fields": ("notes",)}),
         (
@@ -300,9 +300,9 @@ class DeliveryOrderAdmin(admin.ModelAdmin):
         """显示客户名称"""
         return obj.customer.name
 
-    @admin.display(description="销售订单")
+    @admin.display(description="客户订单")
     def sales_order_number(self, obj):
-        """显示销售订单号"""
+        """显示客户订单号"""
         return obj.sales_order.order_number if obj.sales_order else "-"
 
     # 发货单状态徽章

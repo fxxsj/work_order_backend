@@ -58,7 +58,8 @@ class TestPurchaseOrderWriteback:
         po = PurchaseOrderFactory(
             supplier=self.supplier,
             work_order=self.work_order,
-            status="approved",
+            approval_status="approved",
+            status="pending",
         )
         item = PurchaseOrderItemFactory(
             purchase_order=po,
@@ -71,6 +72,8 @@ class TestPurchaseOrderWriteback:
         # 执行下单
         response = self.client.post(f"/api/v1/purchase-orders/{po.id}/place_order/")
 
+        if response.status_code != 200:
+            print("Response:", response.data)
         assert response.status_code == 200
 
         # 刷新并验证
@@ -84,6 +87,7 @@ class TestPurchaseOrderWriteback:
         po = PurchaseOrderFactory(
             supplier=self.supplier,
             work_order=self.work_order,
+            approval_status="approved",
             status="ordered",
         )
         item = PurchaseOrderItemFactory(
@@ -137,6 +141,7 @@ class TestPurchaseOrderWriteback:
         po = PurchaseOrderFactory(
             supplier=self.supplier,
             work_order=self.work_order,
+            approval_status="approved",
             status="ordered",
         )
         item = PurchaseOrderItemFactory(
@@ -316,7 +321,7 @@ class TestWorkOrderDetailSerializerPurchaseOrders:
 
         supplier = SupplierFactory(name="Test Supplier")
         work_order = WorkOrderFactory(approval_status="approved")
-        po = PurchaseOrderFactory(supplier=supplier, work_order=work_order, status="ordered")
+        po = PurchaseOrderFactory(supplier=supplier, work_order=work_order, approval_status="approved", status="ordered")
 
         serializer = WorkOrderDetailSerializer(work_order)
         data = serializer.data
@@ -338,7 +343,7 @@ class TestWorkOrderDetailSerializerPurchaseOrders:
 
         supplier = SupplierFactory(name="Prefetch Supplier")
         work_order = WorkOrderFactory(approval_status="approved")
-        PurchaseOrderFactory(supplier=supplier, work_order=work_order, status="draft")
+        PurchaseOrderFactory(supplier=supplier, work_order=work_order, approval_status="draft", status="pending")
 
         # 模拟 include_details=True 的 prefetch
         work_order = (

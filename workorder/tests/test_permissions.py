@@ -309,6 +309,12 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
         self.salesperson2 = TestDataFactory.create_user(username="sales2")
         self.salesperson1.groups.add(self.sales_group)
         self.salesperson2.groups.add(self.sales_group)
+        
+        # Grant approve_workorder to salesperson1 for testing approval/rejection logic
+        from django.contrib.auth.models import Permission
+        perm = Permission.objects.filter(codename='approve_workorder').first()
+        if perm:
+            self.salesperson1.user_permissions.add(perm)
 
         # 创建客户
         self.customer1 = TestDataFactory.create_customer(salesperson=self.salesperson1)

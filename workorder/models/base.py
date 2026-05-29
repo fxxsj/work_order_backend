@@ -36,6 +36,40 @@ class TimeStampedModel(models.Model):
     class Meta:
         abstract = True
 
+class ApprovalFieldsMixin(models.Model):
+    """审核相关字段Mixin，所有需审核的模型继承此Mixin"""
+    
+    class Status:
+        DRAFT = "draft"
+        SUBMITTED = "submitted"
+        APPROVED = "approved"
+        REJECTED = "rejected"
+    
+    approval_status = models.CharField(
+        "审核状态",
+        max_length=20,
+        choices=[
+            (Status.DRAFT, "草稿"),
+            (Status.SUBMITTED, "待审核"),
+            (Status.APPROVED, "已审核"),
+            (Status.REJECTED, "已拒绝"),
+        ],
+        default=Status.DRAFT,
+    )
+    approved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_%(class)s_set",
+        verbose_name="审核人",
+    )
+    approved_at = models.DateTimeField("审核时间", null=True, blank=True)
+    approval_comment = models.TextField("审核意见", blank=True)
+    
+    class Meta:
+        abstract = True
+
 
 class ConfirmableMixin(models.Model):
     """确认状态抽象 Mixin

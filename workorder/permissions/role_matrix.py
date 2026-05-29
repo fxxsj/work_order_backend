@@ -201,11 +201,28 @@ ROLE_PERMISSIONS = {
 
 ROLE_CUSTOM_PERMISSIONS = {
     "manager": {
-        "WorkOrder": ["change_approved_workorder", "delete_workorder"],
-        "SalesOrder": ["change_approved_salesorder"],
+        "WorkOrder": ["change_approved_workorder", "delete_workorder", "submit_workorder"],
+        "SalesOrder": ["change_approved_salesorder", "submit_salesorder"],
+        "PurchaseOrder": ["change_approved_purchaseorder", "submit_purchaseorder"],
+        "Invoice": ["change_approved_invoice", "submit_invoice"],
     },
     "supervisor": {
-        "WorkOrder": ["approve_workorder"],
+        "WorkOrder": ["approve_workorder", "submit_workorder"],
+        "SalesOrder": ["approve_salesorder", "submit_salesorder"],
+        "PurchaseOrder": ["approve_purchaseorder", "submit_purchaseorder"],
+        "Invoice": ["approve_invoice", "submit_invoice"],
+    },
+    "finance": {
+        "Invoice": ["approve_invoice", "change_approved_invoice", "submit_invoice"],
+    },
+    "procurement": {
+        "PurchaseOrder": ["approve_purchaseorder", "change_approved_purchaseorder", "submit_purchaseorder"],
+    },
+    "sales": {
+        "SalesOrder": ["submit_salesorder"],
+    },
+    "operator": {
+        "WorkOrder": ["submit_workorder"],
     },
 }
 
@@ -227,9 +244,5 @@ ROLE_ALIASES = {
     "administrators": "admin",
 }
 
-STALE_PERMISSION_MODELS = {
-    "approvalworkflow",
-    "approvalstep",
-    "approvalrule",
-    "approvalescalation",
-}
+# 废弃模型列表（已确认无实体引用，可安全清理）
+STALE_PERMISSION_MODELS: set = set()

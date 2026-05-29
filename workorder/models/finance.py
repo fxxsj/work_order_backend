@@ -16,7 +16,7 @@ from django.db import models, transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from .base import TimeStampedModel
+from .base import TimeStampedModel, ApprovalFieldsMixin
 from workorder.constants.status import InvoiceStatus, PaymentPlanStatus, StatementStatus
 
 
@@ -200,7 +200,7 @@ class ProductionCost(TimeStampedModel, models.Model):
         pass
 
 
-class Invoice(TimeStampedModel, models.Model):
+class Invoice(TimeStampedModel, ApprovalFieldsMixin, models.Model):
     """发票"""
 
     TYPE_CHOICES = [
@@ -236,7 +236,7 @@ class Invoice(TimeStampedModel, models.Model):
         null=True,
         blank=True,
         related_name="invoices",
-        verbose_name="销售订单",
+        verbose_name="客户订单",
     )
     work_order = models.ForeignKey(
         "workorder.WorkOrder",
@@ -275,7 +275,6 @@ class Invoice(TimeStampedModel, models.Model):
         "发票附件", upload_to="invoices/", null=True, blank=True
     )
 
-    # 审核信息
     submitted_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -285,15 +284,6 @@ class Invoice(TimeStampedModel, models.Model):
         verbose_name="提交人",
     )
     submitted_at = models.DateTimeField("提交时间", null=True, blank=True)
-    approved_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="approved_invoices",
-        verbose_name="审核人",
-    )
-    approved_at = models.DateTimeField("审核时间", null=True, blank=True)
 
     created_by = models.ForeignKey(
         User,
@@ -308,6 +298,11 @@ class Invoice(TimeStampedModel, models.Model):
         verbose_name = "发票"
         verbose_name_plural = "发票管理"
         ordering = ["-created_at"]
+        permissions = [
+            ("approve_invoice", "可以审核发票"),
+            ("submit_invoice", "可以提交发票审核"),
+            ("change_approved_invoice", "可以编辑已审核的发票"),
+        ]
         indexes = [
             models.Index(fields=["status"]),
             models.Index(fields=["customer"]),
@@ -357,7 +352,7 @@ class Payment(models.Model):
         null=True,
         blank=True,
         related_name="payments",
-        verbose_name="销售订单",
+        verbose_name="客户订单",
     )
     invoice = models.ForeignKey(
         Invoice,
@@ -427,7 +422,7 @@ class PaymentPlan(models.Model):
         "workorder.SalesOrder",
         on_delete=models.CASCADE,
         related_name="payment_plans",
-        verbose_name="销售订单",
+        verbose_name="客户订单",
     )
     plan_amount = models.DecimalField("计划金额", max_digits=12, decimal_places=2)
     plan_date = models.DateField("计划收款日期")

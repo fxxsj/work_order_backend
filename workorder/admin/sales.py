@@ -2,11 +2,11 @@
 销售管理 Admin
 
 包含销售相关的 admin 类：
-- SalesOrderAdmin: 销售订单管理
-- SalesOrderItemAdmin: 销售订单明细管理
+- SalesOrderAdmin: 客户订单管理
+- SalesOrderItemAdmin: 客户订单明细管理
 
 及相关的 Inline 类：
-- SalesOrderItemInline: 销售订单明细内联
+- SalesOrderItemInline: 客户订单明细内联
 """
 
 from django.contrib import admin
@@ -21,7 +21,7 @@ from .utils import WORKORDER_STATUS_COLORS, create_status_badge_method
 
 
 class SalesOrderItemInline(FixedInlineModelAdminMixin, admin.TabularInline):
-    """销售订单明细内联"""
+    """客户订单明细内联"""
 
     model = SalesOrderItem
     extra = 1
@@ -42,7 +42,7 @@ class SalesOrderItemInline(FixedInlineModelAdminMixin, admin.TabularInline):
 
 @admin.register(SalesOrder)
 class SalesOrderAdmin(admin.ModelAdmin):
-    """销售订单管理"""
+    """客户订单管理"""
 
     list_display = [
         "order_number",
@@ -160,7 +160,7 @@ class SalesOrderAdmin(admin.ModelAdmin):
         """显示客户名称"""
         return obj.customer.name
 
-    # 销售订单状态徽章
+    # 客户订单状态徽章
     status_badge = create_status_badge_method(
         {
             "draft": "#909399",
@@ -199,7 +199,7 @@ class SalesOrderAdmin(admin.ModelAdmin):
 
 @admin.register(SalesOrderItem)
 class SalesOrderItemAdmin(admin.ModelAdmin):
-    """销售订单明细管理"""
+    """客户订单明细管理"""
 
     list_display = [
         "sales_order_number",
@@ -220,9 +220,9 @@ class SalesOrderItemAdmin(admin.ModelAdmin):
     readonly_fields = ["created_at", "updated_at", "subtotal"]
     ordering = ["sales_order", "id"]
 
-    @admin.display(description="销售订单号")
+    @admin.display(description="客户订单号")
     def sales_order_number(self, obj):
-        """显示销售订单号"""
+        """显示客户订单号"""
         return obj.sales_order.order_number
 
     @admin.display(description="产品编码")

@@ -53,7 +53,7 @@ class TestSalesOrderWorkflow:
 
         assert response.status_code == status.HTTP_201_CREATED
         created = response.data["data"]
-        assert created["status"] == "draft"
+        assert created["approval_status"] == "draft"
         assert created["payment_status"] == "unpaid"
 
         order_id = created["id"]
@@ -61,7 +61,7 @@ class TestSalesOrderWorkflow:
             customer_id=customer.id,
             product_id=product.id,
         )
-        update_payload["status"] = "completed"
+        update_payload["approval_status"] = "completed"
         update_payload["payment_status"] = "paid"
         response = api_client.put(
             f"/api/v1/sales-orders/{order_id}/",
@@ -71,7 +71,7 @@ class TestSalesOrderWorkflow:
 
         assert response.status_code == status.HTTP_200_OK
         updated = response.data["data"]
-        assert updated["status"] == "draft"
+        assert updated["approval_status"] == "draft"
         assert updated["payment_status"] == "unpaid"
 
     def test_delivery_order_can_be_created_from_approved_sales_order(self, api_client):
@@ -82,7 +82,7 @@ class TestSalesOrderWorkflow:
             customer=customer,
             order_date=timezone.now().date(),
             delivery_date=timezone.now().date() + timedelta(days=5),
-            status="approved",
+            approval_status="approved",
             created_by=user,
         )
         sales_item = SalesOrderItem.objects.create(
@@ -127,7 +127,7 @@ class TestSalesOrderWorkflow:
             customer=customer,
             order_date=timezone.now().date(),
             delivery_date=timezone.now().date() + timedelta(days=5),
-            status="approved",
+            approval_status="approved",
             created_by=user,
         )
         SalesOrderItem.objects.create(

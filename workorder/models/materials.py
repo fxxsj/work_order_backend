@@ -13,7 +13,7 @@ from django.contrib.auth.models import User
 from django.db import models, transaction
 from django.utils import timezone
 from workorder.models.audit import AuditMixin
-from workorder.models.base import TimeStampedModel, GenerateCodeMixin
+from workorder.models.base import TimeStampedModel, GenerateCodeMixin, ApprovalFieldsMixin
 
 
 class Material(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
@@ -184,13 +184,11 @@ class MaterialSupplier(models.Model):
         return f"{self.material.name} - {self.supplier.name}"
 
 
-class PurchaseOrder(TimeStampedModel, models.Model):
+class PurchaseOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
     """采购单"""
 
     STATUS_CHOICES = [
-        ("draft", "草稿"),
-        ("submitted", "已提交"),
-        ("approved", "已批准"),
+        ("pending", "待处理"),
         ("ordered", "已下单"),
         ("received", "已收货"),
         ("cancelled", "已取消"),
@@ -211,7 +209,7 @@ class PurchaseOrder(TimeStampedModel, models.Model):
         Supplier, on_delete=models.PROTECT, verbose_name="供应商"
     )
     status = models.CharField(
-        "状态", max_length=20, choices=STATUS_CHOICES, default="draft"
+        "状态", max_length=20, choices=STATUS_CHOICES, default="pending"
     )
     # 合计金额
     total_amount = models.DecimalField(
@@ -227,15 +225,6 @@ class PurchaseOrder(TimeStampedModel, models.Model):
         verbose_name="提交人",
     )
     submitted_at = models.DateTimeField("提交时间", null=True, blank=True)
-    approved_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="approved_purchase_orders",
-        verbose_name="审核人",
-    )
-    approved_at = models.DateTimeField("审核时间", null=True, blank=True)
     # 采购相关
     ordered_date = models.DateField("下单日期", null=True, blank=True)
     expected_date = models.DateField(
@@ -263,6 +252,11 @@ class PurchaseOrder(TimeStampedModel, models.Model):
         verbose_name = "采购单"
         verbose_name_plural = "采购单管理"
         ordering = ["-created_at"]
+        permissions = [
+            ("approve_purchaseorder", "可以审核采购单"),
+            ("submit_purchaseorder", "可以提交采购单审核"),
+            ("change_approved_purchaseorder", "可以编辑已审核的采购单"),
+        ]
         indexes = [
             models.Index(fields=["order_number"], name="po_number_idx"),
             models.Index(fields=["status"], name="po_status_idx"),

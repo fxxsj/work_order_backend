@@ -2,7 +2,7 @@
 施工单业务流程编排服务 (WorkOrderFlowService)
 
 负责编排施工单的完整业务流程，包括：
-- 从销售订单创建施工单
+- 从客户订单创建施工单
 - 提交审核流程
 - 审核通过后的任务分派
 - 状态流转与事件触发
@@ -123,7 +123,7 @@ class WorkOrderFlowService:
                 "只能审核自己负责的施工单", code=status.HTTP_403_FORBIDDEN
             )
 
-    # ========== 流程 1: 从销售订单创建施工单 ==========
+    # ========== 流程 1: 从客户订单创建施工单 ==========
 
     @staticmethod
     @transaction.atomic
@@ -139,10 +139,10 @@ class WorkOrderFlowService:
         additional_data: Optional[Dict[str, Any]] = None,
     ) -> WorkOrder:
         """
-        从销售订单创建施工单（完整流程）
+        从客户订单创建施工单（完整流程）
 
         流程步骤：
-        1. 验证销售订单状态
+        1. 验证客户订单状态
         2. 复制客户、产品信息
         3. 根据产品配置自动生成工序
         4. 根据产品配置自动生成物料清单
@@ -150,7 +150,7 @@ class WorkOrderFlowService:
         6. 发送通知
 
         Args:
-            sales_order_id: 销售订单ID
+            sales_order_id: 客户订单ID
             production_quantity: 生产数量
             delivery_date: 交货日期
             priority: 优先级
@@ -164,19 +164,19 @@ class WorkOrderFlowService:
         Raises:
             ServiceError: 业务逻辑错误
         """
-        # 1. 加载并验证销售订单
+        # 1. 加载并验证客户订单
         try:
             sales_order = SalesOrder.objects.select_related("customer").get(
                 id=sales_order_id
             )
         except SalesOrder.DoesNotExist as exc:
             raise ServiceError(
-                "销售订单不存在", code=status.HTTP_404_NOT_FOUND
+                "客户订单不存在", code=status.HTTP_404_NOT_FOUND
             ) from exc
 
         if sales_order.status not in [SalesOrderStatus.APPROVED, SalesOrderStatus.IN_PRODUCTION]:
             raise ServiceError(
-                f"只有已审核或生产中的销售订单才能创建施工单，当前状态：{sales_order.status}",
+                f"只有已审核或生产中的客户订单才能创建施工单，当前状态：{sales_order.status}",
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -188,7 +188,7 @@ class WorkOrderFlowService:
             production_items = WorkOrderFlowService._build_production_items(sales_order)
         if not production_items:
             raise ServiceError(
-                "销售订单库存充足，无需生成施工单", code=status.HTTP_400_BAD_REQUEST
+                "客户订单库存充足，无需生成施工单", code=status.HTTP_400_BAD_REQUEST
             )
 
         if production_quantity is not None:
@@ -206,7 +206,7 @@ class WorkOrderFlowService:
 
         if production_quantity <= 0:
             raise ServiceError(
-                "销售订单没有可生产数量", code=status.HTTP_400_BAD_REQUEST
+                "客户订单没有可生产数量", code=status.HTTP_400_BAD_REQUEST
             )
 
         # 2. 生成施工单号
@@ -228,9 +228,9 @@ class WorkOrderFlowService:
             approval_status=WorkOrderApprovalStatus.DRAFT,  # 草稿，提交后才进入待审核
         )
 
-        logger.info(f"从销售订单 {sales_order.order_number} 创建施工单 {order_number}")
+        logger.info(f"从客户订单 {sales_order.order_number} 创建施工单 {order_number}")
 
-        # 4. 复制销售订单产品
+        # 4. 复制客户订单产品
         WorkOrderFlowService._copy_sales_order_products(
             work_order, sales_order, production_items=production_items
         )
@@ -250,7 +250,7 @@ class WorkOrderFlowService:
             work_order=work_order,
             approval_status=work_order.approval_status,
             approved_by=created_by,
-            approval_comment=f"从销售订单 {sales_order.order_number} 创建",
+            approval_comment=f"从客户订单 {sales_order.order_number} 创建",
         )
 
         # 9. 发送通知
@@ -566,7 +566,7 @@ class WorkOrderFlowService:
         sales_order: SalesOrder,
         production_items: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
-        """复制销售订单产品到施工单。"""
+        """复制客户订单产品到施工单。"""
         if production_items is None:
             production_items = WorkOrderFlowService._build_production_items(sales_order)
 
@@ -583,7 +583,7 @@ class WorkOrderFlowService:
             created_count += 1
 
         logger.info(
-            f"复制了 {created_count} 个销售订单产品到施工单 {work_order.order_number}"
+            f"复制了 {created_count} 个客户订单产品到施工单 {work_order.order_number}"
         )
 
     @staticmethod
@@ -668,7 +668,7 @@ class WorkOrderFlowService:
     def _build_production_items(
         sales_order: SalesOrder,
     ) -> List[Dict[str, Any]]:
-        """根据库存缺口计算需要生产的销售订单明细"""
+        """根据库存缺口计算需要生产的客户订单明细"""
         sales_items = list(
             SalesOrderItem.objects.select_related("product").filter(
                 sales_order=sales_order

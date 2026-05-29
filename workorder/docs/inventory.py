@@ -221,16 +221,16 @@ stock_in_submit_docs = extend_schema(
     },
 )
 
-stock_in_approve_docs = extend_schema(
+stock_in_confirm_docs = extend_schema(
     tags=["库存"],
-    summary="审核入库单",
+    summary="确认入库单",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("StockInApproveResponse"),
-            description="审核成功",
+            response=standard_success_response("StockInConfirmResponse"),
+            description="确认成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("StockInApproveBadRequest"),
+            response=standard_error_response("StockInConfirmBadRequest"),
             description="状态不允许",
         ),
     },
@@ -273,16 +273,16 @@ stock_out_docs = extend_schema_view(
     ),
 )
 
-stock_out_approve_docs = extend_schema(
+stock_out_confirm_docs = extend_schema(
     tags=["库存"],
-    summary="审核出库单",
+    summary="确认出库单",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("StockOutApproveResponse"),
-            description="审核成功",
+            response=standard_success_response("StockOutConfirmResponse"),
+            description="确认成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("StockOutApproveBadRequest"),
+            response=standard_error_response("StockOutConfirmBadRequest"),
             description="状态不允许",
         ),
     },

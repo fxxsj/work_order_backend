@@ -1,26 +1,23 @@
 """
-销售订单相关模型
+客户订单相关模型
 
-包含销售订单管理的相关模型：
-- SalesOrder: 销售订单
-- SalesOrderItem: 销售订单明细
+包含客户订单管理的相关模型：
+- SalesOrder: 客户订单
+- SalesOrderItem: 客户订单明细
 """
 
 from django.contrib.auth.models import User
 from django.db import models, transaction
 from django.utils import timezone
 
-from .base import TimeStampedModel
+from .base import TimeStampedModel, ApprovalFieldsMixin
 
 
-class SalesOrder(TimeStampedModel, models.Model):
-    """销售订单"""
+class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
+    """客户订单"""
 
     STATUS_CHOICES = [
-        ("draft", "草稿"),
-        ("submitted", "已提交"),
-        ("approved", "已审核"),
-        ("rejected", "已拒绝"),
+        ("pending", "待处理"),
         ("in_production", "生产中"),
         ("completed", "已完成"),
         ("cancelled", "已取消"),
@@ -34,7 +31,7 @@ class SalesOrder(TimeStampedModel, models.Model):
 
     @classmethod
     def generate_order_number(cls):
-        """生成销售订单号：SO + yyyymmdd + 4位序号"""
+        """生成客户订单号：SO + yyyymmdd + 4位序号"""
         from workorder.utils import generate_order_number
         return generate_order_number(
             model_class=cls,
@@ -42,12 +39,12 @@ class SalesOrder(TimeStampedModel, models.Model):
             prefix="SO",
         )
 
-    order_number = models.CharField("销售订单号", max_length=50, unique=True)
+    order_number = models.CharField("客户订单号", max_length=50, unique=True)
     customer = models.ForeignKey(
         "workorder.Customer", on_delete=models.PROTECT, verbose_name="客户"
     )
     status = models.CharField(
-        "订单状态", max_length=20, choices=STATUS_CHOICES, default="draft"
+        "订单状态", max_length=20, choices=STATUS_CHOICES, default="pending"
     )
     payment_status = models.CharField(
         "付款状态", max_length=20, choices=PAYMENT_STATUS_CHOICES, default="unpaid"
@@ -86,7 +83,6 @@ class SalesOrder(TimeStampedModel, models.Model):
     )
     payment_date = models.DateField("付款日期", null=True, blank=True)
 
-    # 审核相关
     submitted_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -96,16 +92,6 @@ class SalesOrder(TimeStampedModel, models.Model):
         verbose_name="提交人",
     )
     submitted_at = models.DateTimeField("提交时间", null=True, blank=True)
-    approved_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="approved_sales_orders",
-        verbose_name="审核人",
-    )
-    approved_at = models.DateTimeField("审核时间", null=True, blank=True)
-    approval_comment = models.TextField("审核意见", blank=True)
 
     # 其他信息
     contract_number = models.CharField("合同号", max_length=100, blank=True)
@@ -134,11 +120,13 @@ class SalesOrder(TimeStampedModel, models.Model):
     updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     class Meta:
-        verbose_name = "销售订单"
-        verbose_name_plural = "销售订单管理"
+        verbose_name = "客户订单"
+        verbose_name_plural = "客户订单管理"
         ordering = ["-created_at"]
         permissions = [
-            ("change_approved_salesorder", "可以编辑已审核的销售订单"),
+            ("approve_salesorder", "可以审核客户订单"),
+            ("submit_salesorder", "可以提交客户订单审核"),
+            ("change_approved_salesorder", "可以编辑已审核的客户订单"),
         ]
 
     def __str__(self):
@@ -153,7 +141,7 @@ class SalesOrder(TimeStampedModel, models.Model):
         return list(self.get_related_work_orders_queryset())
 
     def save(self, *args, **kwargs):
-        """保存销售订单，自动生成订单号和计算金额"""
+        """保存客户订单，自动生成订单号和计算金额"""
         if not self.order_number:
             self.order_number = self.generate_order_number()
 
@@ -197,7 +185,7 @@ class SalesOrder(TimeStampedModel, models.Model):
         )
 
     def validate_before_approval(self):
-        """审核前验证销售订单数据完整性
+        """审核前验证客户订单数据完整性
 
         Returns:
             list: 错误信息列表，如果为空则表示验证通过
@@ -227,13 +215,13 @@ class SalesOrder(TimeStampedModel, models.Model):
 
 
 class SalesOrderItem(TimeStampedModel, models.Model):
-    """销售订单明细"""
+    """客户订单明细"""
 
     sales_order = models.ForeignKey(
         SalesOrder,
         on_delete=models.CASCADE,
         related_name="items",
-        verbose_name="销售订单",
+        verbose_name="客户订单",
     )
     product = models.ForeignKey(
         "workorder.Product", on_delete=models.PROTECT, verbose_name="产品"
@@ -274,8 +262,8 @@ class SalesOrderItem(TimeStampedModel, models.Model):
         return self.delivered_quantity >= self.quantity
 
     class Meta:
-        verbose_name = "销售订单明细"
-        verbose_name_plural = "销售订单明细管理"
+        verbose_name = "客户订单明细"
+        verbose_name_plural = "客户订单明细管理"
         ordering = ["sales_order", "id"]
 
     def __str__(self):

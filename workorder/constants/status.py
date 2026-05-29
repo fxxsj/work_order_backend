@@ -166,7 +166,7 @@ class StockTransactionStatus:
 
 
 class SalesOrderStatus:
-    """销售订单状态常量"""
+    """客户订单状态常量"""
 
     DRAFT = 'draft'
     SUBMITTED = 'submitted'

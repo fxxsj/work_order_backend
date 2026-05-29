@@ -4,7 +4,7 @@ ROLE_CODES = {
     "sales": {
         "label": "业务员",
         "label_en": "Sales Person",
-        "description": "负责客户管理和销售订单",
+        "description": "负责客户管理和客户订单",
     },
     "supervisor": {
         "label": "主管",

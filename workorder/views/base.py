@@ -117,12 +117,12 @@ class CustomerViewSet(BaseViewSet):
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        # 检查是否有关联的销售订单
+        # 检查是否有关联的客户订单
         from ..models.sales import SalesOrder
 
         if SalesOrder.objects.filter(customer=instance).exists():
             return APIResponse.error(
-                "该客户有关联的销售订单，不可删除",
+                "该客户有关联的客户订单，不可删除",
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
