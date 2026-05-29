@@ -31,14 +31,15 @@ PRESET_PROCESSES = [
 # 预设工序编码列表（用于回滚和验证）
 PRESET_PROCESS_CODES = [p['code'] for p in PRESET_PROCESSES]
 
-# 预设部门数据（共11个部门）
-# 管理部门（顶层，5个）
+# 预设部门数据（共12个部门）
+# 管理部门（顶层，6个）
 PRESET_MANAGEMENT_DEPARTMENTS = [
     {'name': '业务部', 'code': 'business', 'sort_order': 1, 'parent': None},
     {'name': '财务部', 'code': 'finance', 'sort_order': 2, 'parent': None},
     {'name': '设计部', 'code': 'design', 'sort_order': 3, 'parent': None},
     {'name': '采购部', 'code': 'purchase', 'sort_order': 4, 'parent': None},
-    {'name': '运输部', 'code': 'logistics', 'sort_order': 11, 'parent': None},
+    {'name': '质检部', 'code': 'quality', 'sort_order': 11, 'parent': None},
+    {'name': '运输部', 'code': 'logistics', 'sort_order': 12, 'parent': None},
 ]
 
 # 生产部（父部门，1个）
@@ -166,4 +167,3 @@ PRESET_ASSIGNMENT_RULES = [
     {'process_code': 'STAPLE', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '打钉工序生产部兜底'},
     {'process_code': 'PACK', 'department_code': 'production', 'priority': 5, 'operator_selection_strategy': 'least_tasks', 'notes': '包装工序生产部兜底'},
 ]
-

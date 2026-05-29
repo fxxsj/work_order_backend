@@ -26,6 +26,16 @@ ROLE_CODES = {
         "label_en": "Finance",
         "description": "财务和成本管理",
     },
+    "procurement": {
+        "label": "采购",
+        "label_en": "Procurement",
+        "description": "供应商和采购订单管理",
+    },
+    "design": {
+        "label": "设计/制版",
+        "label_en": "Design / Prepress",
+        "description": "图稿、版类资料和制版任务",
+    },
     "inventory": {
         "label": "仓储",
         "label_en": "Inventory",
@@ -62,6 +72,8 @@ SUPERVISOR = "supervisor"
 MANAGER = "manager"
 OPERATOR = "operator"
 FINANCE = "finance"
+PROCUREMENT = "procurement"
+DESIGN = "design"
 INVENTORY = "inventory"
 QUALITY = "quality"
 ADMIN = "admin"
