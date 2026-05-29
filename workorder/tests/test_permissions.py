@@ -16,9 +16,16 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
 
     def setUp(self):
         """设置测试数据"""
+        from workorder.constants.role_codes import SALES
+
         # 创建业务员1和业务员2
         self.salesperson1 = TestDataFactory.create_user(username="sales1")
         self.salesperson2 = TestDataFactory.create_user(username="sales2")
+
+        # 添加到 SALES 组（与 make_salesperson 逻辑一致）
+        sales_group, _ = Group.objects.get_or_create(name=SALES)
+        self.salesperson1.groups.add(sales_group)
+        self.salesperson2.groups.add(sales_group)
 
         # 创建客户1（属于业务员1）和客户2（属于业务员2）
         self.customer1 = TestDataFactory.create_customer(

@@ -28,11 +28,13 @@ def make_salesperson(user, customer):
 def make_supervisor(user):
     from workorder.constants.role_codes import SUPERVISOR
     from django.contrib.auth.models import Group, Permission
+
     group, _ = Group.objects.get_or_create(name=SUPERVISOR)
     user.groups.add(group)
-    perm = Permission.objects.filter(codename='approve_workorder').first()
-    if perm:
-        user.user_permissions.add(perm)
+    for codename in ("approve_workorder", "change_workorder"):
+        perm = Permission.objects.filter(codename=codename).first()
+        if perm:
+            user.user_permissions.add(perm)
 
 
 @pytest.mark.django_db

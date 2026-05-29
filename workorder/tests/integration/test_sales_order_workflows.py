@@ -11,11 +11,11 @@ from workorder.models.sales import SalesOrder, SalesOrderItem
 from workorder.tests.factories import CustomerFactory, ProductFactory, UserFactory
 
 
-def _sales_order_payload(*, customer_id: int, product_id: int) -> dict:
+def _sales_order_payload(*, customer_id: int, product_id: int, status: str = "pending") -> dict:
     today = timezone.now().date()
     return {
         "customer": customer_id,
-        "status": "approved",
+        "status": status,
         "payment_status": "paid",
         "order_date": str(today),
         "delivery_date": str(today + timedelta(days=7)),
@@ -45,6 +45,9 @@ class TestSalesOrderWorkflow:
         product = ProductFactory()
         api_client.force_authenticate(user=user)
 
+        # status 字段在 SalesOrderSerializer 中为 always_read_only_fields，
+        # 尝试传入非法值不会导致创建失败（字段被忽略），但 "approved" 已经不是
+        # 合法选项，为清晰起见改为 "pending"
         response = api_client.post(
             "/api/v1/sales-orders/",
             _sales_order_payload(customer_id=customer.id, product_id=product.id),
@@ -53,7 +56,7 @@ class TestSalesOrderWorkflow:
 
         assert response.status_code == status.HTTP_201_CREATED
         created = response.data["data"]
-        assert created["approval_status"] == "draft"
+        assert created["status"] == "pending"
         assert created["payment_status"] == "unpaid"
 
         order_id = created["id"]
@@ -61,7 +64,6 @@ class TestSalesOrderWorkflow:
             customer_id=customer.id,
             product_id=product.id,
         )
-        update_payload["approval_status"] = "completed"
         update_payload["payment_status"] = "paid"
         response = api_client.put(
             f"/api/v1/sales-orders/{order_id}/",
@@ -71,7 +73,7 @@ class TestSalesOrderWorkflow:
 
         assert response.status_code == status.HTTP_200_OK
         updated = response.data["data"]
-        assert updated["approval_status"] == "draft"
+        assert updated["status"] == "pending"
         assert updated["payment_status"] == "unpaid"
 
     def test_delivery_order_can_be_created_from_approved_sales_order(self, api_client):
@@ -82,7 +84,7 @@ class TestSalesOrderWorkflow:
             customer=customer,
             order_date=timezone.now().date(),
             delivery_date=timezone.now().date() + timedelta(days=5),
-            approval_status="approved",
+            status="in_production",
             created_by=user,
         )
         sales_item = SalesOrderItem.objects.create(
@@ -127,7 +129,7 @@ class TestSalesOrderWorkflow:
             customer=customer,
             order_date=timezone.now().date(),
             delivery_date=timezone.now().date() + timedelta(days=5),
-            approval_status="approved",
+            status="in_production",
             created_by=user,
         )
         SalesOrderItem.objects.create(

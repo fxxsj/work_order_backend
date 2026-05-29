@@ -63,7 +63,7 @@ class PermissionCache:
                 scoped_ids = set(departments)
                 for department in Department.objects.filter(id__in=departments):
                     scoped_ids.update(
-                        descendant.id for descendant in department.get_descendants()
+                        descendant.id for descendant in department.get_descendants(include_self=True)
                     )
                 department_scope = list(scoped_ids)
 
