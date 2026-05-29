@@ -249,16 +249,20 @@ class Department(TimeStampedModel, models.Model):
             current = current.parent
         return ancestors
 
-    def get_descendants(self):
+    def get_descendants(self, include_self=False):
         """获取所有子孙部门（递归）
 
+        Args:
+            include_self: 是否包含自身部门
         Returns:
-            list: 子孙部门列表
+            list: 子孙部门列表（include_self=True 时包含自身）
         """
         descendants = []
+        if include_self:
+            descendants.append(self)
         for child in self.children.all():
             descendants.append(child)
-            descendants.extend(child.get_descendants())
+            descendants.extend(child.get_descendants(include_self=False))
         return descendants
 
     def get_level(self):
