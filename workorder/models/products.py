@@ -12,10 +12,10 @@
 from django.contrib.auth.models import User
 from django.db import models, transaction
 from workorder.models.audit import AuditMixin
-from workorder.models.base import TimeStampedModel
+from workorder.models.base import TimeStampedModel, GenerateCodeMixin
 
 
-class Product(AuditMixin, TimeStampedModel, models.Model):
+class Product(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
     """产品信息"""
 
     # 产品类型选项
@@ -26,7 +26,12 @@ class Product(AuditMixin, TimeStampedModel, models.Model):
     ]
 
     name = models.CharField("产品名称", max_length=200)
-    code = models.CharField("产品编码", max_length=50, unique=True)
+    code = models.CharField("产品编码", max_length=50, unique=True, blank=True)
+    
+    # 自动生成编码配置
+    code_prefix = "PRD"
+    code_date_format = ""
+    code_sequence_length = 5
     specification = models.CharField("规格", max_length=200, blank=True)
     unit = models.CharField("单位", max_length=20, default="件")
     unit_price = models.DecimalField("单价", max_digits=10, decimal_places=2, default=0)
@@ -86,6 +91,11 @@ class Product(AuditMixin, TimeStampedModel, models.Model):
 
     def get_audit_log_repr(self):
         return f"产品 {self.code} - {self.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = self.generate_code()
+        super().save(*args, **kwargs)
 
     # ===== 产品类型相关方法 =====
 
@@ -359,11 +369,15 @@ class ProductMaterial(models.Model):
         return f"{self.product.name} - {self.material.name}"
 
 
-class ProductGroup(TimeStampedModel, models.Model):
+class ProductGroup(TimeStampedModel, GenerateCodeMixin, models.Model):
     """产品组（如：天地盒、套装等，一个产品组可能需要多个施工单完成）"""
 
     name = models.CharField("产品组名称", max_length=200)
-    code = models.CharField("产品组编码", max_length=50, unique=True)
+    code = models.CharField("产品组编码", max_length=50, unique=True, blank=True)
+    
+    code_prefix = "PRDG"
+    code_date_format = ""
+    code_sequence_length = 5
     description = models.TextField("描述", blank=True)
     is_active = models.BooleanField("是否启用", default=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
@@ -381,6 +395,11 @@ class ProductGroup(TimeStampedModel, models.Model):
 
     def __str__(self):
         return f"{self.code} - {self.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = self.generate_code()
+        super().save(*args, **kwargs)
 
 
 class ProductGroupItem(models.Model):

@@ -66,30 +66,23 @@ class GenerateCodeMixin(models.Model):
     """编码自动生成 Mixin
 
     子类设置 code_prefix（如 "DIE"、"FP"、"EP"），
-    generate_code() 生成 prefix + YYYYMM + 3位序号。
+    generate_code() 统一调用通用发号器生成。
     """
     code_prefix = ""
+    code_date_format = "%Y%m"
+    code_sequence_length = 3
+    code_field_name = "code"
 
     @classmethod
     def generate_code(cls):
-        prefix = f"{cls.code_prefix}{timezone.now().strftime('%Y%m')}"
-        with transaction.atomic():
-            last = (
-                cls.objects.filter(code__startswith=prefix)
-                .order_by("-code")
-                .select_for_update()
-                .first()
-            )
-            prefix_len = len(cls.code_prefix) + 6
-            if last and len(last.code) >= prefix_len + 3:
-                try:
-                    last_number = int(last.code[prefix_len:])
-                    new_number = last_number + 1
-                except (ValueError, IndexError):
-                    new_number = 1
-            else:
-                new_number = 1
-            return f"{prefix}{new_number:03d}"
+        from workorder.utils import generate_order_number
+        return generate_order_number(
+            model_class=cls,
+            field_name=cls.code_field_name,
+            prefix=cls.code_prefix,
+            date_format=cls.code_date_format,
+            sequence_length=cls.code_sequence_length
+        )
 
     class Meta:
         abstract = True

@@ -28,7 +28,7 @@ class MaterialSerializer(serializers.ModelSerializer):
     def validate_code(self, value):
         """验证物料编码格式"""
         if not value:
-            raise serializers.ValidationError("物料编码不能为空")
+            return value
 
         if not re.match(r"^[A-Za-z0-9-]+$", value):
             raise serializers.ValidationError("物料编码只能包含字母、数字和连字符")
@@ -134,7 +134,7 @@ class SupplierSerializer(serializers.ModelSerializer):
     def validate_code(self, value):
         """验证供应商编码格式"""
         if not value:
-            raise serializers.ValidationError("供应商编码不能为空")
+            return value
 
         # 支持字母、数字、连字符和中文字符
         if not re.match(r"^[\u4e00-\u9fa5A-Za-z0-9-]+$", value):

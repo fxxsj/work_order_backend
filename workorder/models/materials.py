@@ -13,14 +13,18 @@ from django.contrib.auth.models import User
 from django.db import models, transaction
 from django.utils import timezone
 from workorder.models.audit import AuditMixin
-from workorder.models.base import TimeStampedModel
+from workorder.models.base import TimeStampedModel, GenerateCodeMixin
 
 
-class Material(AuditMixin, TimeStampedModel, models.Model):
+class Material(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
     """物料信息"""
 
     name = models.CharField("物料名称", max_length=200)
-    code = models.CharField("物料编码", max_length=50, unique=True)
+    code = models.CharField("物料编码", max_length=50, unique=True, blank=True)
+    
+    code_prefix = "MAT"
+    code_date_format = ""
+    code_sequence_length = 5
     specification = models.CharField("规格", max_length=200, blank=True)
     unit = models.CharField("单位", max_length=20, default="个")
     unit_price = models.DecimalField(
@@ -76,6 +80,11 @@ class Material(AuditMixin, TimeStampedModel, models.Model):
     def get_audit_log_repr(self):
         return f"物料 {self.code} - {self.name}"
 
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = self.generate_code()
+        super().save(*args, **kwargs)
+
     def is_low_stock(self):
         """检查库存是否不足"""
         return self.stock_quantity < self.min_stock_quantity
@@ -86,7 +95,7 @@ class Material(AuditMixin, TimeStampedModel, models.Model):
         return max(0, required_quantity - available)
 
 
-class Supplier(TimeStampedModel, models.Model):
+class Supplier(TimeStampedModel, GenerateCodeMixin, models.Model):
     """供应商信息"""
 
     STATUS_CHOICES = [
@@ -95,7 +104,11 @@ class Supplier(TimeStampedModel, models.Model):
     ]
 
     name = models.CharField("供应商名称", max_length=200)
-    code = models.CharField("供应商编码", max_length=50, unique=True)
+    code = models.CharField("供应商编码", max_length=50, unique=True, blank=True)
+    
+    code_prefix = "SUP"
+    code_date_format = ""
+    code_sequence_length = 5
     contact_person = models.CharField("联系人", max_length=100, blank=True)
     phone = models.CharField("联系电话", max_length=50, blank=True)
     email = models.EmailField("邮箱", blank=True)
@@ -117,6 +130,11 @@ class Supplier(TimeStampedModel, models.Model):
 
     def __str__(self):
         return f"{self.code} - {self.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = self.generate_code()
+        super().save(*args, **kwargs)
 
 
 class MaterialSupplier(models.Model):

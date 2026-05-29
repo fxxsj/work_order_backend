@@ -99,32 +99,14 @@ class Artwork(ConfirmableMixin, TimeStampedModel, models.Model):
     @classmethod
     def generate_base_code(cls):
         """生成图稿主编码：格式 ART + yyyymm + 3位自增序号"""
-        now = timezone.now()
-        prefix = f"ART{now.strftime('%Y%m')}"
-
-        with transaction.atomic():
-            # 查找该前缀下的最大序号（不考虑版本号）
-            last_artwork = (
-                cls.objects.filter(base_code__startswith=prefix)
-                .order_by("-base_code")
-                .select_for_update()
-                .first()
-            )
-
-            if (
-                last_artwork
-                and last_artwork.base_code
-                and len(last_artwork.base_code) >= 12
-            ):
-                try:
-                    last_number = int(last_artwork.base_code[9:])  # ART + yyyymm = 9位
-                    new_number = last_number + 1
-                except (ValueError, IndexError):
-                    new_number = 1
-            else:
-                new_number = 1
-
-            return f"{prefix}{new_number:03d}"
+        from workorder.utils import generate_order_number
+        return generate_order_number(
+            model_class=cls,
+            field_name="base_code",
+            prefix="ART",
+            date_format="%Y%m",
+            sequence_length=3
+        )
 
     @classmethod
     def get_next_version(cls, base_code):
