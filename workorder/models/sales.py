@@ -232,7 +232,7 @@ class SalesOrderItem(TimeStampedModel, models.Model):
         max_digits=10,
         decimal_places=2,
         default=0,
-        help_text="已通过发货单发出的数量",
+        help_text="已通过送货单发出的数量",
     )
     unit = models.CharField("单位", max_length=20, default="件")
     unit_price = models.DecimalField("单价", max_digits=10, decimal_places=2)

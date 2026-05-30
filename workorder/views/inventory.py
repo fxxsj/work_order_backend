@@ -5,8 +5,8 @@
 - ProductStockViewSet: 成品库存
 - StockInViewSet: 入库单
 - StockOutViewSet: 出库单
-- DeliveryOrderViewSet: 发货单
-- DeliveryItemViewSet: 发货明细
+- DeliveryOrderViewSet: 送货单
+- DeliveryItemViewSet: 送货明细
 - QualityInspectionViewSet: 质量检验
 """
 
@@ -560,7 +560,7 @@ class StockOutViewSet(viewsets.ModelViewSet):
         delivery_order = stock_out.delivery_order
         if delivery_order.status != "pending":
             return APIResponse.error(
-                "发货单不是【待发货】状态，无法再次扣减库存",
+                "送货单不是【待发货】状态，无法再次扣减库存",
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -672,7 +672,7 @@ class DeliveryItemViewSet(viewsets.ModelViewSet):
         """支持过滤"""
         queryset = super().get_queryset()
 
-        # 按发货单过滤
+        # 按送货单过滤
         delivery_order_id = self.request.query_params.get("delivery_order")
         if delivery_order_id:
             queryset = queryset.filter(delivery_order_id=delivery_order_id)
@@ -682,7 +682,7 @@ class DeliveryItemViewSet(viewsets.ModelViewSet):
 
 @delivery_order_docs
 class DeliveryOrderViewSet(viewsets.ModelViewSet):
-    """发货单视图集"""
+    """送货单视图集"""
 
     queryset = (
         DeliveryOrder.objects.select_related("customer", "sales_order", "created_by")
@@ -786,7 +786,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
 
         if delivery_order.status != "pending":
             return APIResponse.error(
-                "只有待发货状态的发货单可以发货", code=status.HTTP_400_BAD_REQUEST
+                "只有待发货状态的送货单可以发货", code=status.HTTP_400_BAD_REQUEST
             )
 
         with transaction.atomic():
@@ -827,7 +827,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
                 stock_out_date=timezone.now().date(),
                 status="completed",
                 operator=request.user,
-                notes=f"发货单 {delivery_order.order_number} 自动出库",
+                notes=f"送货单 {delivery_order.order_number} 自动出库",
             )
 
             # 4. 更新发货信息
@@ -873,7 +873,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
 
         if delivery_order.status not in ["shipped", "in_transit"]:
             return APIResponse.error(
-                "只有已发货或运输中的发货单可以签收", code=status.HTTP_400_BAD_REQUEST
+                "只有已发货或运输中的送货单可以签收", code=status.HTTP_400_BAD_REQUEST
             )
 
         # 更新签收信息
@@ -902,7 +902,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
 
         if delivery_order.status not in ["shipped", "in_transit"]:
             return APIResponse.error(
-                "只有已发货或运输中的发货单可以拒收", code=status.HTTP_400_BAD_REQUEST
+                "只有已发货或运输中的送货单可以拒收", code=status.HTTP_400_BAD_REQUEST
             )
 
         reject_reason = request.data.get("reject_reason", "")
@@ -940,7 +940,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
                         item.sales_order_item.delivered_quantity = 0
                     item.sales_order_item.save()
 
-            # 3. 更新发货单状态
+            # 3. 更新送货单状态
             delivery_order.status = "rejected"
             delivery_order.received_notes = f"拒收原因: {reject_reason}"
             delivery_order.save()
@@ -964,7 +964,7 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
 
         if delivery_order.status != "rejected":
             return APIResponse.error(
-                "只有拒收状态的发货单可以登记处理", code=status.HTTP_400_BAD_REQUEST
+                "只有拒收状态的送货单可以登记处理", code=status.HTTP_400_BAD_REQUEST
             )
 
         resolution = (request.data.get("resolution") or "").strip()

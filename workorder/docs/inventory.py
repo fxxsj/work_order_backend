@@ -329,23 +329,23 @@ delivery_item_docs = extend_schema_view(
 delivery_order_docs = extend_schema_view(
     list=extend_schema(
         tags=["库存"],
-        summary="获取发货单列表",
+        summary="获取送货单列表",
         responses={
             200: OpenApiResponse(
                 response=standard_success_response("DeliveryOrderListResponse"),
-                description="发货单列表",
+                description="送货单列表",
             )
         },
     ),
     retrieve=extend_schema(
         tags=["库存"],
-        summary="获取发货单详情",
+        summary="获取送货单详情",
         responses={
             200: OpenApiResponse(
                 response=standard_success_response(
                     "DeliveryOrderDetailResponse", DeliveryOrderSerializer
                 ),
-                description="发货单详情",
+                description="送货单详情",
             )
         },
     ),

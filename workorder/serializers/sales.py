@@ -132,7 +132,7 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_delivery_order_numbers(self, obj) -> List[str]:
-        """获取关联的发货单号列表"""
+        """获取关联的送货单号列表"""
         return [
             delivery.order_number
             for delivery in obj.delivery_orders.all()
@@ -162,7 +162,7 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_delivery_order_summaries(self, obj) -> List[dict]:
-        """获取关联发货单摘要"""
+        """获取关联送货单摘要"""
         return [
             {
                 "id": delivery.id,

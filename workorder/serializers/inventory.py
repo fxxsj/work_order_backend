@@ -5,7 +5,7 @@
 - ProductStock: 成品库存
 - StockIn: 入库单
 - StockOut: 出库单
-- DeliveryOrder: 发货单
+- DeliveryOrder: 送货单
 - DeliveryItem: 发货明细
 - QualityInspection: 质量检验
 """
@@ -296,7 +296,7 @@ class StockOutCreateSerializer(serializers.ModelSerializer):
         delivery_order = data.get("delivery_order")
         if out_type == "delivery" and delivery_order is None:
             raise serializers.ValidationError(
-                {"delivery_order": "发货出库必须关联发货单"}
+                {"delivery_order": "发货出库必须关联送货单"}
             )
         return data
 
@@ -323,7 +323,7 @@ class DeliveryItemSerializer(serializers.ModelSerializer):
 
 
 class DeliveryOrderSerializer(serializers.ModelSerializer):
-    """发货单序列化器"""
+    """送货单序列化器"""
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
 
@@ -380,7 +380,7 @@ class DeliveryOrderSerializer(serializers.ModelSerializer):
 
 
 class DeliveryOrderListSerializer(serializers.ModelSerializer):
-    """发货单列表序列化器（精简版）"""
+    """送货单列表序列化器（精简版）"""
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     customer_name = serializers.CharField(source="customer.name", read_only=True)
@@ -448,7 +448,7 @@ class DeliveryOrderListSerializer(serializers.ModelSerializer):
 
 
 class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
-    """发货单创建序列化器"""
+    """送货单创建序列化器"""
 
     items_data = serializers.ListField(
         child=serializers.DictField(),
@@ -486,7 +486,7 @@ class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
         allowed_statuses = {"approved", "in_production", "completed"}
         if sales_order and sales_order.status not in allowed_statuses:
             raise serializers.ValidationError(
-                {"sales_order": "只有已审核、生产中或已完成的客户订单才能创建发货单"}
+                {"sales_order": "只有已审核、生产中或已完成的客户订单才能创建送货单"}
             )
 
         # 收货人信息必填
@@ -500,7 +500,7 @@ class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        """创建发货单"""
+        """创建送货单"""
         items_data = validated_data.pop("items_data", [])
         delivery_order = DeliveryOrder.objects.create(**validated_data)
 
@@ -525,7 +525,7 @@ class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
 
 
 class DeliveryOrderUpdateSerializer(serializers.ModelSerializer):
-    """发货单更新序列化器"""
+    """送货单更新序列化器"""
 
     items_data = serializers.ListField(
         child=serializers.DictField(),
@@ -555,7 +555,7 @@ class DeliveryOrderUpdateSerializer(serializers.ModelSerializer):
         ]
 
     def update(self, instance, validated_data):
-        """更新发货单"""
+        """更新送货单"""
         items_data = validated_data.pop("items_data", None)
 
         # 更新基本信息

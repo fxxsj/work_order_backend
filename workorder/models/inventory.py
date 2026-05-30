@@ -5,7 +5,7 @@
 - ProductStock: 成品库存
 - StockIn: 入库单
 - StockOut: 出库单
-- DeliveryOrder: 发货单
+- DeliveryOrder: 送货单
 - DeliveryItem: 发货明细
 - QualityInspection: 质量检验
 """
@@ -229,7 +229,7 @@ class StockOut(models.Model):
         null=True,
         blank=True,
         related_name="stock_outs",
-        verbose_name="发货单",
+        verbose_name="送货单",
     )
     stock_out_date = models.DateField("出库日期", default=timezone.now)
     status = models.CharField(
@@ -277,13 +277,13 @@ class StockOut(models.Model):
 
 
 class DeliveryOrder(TimeStampedModel, models.Model):
-    """发货单"""
+    """送货单"""
 
     STATUS_CHOICES = DeliveryOrderModelStatus.CHOICES
 
     @classmethod
     def generate_order_number(cls):
-        """生成发货单号：FH + yyyymmdd + 4位序号"""
+        """生成送货单号：FH + yyyymmdd + 4位序号"""
         from workorder.utils import generate_order_number
         return generate_order_number(
             model_class=cls,
@@ -292,7 +292,7 @@ class DeliveryOrder(TimeStampedModel, models.Model):
         )
 
     order_number = models.CharField(
-        "发货单号", max_length=50, unique=True, editable=False
+        "送货单号", max_length=50, unique=True, editable=False
     )
     sales_order = models.ForeignKey(
         "workorder.SalesOrder",
@@ -342,8 +342,8 @@ class DeliveryOrder(TimeStampedModel, models.Model):
     )
 
     class Meta:
-        verbose_name = "发货单"
-        verbose_name_plural = "发货单管理"
+        verbose_name = "送货单"
+        verbose_name_plural = "送货单管理"
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["status"]),
@@ -361,13 +361,13 @@ class DeliveryOrder(TimeStampedModel, models.Model):
 
 
 class DeliveryItem(models.Model):
-    """发货明细"""
+    """送货明细"""
 
     delivery_order = models.ForeignKey(
         DeliveryOrder,
         on_delete=models.CASCADE,
         related_name="items",
-        verbose_name="发货单",
+        verbose_name="送货单",
     )
     product = models.ForeignKey(
         "workorder.Product", on_delete=models.PROTECT, verbose_name="产品"

@@ -116,7 +116,7 @@ class NotificationStatus:
 
 
 class DeliveryOrderStatus:
-    """发货单状态常量"""
+    """送货单状态常量"""
 
     PENDING = 'pending'
     PREPARING = 'preparing'
@@ -284,7 +284,7 @@ class StockOutStatus:
 
 
 class DeliveryOrderModelStatus:
-    """发货单状态常量（模型层，与 DeliveryOrderStatus 含义不同）"""
+    """送货单状态常量（模型层，与 DeliveryOrderStatus 含义不同）"""
 
     PENDING = 'pending'
     SHIPPED = 'shipped'

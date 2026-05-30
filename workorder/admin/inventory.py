@@ -5,12 +5,12 @@
 - ProductStockAdmin: 成品库存管理（已注释，暂不注册）
 - StockInAdmin: 入库单管理（已注释，暂不注册）
 - StockOutAdmin: 出库单管理（已注释，暂不注册）
-- DeliveryOrderAdmin: 发货单管理
-- DeliveryItemAdmin: 发货明细管理
+- DeliveryOrderAdmin: 送货单管理
+- DeliveryItemAdmin: 送货明细管理
 - QualityInspectionAdmin: 质量检验管理（已注释，暂不注册）
 
 及相关的 Inline 类：
-- DeliveryItemInline: 发货明细内联
+- DeliveryItemInline: 送货明细内联
 """
 
 from django.contrib import admin
@@ -235,7 +235,7 @@ class StockOutAdmin(admin.ModelAdmin):
 
 @admin.register(DeliveryOrder)
 class DeliveryOrderAdmin(admin.ModelAdmin):
-    """发货单管理"""
+    """送货单管理"""
 
     list_display = [
         "order_number",
@@ -305,7 +305,7 @@ class DeliveryOrderAdmin(admin.ModelAdmin):
         """显示客户订单号"""
         return obj.sales_order.order_number if obj.sales_order else "-"
 
-    # 发货单状态徽章
+    # 送货单状态徽章
     status_badge = create_status_badge_method(
         {
             "pending": "#909399",
@@ -320,7 +320,7 @@ class DeliveryOrderAdmin(admin.ModelAdmin):
 
 @admin.register(DeliveryItem)
 class DeliveryItemAdmin(admin.ModelAdmin):
-    """发货明细管理"""
+    """送货明细管理"""
 
     list_display = [
         "delivery_order_number",
@@ -339,9 +339,9 @@ class DeliveryItemAdmin(admin.ModelAdmin):
     readonly_fields = ["created_at"]
     ordering = ["delivery_order", "id"]
 
-    @admin.display(description="发货单号")
+    @admin.display(description="送货单号")
     def delivery_order_number(self, obj):
-        """显示发货单号"""
+        """显示送货单号"""
         return obj.delivery_order.order_number
 
     @admin.display(description="产品编码")
