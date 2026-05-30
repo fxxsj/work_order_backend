@@ -99,7 +99,7 @@ class ProductSerializer(serializers.ModelSerializer):
     def validate_code(self, value):
         """验证产品编码格式"""
         if not value:
-            raise serializers.ValidationError("产品编码不能为空")
+            return value
 
         # 验证编码格式：只能包含字母、数字和连字符
         if not re.match(r"^[A-Za-z0-9-]+$", value):
