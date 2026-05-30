@@ -3,6 +3,7 @@
 from django.contrib.auth.models import Group, Permission, User
 from django.core.management import call_command
 from django.test import TestCase
+from django.core.cache import cache
 
 from workorder.constants.role_codes import ALL_ROLE_CODES
 from workorder.models import Department, Process, UserProfile, WorkOrderTask
@@ -47,6 +48,7 @@ class DepartmentScopeTest(TestCase):
     """验证父部门包含子部门任务范围。"""
 
     def setUp(self):
+        cache.clear()
         self.production = Department.objects.create(
             name="生产部范围测试",
             code="scope_production",

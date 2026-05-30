@@ -130,6 +130,7 @@ class TestSalesOrderWorkflow:
             order_date=timezone.now().date(),
             delivery_date=timezone.now().date() + timedelta(days=5),
             status="in_production",
+            approval_status="approved",
             created_by=user,
         )
         SalesOrderItem.objects.create(
