@@ -37,6 +37,14 @@ def make_supervisor(user):
             user.user_permissions.add(perm)
 
 
+def make_maker(user):
+    from django.contrib.auth.models import Permission
+
+    perm = Permission.objects.filter(codename="submit_workorder").first()
+    if perm:
+        user.user_permissions.add(perm)
+
+
 @pytest.mark.django_db
 @pytest.mark.integration
 class TestWorkOrderLifecycle:
@@ -52,6 +60,7 @@ class TestWorkOrderLifecycle:
         dept = DepartmentFactory(name="Printing")
         process = ProcessFactory(name="Offset Printing")
         maker = UserFactory(username="maker", departments=[dept])
+        make_maker(maker)
         supervisor = UserFactory(username="supervisor", departments=[dept])
         operator = UserFactory(username="operator", departments=[dept])
         customer = CustomerFactory(name="Test Customer")
@@ -151,6 +160,7 @@ class TestWorkOrderLifecycle:
         process3 = ProcessFactory(name="Die Cutting")
 
         maker = UserFactory(username="maker", departments=[dept])
+        make_maker(maker)
         supervisor = UserFactory(username="supervisor", departments=[dept])
         customer = CustomerFactory()
 
