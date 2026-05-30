@@ -189,6 +189,9 @@ class InvoiceSerializer(serializers.ModelSerializer):
         source="get_invoice_type_display", read_only=True
     )
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    approval_status_display = serializers.CharField(
+        source="get_approval_status_display", read_only=True
+    )
 
     # 关联信息
     sales_order_number = serializers.CharField(

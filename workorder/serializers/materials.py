@@ -310,6 +310,9 @@ class PurchaseOrderListSerializer(serializers.ModelSerializer):
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     supplier_code = serializers.CharField(source="supplier.code", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    approval_status_display = serializers.CharField(
+        source="get_approval_status_display", read_only=True
+    )
     submitted_by_name = serializers.CharField(
         source="submitted_by.username", read_only=True, allow_null=True
     )
@@ -341,6 +344,9 @@ class PurchaseOrderDetailSerializer(serializers.ModelSerializer):
     )
     supplier_phone = serializers.CharField(source="supplier.phone", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    approval_status_display = serializers.CharField(
+        source="get_approval_status_display", read_only=True
+    )
     submitted_by_name = serializers.CharField(
         source="submitted_by.username", read_only=True, allow_null=True
     )

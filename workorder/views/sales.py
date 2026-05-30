@@ -49,7 +49,7 @@ class SalesOrderFilterSet(FilterSet):
 
     class Meta:
         model = SalesOrder
-        fields = ["customer", "status", "payment_status"]
+        fields = ["customer", "status", "approval_status", "payment_status"]
 
 
 def _scope_sales_orders(queryset, user):

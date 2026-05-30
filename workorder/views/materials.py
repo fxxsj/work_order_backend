@@ -70,7 +70,7 @@ class PurchaseOrderFilterSet(FilterSet):
 
     class Meta:
         model = PurchaseOrder
-        fields = ["supplier", "status", "work_order"]
+        fields = ["supplier", "status", "approval_status", "work_order"]
 
 
 @material_docs

@@ -381,6 +381,10 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         invoice_status = self.request.query_params.get("status")
         if invoice_status:
             queryset = queryset.filter(status=invoice_status)
+            
+        approval_status = self.request.query_params.get("approval_status")
+        if approval_status:
+            queryset = queryset.filter(approval_status=approval_status)
 
         todo_filter = (self.request.query_params.get("todo") or "").strip()
         if todo_filter == "pending_attachment":

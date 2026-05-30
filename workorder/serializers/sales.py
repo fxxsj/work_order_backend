@@ -39,6 +39,9 @@ class SalesOrderListSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source="customer.name", read_only=True)
     customer_code = serializers.CharField(source="customer.code", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    approval_status_display = serializers.CharField(
+        source="get_approval_status_display", read_only=True
+    )
     payment_status_display = serializers.CharField(
         source="get_payment_status_display", read_only=True
     )
@@ -66,6 +69,9 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
     customer_phone = serializers.CharField(source="customer.phone", read_only=True)
     customer_address = serializers.CharField(source="customer.address", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    approval_status_display = serializers.CharField(
+        source="get_approval_status_display", read_only=True
+    )
     payment_status_display = serializers.CharField(
         source="get_payment_status_display", read_only=True
     )
