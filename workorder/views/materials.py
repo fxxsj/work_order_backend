@@ -214,7 +214,8 @@ class PurchaseOrderViewSet(BaseViewSet):
 
         service = ApprovalService(PurchaseOrder)
         try:
-            order = service.submit_for_approval(order, request.user)
+            auto_approve = request.data.get("auto_approve", False)
+            order = service.submit_for_approval(order, request.user, auto_approve=auto_approve)
             order.rejection_reason = ""
             order.save(update_fields=["rejection_reason"])
         except ServiceError as e:

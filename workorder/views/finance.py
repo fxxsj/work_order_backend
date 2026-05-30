@@ -435,7 +435,8 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
         service = ApprovalService(Invoice)
         try:
-            invoice = service.submit_for_approval(invoice, request.user)
+            auto_approve = request.data.get("auto_approve", False)
+            invoice = service.submit_for_approval(invoice, request.user, auto_approve=auto_approve)
             if invoice.status == "draft":
                 invoice.status = "issued"
             invoice.save(update_fields=["status"])

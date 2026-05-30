@@ -270,6 +270,7 @@ class WorkOrderFlowService:
         work_order_id: int,
         submitted_by: User,
         comment: str = "",
+        auto_approve: bool = False,
     ) -> WorkOrder:
         """
         提交施工单审核
@@ -342,6 +343,17 @@ class WorkOrderFlowService:
                 recipient=salesperson,
                 comment=comment,
             )
+
+        if auto_approve:
+            can_review_by_role = is_sales_user(submitted_by)
+            can_review_by_perm = submitted_by.is_superuser or submitted_by.has_perm("workorder.change_workorder")
+            if (can_review_by_role or can_review_by_perm):
+                if can_review_by_perm or work_order.customer.salesperson == submitted_by:
+                    return WorkOrderFlowService.approve(
+                        work_order_id=work_order.id,
+                        approved_by=submitted_by,
+                        comment="系统自动审核通过（快捷发布）"
+                    )
 
         return work_order
 

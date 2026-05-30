@@ -110,7 +110,7 @@ class ApprovalService(Generic[T]):
         self._log_approval(obj, user, "reject", reason)
         return obj
     
-    def submit_for_approval(self, obj, user, comment: str = "") -> T:
+    def submit_for_approval(self, obj, user, comment: str = "", auto_approve: bool = False) -> T:
         """提交审核"""
         self.validate_submit_permission(user, obj)
         current_status = getattr(obj, 'approval_status', getattr(obj, 'status', None))
@@ -128,6 +128,13 @@ class ApprovalService(Generic[T]):
         obj.save()
         
         self._log_approval(obj, user, "submit", comment)
+
+        # 智能免审逻辑：如果请求了自动审核，并且用户拥有审核权限
+        if auto_approve:
+            permission = self.get_approve_permission()
+            if user.is_superuser or (permission and user.has_perm(permission)):
+                self.approve(obj, user, comment="系统自动审核通过（具有审核权限）")
+                
         return obj
     
     def _log_approval(self, obj, user, action: str, comment: str) -> None:

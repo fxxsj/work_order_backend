@@ -280,6 +280,7 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
                 work_order_id=work_order.id,
                 submitted_by=request.user,
                 comment=request.data.get("comment", ""),
+                auto_approve=request.data.get("auto_approve", False),
             )
 
             serializer = WorkOrderDetailSerializer(updated_work_order)
