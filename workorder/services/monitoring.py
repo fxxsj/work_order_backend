@@ -225,7 +225,7 @@ class BusinessMetrics:
             'approval_stats': {
                 'approved': approved_orders,
                 'rejected': rejected_orders,
-                'pending': queryset.filter(approval_status='pending').count(),
+                'pending': queryset.filter(approval_status='submitted').count(),
                 'approval_rate': (approved_orders / (approved_orders + rejected_orders) * 100) if (approved_orders + rejected_orders) > 0 else 0
             },
             'amount_stats': {

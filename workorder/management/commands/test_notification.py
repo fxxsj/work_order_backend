@@ -114,7 +114,7 @@ class Command(BaseCommand):
         self.stdout.write('\n测试施工单审核通知...')
         
         # 获取待审核的施工单
-        workorder = WorkOrder.objects.filter(approval_status='pending').first()
+        workorder = WorkOrder.objects.filter(approval_status='submitted').first()
         if not workorder:
             self.stdout.write(self.style.WARNING('没有找到待审核的施工单'))
             return

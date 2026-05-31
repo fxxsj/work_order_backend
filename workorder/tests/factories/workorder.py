@@ -52,7 +52,7 @@ class WorkOrderFactory(factory.django.DjangoModelFactory):
     order_date = factory.LazyFunction(lambda: date.today())
     delivery_date = factory.LazyFunction(lambda: date.today() + timedelta(days=7))
     priority = 'normal'
-    approval_status = 'pending'
+    approval_status = 'submitted'
     status = 'pending'
 
     # Post-generation: create processes

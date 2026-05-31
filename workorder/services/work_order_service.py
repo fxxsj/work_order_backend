@@ -89,11 +89,35 @@ class WorkOrderService:
             work_order=work_order, material=material, notes=notes
         )
 
+    # 生产状态转换规则（completed 只能由系统自动设置）
+    ALLOWED_STATUS_TRANSITIONS = {
+        WorkOrderStatus.PENDING: [WorkOrderStatus.IN_PROGRESS],
+        WorkOrderStatus.IN_PROGRESS: [WorkOrderStatus.PAUSED, WorkOrderStatus.CANCELLED],
+        WorkOrderStatus.PAUSED: [WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.CANCELLED],
+        WorkOrderStatus.COMPLETED: [],
+        WorkOrderStatus.CANCELLED: [],
+    }
+
     @staticmethod
     def update_status(*, work_order: WorkOrder, new_status: str) -> WorkOrder:
         if new_status not in dict(WorkOrder.STATUS_CHOICES):
             raise ServiceError(
                 "无效的状态",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 校验转换合法性
+        allowed = WorkOrderService.ALLOWED_STATUS_TRANSITIONS.get(work_order.status, [])
+        if new_status not in allowed:
+            raise ServiceError(
+                f"不允许的状态转换：{work_order.status} → {new_status}",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # pending → in_progress 仅审批通过后允许
+        if new_status == WorkOrderStatus.IN_PROGRESS and work_order.approval_status != WorkOrderApprovalStatus.APPROVED:
+            raise ServiceError(
+                "施工单未审核通过，无法开始生产",
                 code=status.HTTP_400_BAD_REQUEST,
             )
 

@@ -387,7 +387,7 @@ class WorkOrderOptimizedManager(PerformanceOptimizedManager):
             in_progress_orders=Count('id', filter=Q(status='in_progress')),
             completed_orders=Count('id', filter=Q(status='completed')),
             urgent_orders=Count('id', filter=Q(priority='urgent')),
-            pending_approval=Count('id', filter=Q(approval_status='pending'))
+            pending_approval=Count('id', filter=Q(approval_status='submitted'))
         )
         
         # 获取即将到期的订单

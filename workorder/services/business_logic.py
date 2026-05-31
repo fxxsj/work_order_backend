@@ -161,7 +161,7 @@ class WorkOrderBusinessService:
         Returns:
             bool: 是否成功
         """
-        if workorder.approval_status != 'pending':
+        if workorder.approval_status != 'submitted':
             raise ValidationError('只有待审核的订单可以审核')
         
         workorder.approval_status = 'approved'
@@ -192,7 +192,7 @@ class WorkOrderBusinessService:
         Returns:
             bool: 是否成功
         """
-        if workorder.approval_status != 'pending':
+        if workorder.approval_status != 'submitted':
             raise ValidationError('只有待审核的订单可以拒绝')
         
         workorder.approval_status = 'rejected'

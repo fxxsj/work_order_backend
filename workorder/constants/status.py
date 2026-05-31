@@ -26,18 +26,20 @@ class WorkOrderStatus:
 
 
 class WorkOrderApprovalStatus:
-    """施工单审核状态常量"""
+    """施工单审核状态常量
+
+    与 ApprovalFieldsMixin.choices 对齐：draft / submitted / approved / rejected
+    注意：不再包含 PENDING，提交审核后统一使用 SUBMITTED。
+    """
 
     DRAFT = 'draft'
     SUBMITTED = 'submitted'
-    PENDING = 'pending'
     APPROVED = 'approved'
     REJECTED = 'rejected'
 
     CHOICES = [
         (DRAFT, _('草稿')),
-        (SUBMITTED, _('已提交')),
-        (PENDING, _('待审核')),
+        (SUBMITTED, _('待审核')),
         (APPROVED, _('已通过')),
         (REJECTED, _('已拒绝')),
     ]
