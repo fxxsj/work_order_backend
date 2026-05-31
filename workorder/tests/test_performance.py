@@ -26,6 +26,8 @@ class PerformanceTestCase(TestCase):
 
     def setUp(self):
         """Create test data"""
+        cache.clear()
+
         # Create department
         self.department = Department.objects.create(
             name='Test Dept',
