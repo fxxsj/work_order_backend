@@ -802,7 +802,7 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
 
         委托给 TaskGenerationService 处理业务逻辑。
         """
-        from ..services.task_generation_service import TaskGenerationService
+        from ..services.task_generation import TaskGenerationService
         TaskGenerationService.generate_tasks_for_process(self)
 
     def _parse_material_usage(self, usage_str):
@@ -810,7 +810,7 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
 
         委托给 TaskGenerationService 处理。
         """
-        from ..services.task_generation_service import TaskGenerationService
+        from ..services.task_generation import TaskGenerationService
         return TaskGenerationService._parse_material_usage(usage_str)
 
 

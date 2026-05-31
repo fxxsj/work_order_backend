@@ -528,6 +528,101 @@ class WorkOrderViewSet(BaseViewSet):
         serializer = self.get_serializer(work_order)
         return APIResponse.success(data=serializer.data)
 
+    @action(detail=True, methods=["post"])
+    def submit_approval(self, request, pk=None):
+        """兼容旧施工单接口：提交审核，实际委托流程服务。"""
+        work_order = self.get_object()
+        try:
+            updated_work_order = WorkOrderFlowService.submit_for_approval(
+                work_order_id=work_order.id,
+                submitted_by=request.user,
+                comment=request.data.get("comment", ""),
+                auto_approve=request.data.get("auto_approve", False),
+            )
+        except ServiceError as exc:
+            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+
+        serializer = WorkOrderDetailSerializer(updated_work_order)
+        return APIResponse.success(data=serializer.data, message="施工单已提交审核")
+
+    @action(detail=True, methods=["post"])
+    @work_order_approve_docs
+    def approve(self, request, pk=None):
+        """兼容旧施工单接口：审核通过，实际委托流程服务并生成任务。"""
+        work_order = self.get_object()
+        if work_order.approval_status != "submitted":
+            return APIResponse.error(
+                '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。',
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        if not request.user.is_superuser and not request.user.has_perm("workorder.approve_workorder"):
+            return APIResponse.error("您没有审核施工单的权限", code=status.HTTP_403_FORBIDDEN)
+
+        try:
+            updated_work_order = WorkOrderFlowService.handle_approval_passed(
+                work_order=work_order,
+                approved_by=request.user,
+                comment=request.data.get("comment", ""),
+            )
+        except ServiceError as exc:
+            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+
+        serializer = WorkOrderDetailSerializer(updated_work_order)
+        data = dict(serializer.data)
+        task_generation = getattr(updated_work_order, "_task_generation_result", None)
+        procurement_summary = getattr(updated_work_order, "_procurement_summary", None)
+        if task_generation is not None:
+            data["task_generation"] = {
+                key: value for key, value in task_generation.items() if key != "tasks"
+            }
+        if procurement_summary is not None:
+            data["procurement_summary"] = procurement_summary
+        return APIResponse.success(
+            data=data,
+            message="施工单已审核通过，任务已自动分派",
+        )
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        """兼容旧施工单接口：审核拒绝，实际委托流程服务。"""
+        work_order = self.get_object()
+        reason = request.data.get("reason") or request.data.get("rejection_reason") or ""
+        if work_order.approval_status != "submitted":
+            return APIResponse.error("只有待审核的施工单可以拒绝", code=status.HTTP_400_BAD_REQUEST)
+        if not request.user.is_superuser and not request.user.has_perm("workorder.approve_workorder"):
+            return APIResponse.error("您没有审核施工单的权限", code=status.HTTP_403_FORBIDDEN)
+        if not reason:
+            return APIResponse.error("拒绝原因不能为空", code=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            updated_work_order = WorkOrderFlowService.handle_approval_rejected(
+                work_order=work_order,
+                rejected_by=request.user,
+                reason=reason,
+            )
+        except ServiceError as exc:
+            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+
+        serializer = WorkOrderDetailSerializer(updated_work_order)
+        return APIResponse.success(data=serializer.data, message="施工单已审核拒绝")
+
+    @action(detail=True, methods=["post"])
+    @work_order_resubmit_docs
+    def resubmit_for_approval(self, request, pk=None):
+        """兼容旧施工单接口：被拒绝后重新提交审核。"""
+        work_order = self.get_object()
+        try:
+            updated_work_order = WorkOrderFlowService.submit_for_approval(
+                work_order_id=work_order.id,
+                submitted_by=request.user,
+                comment=request.data.get("comment", ""),
+            )
+        except ServiceError as exc:
+            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+
+        serializer = WorkOrderDetailSerializer(updated_work_order)
+        return APIResponse.success(data=serializer.data, message="施工单已重新提交审核")
+
     @action(detail=False, methods=["get"])
     @work_order_statistics_docs
     def statistics(self, request):
@@ -1071,16 +1166,19 @@ class WorkOrderViewSet(BaseViewSet):
         else:
             stored_process_ids = []
 
-        # 检查是否有变化
-        has_changes = set(current_process_ids) != set(stored_process_ids)
-
         # 检查是否可以同步（未审核的施工单才能同步）
         can_sync = work_order.approval_status != "approved"
+        preview = TaskSyncService.preview_sync(
+            work_order,
+            stored_process_ids or current_process_ids,
+            current_process_ids,
+        )
 
         return APIResponse.success(
             data={
-                "sync_needed": has_changes and can_sync,
+                "sync_needed": preview.get("sync_needed", False) and can_sync,
                 "current_process_ids": current_process_ids,
                 "can_sync": can_sync,
+                "preview": preview,
             }
         )

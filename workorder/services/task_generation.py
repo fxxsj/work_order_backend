@@ -34,16 +34,25 @@ class TaskGenerationService:
             }
         """
         all_tasks = []
+        existing_count = WorkOrderTask.objects.filter(
+            work_order_process__work_order=work_order
+        ).exclude(status="draft").count()
 
         # 遍历施工单的所有工序
         for work_order_process in work_order.order_processes.all():
             # 为每个工序构建任务对象
-            tasks = TaskGenerationService.build_task_objects(work_order_process)
+            tasks = TaskGenerationService.build_missing_task_objects(work_order_process)
             all_tasks.extend(tasks)
 
         if not all_tasks:
             logger.info(f"施工单 {work_order.order_number} 没有需要生成的任务")
-            return {'created_count': 0, 'dispatched_count': 0, 'tasks': []}
+            return {
+                'created_count': 0,
+                'existing_count': existing_count,
+                'dispatched_count': 0,
+                'skipped_count': existing_count,
+                'tasks': [],
+            }
 
         # 批量创建所有任务
         created_tasks = WorkOrderTask.objects.bulk_create(
@@ -60,9 +69,53 @@ class TaskGenerationService:
 
         return {
             'created_count': len(created_tasks),
+            'existing_count': existing_count,
             'dispatched_count': dispatched_count,
+            'skipped_count': existing_count,
             'tasks': list(created_tasks)
         }
+
+    @staticmethod
+    def build_missing_task_objects(work_order_process):
+        """构建当前工序缺失的任务对象，避免重复生成。"""
+        task_objects = TaskGenerationService.build_task_objects(work_order_process)
+        return [
+            task for task in task_objects
+            if not TaskGenerationService._task_exists(task)
+        ]
+
+    @staticmethod
+    @transaction.atomic
+    def generate_tasks_for_process(work_order_process):
+        """兼容单工序补生成入口，复用正式任务生成规则。"""
+        task_objects = TaskGenerationService.build_missing_task_objects(
+            work_order_process
+        )
+        if not task_objects:
+            return []
+
+        created_tasks = WorkOrderTask.objects.bulk_create(task_objects, batch_size=100)
+        TaskGenerationService._dispatch_tasks(
+            created_tasks,
+            work_order_process.work_order,
+        )
+        return list(created_tasks)
+
+    @staticmethod
+    def _task_exists(task):
+        """按生成规则的任务身份判断任务是否已存在。"""
+        filters = {
+            "work_order_process": task.work_order_process,
+            "task_type": task.task_type,
+            "artwork": task.artwork,
+            "die": task.die,
+            "product": task.product,
+            "material": task.material,
+            "foiling_plate": task.foiling_plate,
+            "embossing_plate": task.embossing_plate,
+            "parent_task__isnull": True,
+        }
+        return WorkOrderTask.objects.filter(**filters).exclude(status="draft").exists()
 
     @staticmethod
     def build_task_objects(work_order_process):
@@ -284,4 +337,3 @@ class TaskGenerationService:
 
 
 # 保留别名以保持向后兼容
-

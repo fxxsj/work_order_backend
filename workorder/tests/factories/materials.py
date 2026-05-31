@@ -70,7 +70,7 @@ class PurchaseOrderFactory(factory.django.DjangoModelFactory):
         model = PurchaseOrder
 
     supplier = factory.SubFactory(SupplierFactory)
-    status = "draft"
+    status = "pending"
     total_amount = 0
 
 

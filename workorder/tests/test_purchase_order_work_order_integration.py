@@ -222,7 +222,7 @@ class TestCreateFromWorkOrder:
 
         assert po.work_order == work_order
         assert po.supplier == supplier
-        assert po.status == "draft"
+        assert po.status == "pending"
 
         # 验证 Item 关联了 work_order_material
         item = po.items.first()
@@ -275,7 +275,8 @@ class TestCreateFromWorkOrder:
         )
 
         assert response.status_code == 400
-        assert "没有默认供应商" in response.json()["message"]
+        assert "默认供应商" in response.json()["message"]
+        assert response.json()["data"]["blocked_items"]
 
     def test_create_from_work_order_filters_only_pending(self):
         """只筛选 purchase_status=pending 的物料"""
@@ -309,6 +310,43 @@ class TestCreateFromWorkOrder:
             id=data["data"]["purchase_orders"][0]["id"]
         ).items.first()
         assert po_item.work_order_material == pending_wo_material
+
+    def test_create_from_work_order_does_not_duplicate_existing_items(self):
+        """已有关联采购明细的施工单物料不应重复创建"""
+        supplier = SupplierFactory(status="active")
+        material = MaterialFactory(default_supplier=supplier)
+        work_order = WorkOrderFactory(approval_status="approved", status="in_progress")
+        wo_material = WorkOrderMaterialFactory(
+            work_order=work_order,
+            material=material,
+            purchase_status=MaterialPurchaseStatus.PENDING,
+            material_usage="200张",
+        )
+        po = PurchaseOrderFactory(
+            supplier=supplier,
+            work_order=work_order,
+            status="pending",
+        )
+        PurchaseOrderItemFactory(
+            purchase_order=po,
+            material=material,
+            quantity=200,
+            work_order_material=wo_material,
+        )
+
+        response = self.client.post(
+            "/api/v1/purchase-orders/create_from_work_order/",
+            data={"work_order_id": work_order.id},
+            format="json",
+        )
+
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["total_count"] == 0
+        assert data["skipped_item_count"] == 1
+        assert PurchaseOrderItem.objects.filter(
+            work_order_material=wo_material
+        ).count() == 1
 
 
 @pytest.mark.django_db

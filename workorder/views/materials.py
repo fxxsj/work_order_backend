@@ -450,16 +450,58 @@ class PurchaseOrderViewSet(BaseViewSet):
                 "没有待采购的物料", code=status.HTTP_400_BAD_REQUEST
             )
 
+        existing_item_wom_ids = set(
+            PurchaseOrderItem.objects.filter(
+                work_order_material__in=wo_materials,
+            )
+            .exclude(purchase_order__status="cancelled")
+            .values_list("work_order_material_id", flat=True)
+        )
+        skipped_items = []
+        if existing_item_wom_ids:
+            skipped_items = [
+                {
+                    "work_order_material_id": wom.id,
+                    "material_id": wom.material_id,
+                    "material_name": wom.material.name,
+                    "reason": "已存在未取消的关联采购单明细",
+                }
+                for wom in wo_materials
+                if wom.id in existing_item_wom_ids
+            ]
+            wo_materials = wo_materials.exclude(id__in=existing_item_wom_ids)
+
+        if not wo_materials.exists():
+            return APIResponse.success(
+                data={
+                    "purchase_orders": [],
+                    "total_count": 0,
+                    "created_item_count": 0,
+                    "skipped_item_count": len(skipped_items),
+                    "skipped_items": skipped_items,
+                    "blocked_items": [],
+                },
+                message="没有可新建采购单的待采购物料",
+            )
+
         # 校验每个物料都有默认供应商
         missing_supplier = []
         for wom in wo_materials:
             if not wom.material.default_supplier:
-                missing_supplier.append(wom.material.name)
+                missing_supplier.append(
+                    {
+                        "work_order_material_id": wom.id,
+                        "material_id": wom.material_id,
+                        "material_name": wom.material.name,
+                        "reason": "物料未配置默认供应商",
+                    }
+                )
 
         if missing_supplier:
             return APIResponse.error(
-                f"以下物料没有默认供应商，请先配置: {', '.join(missing_supplier)}",
+                "部分物料没有默认供应商，请先配置",
                 code=status.HTTP_400_BAD_REQUEST,
+                data={"blocked_items": missing_supplier},
             )
 
         # 按供应商分组
@@ -479,18 +521,18 @@ class PurchaseOrderViewSet(BaseViewSet):
                 quantity_overrides[wom_id] = qty
 
         created_orders = []
+        created_item_count = 0
         with transaction.atomic():
             for group_data in supplier_groups.values():
                 po = PurchaseOrder.objects.create(
                     supplier=group_data["supplier"],
                     work_order=work_order,
-                    status="draft",
                     notes=notes,
                 )
 
                 for wom in group_data["items"]:
                     # 解析物料用量字符串，提取数量
-                    from ..services.task_generation_service import (
+                    from ..services.task_generation import (
                         TaskGenerationService,
                     )
 
@@ -507,6 +549,7 @@ class PurchaseOrderViewSet(BaseViewSet):
                         unit_price=wom.material.unit_price or 0,
                         work_order_material=wom,
                     )
+                    created_item_count += 1
 
                 po.update_total_amount()
                 created_orders.append(po)
@@ -526,8 +569,15 @@ class PurchaseOrderViewSet(BaseViewSet):
             )
 
         return APIResponse.success(
-            data={"purchase_orders": result, "total_count": len(result)},
-            message=f"成功创建 {len(result)} 个采购单",
+            data={
+                "purchase_orders": result,
+                "total_count": len(result),
+                "created_item_count": created_item_count,
+                "skipped_item_count": len(skipped_items),
+                "skipped_items": skipped_items,
+                "blocked_items": [],
+            },
+            message=f"成功创建 {len(result)} 个采购单，包含 {created_item_count} 个物料明细",
         )
 
     @action(detail=False, methods=["get"])

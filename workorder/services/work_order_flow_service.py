@@ -349,8 +349,8 @@ class WorkOrderFlowService:
             can_review_by_perm = submitted_by.is_superuser or submitted_by.has_perm("workorder.change_workorder")
             if (can_review_by_role or can_review_by_perm):
                 if can_review_by_perm or work_order.customer.salesperson == submitted_by:
-                    return WorkOrderFlowService.approve(
-                        work_order_id=work_order.id,
+                    return WorkOrderFlowService.handle_approval_passed(
+                        work_order=work_order,
                         approved_by=submitted_by,
                         comment="系统自动审核通过（快捷发布）"
                     )
@@ -406,6 +406,9 @@ class WorkOrderFlowService:
         from workorder.services.task_generation import TaskGenerationService
 
         task_result = TaskGenerationService.generate_tasks_and_dispatch(work_order)
+        procurement_summary = WorkOrderFlowService._get_procurement_need_summary(
+            work_order
+        )
         logger.info(
             f"施工单 {work_order.order_number} 生成了 {task_result['created_count']} 个任务，"
             f"分派了 {task_result['dispatched_count']} 个"
@@ -433,6 +436,8 @@ class WorkOrderFlowService:
             dispatch_result=task_result,
         )
 
+        work_order._task_generation_result = task_result
+        work_order._procurement_summary = procurement_summary
         logger.info(f"施工单 {work_order.order_number} 审核通过流程完成")
         return work_order
 
@@ -455,7 +460,7 @@ class WorkOrderFlowService:
         3. 发送通知给创建人
 
         注意：审核拒绝时，已生成的任务保留在数据库中。
-        如果施工单重新提交审核并通过，之前的任务会被删除并重新生成。
+        如果施工单重新提交审核并通过，任务生成服务只补齐缺失任务，不删除已开始或已完成任务。
 
         Args:
             work_order: 施工单对象
@@ -571,6 +576,24 @@ class WorkOrderFlowService:
             new_seq = 1
 
         return f"{prefix}{new_seq:03d}"
+
+    @staticmethod
+    def _get_procurement_need_summary(work_order: WorkOrder) -> Dict[str, Any]:
+        """统计施工单待采购物料，用于审批结果提示。"""
+        from workorder.constants.status import MaterialPurchaseStatus
+
+        pending_materials = work_order.materials.select_related(
+            "material__default_supplier"
+        ).filter(purchase_status=MaterialPurchaseStatus.PENDING)
+        pending_count = pending_materials.count()
+        missing_supplier_count = sum(
+            1 for item in pending_materials if not item.material.default_supplier_id
+        )
+        return {
+            "pending_material_count": pending_count,
+            "missing_supplier_count": missing_supplier_count,
+            "can_create_purchase_orders": pending_count > 0 and missing_supplier_count == 0,
+        }
 
     @staticmethod
     def _copy_sales_order_products(

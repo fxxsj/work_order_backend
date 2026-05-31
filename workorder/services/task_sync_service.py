@@ -37,9 +37,19 @@ class TaskSyncService:
                 - added_process_ids: 新增的工序ID列表
                 - affected: 是否有任何变化
         """
-        # 使用集合进行差量计算（O(1)复杂度）
-        old_set = set(old_process_ids)
-        new_set = set(new_process_ids)
+        current_process_ids = set(
+            work_order.order_processes.values_list("id", flat=True)
+        )
+        old_set = (
+            set(old_process_ids)
+            if old_process_ids is not None
+            else current_process_ids
+        )
+        new_set = (
+            set(new_process_ids)
+            if new_process_ids is not None
+            else current_process_ids
+        )
 
         # 计算差异
         removed = old_set - new_set  # 被移除的工序
@@ -47,21 +57,42 @@ class TaskSyncService:
 
         # 查询将被删除的任务数量
         tasks_to_remove = 0
+        blocked_task_ids = []
         if removed:
-            tasks_to_remove = WorkOrderTask.objects.filter(
+            removed_tasks = WorkOrderTask.objects.filter(
                 work_order_process__in=list(removed),
-            ).count()
+            )
+            blocked_task_ids = list(
+                removed_tasks.exclude(status="pending").values_list("id", flat=True)
+            )
+            tasks_to_remove = removed_tasks.filter(status="pending").count()
 
-        # 估算新增任务数量（基于工序类型）
-        # 这是一个粗略估计，实际数量取决于工序类型和关联对象
-        tasks_to_add = len(added) * 2  # 保守估计每个工序平均生成2个任务
+        process_ids_to_check = (new_set & current_process_ids) | added
+        missing_process_ids = []
+        tasks_to_add = 0
+        for process in WorkOrderProcess.objects.filter(
+            id__in=list(process_ids_to_check),
+            work_order=work_order,
+        ):
+            missing_tasks = TaskGenerationService.build_missing_task_objects(process)
+            if missing_tasks:
+                missing_process_ids.append(process.id)
+                tasks_to_add += len(missing_tasks)
+
+        process_ids_to_generate = sorted(set(added) | set(missing_process_ids))
 
         return {
             'tasks_to_remove': tasks_to_remove,
             'tasks_to_add': tasks_to_add,
+            'tasks_blocked': len(blocked_task_ids),
             'removed_process_ids': list(removed),
             'added_process_ids': list(added),
-            'affected': len(removed) > 0 or len(added) > 0
+            'missing_process_ids': missing_process_ids,
+            'orphan_task_ids': [],
+            'blocked_task_ids': blocked_task_ids,
+            'process_ids_to_generate': process_ids_to_generate,
+            'sync_needed': bool(removed or added or missing_process_ids),
+            'affected': bool(removed or added or missing_process_ids),
         }
 
     @staticmethod
@@ -93,16 +124,32 @@ class TaskSyncService:
         )
 
         removed_ids = preview['removed_process_ids']
-        added_ids = preview['added_process_ids']
+        added_ids = preview['process_ids_to_generate']
 
         deleted_count = 0
         added_count = 0
+        dispatched_count = 0
+        blocked_task_ids = []
 
         # 1. 删除被移除工序的任务
         if removed_ids:
-            deleted_count, _ = WorkOrderTask.objects.filter(
+            removed_tasks = WorkOrderTask.objects.filter(
                 work_order_process__in=removed_ids,
-            ).delete()
+            )
+            blocked_task_ids = list(
+                removed_tasks.exclude(status="pending").values_list("id", flat=True)
+            )
+            if blocked_task_ids:
+                return {
+                    'deleted_count': 0,
+                    'added_count': 0,
+                    'dispatched_count': 0,
+                    'blocked_count': len(blocked_task_ids),
+                    'blocked_task_ids': blocked_task_ids,
+                    'message': f'同步被阻止：{len(blocked_task_ids)} 个任务已开始或已完成，不能自动删除',
+                }
+            deleted_count = removed_tasks.count()
+            removed_tasks.delete()
 
         # 2. 为新增工序生成任务
         if added_ids:
@@ -115,7 +162,7 @@ class TaskSyncService:
             all_new_tasks = []
             for process in new_processes:
                 # 使用 TaskGenerationService 构建任务对象
-                task_objects = TaskGenerationService.build_task_objects(process)
+                task_objects = TaskGenerationService.build_missing_task_objects(process)
                 all_new_tasks.extend(task_objects)
 
             # 批量创建新任务
@@ -126,11 +173,20 @@ class TaskSyncService:
                     ignore_conflicts=False
                 )
                 added_count = len(created_tasks)
+                dispatched_count = TaskGenerationService._dispatch_tasks(
+                    created_tasks, locked_work_order
+                )
 
-        message = f'同步完成：已删除 {deleted_count} 个任务，新增 {added_count} 个任务'
+        message = (
+            f'同步完成：已删除 {deleted_count} 个任务，'
+            f'新增 {added_count} 个任务，分派 {dispatched_count} 个任务'
+        )
 
         return {
             'deleted_count': deleted_count,
             'added_count': added_count,
+            'dispatched_count': dispatched_count,
+            'blocked_count': 0,
+            'blocked_task_ids': blocked_task_ids,
             'message': message
         }

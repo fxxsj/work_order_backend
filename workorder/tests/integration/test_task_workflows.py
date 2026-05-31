@@ -14,9 +14,12 @@ from workorder.tests.factories import (
     WorkOrderTaskFactory,
     WorkOrderProcessFactory,
     WorkOrderProductFactory,
+    WorkOrderMaterialFactory,
+    MaterialFactory,
 )
 from workorder.models import WorkOrder, WorkOrderTask
 from workorder.models.core import TaskLog
+from workorder.models.assets import Artwork, Die, FoilingPlate, EmbossingPlate
 
 
 def make_salesperson(user, customer):
@@ -73,6 +76,259 @@ class TestWorkOrderTaskWorkflow:
         assert tasks.count() >= 1
         # At least one task should be pending (approval creates new tasks)
         assert tasks.filter(status="pending").exists()
+
+    def test_workorder_approval_is_idempotent_for_generated_tasks(self, api_client):
+        """
+        GIVEN: A submitted workorder that already has generated pending tasks
+        WHEN: Task generation is invoked again through approval flow service
+        THEN: Existing formal tasks are reused and not duplicated
+        """
+        from workorder.services.task_generation import TaskGenerationService
+
+        process = ProcessFactory(code="PACK", name="包装")
+        supervisor = UserFactory(username="idempotent_supervisor")
+        workorder = WorkOrderFactory(
+            approval_status="submitted",
+            created_by=supervisor,
+            processes=[{"process": process, "tasks": 0}],
+        )
+        WorkOrderProductFactory(work_order=workorder, quantity=100)
+
+        first_result = TaskGenerationService.generate_tasks_and_dispatch(workorder)
+        second_result = TaskGenerationService.generate_tasks_and_dispatch(workorder)
+
+        assert first_result["created_count"] == 1
+        assert second_result["created_count"] == 0
+        assert second_result["existing_count"] == 1
+        assert workorder.tasks.exclude(status="draft").count() == 1
+
+    def test_reapproval_preserves_existing_completed_tasks(self, api_client):
+        """
+        GIVEN: A rejected workorder already has a completed formal task
+        WHEN: It is resubmitted and approved again
+        THEN: Existing completed tasks are preserved and not duplicated
+        """
+        from workorder.services.work_order_flow_service import WorkOrderFlowService
+
+        process = ProcessFactory(code="PACK", name="包装")
+        reviewer = UserFactory(username="reapproval_reviewer", is_superuser=True)
+        workorder = WorkOrderFactory(
+            approval_status="rejected",
+            status="pending",
+            created_by=reviewer,
+            processes=[{"process": process, "tasks": 0}],
+        )
+        product = WorkOrderProductFactory(work_order=workorder, quantity=100)
+        wo_process = workorder.order_processes.get()
+        existing_task = WorkOrderTaskFactory(
+            work_order_process=wo_process,
+            product=product.product,
+            task_type="packaging",
+            status="completed",
+        )
+
+        WorkOrderFlowService.submit_for_approval(
+            work_order_id=workorder.id,
+            submitted_by=reviewer,
+            comment="重新提交",
+        )
+        workorder.refresh_from_db()
+        approved = WorkOrderFlowService.handle_approval_passed(
+            work_order=workorder,
+            approved_by=reviewer,
+            comment="复审通过",
+        )
+
+        existing_task.refresh_from_db()
+        assert approved.approval_status == "approved"
+        assert existing_task.status == "completed"
+        assert workorder.tasks.exclude(status="draft").count() == 1
+        assert approved._task_generation_result["created_count"] == 0
+        assert approved._task_generation_result["existing_count"] == 1
+
+    def test_submit_for_approval_auto_approve_generates_tasks(self, api_client):
+        """
+        GIVEN: A draft workorder and a reviewer using quick publish
+        WHEN: submit_for_approval(auto_approve=True) runs
+        THEN: It uses the normal approval path and generates tasks
+        """
+        from workorder.services.work_order_flow_service import WorkOrderFlowService
+
+        reviewer = UserFactory(username="auto_approve_reviewer", is_superuser=True)
+        workorder = WorkOrderFactory(
+            approval_status="draft",
+            status="pending",
+            created_by=reviewer,
+            processes=1,
+        )
+        WorkOrderProductFactory(work_order=workorder, quantity=100)
+
+        approved = WorkOrderFlowService.submit_for_approval(
+            work_order_id=workorder.id,
+            submitted_by=reviewer,
+            comment="快捷发布",
+            auto_approve=True,
+        )
+
+        assert approved.approval_status == "approved"
+        assert workorder.tasks.exclude(status="draft").exists()
+
+    def test_process_task_generation_rules_cover_core_process_codes(self, api_client):
+        """
+        GIVEN: A workorder with assets, cutting materials, and products
+        WHEN: Task objects are built for each core process code
+        THEN: Each process creates the expected task type and count
+        """
+        from workorder.services.task_generation import TaskGenerationService
+
+        workorder = WorkOrderFactory(
+            approval_status="submitted",
+            status="pending",
+            processes=[],
+            production_quantity=120,
+        )
+        WorkOrderProductFactory(work_order=workorder, quantity=80)
+        WorkOrderMaterialFactory(
+            work_order=workorder,
+            material=MaterialFactory(need_cutting=True),
+            need_cutting=True,
+            material_usage="25张",
+        )
+        artwork = Artwork.objects.create(name="A1")
+        die = Die.objects.create(name="D1")
+        foiling = FoilingPlate.objects.create(name="F1")
+        embossing = EmbossingPlate.objects.create(name="E1")
+        workorder.artworks.add(artwork)
+        workorder.dies.add(die)
+        workorder.foiling_plates.add(foiling)
+        workorder.embossing_plates.add(embossing)
+
+        expectations = {
+            "CTP": (4, {"plate_making"}),
+            "CUT": (1, {"cutting"}),
+            "PRT": (1, {"printing"}),
+            "FOIL_G": (1, {"foiling"}),
+            "EMB": (1, {"embossing"}),
+            "DIE": (1, {"die_cutting"}),
+            "PACK": (1, {"packaging"}),
+        }
+
+        for code, (expected_count, expected_types) in expectations.items():
+            process = ProcessFactory(code=code, name=code)
+            wo_process = WorkOrderProcessFactory(
+                work_order=workorder,
+                process=process,
+                tasks=0,
+            )
+            task_objects = TaskGenerationService.build_task_objects(wo_process)
+
+            assert len(task_objects) == expected_count
+            assert {task.task_type for task in task_objects} == expected_types
+
+    def test_task_sync_dispatches_added_tasks(self, api_client):
+        """
+        GIVEN: A workorder with a newly added process
+        WHEN: Task sync creates missing tasks
+        THEN: Added tasks are assigned like approval-generated tasks
+        """
+        from workorder.services.task_sync_service import TaskSyncService
+
+        process = ProcessFactory(code="PACK", name="包装")
+        dept = DepartmentFactory(name="包装部")
+        dept.processes.add(process)
+        UserFactory(username="pack_operator", departments=[dept])
+        workorder = WorkOrderFactory(
+            approval_status="draft",
+            status="pending",
+            processes=[],
+        )
+        WorkOrderProductFactory(work_order=workorder, quantity=50)
+        wo_process = WorkOrderProcessFactory(
+            work_order=workorder,
+            process=process,
+            department=dept,
+            tasks=0,
+        )
+
+        result = TaskSyncService.execute_sync(
+            workorder,
+            old_process_ids=[],
+            new_process_ids=[wo_process.id],
+        )
+
+        assert result["added_count"] == 1
+        assert result["dispatched_count"] == 1
+        task = workorder.tasks.exclude(status="draft").get()
+        assert task.assigned_department == dept
+        assert task.assigned_operator is not None
+
+    def test_task_sync_blocks_deleting_started_tasks(self, api_client):
+        """
+        GIVEN: A removed process has an in-progress task
+        WHEN: Task sync executes
+        THEN: The sync is blocked and the task is preserved
+        """
+        from workorder.services.task_sync_service import TaskSyncService
+
+        process = ProcessFactory(code="PACK", name="包装")
+        workorder = WorkOrderFactory(
+            approval_status="draft",
+            status="pending",
+            processes=[],
+        )
+        WorkOrderProductFactory(work_order=workorder, quantity=50)
+        wo_process = WorkOrderProcessFactory(
+            work_order=workorder,
+            process=process,
+            tasks=0,
+        )
+        started_task = WorkOrderTaskFactory(
+            work_order_process=wo_process,
+            status="in_progress",
+        )
+
+        result = TaskSyncService.execute_sync(
+            workorder,
+            old_process_ids=[wo_process.id],
+            new_process_ids=[],
+        )
+
+        assert result["added_count"] == 0
+        assert result["deleted_count"] == 0
+        assert result["blocked_count"] == 1
+        assert result["blocked_task_ids"] == [started_task.id]
+        assert WorkOrderTask.objects.filter(id=started_task.id).exists()
+
+    def test_task_sync_detects_missing_tasks_for_existing_process(self, api_client):
+        """
+        GIVEN: A process already exists on the workorder but has no formal tasks
+        WHEN: Sync preview and execution run with the current process list
+        THEN: Missing tasks are detected and generated
+        """
+        from workorder.services.task_sync_service import TaskSyncService
+
+        process = ProcessFactory(code="PACK", name="包装")
+        workorder = WorkOrderFactory(
+            approval_status="draft",
+            status="pending",
+            processes=[],
+        )
+        WorkOrderProductFactory(work_order=workorder, quantity=50)
+        wo_process = WorkOrderProcessFactory(
+            work_order=workorder,
+            process=process,
+            tasks=0,
+        )
+        process_ids = [wo_process.id]
+
+        preview = TaskSyncService.preview_sync(workorder, process_ids, process_ids)
+        result = TaskSyncService.execute_sync(workorder, process_ids, process_ids)
+
+        assert preview["sync_needed"] is True
+        assert preview["tasks_to_add"] == 1
+        assert preview["missing_process_ids"] == process_ids
+        assert result["added_count"] == 1
+        assert workorder.tasks.exclude(status="draft").count() == 1
 
     def test_task_assignment_by_supervisor(self, api_client):
         """
@@ -385,6 +641,60 @@ class TestWorkOrderTaskWorkflow:
         )
 
         assert response.status_code == status.HTTP_200_OK
+        task.refresh_from_db()
+        assert task.status == "completed"
+
+    def test_cut_task_completion_requires_material_cut_status(self, api_client):
+        """
+        GIVEN: A CUT task linked to a workorder material
+        WHEN: The material has not been marked cut
+        THEN: The task cannot be completed until purchase_status is cut
+        """
+        process = ProcessFactory(code="CUT", name="开料")
+        user = UserFactory(username="cut_supervisor", is_superuser=True)
+        material = MaterialFactory(need_cutting=True)
+        workorder = WorkOrderFactory(
+            approval_status="approved",
+            status="in_progress",
+            created_by=user,
+            processes=[],
+        )
+        wo_process = WorkOrderProcessFactory(
+            work_order=workorder,
+            process=process,
+            tasks=0,
+        )
+        wo_material = WorkOrderMaterialFactory(
+            work_order=workorder,
+            material=material,
+            need_cutting=True,
+            purchase_status="received",
+        )
+        task = WorkOrderTaskFactory(
+            work_order_process=wo_process,
+            material=material,
+            task_type="cutting",
+            status="in_progress",
+            production_quantity=1,
+        )
+
+        api_client.force_authenticate(user=user)
+        blocked = api_client.post(
+            f"/api/v1/workorder-tasks/{task.id}/complete/",
+            {"completion_reason": "开料完成"},
+            format="json",
+        )
+        assert blocked.status_code == status.HTTP_400_BAD_REQUEST
+
+        wo_material.purchase_status = "cut"
+        wo_material.save(update_fields=["purchase_status"])
+        completed = api_client.post(
+            f"/api/v1/workorder-tasks/{task.id}/complete/",
+            {"completion_reason": "开料完成"},
+            format="json",
+        )
+
+        assert completed.status_code == status.HTTP_200_OK
         task.refresh_from_db()
         assert task.status == "completed"
 

@@ -324,8 +324,19 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             )
 
             serializer = WorkOrderDetailSerializer(updated_work_order)
+            data = dict(serializer.data)
+            task_generation = getattr(updated_work_order, "_task_generation_result", None)
+            procurement_summary = getattr(updated_work_order, "_procurement_summary", None)
+            if task_generation is not None:
+                data["task_generation"] = {
+                    key: value
+                    for key, value in task_generation.items()
+                    if key != "tasks"
+                }
+            if procurement_summary is not None:
+                data["procurement_summary"] = procurement_summary
             return APIResponse.success(
-                data=serializer.data,
+                data=data,
                 message="施工单已审核通过，任务已自动分派",
             )
 
