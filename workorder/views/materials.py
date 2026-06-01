@@ -58,6 +58,7 @@ from ..serializers.materials import (
 )
 from ..services.service_errors import ServiceError
 from ..services.approval_service import ApprovalService
+from ..services.purchase_order_flow_service import PurchaseOrderFlowService
 from .base_viewsets import BaseViewSet
 
 
@@ -262,29 +263,13 @@ class PurchaseOrderViewSet(BaseViewSet):
     def place_order(self, request, pk=None):
         """下单"""
         order = self.get_object()
-        if order.approval_status != "approved" or order.status not in ["pending", "draft", "ordered"]:
-            return APIResponse.error("只有已批准且未下单的采购单可以下单", code=status.HTTP_400_BAD_REQUEST)
-
-        order.status = "ordered"
-        ordered_date = request.data.get("ordered_date")
-        if ordered_date:
-            order.ordered_date = ordered_date
-        else:
-            order.ordered_date = timezone.now().date()
-        order.save()
-
-        # 回写施工单物料采购状态为"已下单"
-        from workorder.constants.status import MaterialPurchaseStatus
-
-        for item in order.items.select_related("work_order_material").all():
-            if item.work_order_material and item.work_order_material.purchase_status == MaterialPurchaseStatus.PENDING:
-                item.work_order_material.purchase_status = (
-                    MaterialPurchaseStatus.ORDERED
-                )
-                item.work_order_material.purchase_date = timezone.now().date()
-                item.work_order_material.save(
-                    update_fields=["purchase_status", "purchase_date"]
-                )
+        try:
+            PurchaseOrderFlowService.place_order(
+                order=order,
+                ordered_date=request.data.get("ordered_date"),
+            )
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code)
 
         return APIResponse.success(message="下单成功")
 

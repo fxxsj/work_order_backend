@@ -81,6 +81,35 @@ class TestPurchaseOrderWriteback:
         assert self.wo_material.purchase_status == MaterialPurchaseStatus.ORDERED
         assert self.wo_material.purchase_date is not None
 
+    def test_place_order_rejects_already_ordered_purchase_order(self):
+        """已下单采购单不能重复下单，避免覆盖下单日期"""
+        po = PurchaseOrderFactory(
+            supplier=self.supplier,
+            work_order=self.work_order,
+            approval_status="approved",
+            status="ordered",
+            ordered_date=timezone.now().date(),
+        )
+
+        response = self.client.post(f"/api/v1/purchase-orders/{po.id}/place_order/")
+
+        assert response.status_code == 400
+        assert "待下单" in response.json()["message"]
+
+    def test_place_order_rejects_non_pending_business_status(self):
+        """非 pending 业务状态不能下单，即使审批状态已通过"""
+        po = PurchaseOrderFactory(
+            supplier=self.supplier,
+            work_order=self.work_order,
+            approval_status="approved",
+            status="draft",
+        )
+
+        response = self.client.post(f"/api/v1/purchase-orders/{po.id}/place_order/")
+
+        assert response.status_code == 400
+        assert "待下单" in response.json()["message"]
+
     def test_stock_in_updates_work_order_material_to_received(self):
         """stock_in 应将 WorkOrderMaterial.purchase_status 更新为 received"""
         # 创建采购单并完成下单

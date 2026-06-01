@@ -188,7 +188,7 @@ class PurchaseOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
     """采购单"""
 
     STATUS_CHOICES = [
-        ("pending", "待处理"),
+        ("pending", "待下单"),
         ("ordered", "已下单"),
         ("received", "已收货"),
         ("cancelled", "已取消"),
