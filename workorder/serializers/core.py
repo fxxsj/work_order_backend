@@ -63,9 +63,7 @@ class TaskLogSerializer(serializers.ModelSerializer):
         source="get_log_type_display", read_only=True
     )
     operator_name = serializers.SerializerMethodField()
-    quantity_increment = (
-        serializers.SerializerMethodField()
-    )  # 增量值（优先使用模型字段，如果没有则计算）
+    quantity_increment = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = TaskLog
@@ -76,16 +74,6 @@ class TaskLogSerializer(serializers.ModelSerializer):
         if obj.operator:
             return obj.operator.username
         return None
-
-    def get_quantity_increment(self, obj) -> Optional[int]:
-        """获取增量值（优先使用模型字段，如果没有则计算）"""
-        if obj.quantity_increment is not None:
-            return obj.quantity_increment
-        # 兼容旧数据：如果没有增量字段，则计算
-        if obj.quantity_before is not None and obj.quantity_after is not None:
-            return obj.quantity_after - obj.quantity_before
-        return None
-
 
 class WorkOrderTaskSerializer(serializers.ModelSerializer):
     """施工单任务序列化器"""
@@ -252,10 +240,6 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
 class TaskAssignmentSerializer(serializers.Serializer):
     """任务分配序列化器"""
 
-    operator_id = serializers.IntegerField(
-        required=False,
-        help_text="操作员用户ID，兼容旧字段",
-    )
     assigned_operator = serializers.IntegerField(
         required=False,
         help_text="分派操作员用户ID",
@@ -273,15 +257,13 @@ class TaskAssignmentSerializer(serializers.Serializer):
     )
 
     def validate(self, attrs):
-        operator_id = attrs.get("operator_id") or attrs.get("assigned_operator")
+        assigned_operator = attrs.get("assigned_operator")
         department_provided = "assigned_department" in self.initial_data
-        if not operator_id and not department_provided:
+        if not assigned_operator and not department_provided:
             raise serializers.ValidationError("请提供操作员ID或分派部门")
-        if operator_id:
-            attrs["operator_id"] = operator_id
         return attrs
 
-    def validate_operator_id(self, value):
+    def validate_assigned_operator(self, value):
         """验证操作员ID"""
         from django.contrib.auth.models import User
 
@@ -857,15 +839,6 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                 data["delivery_date"] = sales_order.delivery_date
             if not products_data and not data.get("total_amount"):
                 data["total_amount"] = sales_order.total_amount
-
-        existing_allocated_quantities = {}
-        if instance is not None:
-            existing_allocated_quantities = {
-                item.sales_order_item_id: item.quantity or 0
-                for item in instance.products.filter(
-                    sales_order_item__isnull=False, source_type="sales_order"
-                )
-            }
 
         validated_products_data = []
         requested_quantities_by_sales_item = {}

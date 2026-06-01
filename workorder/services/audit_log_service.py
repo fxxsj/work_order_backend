@@ -16,9 +16,7 @@ import uuid
 import decimal
 from datetime import date, datetime, time
 from django.db.models.signals import post_save, post_delete, pre_save
-from django.db.models import Model
 from django.contrib.contenttypes.models import ContentType
-from django.utils import timezone
 from django.db.models.fields.files import FieldFile
 
 from ..models.audit import AuditLog, AuditLogSettings, AuditMixin

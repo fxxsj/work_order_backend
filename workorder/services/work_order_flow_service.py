@@ -27,7 +27,6 @@ from django.db import transaction
 from django.db.models import Sum, F
 from django.contrib.auth.models import User
 from django.utils import timezone
-from django.core.exceptions import ValidationError
 from rest_framework import status
 
 from ..permissions.permission_utils import is_sales_user
@@ -37,16 +36,12 @@ from ..models.core import (
     WorkOrderTask,
     WorkOrderProduct,
     WorkOrderMaterial,
-    APPROVED_ORDER_EDITABLE_FIELDS,
 )
 from ..models.sales import SalesOrder, SalesOrderItem
 from ..models.inventory import ProductStock
 from ..models.system import (
     WorkOrderApprovalLog,
-    Notification,
-    TaskAssignmentRule,
 )
-from ..models.base import Customer, Department
 from workorder.constants.status import (
     SalesOrderStatus,
     TaskStatus,
@@ -54,7 +49,6 @@ from workorder.constants.status import (
     WorkOrderStatus,
 )
 from .service_errors import ServiceError
-from .work_order_service import WorkOrderService
 from .dispatch_service import AutoDispatchService
 from .notification_triggers_flow import NotificationTriggers
 

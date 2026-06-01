@@ -801,10 +801,8 @@ class StatementViewSet(viewsets.ModelViewSet):
             ownership_paths=("created_by", "confirmed_by"),
         )
 
-        # 按对账单类型过滤（兼容前端参数 statement_type 和后端参数 type）
-        statement_type = self.request.query_params.get(
-            "statement_type"
-        ) or self.request.query_params.get("type")
+        # 按对账单类型过滤
+        statement_type = self.request.query_params.get("type")
         if statement_type:
             queryset = queryset.filter(statement_type=statement_type)
 
@@ -819,10 +817,8 @@ class StatementViewSet(viewsets.ModelViewSet):
         elif todo_filter == "disputed":
             queryset = queryset.filter(status="disputed")
 
-        # 按客户过滤（兼容前端参数 partner 和后端参数 customer）
-        customer_id = self.request.query_params.get(
-            "partner"
-        ) or self.request.query_params.get("customer")
+        # 按客户过滤
+        customer_id = self.request.query_params.get("customer")
         if customer_id:
             queryset = queryset.filter(customer_id=customer_id)
 

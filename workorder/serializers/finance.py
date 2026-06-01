@@ -14,7 +14,6 @@
 from decimal import Decimal
 from typing import Optional
 
-from django.contrib.auth.models import User
 from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import serializers
@@ -224,7 +223,6 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """验证发票数据"""
-        invoice_type = data.get("invoice_type")
         amount = data.get("amount")
         tax_rate = data.get("tax_rate")
 
@@ -507,15 +505,6 @@ class StatementSerializer(serializers.ModelSerializer):
         source="confirmed_by.username", read_only=True, allow_null=True
     )
 
-    # 兼容前端字段名
-    period_start = serializers.DateField(source="start_date", read_only=True)
-    period_end = serializers.DateField(source="end_date", read_only=True)
-    debit_amount = serializers.DecimalField(
-        source="total_debit", read_only=True, max_digits=12, decimal_places=2
-    )
-    credit_amount = serializers.DecimalField(
-        source="total_credit", read_only=True, max_digits=12, decimal_places=2
-    )
     statement_date = serializers.SerializerMethodField()
     follow_up_text = serializers.SerializerMethodField()
 
@@ -531,7 +520,7 @@ class StatementSerializer(serializers.ModelSerializer):
         return obj.created_at.date()
 
     def get_partner_name(self, obj) -> Optional[str]:
-        """获取对方单位名称（兼容前端）"""
+        """获取对方单位名称"""
         if obj.statement_type == "customer" and obj.customer:
             return obj.customer.name
         elif obj.statement_type == "supplier" and obj.supplier:

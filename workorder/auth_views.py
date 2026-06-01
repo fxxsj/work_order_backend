@@ -7,8 +7,6 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User, Group
-from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
-from django.utils.decorators import method_decorator
 from django.conf import settings
 from datetime import timedelta
 from .serializers.base import UserSerializer
@@ -461,8 +459,6 @@ def get_salespersons(request):
 @permission_classes([IsAuthenticated])
 def get_users_by_department(request):
     """根据部门获取用户列表"""
-    from .models import UserProfile
-
     try:
         department_id = request.query_params.get("department_id")
 

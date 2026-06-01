@@ -4,7 +4,6 @@
 提供缓存和优化的权限检查方法，减少数据库查询
 """
 from django.core.cache import cache
-from django.contrib.auth.models import Permission
 from django.db.models import Q
 
 

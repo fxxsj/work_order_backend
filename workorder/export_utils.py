@@ -12,7 +12,6 @@ except ImportError:
 
 from django.http import HttpResponse
 from django.utils import timezone
-from datetime import datetime
 
 
 def create_excel_response(filename):
@@ -803,4 +802,3 @@ def import_customers(file, user=None):
             'error_count': 1,
             'errors': [f'文件读取失败: {str(e)}']
         }
-

@@ -4,12 +4,6 @@
 定义各模型的导出/导入配置，供 ViewSet 使用。
 """
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Type
-
-from django.contrib.auth.models import User
-from django.db import models
-
 from .import_export import ExportConfig, ExportField, ImportConfig, ImportField
 
 

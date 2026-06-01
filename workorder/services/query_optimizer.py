@@ -9,11 +9,11 @@
 """
 
 from django.db import models
-from django.db.models import Prefetch, Q, Count, Sum, Avg, Max, Min
+from django.db.models import Prefetch, Q, Count, Sum
 from django.core.cache import cache
 from django.conf import settings
 from django.utils import timezone
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any
 import logging
 import time
 
@@ -165,7 +165,7 @@ class QueryOptimizer:
         Returns:
             {order_id: stats_dict}
         """
-        from ..models.core import WorkOrder, WorkOrderProcess, WorkOrderTask
+        from ..models.core import WorkOrder
         
         # 使用子查询获取统计信息，避免多次查询
         work_orders = WorkOrder.objects.filter(id__in=order_ids).select_related(

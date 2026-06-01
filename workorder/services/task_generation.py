@@ -334,6 +334,3 @@ class TaskGenerationService:
             except (ValueError, IndexError):
                 return 0
         return 0
-
-
-# 保留别名以保持向后兼容

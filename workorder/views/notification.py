@@ -35,13 +35,6 @@ from ..models.system import (
     default_user_notification_preferences,
 )
 
-# 暂时注释掉可能导致阻塞的导入
-# from ..services.realtime_notification import (
-#     RealtimeNotificationService, NotificationManager,
-#     NotificationEvent, NotificationPriority, NotificationChannel
-# )
-
-
 class NotificationPagination(PageNumberPagination):
     """通知分页器"""
 

@@ -5,14 +5,11 @@
 """
 
 import json
-import asyncio
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 from urllib.parse import parse_qs
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync, sync_to_async
-from django.db.models import Q
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.conf import settings
@@ -348,8 +345,9 @@ class RealtimeNotificationService:
         # 去重
         recipients = list(set(recipients))
 
-        # 获取工序名称
-        process_name = task.work_order_process.process.name if task.work_order_process else task.process_code
+        process = task.work_order_process.process if task.work_order_process else None
+        process_code = process.code if process else None
+        process_name = process.name if process else None
 
         self.send_notification(
             event_type=NotificationEvent.TASK_ASSIGNED,
@@ -359,7 +357,7 @@ class RealtimeNotificationService:
                 'task_name': task.work_content,
                 'workorder_id': task.work_order_process.work_order.id if task.work_order_process else None,
                 'workorder_number': task.work_order_process.work_order.order_number if task.work_order_process else '',
-                'process_code': task.process_code,
+                'process_code': process_code,
                 'process_name': process_name,
                 'assigned_by': assigned_by.username if assigned_by else '系统',
                 'quantity': task.production_quantity,
@@ -389,8 +387,9 @@ class RealtimeNotificationService:
 
         recipients = list(set(recipients))
 
-        # 获取工序名称
-        process_name = task.work_order_process.process.name if task.work_order_process else task.process_code
+        process = task.work_order_process.process if task.work_order_process else None
+        process_code = process.code if process else None
+        process_name = process.name if process else None
 
         self.send_notification(
             event_type=NotificationEvent.TASK_COMPLETED,
@@ -402,7 +401,7 @@ class RealtimeNotificationService:
                 'workorder_number': work_order.order_number if work_order else '',
                 'completed_by': completed_by.username if completed_by else '系统',
                 'completed_at': timezone.now().isoformat(),
-                'process_code': task.process_code,
+                'process_code': process_code,
                 'process_name': process_name,
             },
             priority=NotificationPriority.NORMAL,
@@ -412,32 +411,12 @@ class RealtimeNotificationService:
     def _get_department_members(self, department):
         """获取部门成员"""
         try:
-            from ..models.system import UserProfile
             return User.objects.filter(
                 profile__departments=department,
                 is_active=True
             ).distinct()
         except Exception:
             return []
-
-    def _get_supervisors(self):
-        """获取主管用户（具有主管权限的用户）"""
-        # 根据实际权限系统实现
-        try:
-            from ..models.system import UserProfile
-            return User.objects.filter(
-                profile__role__in=['supervisor', 'manager'],
-                is_active=True
-            ).distinct()
-        except Exception:
-            # Fallback to group-based check
-            try:
-                return User.objects.filter(
-                    groups__name__in=['supervisor', 'manager'],
-                    is_active=True
-                ).distinct()
-            except Exception:
-                return []
 
     def _map_priority(self, workorder_priority):
         """映射施工单优先级到通知优先级"""
@@ -534,7 +513,7 @@ class RealtimeNotificationService:
     def _get_next_process(self, workorder, current_process):
         """获取下一个工序"""
         try:
-            from ..models.core import WorkOrderProcess, Process
+            from ..models.core import WorkOrderProcess
             
             current_order = WorkOrderProcess.objects.get(
                 workorder=workorder, 
@@ -554,8 +533,6 @@ class RealtimeNotificationService:
     def _get_process_operators(self, process):
         """获取工序操作员"""
         try:
-            from ..models.system import UserProfile
-            
             return User.objects.filter(
                 userprofile__department=process.department,
                 userprofile__is_active=True
@@ -571,8 +548,6 @@ class RealtimeNotificationService:
             processes = WorkOrderProcess.objects.filter(workorder=workorder).values_list('process', flat=True)
             
             departments = Process.objects.filter(id__in=processes).values_list('department', flat=True)
-            
-            from ..models.system import UserProfile
             return User.objects.filter(
                 userprofile__department__in=departments,
                 userprofile__is_active=True
@@ -599,7 +574,6 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         # 从查询参数获取 token
         query_string = self.scope.get("query_string", b"").decode("utf-8")
 
-        from urllib.parse import parse_qs
         query_params = parse_qs(query_string)
 
         # parse_qs 返回字符串键，不是字节键
@@ -613,15 +587,12 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         # 验证 JWT token 并获取用户（使用 sync_to_async 包装同步 ORM 调用）
         from rest_framework_simplejwt.tokens import AccessToken
         from rest_framework_simplejwt.exceptions import TokenError
-        from asgiref.sync import sync_to_async
-
         try:
             # 解析 JWT access token
             access_token = AccessToken(token)
             user_id = access_token['user_id']
 
             # 从数据库获取用户
-            from django.contrib.auth.models import User
             user = await sync_to_async(User.objects.get)(id=user_id, is_active=True)
         except TokenError as e:
             logger.warning(f"WebSocket JWT token 无效: {token[:10]}... - {str(e)}")
@@ -689,8 +660,6 @@ class NotificationManager:
     def create_system_announcement(title: str, message: str, priority: str = NotificationPriority.NORMAL):
         """创建系统公告"""
         try:
-            from ..models.system import UserProfile
-            
             # 获取所有活跃用户
             active_users = User.objects.filter(
                 userprofile__is_active=True,
@@ -717,8 +686,6 @@ class NotificationManager:
     def send_urgent_order_alert(workorder):
         """发送紧急订单警报"""
         try:
-            from ..models.system import UserProfile
-            
             # 获取所有主管和操作员
             supervisors = User.objects.filter(groups__name='supervisor', is_active=True)
             

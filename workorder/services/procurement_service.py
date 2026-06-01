@@ -10,9 +10,6 @@ import logging
 from datetime import date, timedelta
 from typing import Any, Dict, List
 
-from django.db.models import Count, Q, Sum
-from django.utils import timezone
-
 from workorder.constants.status import MaterialPurchaseStatus
 
 logger = logging.getLogger(__name__)
@@ -53,8 +50,6 @@ class ProcurementService:
             }
         """
         from workorder.models.core import WorkOrderMaterial
-        from workorder.models.materials import Material, PurchaseOrderItem
-
         # 查询所有活跃施工单的物料
         wo_materials = (
             WorkOrderMaterial.objects.filter(

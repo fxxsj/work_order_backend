@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Optional, Tuple
+from typing import Optional
 
 from workorder.permission_utils import PermissionCache
 from workorder.permissions.permission_utils import is_manager_user
@@ -82,41 +82,3 @@ def ensure_material_cut_ready(
     if ProcessCodes.requires_material_cut_status(process_code):
         if work_order_material.purchase_status != "cut":
             raise ServiceError(message=f"物料未开料，无法{action_label}开料任务", code=400)
-
-
-def resolve_design_assets(
-    *,
-    task,
-    artwork_ids: Iterable[int],
-    die_ids: Iterable[int],
-    work_order,
-) -> Tuple[Optional[object], Optional[object]]:
-    artwork = None
-    die = None
-
-    is_design_task = "设计图稿" in task.work_content or "更新图稿" in task.work_content
-    is_die_design_task = "设计刀模" in task.work_content or "更新刀模" in task.work_content
-
-    if is_design_task:
-        if not artwork_ids:
-            raise ServiceError(message="请至少选择一个图稿", code=400)
-        from workorder.models.assets import Artwork
-
-        artworks = Artwork.objects.filter(id__in=artwork_ids)
-        if artworks.count() != len(artwork_ids):
-            raise ServiceError(message="部分图稿不存在", code=400)
-        work_order.artworks.add(*artworks)
-        artwork = artworks.first()
-
-    if is_die_design_task:
-        if not die_ids:
-            raise ServiceError(message="请至少选择一个刀模", code=400)
-        from workorder.models.assets import Die
-
-        dies = Die.objects.filter(id__in=die_ids)
-        if dies.count() != len(die_ids):
-            raise ServiceError(message="部分刀模不存在", code=400)
-        work_order.dies.add(*dies)
-        die = dies.first()
-
-    return artwork, die

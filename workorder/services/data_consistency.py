@@ -9,10 +9,8 @@
 """
 
 from django.db import transaction
-from django.db.models import F, Sum, Q, Count
 from django.utils import timezone
-from decimal import Decimal
-from typing import Dict, List, Optional, Tuple
+from typing import Dict
 import logging
 
 logger = logging.getLogger(__name__)

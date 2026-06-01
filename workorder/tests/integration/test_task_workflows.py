@@ -355,11 +355,11 @@ class TestWorkOrderTaskWorkflow:
         task.refresh_from_db()
         assert task.assigned_operator == operator
 
-    def test_task_assignment_accepts_operator_id_alias(self, api_client):
+    def test_task_assignment_rejects_operator_id_alias(self, api_client):
         """
         GIVEN: A pending task and an operator
-        WHEN: Supervisor assigns using the legacy operator_id field
-        THEN: Task is assigned to operator
+        WHEN: Supervisor assigns using the removed legacy operator_id field
+        THEN: Request is rejected
         """
         dept = DepartmentFactory()
         supervisor = UserFactory(username="supervisor_alias", departments=[dept])
@@ -376,9 +376,9 @@ class TestWorkOrderTaskWorkflow:
             format="json",
         )
 
-        assert response.status_code == status.HTTP_200_OK
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
         task.refresh_from_db()
-        assert task.assigned_operator == operator
+        assert task.assigned_operator is None
 
     def test_task_assignment_can_update_department_only(self, api_client):
         """

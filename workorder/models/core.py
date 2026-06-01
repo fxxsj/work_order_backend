@@ -24,11 +24,10 @@ Migration 0036_add_performance_indexes applied successfully.
 """
 
 import logging
-from datetime import date, datetime
+from datetime import date
 
 from django.contrib.auth.models import User
-from django.db import models, transaction
-from django.db.models import Max
+from django.db import models
 from django.utils import timezone
 from rest_framework import status
 from workorder.models.audit import AuditMixin
@@ -40,10 +39,10 @@ logger = logging.getLogger(__name__)
 
 # 导入 Process 和 Department 模型用于验证和分派
 try:
-    from workorder.models.base import Department, Process
+    from workorder.models.base import Department
 except ImportError:
     # 如果在同一个模块中，使用相对导入
-    from .base import Department, Process
+    from .base import Department
 
 # 审核通过后禁止编辑的核心字段列表
 APPROVED_ORDER_PROTECTED_FIELDS = [
@@ -756,8 +755,6 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
         import random
 
         from django.contrib.auth.models import User
-        from django.db.models import Count, Q
-
         department_users = User.objects.filter(
             profile__departments=department, is_active=True
         ).exclude(
@@ -1199,16 +1196,6 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
     def get_audit_log_repr(self):
         return f"{self.work_order_process} - {self.work_content[:50]}"
 
-    @property
-    def process_code(self):
-        """兼容引用任务工序编码的调用方。"""
-        if not self.work_order_process_id:
-            return None
-        process = getattr(self.work_order_process, "process", None)
-        if not process:
-            return None
-        return process.code
-
     def is_subtask(self):
         """判断是否为子任务"""
         return self.parent_task is not None
@@ -1259,8 +1246,6 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
         Returns:
             bool: 更新是否成功
         """
-        from django.utils import timezone
-
         # 保存旧值
         old_quantity = self.quantity_completed
 

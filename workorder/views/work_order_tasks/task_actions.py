@@ -4,9 +4,6 @@
 包含单个任务的操作方法。
 """
 
-from django.db.models import Q
-from django.utils import timezone
-from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiExample,
     OpenApiResponse,
@@ -23,11 +20,10 @@ from workorder.policies.task_policy import (
     ensure_material_cut_ready,
     ensure_task_version,
     ensure_user_can_modify_task,
-    resolve_design_assets,
 )
 
 from workorder.models.base import Department
-from workorder.models.core import TaskLog, WorkOrder, WorkOrderTask
+from workorder.models.core import TaskLog
 from workorder.models.system import Notification
 from workorder.serializers.core import TaskAssignmentSerializer, WorkOrderTaskSerializer
 from workorder.services.realtime_notification import notification_service
@@ -140,8 +136,6 @@ class TaskActionsMixin:
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
-        from workorder.process_codes import ProcessCodes
-
         # 并发控制：检查版本号（乐观锁）
         expected_version = request.data.get("version")
         try:
@@ -157,8 +151,6 @@ class TaskActionsMixin:
         quantity_increment = request.data.get("quantity_increment")
         quantity_defective = request.data.get("quantity_defective", 0)
         notes = request.data.get("notes", "")
-        artwork_ids = request.data.get("artwork_ids", [])
-        die_ids = request.data.get("die_ids", [])
 
         if quantity_increment is None:
             return APIResponse.error("请提供本次完成数量", code=status.HTTP_400_BAD_REQUEST)
@@ -187,21 +179,6 @@ class TaskActionsMixin:
 
         # 记录更新前的状态和数量
         status_before = task.status
-
-        try:
-            artwork, die = resolve_design_assets(
-                task=task,
-                artwork_ids=artwork_ids,
-                die_ids=die_ids,
-                work_order=work_order,
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
-        if artwork:
-            task.artwork = artwork
-        if die:
-            task.die = die
 
         # 更新任务数量（增量更新）
         task.quantity_completed = new_quantity_completed
@@ -356,8 +333,6 @@ class TaskActionsMixin:
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
-        from workorder.process_codes import ProcessCodes
-
         # 并发控制：检查版本号（乐观锁）
         expected_version = request.data.get("version")
         try:
@@ -373,8 +348,6 @@ class TaskActionsMixin:
         completion_reason = request.data.get("completion_reason", "")
         quantity_defective = request.data.get("quantity_defective", 0)  # 不良品数量
         notes = request.data.get("notes", "")
-        artwork_ids = request.data.get("artwork_ids", [])
-        die_ids = request.data.get("die_ids", [])
 
         try:
             ensure_assets_confirmed(task, "完成")
@@ -385,23 +358,6 @@ class TaskActionsMixin:
         # 记录更新前的状态和数量
         status_before = task.status
         quantity_before = task.quantity_completed
-
-        # 注意：设计不属于施工单工序，设计任务通过其他系统管理
-        # 以下逻辑用于兼容可能已存在的设计任务（手动创建或历史数据）
-        try:
-            artwork, die = resolve_design_assets(
-                task=task,
-                artwork_ids=artwork_ids,
-                die_ids=die_ids,
-                work_order=work_order,
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
-        if artwork:
-            task.artwork = artwork
-        if die:
-            task.die = die
 
         # 强制设置为已完成（不根据数量判断）
         task.status = "completed"
@@ -574,7 +530,6 @@ class TaskActionsMixin:
         兼容字段：
         - assigned_department: 部门ID；传空值时清空部门分派
         - assigned_operator: 操作员ID
-        - operator_id: 操作员ID（旧字段）
         """
         task = self.get_object()
         serializer = TaskAssignmentSerializer(data=request.data)
@@ -663,7 +618,7 @@ class TaskActionsMixin:
                         operator=request.user,
                     )
 
-            operator_id = serializer.validated_data.get("operator_id")
+            operator_id = serializer.validated_data.get("assigned_operator")
             if operator_id:
                 result = TaskAssignmentService.assign_to_operator(
                     task_id=task.id,
@@ -718,8 +673,6 @@ class TaskActionsMixin:
         - 只有生产主管、创建人或任务分派的操作员可以取消任务
         - 已开始的任务需要特殊权限才能取消
         """
-        from django.contrib.auth.models import User
-
         from workorder.models.core import TaskLog
 
         task = self.get_object()
@@ -768,7 +721,6 @@ class TaskActionsMixin:
 
         # 记录取消前的状态
         status_before = task.status
-        quantity_before = task.quantity_completed
 
         # 取消任务
         task.status = "cancelled"

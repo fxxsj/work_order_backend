@@ -408,7 +408,7 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
 
         POST /workorder-tasks/{id}/assign/
         Body: {
-            "operator_id": 123,
+            "assigned_operator": 123,
             "notes": "优先处理此任务"  # 可选
         }
 
@@ -426,7 +426,7 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         try:
             result = TaskAssignmentService.assign_to_operator(
                 task_id=task.id,
-                operator_id=serializer.validated_data["operator_id"],
+                operator_id=serializer.validated_data["assigned_operator"],
                 assigned_by=request.user,
                 notes=serializer.validated_data.get("notes", ""),
             )

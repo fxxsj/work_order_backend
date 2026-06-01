@@ -6,7 +6,6 @@
 """
 from typing import Optional, Dict, Any
 from django.db import transaction
-from django.db.models import Q
 from django.utils import timezone
 import logging
 
@@ -280,9 +279,6 @@ class TaskAssignmentService:
         # 验证任务可分配性
         TaskAssignmentService.validate_task_assignment_eligibility(task)
 
-        # 记录原操作员（用于日志）
-        previous_operator = task.assigned_operator
-
         # 执行分配
         task.assigned_operator = operator
         task.save(update_fields=['assigned_department', 'assigned_operator', 'updated_at'])
@@ -441,8 +437,6 @@ class TaskAssignmentService:
             ServiceError: 业务规则不满足（code=status.HTTP_422_UNPROCESSABLE_ENTITY 或 code=status.HTTP_409_CONFLICT）
             WorkOrderTask.DoesNotExist: 任务不存在
         """
-        from django.contrib.auth.models import User
-
         # 使用 select_for_update 行锁，防止并发认领
         try:
             task = WorkOrderTask.objects.select_for_update().get(id=task_id)

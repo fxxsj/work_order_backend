@@ -4,8 +4,6 @@ OpenAPI schema helpers for standard API responses.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from drf_spectacular.utils import inline_serializer
 from drf_spectacular.openapi import AutoSchema
 from rest_framework import serializers

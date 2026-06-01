@@ -21,7 +21,7 @@ task_assign_docs = extend_schema(
     request=inline_serializer(
         name="TaskAssignRequest",
         fields={
-            "operator_id": serializers.IntegerField(),
+            "assigned_operator": serializers.IntegerField(),
             "notes": serializers.CharField(required=False, allow_blank=True),
         },
     ),
@@ -29,7 +29,7 @@ task_assign_docs = extend_schema(
         OpenApiExample(
             name="示例请求",
             summary="分派任务",
-            value={"operator_id": 9, "notes": "优先处理"},
+            value={"assigned_operator": 9, "notes": "优先处理"},
             request_only=True,
         )
     ],

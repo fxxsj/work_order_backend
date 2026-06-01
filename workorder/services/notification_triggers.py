@@ -11,7 +11,7 @@ from django.utils import timezone
 from datetime import timedelta
 
 from workorder.constants.status import TaskStatus
-from ..models.core import WorkOrder, WorkOrderProcess, WorkOrderTask, ProcessLog
+from ..models.core import WorkOrder, WorkOrderTask, ProcessLog
 from ..models.system import WorkOrderApprovalLog
 from ..services.realtime_notification import (
     notification_service, NotificationEvent, NotificationPriority

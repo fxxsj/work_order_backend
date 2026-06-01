@@ -135,9 +135,7 @@ class WorkOrderFilterSet(FilterSet):
     def filter_approval_status(self, queryset, name, value):
         if not value:
             return queryset
-        # 兼容旧前端/旧链接里的 pending，新的“待审核”为 submitted。
-        normalized = "submitted" if value == "pending" else value
-        return queryset.filter(approval_status=normalized)
+        return queryset.filter(approval_status=value)
 
 
 @extend_schema_view(
