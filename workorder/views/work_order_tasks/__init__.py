@@ -46,5 +46,4 @@ class WorkOrderTaskViewSet(
     pass
 
 
-# 保持向后兼容：导出相同的类名
 __all__ = ["WorkOrderTaskViewSet"]

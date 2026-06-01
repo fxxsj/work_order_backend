@@ -9,6 +9,7 @@
 
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
+from django.core.management import call_command
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -26,6 +27,7 @@ class RoleProfilePermissionTest(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.client = APIClient()
+        call_command("init_groups", verbosity=0)
 
     def _get_user_with_role(self, role_code):
         """创建属于指定角色的用户"""
@@ -118,6 +120,7 @@ class WorkOrderFlowActionPermissionTest(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.api_client = APIClient()
+        call_command("init_groups", verbosity=0)
 
     def _create_user_with_role(self, role_code):
         from django.contrib.auth import get_user_model

@@ -1,7 +1,8 @@
 """
-Models 模块
+Models 模块入口
 
 将所有模型按业务领域拆分为独立模块，提高代码可维护性。
+Django 会导入 app 的 models 包来注册模型，因此这里显式导入各领域模型。
 
 模块结构：
 - base: 基础管理模型 (Customer, Department, Process, UserProfile)
@@ -28,8 +29,6 @@ from .assets import (
     FoilingPlateProduct,
 )
 from .audit import AuditLog, AuditLogExport, AuditLogSettings
-
-# 导入所有模型，保持向后兼容
 from .base import Customer, Department, Process
 from .core import (
     APPROVED_ORDER_EDITABLE_FIELDS,

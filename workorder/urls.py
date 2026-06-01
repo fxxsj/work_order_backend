@@ -1,32 +1,61 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import (
-    CustomerViewSet, DepartmentViewSet, ProcessViewSet, ProductViewSet,
-    ProductMaterialViewSet, MaterialViewSet,
-    WorkOrderViewSet, WorkOrderProcessViewSet,
-    WorkOrderProductViewSet, WorkOrderMaterialViewSet, ProcessLogViewSet,
-    ArtworkViewSet, ArtworkProductViewSet,
-    DieViewSet, DieProductViewSet, FoilingPlateViewSet, FoilingPlateProductViewSet,
-    EmbossingPlateViewSet, EmbossingPlateProductViewSet,
-    WorkOrderTaskViewSet, ProductGroupViewSet, ProductGroupItemViewSet,
-    TaskAssignmentRuleViewSet,
-    SupplierViewSet, MaterialSupplierViewSet, PurchaseOrderViewSet, PurchaseOrderItemViewSet,
+from .views.assets import (
+    ArtworkProductViewSet,
+    ArtworkViewSet,
+    DieProductViewSet,
+    DieViewSet,
+    EmbossingPlateProductViewSet,
+    EmbossingPlateViewSet,
+    FoilingPlateProductViewSet,
+    FoilingPlateViewSet,
+)
+from .views.audit_log import AuditLogViewSet
+from .views.base import CustomerViewSet, DepartmentViewSet, ProcessViewSet
+from .views.finance import (
+    CostCenterViewSet,
+    CostItemViewSet,
+    InvoiceViewSet,
+    PaymentPlanViewSet,
+    PaymentViewSet,
+    ProductionCostViewSet,
+    StatementViewSet,
+)
+from .views.inventory import (
+    DeliveryItemViewSet,
+    DeliveryOrderViewSet,
+    ProductStockViewSet,
+    QualityInspectionViewSet,
+    StockInViewSet,
+    StockOutViewSet,
+)
+from .views.materials import (
+    MaterialSupplierViewSet,
+    MaterialViewSet,
+    PurchaseOrderItemViewSet,
+    PurchaseOrderViewSet,
     PurchaseReceiveRecordViewSet,
-    SalesOrderViewSet, SalesOrderItemViewSet,
-    # 财务视图集
-    CostCenterViewSet, CostItemViewSet, ProductionCostViewSet,
-    InvoiceViewSet, PaymentViewSet, PaymentPlanViewSet, StatementViewSet,
-    # 库存视图集
-    ProductStockViewSet, StockInViewSet, StockOutViewSet,
-    DeliveryOrderViewSet, DeliveryItemViewSet, QualityInspectionViewSet,
-    # 流程视图集
-    WorkOrderFlowViewSet,
-    AuditLogViewSet,
+    SupplierViewSet,
 )
 from .views.notification import (
     NotificationViewSet, SystemNotificationViewSet,
     UserNotificationSettingsViewSet, NotificationTemplateViewSet
 )
+from .views.process_logs import ProcessLogViewSet
+from .views.products import (
+    ProductGroupItemViewSet,
+    ProductGroupViewSet,
+    ProductMaterialViewSet,
+    ProductViewSet,
+)
+from .views.sales import SalesOrderItemViewSet, SalesOrderViewSet
+from .views.system import TaskAssignmentRuleViewSet
+from .views.work_order_flow_views import WorkOrderFlowViewSet
+from .views.work_order_materials import WorkOrderMaterialViewSet
+from .views.work_order_processes import WorkOrderProcessViewSet
+from .views.work_order_products import WorkOrderProductViewSet
+from .views.work_order_tasks import WorkOrderTaskViewSet
+from .views.work_orders import WorkOrderViewSet
 from .auth_views import (
     LoginView, LogoutView, TokenRefreshViewWithDocs, get_current_user, register_view,
     get_salespersons, get_users_by_department, change_password, update_profile,
@@ -86,7 +115,6 @@ router.register(r'delivery-items', DeliveryItemViewSet, basename='delivery-item'
 router.register(r'quality-inspections', QualityInspectionViewSet, basename='quality-inspection')
 
 router.register(r'system-notifications', SystemNotificationViewSet, basename='system-notifications')
-router.register(r'notification-admin', SystemNotificationViewSet, basename='notification-admin')
 router.register(r'user-notification-settings', UserNotificationSettingsViewSet, basename='user-notification-settings')
 router.register(r'notification-templates', NotificationTemplateViewSet, basename='notification-templates')
 

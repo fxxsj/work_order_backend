@@ -1,7 +1,7 @@
 """
-通知系统测试管理命令
+发送测试通知管理命令
 
-用于测试实时通知系统的各种功能
+用于向开发/测试环境发送实时通知样例
 """
 
 from django.core.management.base import BaseCommand
@@ -17,7 +17,7 @@ from workorder.models.system import Notification
 
 
 class Command(BaseCommand):
-    help = '测试实时通知系统'
+    help = '发送实时通知测试样例'
     
     def add_arguments(self, parser):
         parser.add_argument(

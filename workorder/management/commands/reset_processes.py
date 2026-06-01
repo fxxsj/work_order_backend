@@ -6,6 +6,7 @@
 2. 从共享数据源加载21个标准工序
 3. 这些工序的code字段在Admin中为只读
 """
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from workorder.models import Process, WorkOrderProcess, Product
@@ -21,9 +22,22 @@ class Command(BaseCommand):
             action='store_true',
             help='强制执行，即使有施工单在使用这些工序',
         )
+        parser.add_argument(
+            '--allow-non-debug',
+            action='store_true',
+            help='允许在 DEBUG=False 环境执行。仅限明确确认的初始化环境',
+        )
 
     def handle(self, *args, **options):
         force = options.get('force', False)
+        if not settings.DEBUG and not options.get('allow_non_debug', False):
+            self.stderr.write(
+                self.style.ERROR(
+                    'reset_processes 会删除并重建工序数据。DEBUG=False 环境默认禁止执行；'
+                    '如确认是初始化环境，请追加 --allow-non-debug。'
+                )
+            )
+            return
         
         # 检查是否有施工单在使用工序
         work_order_processes_count = WorkOrderProcess.objects.count()
@@ -112,4 +126,3 @@ class Command(BaseCommand):
                 self.style.ERROR(f'✗ 重置失败: {e}')
             )
             raise
-

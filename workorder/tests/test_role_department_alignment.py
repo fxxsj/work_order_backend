@@ -17,6 +17,7 @@ class InitialUserRoleDepartmentTest(TestCase):
     """验证初始用户同时绑定部门和角色组。"""
 
     def test_load_initial_users_binds_departments_and_roles(self):
+        call_command("init_departments", verbosity=0)
         call_command("init_groups", verbosity=0)
         call_command("load_initial_users", "--force", verbosity=0)
 
@@ -49,6 +50,7 @@ class DepartmentScopeTest(TestCase):
 
     def setUp(self):
         cache.clear()
+        call_command("init_groups", verbosity=0)
         self.production = Department.objects.create(
             name="生产部范围测试",
             code="scope_production",

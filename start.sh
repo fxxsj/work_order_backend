@@ -135,12 +135,18 @@ load_initial_data() {
 
     case $choice in
         1)
+            echo -e "${GREEN}初始化工序...${NC}"
+            $VENV_PYTHON manage.py reset_processes --force 2>/dev/null || true
+            echo -e "${GREEN}初始化部门和工序关系...${NC}"
+            $VENV_PYTHON manage.py init_departments 2>/dev/null || true
+            echo -e "${GREEN}初始化用户组...${NC}"
+            $VENV_PYTHON manage.py init_groups 2>/dev/null || true
+            echo -e "${GREEN}初始化任务分派规则...${NC}"
+            $VENV_PYTHON manage.py load_assignment_rules 2>/dev/null || true
             echo -e "${GREEN}加载初始用户...${NC}"
             $VENV_PYTHON manage.py load_initial_users 2>/dev/null || true
             echo -e "${GREEN}加载产品数据...${NC}"
             $VENV_PYTHON manage.py loaddata workorder/fixtures/initial_products.json 2>/dev/null || true
-            echo -e "${GREEN}初始化用户组...${NC}"
-            $VENV_PYTHON manage.py init_groups 2>/dev/null || true
             ;;
         2)
             echo -e "${YELLOW}跳过初始数据加载${NC}"

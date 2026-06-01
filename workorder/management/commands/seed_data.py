@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Dict
 import uuid
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.management.base import BaseCommand
@@ -93,8 +94,22 @@ class Command(BaseCommand):
             default=0,
             help="随机种子（保留参数，当前实现不使用）",
         )
+        parser.add_argument(
+            "--allow-non-debug",
+            action="store_true",
+            help="允许在 DEBUG=False 环境执行。仅限明确确认的测试/演示环境",
+        )
 
     def handle(self, *args, **options):
+        if not settings.DEBUG and not options["allow_non_debug"]:
+            self.stderr.write(
+                self.style.ERROR(
+                    "seed_data 会写入测试数据。DEBUG=False 环境默认禁止执行；"
+                    "如确认是测试/演示环境，请追加 --allow-non-debug。"
+                )
+            )
+            return
+
         scale = max(1, int(options["scale"]))
         seq = Sequence()
         tag = uuid.uuid4().hex[:6]
