@@ -224,23 +224,3 @@ class WorkOrderService:
             )
 
         return work_order
-
-    @staticmethod
-    def resubmit_for_approval(*, work_order: WorkOrder, user) -> WorkOrder:
-        if work_order.approval_status != WorkOrderApprovalStatus.REJECTED:
-            raise ServiceError(
-                "只有被拒绝的施工单才能重新提交审核",
-                code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if work_order.manager != user and work_order.created_by != user:
-            if not user.has_perm("workorder.change_workorder"):
-                raise ServiceError(
-                    "只有制表人、创建人或有编辑权限的用户才能重新提交审核",
-                    code=status.HTTP_403_FORBIDDEN,
-                )
-
-        work_order.approval_status = WorkOrderApprovalStatus.SUBMITTED
-        work_order.approval_comment = ""
-        work_order.save()
-        return work_order

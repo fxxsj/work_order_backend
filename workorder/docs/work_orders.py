@@ -124,44 +124,6 @@ work_order_update_status_docs = extend_schema(
     },
 )
 
-work_order_approve_docs = extend_schema(
-    tags=["施工单"],
-    summary="审核施工单",
-    request=inline_serializer(
-        name="WorkOrderApproveRequest",
-        fields={
-            "approval_status": serializers.CharField(),
-            "approval_comment": serializers.CharField(required=False, allow_blank=True),
-            "rejection_reason": serializers.CharField(required=False, allow_blank=True),
-        },
-    ),
-    responses={
-        200: OpenApiResponse(
-            response=standard_success_response(
-                "WorkOrderApproveResponse", WorkOrderDetailSerializer
-            ),
-            description="审核完成",
-        ),
-        400: OpenApiResponse(
-            response=standard_error_response("WorkOrderApproveBadRequest"),
-            description="请求无效",
-        ),
-    },
-)
-
-work_order_resubmit_docs = extend_schema(
-    tags=["施工单"],
-    summary="重新提交审核",
-    responses={
-        200: OpenApiResponse(
-            response=standard_success_response(
-                "WorkOrderResubmitResponse", WorkOrderDetailSerializer
-            ),
-            description="提交成功",
-        )
-    },
-)
-
 work_order_statistics_docs = extend_schema(
     tags=["施工单"],
     summary="施工单统计",
@@ -247,4 +209,3 @@ work_order_sync_check_docs = extend_schema(
         )
     },
 )
-

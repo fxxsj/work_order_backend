@@ -383,10 +383,10 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
         """测试业务员不能审核其他业务员客户的施工单"""
         self.client.force_login(self.salesperson2)
 
-        # 尝试审核施工单
+        # 尝试通过正式 flow 端点审核施工单
         response = self.api_post(
-            f"/api/v1/workorders/{self.wo1.id}/approve/",
-            {"approval_status": "approved"},
+            f"/api/v1/workorders-flow/{self.wo1.id}/approve/",
+            {"comment": "Approved"},
             user=self.salesperson2,
         )
 

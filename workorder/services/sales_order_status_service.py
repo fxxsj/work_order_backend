@@ -24,7 +24,7 @@ class SalesOrderStatusService:
 
     @staticmethod
     def get_sales_orders_for_work_order(work_order) -> list[SalesOrder]:
-        """获取与施工单关联的客户订单，兼容 FK 和过渡期 M2M。"""
+        """获取与施工单关联的客户订单。"""
         return work_order.get_related_sales_orders()
 
     @staticmethod

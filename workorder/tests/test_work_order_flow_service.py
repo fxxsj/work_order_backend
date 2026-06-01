@@ -317,7 +317,7 @@ class WorkOrderFlowServiceTest(TestCase):
         self.sales_order.refresh_from_db()
         self.assertEqual(self.sales_order.status, "approved")
 
-    def test_sales_order_related_work_orders_deduplicates_fk_and_m2m(self):
+    def test_sales_order_related_work_orders_uses_fk_relation(self):
         """测试客户订单读取关联施工单时基于 FK 返回结果。"""
         work_order = WorkOrder.objects.create(
             order_number="WO20260303101",

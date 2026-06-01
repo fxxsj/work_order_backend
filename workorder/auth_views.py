@@ -11,7 +11,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
 from django.conf import settings
 from datetime import timedelta
-from .serializers import UserSerializer
+from .serializers.base import UserSerializer
 from workorder.response import APIResponse
 from workorder.schema import standard_error_response, standard_success_response
 from workorder.constants.role_codes import SALES, resolve_role_codes

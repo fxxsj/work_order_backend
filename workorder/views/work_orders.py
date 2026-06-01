@@ -31,10 +31,8 @@ from workorder.response import APIResponse
 from workorder.docs.work_orders import (
     work_order_add_material_docs,
     work_order_add_process_docs,
-    work_order_approve_docs,
     work_order_docs,
     work_order_export_docs,
-    work_order_resubmit_docs,
     work_order_statistics_docs,
     work_order_summary_docs,
     work_order_sync_check_docs,
@@ -83,7 +81,6 @@ from ..serializers.core import (
 )
 from ..services.task_sync_service import TaskSyncService
 from ..services.service_errors import ServiceError
-from ..services.work_order_flow_service import WorkOrderFlowService
 from ..services.work_order_service import WorkOrderService
 
 # P1 优化: 导入自定义速率限制
@@ -528,101 +525,6 @@ class WorkOrderViewSet(BaseViewSet):
         serializer = self.get_serializer(work_order)
         return APIResponse.success(data=serializer.data)
 
-    @action(detail=True, methods=["post"])
-    def submit_approval(self, request, pk=None):
-        """兼容旧施工单接口：提交审核，实际委托流程服务。"""
-        work_order = self.get_object()
-        try:
-            updated_work_order = WorkOrderFlowService.submit_for_approval(
-                work_order_id=work_order.id,
-                submitted_by=request.user,
-                comment=request.data.get("comment", ""),
-                auto_approve=request.data.get("auto_approve", False),
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
-        serializer = WorkOrderDetailSerializer(updated_work_order)
-        return APIResponse.success(data=serializer.data, message="施工单已提交审核")
-
-    @action(detail=True, methods=["post"])
-    @work_order_approve_docs
-    def approve(self, request, pk=None):
-        """兼容旧施工单接口：审核通过，实际委托流程服务并生成任务。"""
-        work_order = self.get_object()
-        if work_order.approval_status != "submitted":
-            return APIResponse.error(
-                '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。',
-                code=status.HTTP_400_BAD_REQUEST,
-            )
-        if not request.user.is_superuser and not request.user.has_perm("workorder.approve_workorder"):
-            return APIResponse.error("您没有审核施工单的权限", code=status.HTTP_403_FORBIDDEN)
-
-        try:
-            updated_work_order = WorkOrderFlowService.handle_approval_passed(
-                work_order=work_order,
-                approved_by=request.user,
-                comment=request.data.get("comment", ""),
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
-        serializer = WorkOrderDetailSerializer(updated_work_order)
-        data = dict(serializer.data)
-        task_generation = getattr(updated_work_order, "_task_generation_result", None)
-        procurement_summary = getattr(updated_work_order, "_procurement_summary", None)
-        if task_generation is not None:
-            data["task_generation"] = {
-                key: value for key, value in task_generation.items() if key != "tasks"
-            }
-        if procurement_summary is not None:
-            data["procurement_summary"] = procurement_summary
-        return APIResponse.success(
-            data=data,
-            message="施工单已审核通过，任务已自动分派",
-        )
-
-    @action(detail=True, methods=["post"])
-    def reject(self, request, pk=None):
-        """兼容旧施工单接口：审核拒绝，实际委托流程服务。"""
-        work_order = self.get_object()
-        reason = request.data.get("reason") or request.data.get("rejection_reason") or ""
-        if work_order.approval_status != "submitted":
-            return APIResponse.error("只有待审核的施工单可以拒绝", code=status.HTTP_400_BAD_REQUEST)
-        if not request.user.is_superuser and not request.user.has_perm("workorder.approve_workorder"):
-            return APIResponse.error("您没有审核施工单的权限", code=status.HTTP_403_FORBIDDEN)
-        if not reason:
-            return APIResponse.error("拒绝原因不能为空", code=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            updated_work_order = WorkOrderFlowService.handle_approval_rejected(
-                work_order=work_order,
-                rejected_by=request.user,
-                reason=reason,
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
-        serializer = WorkOrderDetailSerializer(updated_work_order)
-        return APIResponse.success(data=serializer.data, message="施工单已审核拒绝")
-
-    @action(detail=True, methods=["post"])
-    @work_order_resubmit_docs
-    def resubmit_for_approval(self, request, pk=None):
-        """兼容旧施工单接口：被拒绝后重新提交审核。"""
-        work_order = self.get_object()
-        try:
-            updated_work_order = WorkOrderFlowService.submit_for_approval(
-                work_order_id=work_order.id,
-                submitted_by=request.user,
-                comment=request.data.get("comment", ""),
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
-        serializer = WorkOrderDetailSerializer(updated_work_order)
-        return APIResponse.success(data=serializer.data, message="施工单已重新提交审核")
-
     @action(detail=False, methods=["get"])
     @work_order_statistics_docs
     def statistics(self, request):
@@ -890,27 +792,19 @@ class WorkOrderViewSet(BaseViewSet):
         candidates = []
         for sales_order in queryset.order_by("-order_date", "-id"):
             allocated_quantities_by_item = {}
-            legacy_allocated_quantities_by_product = {}
             for work_order in sales_order.source_work_orders.all():
                 if excluded_work_order_id and work_order.id == excluded_work_order_id:
                     continue
                 for product_item in work_order.products.all():
-                    if product_item.sales_order_item_id:
-                        allocated_quantities_by_item[
-                            product_item.sales_order_item_id
-                        ] = allocated_quantities_by_item.get(
-                            product_item.sales_order_item_id, 0
-                        ) + int(
-                            product_item.quantity or 0
-                        )
-                    else:
-                        legacy_allocated_quantities_by_product[
-                            product_item.product_id
-                        ] = legacy_allocated_quantities_by_product.get(
-                            product_item.product_id, 0
-                        ) + int(
-                            product_item.quantity or 0
-                        )
+                    if not product_item.sales_order_item_id:
+                        continue
+                    allocated_quantities_by_item[
+                        product_item.sales_order_item_id
+                    ] = allocated_quantities_by_item.get(
+                        product_item.sales_order_item_id, 0
+                    ) + int(
+                        product_item.quantity or 0
+                    )
 
             available_products = []
             for item in sales_order.items.all():
@@ -919,18 +813,10 @@ class WorkOrderViewSet(BaseViewSet):
                 allocated_quantity = int(
                     allocated_quantities_by_item.get(item.id, 0) or 0
                 )
-                legacy_allocated_quantity = int(
-                    legacy_allocated_quantities_by_product.get(item.product_id, 0) or 0
-                )
                 remaining_quantity = max(
-                    int(item.quantity) - allocated_quantity - legacy_allocated_quantity,
+                    int(item.quantity) - allocated_quantity,
                     0,
                 )
-                if legacy_allocated_quantity > 0:
-                    legacy_allocated_quantities_by_product[item.product_id] = max(
-                        legacy_allocated_quantity - int(item.quantity),
-                        0,
-                    )
                 if remaining_quantity <= 0:
                     continue
                 available_products.append(
