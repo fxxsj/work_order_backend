@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Entrypoint script for 印刷施工单跟踪系统
+# Entrypoint script for 印刷生产管理系统
 set -e
 
-echo "🚀 Starting 印刷施工单跟踪系统..."
+echo "🚀 Starting 印刷生产管理系统..."
 
 # Wait for database to be ready
 if [ -n "$DATABASE_URL" ]; then

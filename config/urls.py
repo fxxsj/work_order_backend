@@ -65,6 +65,6 @@ if settings.DEBUG:
     urlpatterns += staticfiles_urlpatterns()
 
 # Admin site customization
-admin.site.site_header = "印刷施工单跟踪系统"
-admin.site.site_title = "印刷施工单管理"
-admin.site.index_title = "欢迎使用印刷施工单跟踪系统"
+admin.site.site_header = "印刷生产管理系统"
+admin.site.site_title = "印刷生产管理"
+admin.site.index_title = "欢迎使用印刷生产管理系统"

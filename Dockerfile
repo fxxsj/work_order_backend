@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 LABEL maintainer="fxxsj <i@fxxsj.eu.org>"
 LABEL version="1.0"
-LABEL description="印刷施工单跟踪系统 - 后端"
+LABEL description="印刷生产管理系统 - 后端"
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1

@@ -1,4 +1,4 @@
-# 印刷施工单跟踪系统 - 后端
+# 印刷生产管理系统 - 后端
 
 > Django 4.2 + DRF 后端 API 服务
 
@@ -30,15 +30,15 @@
 - 模型变更必须有 migration
 - 查询优化: `select_related` / `prefetch_related` 避免 N+1
 
-## Removed Compatibility
+## API Contracts
 
-- 施工单审批统一使用 `/api/v1/workorders-flow/`，不要在 `workorders` ViewSet 新增审批动作。
-- 任务分派请求字段统一使用 `assigned_operator`，不要恢复 `operator_id` 请求别名。
-- 施工单筛选 `approval_status=pending` 不再映射为 `submitted`；待审核状态直接传 `submitted`。
-- 对账单列表筛选类型参数统一使用 `type`，客户过滤使用 `customer`，不要恢复 `statement_type` / `partner` 查询别名。
-- 对账单响应字段使用 `start_date`、`end_date`、`total_debit`、`total_credit`，不要恢复 `period_start`、`period_end`、`debit_amount`、`credit_amount` 响应别名。
-- 任务日志增量使用 `quantity_increment`，不要再从 `quantity_before` / `quantity_after` 计算旧数据 fallback。
-- 任务工序编码通过 `work_order_process.process.code` 获取，不要恢复 `WorkOrderTask.process_code` 兼容 property。
+- 施工单审批统一使用 `/api/v1/workorders-flow/`。
+- 任务分派请求字段使用 `assigned_operator`。
+- 施工单待审核筛选使用 `approval_status=submitted`。
+- 对账单列表筛选类型参数使用 `type`，客户过滤使用 `customer`。
+- 对账单响应字段使用 `start_date`、`end_date`、`total_debit`、`total_credit`。
+- 任务日志增量使用 `quantity_increment`。
+- 任务工序编码通过 `work_order_process.process.code` 获取。
 
 ## 开发命令
 

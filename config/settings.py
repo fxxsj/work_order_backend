@@ -524,7 +524,7 @@ SESSION_CACHE_ALIAS = "default"
 
 # drf-spectacular API documentation settings
 SPECTACULAR_SETTINGS = {
-    "TITLE": "印刷施工单跟踪系统 API",
+    "TITLE": "印刷生产管理系统 API",
     "DESCRIPTION": """
     施工单任务即时分派和跟踪管理系统 API 文档。
 
