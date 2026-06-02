@@ -1,7 +1,11 @@
 #!/bin/bash
 # Backend 一键启动脚本
 
-set -e
+set -euo pipefail
+
+# 脚本目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 # 颜色定义
 RED='\033[0;31m'
@@ -14,26 +18,33 @@ NC='\033[0m' # No Color
 PROFILE="dev"
 SKIP_MIGRATE=false
 VENV_NAME="venv"
-USE_WS=false  # 是否启用 WebSocket 支持
+USE_WS=false
+USE_VENV=true
+NON_INTERACTIVE=false
+PORT=8000
 
 # 帮助信息
 show_help() {
     echo "用法: ./start.sh [选项]"
     echo ""
     echo "选项:"
-    echo "  dev          开发环境 (默认)"
-    echo "  prod         生产环境"
+    echo "  dev             开发环境 (默认)"
+    echo "  prod            生产环境"
     echo "  --skip-migrate  跳过数据库迁移"
-    echo "  --ws         启用 WebSocket 支持 (使用 Daphne ASGI 服务器)"
-    echo "  --no-venv    不使用虚拟环境 (使用系统 Python)"
-    echo "  -h, --help   显示帮助信息"
+    echo "  --ws            启用 WebSocket 支持 (使用 Daphne ASGI 服务器)"
+    echo "  --no-venv       不使用虚拟环境 (使用系统 Python)"
+    echo "  --non-interactive, -y  非交互模式，跳过所有询问 (适合 CI)"
+    echo "  --port PORT     指定端口号 (默认 8000)"
+    echo "  -h, --help      显示帮助信息"
     echo ""
     echo "命令示例:"
-    echo "  ./start.sh              # 开发环境完整启动"
-    echo "  ./start.sh dev          # 开发环境"
-    echo "  ./start.sh prod         # 生产环境"
-    echo "  ./start.sh --ws         # 开发环境 + WebSocket"
-    echo "  ./start.sh --skip-migrate  # 跳过迁移快速启动"
+    echo "  ./start.sh                       # 开发环境完整启动"
+    echo "  ./start.sh dev                   # 开发环境"
+    echo "  ./start.sh prod                  # 生产环境"
+    echo "  ./start.sh --ws                  # 开发环境 + WebSocket"
+    echo "  ./start.sh --skip-migrate        # 跳过迁移快速启动"
+    echo "  ./start.sh -y                    # 非交互模式 (CI 场景)"
+    echo "  ./start.sh --port 8080           # 使用 8080 端口"
     echo ""
     echo "环境配置:"
     echo "  dev:  SQLite本地数据库, DEBUG=True"
@@ -51,9 +62,12 @@ check_python() {
         exit 1
     fi
 
-    PYTHON_VERSION=$(python3 --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
-    if [ "$(echo "$PYTHON_VERSION < 3.10" | bc)" = "1" ]; then
-        echo -e "${RED}错误: Python 3.10+ required, 当前版本: $PYTHON_VERSION${NC}"
+    local major minor
+    major=$(python3 -c 'import sys; print(sys.version_info.major)')
+    minor=$(python3 -c 'import sys; print(sys.version_info.minor)')
+
+    if [ "$major" -lt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -lt 10 ]; }; then
+        echo -e "${RED}错误: Python 3.10+ required, 当前版本: $(python3 --version)${NC}"
         exit 1
     fi
 
@@ -62,14 +76,6 @@ check_python() {
 
 # 设置虚拟环境
 setup_venv() {
-    USE_VENV=true
-
-    for arg in "$@"; do
-        if [ "$arg" = "--no-venv" ]; then
-            USE_VENV=false
-        fi
-    done
-
     if [ "$USE_VENV" = true ]; then
         if [ ! -d "$VENV_NAME" ]; then
             echo -e "${GREEN}创建虚拟环境...${NC}"
@@ -85,11 +91,23 @@ setup_venv() {
     fi
 }
 
-# 安装依赖
+# 安装依赖（仅在需要时）
 install_deps() {
+    if [ "$USE_VENV" = true ]; then
+        local stamp="$VENV_NAME/.installed"
+        if [ -f "$stamp" ] && [ "$stamp" -nt "requirements.txt" ]; then
+            echo -e "${GREEN}依赖已是最新，跳过安装${NC}"
+            return
+        fi
+    fi
+
     echo -e "${GREEN}安装依赖...${NC}"
-    $VENV_PIP install --upgrade pip
+    $VENV_PIP install --upgrade pip -q
     $VENV_PIP install -r requirements.txt
+
+    if [ "$USE_VENV" = true ]; then
+        touch "$VENV_NAME/.installed"
+    fi
 }
 
 # 环境配置
@@ -126,12 +144,17 @@ run_migrate() {
 
 # 加载初始数据
 load_initial_data() {
+    if [ "$NON_INTERACTIVE" = true ]; then
+        echo -e "${YELLOW}非交互模式，跳过初始数据加载${NC}"
+        return
+    fi
+
     echo ""
     echo -e "${YELLOW}是否加载初始数据?${NC}"
     echo "  1) 是 (加载测试用户和产品数据)"
     echo "  2) 否 (跳过)"
     echo ""
-    read -p "请输入选择 [1-2]: " choice
+    read -rp "请输入选择 [1-2]: " choice
 
     case $choice in
         1)
@@ -159,12 +182,17 @@ load_initial_data() {
 
 # 创建超级用户
 create_superuser() {
+    if [ "$NON_INTERACTIVE" = true ]; then
+        echo -e "${YELLOW}非交互模式，跳过超级用户创建${NC}"
+        return
+    fi
+
     echo ""
     echo -e "${YELLOW}是否创建超级用户?${NC}"
     echo "  1) 是"
     echo "  2) 否 (跳过)"
     echo ""
-    read -p "请输入选择 [1-2]: " choice
+    read -rp "请输入选择 [1-2]: " choice
 
     case $choice in
         1)
@@ -180,9 +208,27 @@ create_superuser() {
     esac
 }
 
+# 检查端口占用
+check_port() {
+    if command -v ss &> /dev/null; then
+        if ss -tlnp 2>/dev/null | grep -q ":${PORT} "; then
+            echo -e "${YELLOW}警告: 端口 $PORT 已被占用${NC}"
+            ss -tlnp 2>/dev/null | grep ":${PORT} " || true
+            echo -e "${YELLOW}可以 --port 指定其他端口${NC}"
+        fi
+    elif command -v lsof &> /dev/null; then
+        if lsof -i ":$PORT" &>/dev/null; then
+            echo -e "${YELLOW}警告: 端口 $PORT 已被占用${NC}"
+            lsof -i ":$PORT" 2>/dev/null || true
+            echo -e "${YELLOW}可以 --port 指定其他端口${NC}"
+        fi
+    fi
+}
+
 # 启动服务器
 launch_server() {
     setup_env
+    check_port
 
     echo ""
     echo -e "${GREEN}=======================================${NC}"
@@ -191,28 +237,29 @@ launch_server() {
     echo "  环境:   $PROFILE"
     echo "  DEBUG:  $DEBUG"
     echo "  Python: $($VENV_PYTHON --version)"
+    echo "  端口:   $PORT"
     echo "  WebSocket: $([ "$USE_WS" = true ] && echo "启用 (Daphne)" || echo "禁用 (runserver)")"
     echo -e "${GREEN}=======================================${NC}"
     echo ""
 
     if [ "$USE_WS" = true ]; then
         echo -e "${BLUE}启动 Daphne ASGI 服务器 (支持 WebSocket)...${NC}"
-        echo -e "${YELLOW}访问 http://127.0.0.1:8000/api/ 查看 API${NC}"
-        echo -e "${YELLOW}WebSocket: ws://127.0.0.1:8000/ws/notifications/${NC}"
+        echo -e "${YELLOW}访问 http://127.0.0.1:${PORT}/api/ 查看 API${NC}"
+        echo -e "${YELLOW}WebSocket: ws://127.0.0.1:${PORT}/ws/notifications/${NC}"
         echo ""
-        $VENV_PYTHON -m daphne -b 0.0.0.0 -p 8000 config.asgi:application
+        $VENV_PYTHON -m daphne -b 0.0.0.0 -p "$PORT" config.asgi:application
     else
         echo -e "${BLUE}启动 Django 开发服务器...${NC}"
         echo -e "${YELLOW}注意: 不支持 WebSocket (如需 WebSocket 请使用 --ws)${NC}"
         echo ""
-        $VENV_PYTHON manage.py runserver --skip-checks 0.0.0.0:8000
+        $VENV_PYTHON manage.py runserver --skip-checks "0.0.0.0:${PORT}"
     fi
 }
 
 # 解析参数
 parse_args() {
-    for arg in "$@"; do
-        case $arg in
+    while [[ $# -gt 0 ]]; do
+        case $1 in
             -h|--help)
                 show_help
                 exit 0
@@ -224,12 +271,25 @@ parse_args() {
                 USE_WS=true
                 ;;
             --no-venv)
-                # handled in setup_venv
+                USE_VENV=false
+                ;;
+            --non-interactive|-y)
+                NON_INTERACTIVE=true
+                ;;
+            --port)
+                PORT="${2:?--port 需要端口号参数}"
+                shift
                 ;;
             dev|prod)
-                PROFILE="$arg"
+                PROFILE="$1"
+                ;;
+            *)
+                echo -e "${RED}未知参数: $1${NC}"
+                show_help
+                exit 1
                 ;;
         esac
+        shift
     done
 }
 
@@ -242,7 +302,7 @@ main() {
 
     check_python
     parse_args "$@"
-    setup_venv "$@"
+    setup_venv
     install_deps
     run_migrate
 
