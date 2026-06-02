@@ -431,6 +431,30 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    # ========== 数据完整性检查 ==========
+    @action(detail=True, methods=["get"])
+    def check_completeness(self, request, pk=None):
+        """
+        检查施工单数据完整性（提交审核前预校验）
+
+        返回所有验证错误，如果为空则可以提交审核。
+        """
+        try:
+            work_order = self.get_object()
+            errors = work_order.validate_before_approval()
+            return APIResponse.success(
+                data={
+                    "is_valid": len(errors) == 0,
+                    "errors": errors,
+                },
+                message="验证通过" if not errors else "存在数据不完整项",
+            )
+        except Exception as e:
+            return APIResponse.error(
+                message=f"检查失败：{str(e)}",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
     @action(detail=True, methods=["post"])
     def mark_urgent(self, request, pk=None):
         if not request.user.is_superuser and not request.user.has_perm(

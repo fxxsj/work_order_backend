@@ -303,7 +303,15 @@ class WorkOrderFlowService:
             work_order.approval_status, WorkOrderApprovalStatus.SUBMITTED
         )
 
-        # 3. 状态转换（数据完整性已在保存时验证）
+        # 3. 数据完整性校验
+        errors = work_order.validate_before_approval()
+        if errors:
+            raise ServiceError(
+                f"施工单数据不完整，请补全以下内容：{'；'.join(errors)}",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 4. 状态转换
         # 提交审核不删除任务；已投产变更的任务同步由复审通过后的专门流程处理。
         work_order.approval_status = WorkOrderApprovalStatus.SUBMITTED
         work_order.approved_by = None
