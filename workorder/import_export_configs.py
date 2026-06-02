@@ -67,12 +67,18 @@ PRODUCT_TYPE_MAP = {
 
 def product_pre_save_hook(instance, data):
     """产品保存前钩子"""
-    if instance and hasattr(instance, 'product_group') and 'product_group_name' in data:
-        group_name = data.get('product_group_name')
-        if group_name:
-            from .models.products import ProductGroup
-            group = ProductGroup.objects.filter(name=group_name).first()
+    group_name = data.get('product_group_name')
+    group = None
+    if group_name:
+        from .models.products import ProductGroup
+        group = ProductGroup.objects.filter(name=group_name).first()
+    
+    if instance:
+        if hasattr(instance, 'product_group'):
             instance.product_group = group
+    else:
+        data['product_group'] = group
+        data.pop('product_group_name', None)
 
 
 def parse_product_type(val):
@@ -185,6 +191,93 @@ def get_product_import_config(model_class):
         update_fields=['name', 'specification', 'unit', 'unit_price', 'stock_quantity',
                       'min_stock_quantity', 'product_type', 'description', 'is_active'],
         pre_save_hook=product_pre_save_hook,
+        unique_field_case_insensitive=True,
+    )
+    return config
+
+
+# ============ 物料配置 ============
+
+def material_pre_save_hook(instance, data):
+    """物料保存前钩子"""
+    supplier_name = data.get('default_supplier_name')
+    supplier = None
+    if supplier_name:
+        from .models.materials import Supplier
+        supplier = Supplier.objects.filter(name=supplier_name).first()
+    
+    if instance:
+        instance.default_supplier = supplier
+    else:
+        data['default_supplier'] = supplier
+        data.pop('default_supplier_name', None)
+
+
+MATERIAL_EXPORT_CONFIG = ExportConfig(
+    filename='materials',
+    sheet_title='物料列表',
+    fields=[
+        ExportField('编码', lambda x: x.code),
+        ExportField('名称', lambda x: x.name),
+        ExportField('规格', lambda x: x.specification),
+        ExportField('单位', lambda x: x.unit),
+        ExportField('单价', lambda x: str(x.unit_price) if x.unit_price else '0'),
+        ExportField('库存数量', lambda x: str(x.stock_quantity) if x.stock_quantity else '0'),
+        ExportField('最小库存', lambda x: str(x.min_stock_quantity) if x.min_stock_quantity else '0'),
+        ExportField('默认供应商', lambda x: x.default_supplier.name if x.default_supplier else ''),
+        ExportField('采购周期(天)', lambda x: x.lead_time_days),
+        ExportField('是否需要开料', lambda x: '是' if x.need_cutting else '否'),
+        ExportField('备注', lambda x: x.notes),
+        ExportField('创建时间', lambda x: x.created_at),
+    ],
+    column_widths=[15, 20, 20, 8, 10, 10, 10, 20, 15, 12, 30, 20],
+)
+
+
+MATERIAL_IMPORT_CONFIG = ImportConfig(
+    model=None,  # 动态设置
+    unique_field='code',
+    field_mappings=[
+        ImportField(['编码', 'code'], 'code', strip_val),
+        ImportField(['名称', 'name'], 'name', strip_val),
+        ImportField(['规格', 'specification', 'spec'], 'specification', strip_val),
+        ImportField(['单位', 'unit'], 'unit', strip_val),
+        ImportField(['单价', 'price', 'unit_price'], 'unit_price', lambda v: parse_number(v, 0.0)),
+        ImportField(['库存数量', 'stock', 'stock_quantity'], 'stock_quantity', lambda v: parse_number(v, 0.0)),
+        ImportField(['最小库存', 'min_stock', 'min_stock_quantity'], 'min_stock_quantity', lambda v: parse_number(v, 0.0)),
+        ImportField(['默认供应商', 'supplier', 'default_supplier'], 'default_supplier_name', strip_val),
+        ImportField(['采购周期', 'lead_time', 'lead_time_days'], 'lead_time_days', lambda v: parse_number(v, 7)),
+        ImportField(['是否需要开料', '需要开料', 'need_cutting'], 'need_cutting', parse_bool),
+        ImportField(['备注', 'notes', 'desc'], 'notes', strip_val),
+    ],
+    update_fields=['name', 'specification', 'unit', 'unit_price', 'stock_quantity',
+                  'min_stock_quantity', 'lead_time_days', 'need_cutting', 'notes'],
+    pre_save_hook=material_pre_save_hook,
+    unique_field_case_insensitive=True,
+)
+
+
+def get_material_import_config(model_class):
+    """获取物料导入配置（动态设置model）"""
+    config = ImportConfig(
+        model=model_class,
+        unique_field='code',
+        field_mappings=[
+            ImportField(['编码', 'code'], 'code', strip_val),
+            ImportField(['名称', 'name'], 'name', strip_val),
+            ImportField(['规格', 'specification', 'spec'], 'specification', strip_val),
+            ImportField(['单位', 'unit'], 'unit', strip_val),
+            ImportField(['单价', 'price', 'unit_price'], 'unit_price', lambda v: parse_number(v, 0.0)),
+            ImportField(['库存数量', 'stock', 'stock_quantity'], 'stock_quantity', lambda v: parse_number(v, 0.0)),
+            ImportField(['最小库存', 'min_stock', 'min_stock_quantity'], 'min_stock_quantity', lambda v: parse_number(v, 0.0)),
+            ImportField(['默认供应商', 'supplier', 'default_supplier'], 'default_supplier_name', strip_val),
+            ImportField(['采购周期', 'lead_time', 'lead_time_days'], 'lead_time_days', lambda v: parse_number(v, 7)),
+            ImportField(['是否需要开料', '需要开料', 'need_cutting'], 'need_cutting', parse_bool),
+            ImportField(['备注', 'notes', 'desc'], 'notes', strip_val),
+        ],
+        update_fields=['name', 'specification', 'unit', 'unit_price', 'stock_quantity',
+                      'min_stock_quantity', 'lead_time_days', 'need_cutting', 'notes'],
+        pre_save_hook=material_pre_save_hook,
         unique_field_case_insensitive=True,
     )
     return config

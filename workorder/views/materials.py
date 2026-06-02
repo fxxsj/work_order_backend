@@ -60,6 +60,8 @@ from ..services.service_errors import ServiceError
 from ..services.approval_service import ApprovalService
 from ..services.purchase_order_flow_service import PurchaseOrderFlowService
 from .base_viewsets import BaseViewSet
+from ..import_export import export_model, import_model
+from ..import_export_configs import MATERIAL_EXPORT_CONFIG, get_material_import_config
 
 
 class PurchaseOrderFilterSet(FilterSet):
@@ -96,6 +98,36 @@ class MaterialViewSet(BaseViewSet):
         """优化查询性能"""
         queryset = super().get_queryset()
         return queryset.select_related("default_supplier")
+
+    @action(detail=False, methods=["get"])
+    def export(self, request):
+        """导出物料列表 Excel"""
+        queryset = self.get_queryset()
+        return export_model(queryset, MATERIAL_EXPORT_CONFIG)
+
+    @action(detail=False, methods=["post"])
+    def import_materials(self, request):
+        """导入物料 Excel"""
+        file = request.FILES.get('file')
+        if not file:
+            return APIResponse.error(
+                "未上传文件",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        config = get_material_import_config(Material)
+        result = import_model(file, config, request.user)
+        if result['success_count'] == 0 and result['error_count'] > 0:
+            return APIResponse.error(
+                f"导入失败: {result['errors'][0] if result['errors'] else '未知错误'}",
+                code=status.HTTP_400_BAD_REQUEST,
+                data=result,
+            )
+        created = result.get('created_count', 0)
+        updated = result.get('updated_count', 0)
+        return APIResponse.success(
+            message=f"导入完成: 新增 {created} 条, 更新 {updated} 条, 失败 {result['error_count']} 条",
+            data=result,
+        )
 
 
 @supplier_docs
