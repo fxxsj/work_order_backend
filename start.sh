@@ -118,6 +118,8 @@ setup_env() {
                 if [ -f ".env.example" ]; then
                     echo -e "${GREEN}复制 .env.example -> .env${NC}"
                     cp .env.example .env
+                else
+                    echo -e "${YELLOW}警告: .env.example 不存在，将使用默认配置${NC}"
                 fi
             fi
             export DEBUG=True
@@ -125,8 +127,10 @@ setup_env() {
         prod)
             if [ -f ".env.production" ]; then
                 echo -e "${GREEN}使用生产环境配置 .env.production${NC}"
-                export DEBUG=False
+            else
+                echo -e "${YELLOW}警告: .env.production 不存在，请确保环境变量已正确配置${NC}"
             fi
+            export DEBUG=False
             ;;
     esac
 }
@@ -142,10 +146,25 @@ run_migrate() {
     $VENV_PYTHON manage.py migrate --skip-checks
 }
 
+# 运行 Django 管理命令，失败时显示警告但不中断脚本
+run_mgmt_cmd() {
+    local cmd_name="$1"
+    shift
+    echo -e "${GREEN}运行: $cmd_name${NC}"
+    if ! $VENV_PYTHON manage.py "$cmd_name" "$@"; then
+        echo -e "${YELLOW}警告: $cmd_name 执行失败（命令不存在或执行出错）${NC}"
+    fi
+}
+
 # 加载初始数据
 load_initial_data() {
     if [ "$NON_INTERACTIVE" = true ]; then
         echo -e "${YELLOW}非交互模式，跳过初始数据加载${NC}"
+        return
+    fi
+
+    if [ ! -t 0 ]; then
+        echo -e "${YELLOW}未检测到交互终端，跳过初始数据加载（如需自动加载请使用 -y 参数）${NC}"
         return
     fi
 
@@ -154,30 +173,37 @@ load_initial_data() {
     echo "  1) 是 (加载测试用户和产品数据)"
     echo "  2) 否 (跳过)"
     echo ""
-    read -rp "请输入选择 [1-2]: " choice
 
-    case $choice in
-        1)
-            echo -e "${GREEN}初始化工序...${NC}"
-            $VENV_PYTHON manage.py reset_processes --force 2>/dev/null || true
-            echo -e "${GREEN}初始化部门和工序关系...${NC}"
-            $VENV_PYTHON manage.py init_departments 2>/dev/null || true
-            echo -e "${GREEN}初始化用户组...${NC}"
-            $VENV_PYTHON manage.py init_groups 2>/dev/null || true
-            echo -e "${GREEN}初始化任务分派规则...${NC}"
-            $VENV_PYTHON manage.py load_assignment_rules 2>/dev/null || true
-            echo -e "${GREEN}加载初始用户...${NC}"
-            $VENV_PYTHON manage.py load_initial_users 2>/dev/null || true
-            echo -e "${GREEN}加载产品数据...${NC}"
-            $VENV_PYTHON manage.py loaddata workorder/fixtures/initial_products.json 2>/dev/null || true
-            ;;
-        2)
-            echo -e "${YELLOW}跳过初始数据加载${NC}"
-            ;;
-        *)
-            echo -e "${YELLOW}无效选择，跳过${NC}"
-            ;;
-    esac
+    local choice
+    while true; do
+        read -rp "请输入选择 [1-2] (默认: 2): " choice
+        choice=${choice:-2}
+        case $choice in
+            1)
+                run_mgmt_cmd reset_processes --force
+                run_mgmt_cmd init_departments
+                run_mgmt_cmd init_groups
+                run_mgmt_cmd load_assignment_rules
+                run_mgmt_cmd load_initial_users
+                echo -e "${GREEN}加载产品 fixtures...${NC}"
+                if [ -f "workorder/fixtures/initial_products.json" ]; then
+                    if ! $VENV_PYTHON manage.py loaddata workorder/fixtures/initial_products.json; then
+                        echo -e "${YELLOW}警告: 产品 fixtures 加载失败${NC}"
+                    fi
+                else
+                    echo -e "${YELLOW}警告: workorder/fixtures/initial_products.json 不存在${NC}"
+                fi
+                break
+                ;;
+            2)
+                echo -e "${YELLOW}跳过初始数据加载${NC}"
+                break
+                ;;
+            *)
+                echo -e "${YELLOW}无效输入 '$choice'，请重新输入 1 或 2${NC}"
+                ;;
+        esac
+    done
 }
 
 # 创建超级用户
@@ -187,41 +213,63 @@ create_superuser() {
         return
     fi
 
+    if [ ! -t 0 ]; then
+        echo -e "${YELLOW}未检测到交互终端，跳过超级用户创建${NC}"
+        return
+    fi
+
     echo ""
     echo -e "${YELLOW}是否创建超级用户?${NC}"
     echo "  1) 是"
     echo "  2) 否 (跳过)"
     echo ""
-    read -rp "请输入选择 [1-2]: " choice
 
-    case $choice in
-        1)
-            echo -e "${GREEN}创建超级用户...${NC}"
-            $VENV_PYTHON manage.py createsuperuser
-            ;;
-        2)
-            echo -e "${YELLOW}跳过${NC}"
-            ;;
-        *)
-            echo -e "${YELLOW}无效选择，跳过${NC}"
-            ;;
-    esac
+    local choice
+    while true; do
+        read -rp "请输入选择 [1-2] (默认: 2): " choice
+        choice=${choice:-2}
+        case $choice in
+            1)
+                echo -e "${GREEN}创建超级用户...${NC}"
+                $VENV_PYTHON manage.py createsuperuser
+                break
+                ;;
+            2)
+                echo -e "${YELLOW}跳过${NC}"
+                break
+                ;;
+            *)
+                echo -e "${YELLOW}无效输入 '$choice'，请重新输入 1 或 2${NC}"
+                ;;
+        esac
+    done
 }
 
 # 检查端口占用
 check_port() {
+    local port_in_use=false
+
     if command -v ss &> /dev/null; then
         if ss -tlnp 2>/dev/null | grep -q ":${PORT} "; then
-            echo -e "${YELLOW}警告: 端口 $PORT 已被占用${NC}"
-            ss -tlnp 2>/dev/null | grep ":${PORT} " || true
-            echo -e "${YELLOW}可以 --port 指定其他端口${NC}"
+            port_in_use=true
         fi
     elif command -v lsof &> /dev/null; then
-        if lsof -i ":$PORT" &>/dev/null; then
-            echo -e "${YELLOW}警告: 端口 $PORT 已被占用${NC}"
-            lsof -i ":$PORT" 2>/dev/null || true
-            echo -e "${YELLOW}可以 --port 指定其他端口${NC}"
+        # macOS 兼容: lsof -iTCP:$PORT -sTCP:LISTEN
+        if lsof -iTCP:"$PORT" -sTCP:LISTEN &>/dev/null || lsof -i ":$PORT" &>/dev/null; then
+            port_in_use=true
         fi
+    elif command -v netstat &> /dev/null; then
+        if netstat -tlnp 2>/dev/null | grep -q ":${PORT} "; then
+            port_in_use=true
+        fi
+    fi
+
+    if [ "$port_in_use" = true ]; then
+        echo -e "${YELLOW}警告: 端口 $PORT 已被占用${NC}"
+        if command -v lsof &> /dev/null; then
+            lsof -iTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || lsof -i ":$PORT" 2>/dev/null || true
+        fi
+        echo -e "${YELLOW}可以 --port 指定其他端口${NC}"
     fi
 }
 
@@ -277,7 +325,15 @@ parse_args() {
                 NON_INTERACTIVE=true
                 ;;
             --port)
-                PORT="${2:?--port 需要端口号参数}"
+                if [ -z "${2:-}" ]; then
+                    echo -e "${RED}错误: --port 需要端口号参数${NC}"
+                    exit 1
+                fi
+                if ! [[ "$2" =~ ^[0-9]+$ ]] || [ "$2" -lt 1 ] || [ "$2" -gt 65535 ]; then
+                    echo -e "${RED}错误: --port 需要 1-65535 之间的整数， got '$2'${NC}"
+                    exit 1
+                fi
+                PORT="$2"
                 shift
                 ;;
             dev|prod)
