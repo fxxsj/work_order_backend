@@ -12,9 +12,6 @@
 2. 状态机约束：严格的状态转换验证
 3. 事件驱动：状态变更触发业务事件
 4. 可追溯性：完整的操作日志
-
-Author: 小可 AI Assistant
-Date: 2026-03-03
 """
 
 from __future__ import annotations
@@ -117,6 +114,66 @@ class WorkOrderFlowService:
                 "只能审核自己负责的施工单", code=status.HTTP_403_FORBIDDEN
             )
 
+    @staticmethod
+    def _get_or_raise(queryset, *, message: str, **filters):
+        """统一对象加载和 404 ServiceError。"""
+        try:
+            return queryset.get(**filters)
+        except queryset.model.DoesNotExist as exc:
+            raise ServiceError(message, code=status.HTTP_404_NOT_FOUND) from exc
+
+    @staticmethod
+    def _audit(
+        work_order: WorkOrder,
+        *,
+        approval_status: str,
+        actor: Optional[User] = None,
+        comment: str = "",
+        rejection_reason: str = "",
+    ) -> None:
+        """统一写入施工单审核日志。"""
+        WorkOrderApprovalLog.objects.create(
+            work_order=work_order,
+            approval_status=approval_status,
+            approved_by=actor,
+            approval_comment=comment,
+            rejection_reason=rejection_reason,
+        )
+
+    @staticmethod
+    def _mark_submitted(work_order: WorkOrder, *, comment: str = "") -> None:
+        """标记为待审核，保持提交动作不写审核人和审核时间。"""
+        work_order.approval_status = WorkOrderApprovalStatus.SUBMITTED
+        work_order.approved_by = None
+        work_order.approved_at = None
+        work_order.approval_comment = comment
+        work_order.save(
+            update_fields=[
+                "approval_status",
+                "approved_by",
+                "approved_at",
+                "approval_comment",
+                "updated_at",
+            ]
+        )
+
+    @staticmethod
+    def _mark_reviewed(
+        work_order: WorkOrder,
+        *,
+        approval_status: str,
+        work_order_status: str,
+        actor: User,
+        comment: str = "",
+    ) -> None:
+        """标记审核结果，并保持原有单次保存行为。"""
+        work_order.approval_status = approval_status
+        work_order.approved_by = actor
+        work_order.approved_at = timezone.now()
+        work_order.approval_comment = comment
+        work_order.status = work_order_status
+        work_order.save()
+
     # ========== 流程 1: 从客户订单创建施工单 ==========
 
     @staticmethod
@@ -135,14 +192,6 @@ class WorkOrderFlowService:
         """
         从客户订单创建施工单（完整流程）
 
-        流程步骤：
-        1. 验证客户订单状态
-        2. 复制客户、产品信息
-        3. 根据产品配置自动生成工序
-        4. 根据产品配置自动生成物料清单
-        5. 记录操作日志
-        6. 发送通知
-
         Args:
             sales_order_id: 客户订单ID
             production_quantity: 生产数量
@@ -159,14 +208,11 @@ class WorkOrderFlowService:
             ServiceError: 业务逻辑错误
         """
         # 1. 加载并验证客户订单
-        try:
-            sales_order = SalesOrder.objects.select_related("customer").get(
-                id=sales_order_id
-            )
-        except SalesOrder.DoesNotExist as exc:
-            raise ServiceError(
-                "客户订单不存在", code=status.HTTP_404_NOT_FOUND
-            ) from exc
+        sales_order = WorkOrderFlowService._get_or_raise(
+            SalesOrder.objects.select_related("customer"),
+            message="客户订单不存在",
+            id=sales_order_id,
+        )
 
         if sales_order.status not in [SalesOrderStatus.APPROVED, SalesOrderStatus.IN_PRODUCTION]:
             raise ServiceError(
@@ -240,11 +286,11 @@ class WorkOrderFlowService:
             WorkOrderFlowService._link_assets(work_order, additional_data)
 
         # 8. 记录操作日志
-        WorkOrderApprovalLog.objects.create(
+        WorkOrderFlowService._audit(
             work_order=work_order,
             approval_status=work_order.approval_status,
-            approved_by=created_by,
-            approval_comment=f"从客户订单 {sales_order.order_number} 创建",
+            actor=created_by,
+            comment=f"从客户订单 {sales_order.order_number} 创建",
         )
 
         # 9. 发送通知
@@ -271,12 +317,6 @@ class WorkOrderFlowService:
 
         注意：数据完整性验证已在保存施工单时完成，此处只验证状态转换。
 
-        流程步骤：
-        1. 验证施工单状态（必须是草稿或已拒绝）
-        2. 状态转换为待审核
-        3. 记录提交日志
-        4. 发送审核通知给业务员
-
         Args:
             work_order_id: 施工单ID
             submitted_by: 提交人
@@ -289,14 +329,11 @@ class WorkOrderFlowService:
             ServiceError: 业务逻辑错误
         """
         # 1. 加载施工单
-        try:
-            work_order = WorkOrder.objects.select_related("customer").get(
-                id=work_order_id
-            )
-        except WorkOrder.DoesNotExist as exc:
-            raise ServiceError(
-                "施工订单不存在", code=status.HTTP_404_NOT_FOUND
-            ) from exc
+        work_order = WorkOrderFlowService._get_or_raise(
+            WorkOrder.objects.select_related("customer"),
+            message="施工订单不存在",
+            id=work_order_id,
+        )
 
         # 2. 验证状态
         WorkOrderFlowService._validate_status_transition(
@@ -313,28 +350,16 @@ class WorkOrderFlowService:
 
         # 4. 状态转换
         # 提交审核不删除任务；已投产变更的任务同步由复审通过后的专门流程处理。
-        work_order.approval_status = WorkOrderApprovalStatus.SUBMITTED
-        work_order.approved_by = None
-        work_order.approved_at = None
-        work_order.approval_comment = comment
-        work_order.save(
-            update_fields=[
-                "approval_status",
-                "approved_by",
-                "approved_at",
-                "approval_comment",
-                "updated_at",
-            ]
-        )
+        WorkOrderFlowService._mark_submitted(work_order, comment=comment)
 
         logger.info(f"施工单 {work_order.order_number} 提交审核")
 
         # 6. 记录操作日志
-        WorkOrderApprovalLog.objects.create(
+        WorkOrderFlowService._audit(
             work_order=work_order,
             approval_status=work_order.approval_status,
-            approved_by=submitted_by,
-            approval_comment=comment or "提交审核",
+            actor=submitted_by,
+            comment=comment or "提交审核",
         )
 
         # 7. 发送通知给业务员
@@ -347,15 +372,19 @@ class WorkOrderFlowService:
             )
 
         if auto_approve:
-            can_review_by_role = is_sales_user(submitted_by)
-            can_review_by_perm = submitted_by.is_superuser or submitted_by.has_perm("workorder.change_workorder")
-            if (can_review_by_role or can_review_by_perm):
-                if can_review_by_perm or work_order.customer.salesperson == submitted_by:
-                    return WorkOrderFlowService.handle_approval_passed(
-                        work_order=work_order,
-                        approved_by=submitted_by,
-                        comment="系统自动审核通过（快捷发布）"
-                    )
+            try:
+                WorkOrderFlowService._validate_approval_actor(
+                    work_order=work_order,
+                    user=submitted_by,
+                )
+            except ServiceError:
+                return work_order
+
+            return WorkOrderFlowService.handle_approval_passed(
+                work_order=work_order,
+                approved_by=submitted_by,
+                comment="系统自动审核通过（快捷发布）",
+            )
 
         return work_order
 
@@ -371,12 +400,6 @@ class WorkOrderFlowService:
     ) -> WorkOrder:
         """
         处理审核通过（完整自动化流程）
-
-        流程步骤：
-        1. 生成正式任务并自动分派（一次性生成所有工序的任务）
-        2. 状态转换：pending → approved → in_progress
-        3. 记录审核日志
-        4. 发送通知给相关部门和操作员
 
         注意：任务在审核通过时一次性生成，工序开始时不再重复生成。
 
@@ -417,19 +440,20 @@ class WorkOrderFlowService:
         )
 
         # 2. 状态转换
-        work_order.approval_status = WorkOrderApprovalStatus.APPROVED
-        work_order.approved_by = approved_by
-        work_order.approved_at = timezone.now()
-        work_order.approval_comment = comment
-        work_order.status = WorkOrderStatus.IN_PROGRESS
-        work_order.save()
+        WorkOrderFlowService._mark_reviewed(
+            work_order,
+            approval_status=WorkOrderApprovalStatus.APPROVED,
+            work_order_status=WorkOrderStatus.IN_PROGRESS,
+            actor=approved_by,
+            comment=comment,
+        )
 
         # 3. 记录审核日志
-        WorkOrderApprovalLog.objects.create(
+        WorkOrderFlowService._audit(
             work_order=work_order,
             approval_status=work_order.approval_status,
-            approved_by=approved_by,
-            approval_comment=comment,
+            actor=approved_by,
+            comment=comment,
         )
 
         # 4. 发送通知
@@ -456,11 +480,6 @@ class WorkOrderFlowService:
         """
         处理审核拒绝（完整流程）
 
-        流程步骤：
-        1. 状态转换：pending → rejected
-        2. 记录拒绝日志
-        3. 发送通知给创建人
-
         注意：审核拒绝时，已生成的任务保留在数据库中。
         如果施工单重新提交审核并通过，任务生成服务只补齐缺失任务，不删除已开始或已完成任务。
 
@@ -485,19 +504,20 @@ class WorkOrderFlowService:
         )
 
         # 1. 状态转换
-        work_order.approval_status = WorkOrderApprovalStatus.REJECTED
-        work_order.approved_by = rejected_by
-        work_order.approved_at = timezone.now()
-        work_order.approval_comment = reason
-        work_order.status = WorkOrderStatus.PENDING  # 状态回到待开始
-        work_order.save()
+        WorkOrderFlowService._mark_reviewed(
+            work_order,
+            approval_status=WorkOrderApprovalStatus.REJECTED,
+            work_order_status=WorkOrderStatus.PENDING,
+            actor=rejected_by,
+            comment=reason,
+        )
 
         # 2. 记录拒绝日志
-        WorkOrderApprovalLog.objects.create(
+        WorkOrderFlowService._audit(
             work_order=work_order,
             approval_status=WorkOrderApprovalStatus.REJECTED,
-            approved_by=rejected_by,
-            approval_comment=reason,
+            actor=rejected_by,
+            comment=reason,
             rejection_reason=reason,
         )
 
@@ -540,10 +560,10 @@ class WorkOrderFlowService:
             work_order.save()
 
             # 记录日志
-            WorkOrderApprovalLog.objects.create(
+            WorkOrderFlowService._audit(
                 work_order=work_order,
                 approval_status=work_order.approval_status,
-                approval_comment="所有任务已完成，自动标记施工单为完成状态",
+                comment="所有任务已完成，自动标记施工单为完成状态",
             )
 
             # 发送通知

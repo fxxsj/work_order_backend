@@ -17,6 +17,7 @@ from ..permission_utils import PermissionUtils
 from ..services.work_order_flow_service import WorkOrderFlowService
 from ..services.service_errors import ServiceError
 from ..serializers.core import WorkOrderDetailSerializer
+from ._decorators import handle_flow_errors
 
 
 class WorkOrderFlowViewSet(viewsets.GenericViewSet):
@@ -56,11 +57,7 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
 
     @staticmethod
     def _ensure_work_order_writable(*, work_order: WorkOrder, user) -> None:
-        if user.is_superuser:
-            return
-        if work_order.created_by_id == user.id and user.has_perm("workorder.submit_workorder"):
-            return
-        if user.has_perm("workorder.submit_workorder"):
+        if user.is_superuser or user.has_perm("workorder.submit_workorder"):
             return
         raise ServiceError("您没有提交审核的权限", code=status.HTTP_403_FORBIDDEN)
 
@@ -78,8 +75,27 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
                 code=status.HTTP_403_FORBIDDEN,
             )
 
+    def _build_create_payload(
+        self,
+        request,
+        *,
+        sales_order_id,
+        additional_data: dict,
+    ) -> dict:
+        return {
+            "sales_order_id": sales_order_id,
+            "production_quantity": request.data.get("production_quantity"),
+            "selected_items": request.data.get("selected_items"),
+            "delivery_date": request.data.get("delivery_date"),
+            "priority": request.data.get("priority", "normal"),
+            "notes": request.data.get("notes", ""),
+            "created_by": request.user,
+            "additional_data": additional_data,
+        }
+
     # ========== 流程 1: 从客户订单创建施工单 ==========
     @action(detail=False, methods=["post"])
+    @handle_flow_errors(message_prefix="创建失败：")
     def create_from_sales_order(self, request):
         """
         从客户订单创建施工单
@@ -97,24 +113,19 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             "embossing_plate_ids": []  # 可选
         }
         """
-        try:
-            self._require_permission(
-                request.user,
-                "workorder.add_workorder",
-                "无权从客户订单创建施工单",
-            )
-            self._ensure_sales_order_visible(
+        self._require_permission(
+            request.user,
+            "workorder.add_workorder",
+            "无权从客户订单创建施工单",
+        )
+        self._ensure_sales_order_visible(
+            sales_order_id=request.data.get("sales_order_id"),
+            user=request.user,
+        )
+        work_order = WorkOrderFlowService.create_from_sales_order(
+            **self._build_create_payload(
+                request,
                 sales_order_id=request.data.get("sales_order_id"),
-                user=request.user,
-            )
-            work_order = WorkOrderFlowService.create_from_sales_order(
-                sales_order_id=request.data.get("sales_order_id"),
-                production_quantity=request.data.get("production_quantity"),
-                selected_items=request.data.get("selected_items"),
-                delivery_date=request.data.get("delivery_date"),
-                priority=request.data.get("priority", "normal"),
-                notes=request.data.get("notes", ""),
-                created_by=request.user,
                 additional_data={
                     "artwork_ids": request.data.get("artwork_ids", []),
                     "die_ids": request.data.get("die_ids", []),
@@ -122,20 +133,13 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
                     "embossing_plate_ids": request.data.get("embossing_plate_ids", []),
                 },
             )
+        )
 
-            return APIResponse.success(
-                data={"id": work_order.id, "order_number": work_order.order_number},
-                message="施工单创建成功",
-                code=status.HTTP_201_CREATED,
-            )
-
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
-        except Exception as e:
-            return APIResponse.error(
-                message=f"创建失败：{str(e)}",
-                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return APIResponse.success(
+            data={"id": work_order.id, "order_number": work_order.order_number},
+            message="施工单创建成功",
+            code=status.HTTP_201_CREATED,
+        )
 
     # ========== 批量从客户订单创建施工单 ==========
     @action(detail=False, methods=["post"])
@@ -183,14 +187,11 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             for sales_order_id in sales_order_ids:
                 try:
                     work_order = WorkOrderFlowService.create_from_sales_order(
-                        sales_order_id=sales_order_id,
-                        production_quantity=request.data.get("production_quantity"),
-                        selected_items=request.data.get("selected_items"),
-                        delivery_date=request.data.get("delivery_date"),
-                        priority=request.data.get("priority", "normal"),
-                        notes=request.data.get("notes", ""),
-                        created_by=request.user,
-                        additional_data={},
+                        **self._build_create_payload(
+                            request,
+                            sales_order_id=sales_order_id,
+                            additional_data={},
+                        )
                     )
                     created.append(
                         {
@@ -260,6 +261,7 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
 
     # ========== 流程 2: 提交审核 ==========
     @action(detail=True, methods=["post"])
+    @handle_flow_errors(message_prefix="提交失败：")
     def submit_approval(self, request, pk=None):
         """
         提交施工单审核
@@ -269,36 +271,28 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             "comment": "提交备注"  # 可选
         }
         """
-        try:
-            work_order = self.get_object()
-            self._ensure_work_order_writable(
-                work_order=work_order,
-                user=request.user,
-            )
+        work_order = self.get_object()
+        self._ensure_work_order_writable(
+            work_order=work_order,
+            user=request.user,
+        )
 
-            updated_work_order = WorkOrderFlowService.submit_for_approval(
-                work_order_id=work_order.id,
-                submitted_by=request.user,
-                comment=request.data.get("comment", ""),
-                auto_approve=request.data.get("auto_approve", False),
-            )
+        updated_work_order = WorkOrderFlowService.submit_for_approval(
+            work_order_id=work_order.id,
+            submitted_by=request.user,
+            comment=request.data.get("comment", ""),
+            auto_approve=request.data.get("auto_approve", False),
+        )
 
-            serializer = WorkOrderDetailSerializer(updated_work_order)
-            return APIResponse.success(
-                data=serializer.data,
-                message="施工单已提交审核",
-            )
-
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
-        except Exception as e:
-            return APIResponse.error(
-                message=f"提交失败：{str(e)}",
-                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        serializer = WorkOrderDetailSerializer(updated_work_order)
+        return APIResponse.success(
+            data=serializer.data,
+            message="施工单已提交审核",
+        )
 
     # ========== 流程 3: 审核通过（自动化）==========
     @action(detail=True, methods=["post"])
+    @handle_flow_errors(message_prefix="审核失败：")
     def approve(self, request, pk=None):
         """
         审核通过施工单（自动触发任务分派）
@@ -308,48 +302,38 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             "comment": "审核意见"  # 可选
         }
         """
-        try:
-            work_order = self.get_object()
-            self._validate_approval_permissions(
-                work_order=work_order,
-                user=request.user,
-            )
+        work_order = self.get_object()
+        self._validate_approval_permissions(
+            work_order=work_order,
+            user=request.user,
+        )
 
-            # 调用审核通过流程（自动分派任务）
-            # 注意：数据完整性已在保存时验证，无需重复验证
-            updated_work_order = WorkOrderFlowService.handle_approval_passed(
-                work_order=work_order,
-                approved_by=request.user,
-                comment=request.data.get("comment", ""),
-            )
+        updated_work_order = WorkOrderFlowService.handle_approval_passed(
+            work_order=work_order,
+            approved_by=request.user,
+            comment=request.data.get("comment", ""),
+        )
 
-            serializer = WorkOrderDetailSerializer(updated_work_order)
-            data = dict(serializer.data)
-            task_generation = getattr(updated_work_order, "_task_generation_result", None)
-            procurement_summary = getattr(updated_work_order, "_procurement_summary", None)
-            if task_generation is not None:
-                data["task_generation"] = {
-                    key: value
-                    for key, value in task_generation.items()
-                    if key != "tasks"
-                }
-            if procurement_summary is not None:
-                data["procurement_summary"] = procurement_summary
-            return APIResponse.success(
-                data=data,
-                message="施工单已审核通过，任务已自动分派",
-            )
-
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
-        except Exception as e:
-            return APIResponse.error(
-                message=f"审核失败：{str(e)}",
-                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        serializer = WorkOrderDetailSerializer(updated_work_order)
+        data = dict(serializer.data)
+        task_generation = getattr(updated_work_order, "_task_generation_result", None)
+        procurement_summary = getattr(updated_work_order, "_procurement_summary", None)
+        if task_generation is not None:
+            data["task_generation"] = {
+                key: value
+                for key, value in task_generation.items()
+                if key != "tasks"
+            }
+        if procurement_summary is not None:
+            data["procurement_summary"] = procurement_summary
+        return APIResponse.success(
+            data=data,
+            message="施工单已审核通过，任务已自动分派",
+        )
 
     # ========== 流程 4: 审核拒绝 ==========
     @action(detail=True, methods=["post"])
+    @handle_flow_errors(message_prefix="审核失败：")
     def reject(self, request, pk=None):
         """
         审核拒绝施工单
@@ -359,39 +343,30 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             "reason": "拒绝原因（必填）"
         }
         """
-        try:
-            work_order = self.get_object()
-            reason = request.data.get("reason", "")
-            self._validate_approval_permissions(
-                work_order=work_order,
-                user=request.user,
-            )
+        work_order = self.get_object()
+        reason = request.data.get("reason", "")
+        self._validate_approval_permissions(
+            work_order=work_order,
+            user=request.user,
+        )
 
-            if not reason:
-                return APIResponse.error(
-                    message="拒绝原因不能为空",
-                    code=status.HTTP_400_BAD_REQUEST,
-                )
-
-            updated_work_order = WorkOrderFlowService.handle_approval_rejected(
-                work_order=work_order,
-                rejected_by=request.user,
-                reason=reason,
-            )
-
-            serializer = WorkOrderDetailSerializer(updated_work_order)
-            return APIResponse.success(
-                data=serializer.data,
-                message="施工单已审核拒绝",
-            )
-
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
-        except Exception as e:
+        if not reason:
             return APIResponse.error(
-                message=f"审核失败：{str(e)}",
-                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="拒绝原因不能为空",
+                code=status.HTTP_400_BAD_REQUEST,
             )
+
+        updated_work_order = WorkOrderFlowService.handle_approval_rejected(
+            work_order=work_order,
+            rejected_by=request.user,
+            reason=reason,
+        )
+
+        serializer = WorkOrderDetailSerializer(updated_work_order)
+        return APIResponse.success(
+            data=serializer.data,
+            message="施工单已审核拒绝",
+        )
 
     # ========== 工具方法：检查并完成施工单 ==========
     @action(detail=True, methods=["post"])
@@ -433,27 +408,22 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
 
     # ========== 数据完整性检查 ==========
     @action(detail=True, methods=["get"])
+    @handle_flow_errors(message_prefix="检查失败：")
     def check_completeness(self, request, pk=None):
         """
         检查施工单数据完整性（提交审核前预校验）
 
         返回所有验证错误，如果为空则可以提交审核。
         """
-        try:
-            work_order = self.get_object()
-            errors = work_order.validate_before_approval()
-            return APIResponse.success(
-                data={
-                    "is_valid": len(errors) == 0,
-                    "errors": errors,
-                },
-                message="验证通过" if not errors else "存在数据不完整项",
-            )
-        except Exception as e:
-            return APIResponse.error(
-                message=f"检查失败：{str(e)}",
-                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        work_order = self.get_object()
+        errors = work_order.validate_before_approval()
+        return APIResponse.success(
+            data={
+                "is_valid": len(errors) == 0,
+                "errors": errors,
+            },
+            message="验证通过" if not errors else "存在数据不完整项",
+        )
 
     @action(detail=True, methods=["post"])
     def mark_urgent(self, request, pk=None):
