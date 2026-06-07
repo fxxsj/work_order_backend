@@ -215,9 +215,42 @@ class ProductionCost(TimeStampedModel, models.Model):
         return Decimal("0")
 
     def auto_calculate_labor_cost(self):
-        """自动计算人工成本（基于工时）"""
-        # TODO: 待工时管理模块实现后完善
-        pass
+        """
+        自动计算人工成本（基于任务报工工时）。
+
+        计算规则：
+        - 汇总施工单所有任务的 work_hours
+        - 使用预设的人工小时单价（可扩展为按工序/技能等级定价）
+        - equipment_cost 按 machine_name 存在时累加设备折旧/能耗估算
+        """
+        from decimal import Decimal
+        from workorder.models.core import WorkOrderTask
+
+        tasks = WorkOrderTask.objects.filter(work_order_process__work_order=self.work_order)
+
+        total_hours = Decimal("0")
+        total_operators = 0
+        has_machine = False
+
+        for task in tasks:
+            if task.work_hours:
+                total_hours += Decimal(str(task.work_hours))
+            total_operators += max(task.operator_count or 1, 1)
+            if task.machine_name:
+                has_machine = True
+
+        # 预设人工单价（元/小时），后续可扩展为配置表
+        LABOR_RATE_PER_HOUR = Decimal("25.00")
+        self.labor_cost = total_hours * LABOR_RATE_PER_HOUR * max(total_operators, 1)
+
+        # 设备成本：只要有使用设备，按小时数估算折旧/能耗
+        if has_machine:
+            EQUIPMENT_RATE_PER_HOUR = Decimal("15.00")
+            self.equipment_cost = total_hours * EQUIPMENT_RATE_PER_HOUR
+        else:
+            self.equipment_cost = Decimal("0")
+
+        self.save(update_fields=["labor_cost", "equipment_cost"])
 
 
 class Invoice(TimeStampedModel, ApprovalFieldsMixin, models.Model):

@@ -979,7 +979,14 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def resolve_exception(self, request, pk=None):
-        """登记拒收后的处理动作"""
+        """
+        登记拒收后的处理动作，并驱动后续业务。
+
+        支持三种处理结论：
+        - reship: 补发，自动生成新的送货单
+        - rework: 返工，自动生成返工施工单
+        - terminate: 终止，取消关联客户订单
+        """
         delivery_order = self.get_object()
 
         if delivery_order.status != "rejected":
@@ -989,22 +996,86 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
 
         resolution = (request.data.get("resolution") or "").strip()
         resolution_notes = (request.data.get("resolution_notes") or "").strip()
-        if resolution not in {"reship", "terminate"}:
-            return APIResponse.error("处理结论无效", code=status.HTTP_400_BAD_REQUEST)
+        if resolution not in {"reship", "rework", "terminate"}:
+            return APIResponse.error("处理结论无效，可选：reship（补发）、rework（返工）、terminate（终止）", code=status.HTTP_400_BAD_REQUEST)
         if not resolution_notes:
             return APIResponse.error("请填写处理说明", code=status.HTTP_400_BAD_REQUEST)
 
-        delivery_order.notes = upsert_delivery_exception_resolution(
-            delivery_order.notes,
-            resolution=resolution,
-            resolution_notes=resolution_notes.replace("|", "/"),
-            resolved_by=request.user.username or str(request.user.pk),
-            resolved_at=timezone.now().strftime("%Y-%m-%d %H:%M"),
-        )
-        delivery_order.save(update_fields=["notes", "updated_at"])
+        with transaction.atomic():
+            delivery_order.notes = upsert_delivery_exception_resolution(
+                delivery_order.notes,
+                resolution=resolution,
+                resolution_notes=resolution_notes.replace("|", "/"),
+                resolved_by=request.user.username or str(request.user.pk),
+                resolved_at=timezone.now().strftime("%Y-%m-%d %H:%M"),
+            )
+            delivery_order.save(update_fields=["notes", "updated_at"])
+
+            result_extra = {}
+
+            if resolution == "reship":
+                # 补发：自动生成新的送货单
+                reship_order = DeliveryOrder.objects.create(
+                    sales_order=delivery_order.sales_order,
+                    customer=delivery_order.customer,
+                    delivery_date=timezone.now().date(),
+                    receiver_name=delivery_order.receiver_name,
+                    receiver_phone=delivery_order.receiver_phone,
+                    delivery_address=delivery_order.delivery_address,
+                    notes=f"拒收补发（原送货单：{delivery_order.order_number}）\n{resolution_notes}",
+                )
+                for item in delivery_order.items.all():
+                    DeliveryItem.objects.create(
+                        delivery_order=reship_order,
+                        product=item.product,
+                        sales_order_item=item.sales_order_item,
+                        quantity=item.quantity,
+                        unit=item.unit,
+                        unit_price=item.unit_price,
+                    )
+                result_extra["reship_order_id"] = reship_order.id
+                result_extra["reship_order_number"] = reship_order.order_number
+
+            elif resolution == "rework":
+                # 返工：自动生成返工施工单
+                from workorder.services.work_order_flow_service import WorkOrderFlowService
+                from workorder.models.core import WorkOrder
+
+                sales_order = delivery_order.sales_order
+                if sales_order:
+                    # 尝试从原销售订单创建返工施工单
+                    try:
+                        rework_work_order = WorkOrderFlowService.create_from_sales_order(
+                            sales_order_id=sales_order.id,
+                            production_quantity=None,
+                            delivery_date=sales_order.delivery_date,
+                            priority="urgent",
+                            notes=f"返工施工单（原送货单拒收：{delivery_order.order_number}）\n{resolution_notes}",
+                            created_by=request.user,
+                            additional_data={},
+                        )
+                        # 标记为返工类型（通过 notes 或后续扩展字段标识）
+                        result_extra["rework_work_order_id"] = rework_work_order.id
+                        result_extra["rework_work_order_number"] = rework_work_order.order_number
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"自动创建返工施工单失败: {e}")
+
+            elif resolution == "terminate":
+                # 终止：取消关联客户订单
+                sales_order = delivery_order.sales_order
+                if sales_order and sales_order.status != "cancelled":
+                    sales_order.status = "cancelled"
+                    sales_order.completion_reason = f"送货单拒收后终止（{delivery_order.order_number}）\n{resolution_notes}"
+                    sales_order.save(update_fields=["status", "completion_reason"])
+                    result_extra["sales_order_status"] = "cancelled"
 
         serializer = self.get_serializer(delivery_order)
-        return APIResponse.success(data=serializer.data, message="拒收处理已登记")
+        return APIResponse.success(
+            data={"delivery_order": serializer.data, **result_extra},
+            message=f"拒收处理已登记：{resolution}"
+        )
 
     @action(detail=False, methods=["get"])
     @delivery_summary_docs
