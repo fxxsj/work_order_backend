@@ -56,7 +56,13 @@ class ApprovalValidationBaseTest(TestCase):
             defaults={
                 'name': 'CTP制版',
                 'requires_artwork': True,
-                'artwork_required': True
+                'artwork_required': True,
+                'requires_foiling_plate': False,
+                'foiling_plate_required': False,
+                'requires_embossing_plate': False,
+                'embossing_plate_required': False,
+                'requires_die': False,
+                'die_required': False,
             }
         )
 
@@ -65,7 +71,13 @@ class ApprovalValidationBaseTest(TestCase):
             defaults={
                 'name': '印刷',
                 'requires_artwork': True,
-                'artwork_required': True
+                'artwork_required': True,
+                'requires_foiling_plate': False,
+                'foiling_plate_required': False,
+                'requires_embossing_plate': False,
+                'embossing_plate_required': False,
+                'requires_die': False,
+                'die_required': False,
             }
         )
 
@@ -73,7 +85,15 @@ class ApprovalValidationBaseTest(TestCase):
             code='CUT',
             defaults={
                 'name': '开料',
-                'is_parallel': False
+                'is_parallel': False,
+                'requires_artwork': False,
+                'artwork_required': False,
+                'requires_foiling_plate': False,
+                'foiling_plate_required': False,
+                'requires_embossing_plate': False,
+                'embossing_plate_required': False,
+                'requires_die': False,
+                'die_required': False,
             }
         )
         
@@ -249,7 +269,11 @@ class PlateProcessMatchTest(ApprovalValidationBaseTest):
             requires_artwork=False,
             artwork_required=False,
             requires_die=False,
-            die_required=False
+            die_required=False,
+            requires_foiling_plate=False,
+            foiling_plate_required=False,
+            requires_embossing_plate=False,
+            embossing_plate_required=False,
         )
         
         work_order = WorkOrder(
@@ -281,6 +305,186 @@ class PlateProcessMatchTest(ApprovalValidationBaseTest):
         # 不应该报图稿相关的错误
         artwork_errors = [e for e in errors if '图稿' in e]
         self.assertEqual(len(artwork_errors), 0)
+
+    def test_artwork_required_when_only_requires_artwork_true(self):
+        """测试仅 requires_artwork=True 时也要求图稿"""
+        process_only_requires = Process.objects.create(
+            name='仅 requires_artwork 工序',
+            code='ONLY_REQ_ART',
+            requires_artwork=True,
+            artwork_required=False,
+            requires_die=False,
+            die_required=False
+        )
+
+        work_order = WorkOrder(
+            customer=self.customer,
+            production_quantity=100,
+            delivery_date=self.future_date,
+            created_by=self.creator,
+            manager=self.creator
+        )
+        work_order.save()
+
+        WorkOrderProduct.objects.create(
+            work_order=work_order,
+            product=self.product,
+            quantity=50
+        )
+
+        WorkOrderProcess.objects.create(
+            work_order=work_order,
+            process=process_only_requires,
+            sequence=10
+        )
+
+        errors = work_order.validate_before_approval()
+        artwork_errors = [e for e in errors if '图稿' in e]
+        self.assertTrue(len(artwork_errors) > 0, '仅 requires_artwork=True 时应要求图稿')
+
+    def test_artwork_required_when_only_artwork_required_true(self):
+        """测试仅 artwork_required=True 时也要求图稿"""
+        process_only_required = Process.objects.create(
+            name='仅 artwork_required 工序',
+            code='ONLY_ART_REQ',
+            requires_artwork=False,
+            artwork_required=True,
+            requires_die=False,
+            die_required=False
+        )
+
+        work_order = WorkOrder(
+            customer=self.customer,
+            production_quantity=100,
+            delivery_date=self.future_date,
+            created_by=self.creator,
+            manager=self.creator
+        )
+        work_order.save()
+
+        WorkOrderProduct.objects.create(
+            work_order=work_order,
+            product=self.product,
+            quantity=50
+        )
+
+        WorkOrderProcess.objects.create(
+            work_order=work_order,
+            process=process_only_required,
+            sequence=10
+        )
+
+        errors = work_order.validate_before_approval()
+        artwork_errors = [e for e in errors if '图稿' in e]
+        self.assertTrue(len(artwork_errors) > 0, '仅 artwork_required=True 时应要求图稿')
+
+    def test_die_required_when_only_requires_die_true(self):
+        """测试仅 requires_die=True 时也要求刀模"""
+        process_only_die = Process.objects.create(
+            name='仅 requires_die 工序',
+            code='ONLY_REQ_DIE',
+            requires_artwork=False,
+            artwork_required=False,
+            requires_die=True,
+            die_required=False
+        )
+
+        work_order = WorkOrder(
+            customer=self.customer,
+            production_quantity=100,
+            delivery_date=self.future_date,
+            created_by=self.creator,
+            manager=self.creator
+        )
+        work_order.save()
+
+        WorkOrderProduct.objects.create(
+            work_order=work_order,
+            product=self.product,
+            quantity=50
+        )
+
+        WorkOrderProcess.objects.create(
+            work_order=work_order,
+            process=process_only_die,
+            sequence=10
+        )
+
+        errors = work_order.validate_before_approval()
+        die_errors = [e for e in errors if '刀模' in e]
+        self.assertTrue(len(die_errors) > 0, '仅 requires_die=True 时应要求刀模')
+
+    def test_die_required_when_only_die_required_true(self):
+        """测试仅 die_required=True 时也要求刀模"""
+        process_only_die_req = Process.objects.create(
+            name='仅 die_required 工序',
+            code='ONLY_DIE_REQ',
+            requires_artwork=False,
+            artwork_required=False,
+            requires_die=False,
+            die_required=True
+        )
+
+        work_order = WorkOrder(
+            customer=self.customer,
+            production_quantity=100,
+            delivery_date=self.future_date,
+            created_by=self.creator,
+            manager=self.creator
+        )
+        work_order.save()
+
+        WorkOrderProduct.objects.create(
+            work_order=work_order,
+            product=self.product,
+            quantity=50
+        )
+
+        WorkOrderProcess.objects.create(
+            work_order=work_order,
+            process=process_only_die_req,
+            sequence=10
+        )
+
+        errors = work_order.validate_before_approval()
+        die_errors = [e for e in errors if '刀模' in e]
+        self.assertTrue(len(die_errors) > 0, '仅 die_required=True 时应要求刀模')
+
+    def test_artwork_not_required_when_both_false(self):
+        """测试 requires_artwork=False 且 artwork_required=False 时不要求图稿"""
+        process_both_false = Process.objects.create(
+            name='双 False 工序',
+            code='BOTH_FALSE_ART',
+            requires_artwork=False,
+            artwork_required=False,
+            requires_die=False,
+            die_required=False
+        )
+
+        work_order = WorkOrder(
+            customer=self.customer,
+            production_quantity=100,
+            delivery_date=self.future_date,
+            created_by=self.creator,
+            manager=self.creator
+        )
+        work_order.save()
+
+        WorkOrderProduct.objects.create(
+            work_order=work_order,
+            product=self.product,
+            quantity=50
+        )
+
+        WorkOrderProcess.objects.create(
+            work_order=work_order,
+            process=process_both_false,
+            sequence=10
+        )
+
+        errors = work_order.validate_before_approval()
+        artwork_errors = [e for e in errors if '图稿' in e]
+        self.assertEqual(len(artwork_errors), 0, '双 False 时不应要求图稿')
 
 
 class QuantityValidationTest(ApprovalValidationBaseTest):

@@ -9,7 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 import logging
 
-from ..models.core import WorkOrderTask
+from ..models.core import WorkOrderTask, TaskLog
 from ..models.base import Department
 from ..models.system import Notification
 from ..services.service_errors import ServiceError
@@ -283,6 +283,16 @@ class TaskAssignmentService:
         task.assigned_operator = operator
         task.save(update_fields=['assigned_department', 'assigned_operator', 'updated_at'])
 
+        # 记录任务日志
+        TaskLog.objects.create(
+            task=task,
+            log_type="status_change",
+            content=f"任务分配：{assigned_by.username} 将任务分配给 {operator.username}",
+            status_before=task.status,
+            status_after=task.status,
+            operator=assigned_by,
+        )
+
         # 创建任务分配通知
         work_order = task.work_order_process.work_order if task.work_order_process else None
         Notification.create_notification(
@@ -509,6 +519,16 @@ class TaskAssignmentService:
         # 执行认领
         task.assigned_operator = operator
         task.save(update_fields=['assigned_operator', 'updated_at'])
+
+        # 记录任务日志
+        TaskLog.objects.create(
+            task=task,
+            log_type="status_change",
+            content=f"任务认领：操作员 {operator.username} 认领了任务",
+            status_before=task.status,
+            status_after=task.status,
+            operator=operator,
+        )
 
         # 创建任务认领通知
         work_order = task.work_order_process.work_order if task.work_order_process else None

@@ -272,6 +272,11 @@ class StockOut(models.Model):
         verbose_name_plural = "出库单管理"
         ordering = ["-created_at"]
 
+    def save(self, *args, **kwargs):
+        if not self.order_number:
+            self.order_number = self.generate_order_number()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.order_number} - {self.get_out_type_display()}"
 

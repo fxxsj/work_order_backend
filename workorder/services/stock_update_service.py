@@ -7,6 +7,7 @@
 
 import logging
 from django.db import transaction
+from django.utils import timezone
 
 from workorder.constants.status import MaterialPurchaseStatus, TaskStatus, TaskType
 
@@ -26,9 +27,13 @@ class StockUpdateService:
         - 批量锁定产品记录，避免并发冲突
         - 避免重复计算已入库的数量
         - 记录详细的库存变更日志
+        - 自动创建 ProductStock 批次，确保发货时可找到批次库存
         """
         from workorder.models import WorkOrderTask
+        from workorder.models.inventory import ProductStock
         from workorder.models.products import Product, ProductStockLog
+
+        work_order = work_order_process.work_order
 
         with transaction.atomic():
             packaging_tasks = (
@@ -99,7 +104,7 @@ class StockUpdateService:
                     old_quantity=item[1],
                     new_quantity=item[2],
                     reason=(
-                        f"施工单{work_order_process.work_order.order_number}"
+                        f"施工单{work_order.order_number}"
                         f"包装工序完成，入库{item[3]}{item[0].unit}"
                     ),
                     created_by=None,
@@ -107,6 +112,28 @@ class StockUpdateService:
                 for item in stock_updates
             ]
             ProductStockLog.objects.bulk_create(log_entries)
+
+            # 自动创建/累加 ProductStock 批次，确保发货时可找到批次库存
+            # 批次号包含产品维度，避免多产品冲突；重复包装时累加数量
+            for product, old_qty, new_qty, quantity in stock_updates:
+                batch_no = f"{work_order.order_number}-{product.id}-PKG"
+                existing = (
+                    ProductStock.objects.select_for_update()
+                    .filter(batch_no=batch_no, product=product)
+                    .first()
+                )
+                if existing:
+                    existing.quantity += quantity
+                    existing.save(update_fields=["quantity"])
+                else:
+                    ProductStock.objects.create(
+                        batch_no=batch_no,
+                        product=product,
+                        quantity=quantity,
+                        work_order=work_order,
+                        status="in_stock",
+                        production_date=timezone.now().date(),
+                    )
 
             for product, _, new_qty, _ in stock_updates:
                 if product.is_low_stock():
@@ -155,15 +182,23 @@ class StockUpdateService:
                             material=task.material
                         ).first()
                     )
-                    if (
-                        work_order_material
-                        and work_order_material.purchase_status != MaterialPurchaseStatus.CUT
-                    ):
-                        work_order_material.purchase_status = MaterialPurchaseStatus.CUT
-                        work_order_material.cut_date = (
-                            work_order_process.work_order.updated_at.date()
-                        )
-                        material_updates.append(work_order_material)
+                    if work_order_material:
+                        needs_update = False
+
+                        # 状态不是 CUT 时更新状态
+                        if work_order_material.purchase_status != MaterialPurchaseStatus.CUT:
+                            work_order_material.purchase_status = MaterialPurchaseStatus.CUT
+                            needs_update = True
+
+                        # cut_date 为空时始终写入，避免被其他路径跳过
+                        if not work_order_material.cut_date:
+                            work_order_material.cut_date = (
+                                work_order_process.work_order.updated_at.date()
+                            )
+                            needs_update = True
+
+                        if needs_update:
+                            material_updates.append(work_order_material)
 
             if material_updates:
                 WorkOrderMaterial.objects.bulk_update(

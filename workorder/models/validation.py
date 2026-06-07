@@ -83,7 +83,7 @@ class WorkOrderValidator:
         )
         processes = Process.objects.filter(id__in=selected_processes, is_active=True)
 
-        # 检查图稿
+        # 检查图稿（任一必需字段为真即要求资产）
         processes_requiring_artwork = processes.filter(
             models.Q(requires_artwork=True) | models.Q(artwork_required=True)
         )
@@ -96,7 +96,7 @@ class WorkOrderValidator:
                 f"选择了需要图稿的工序（{process_names}），请至少选择一个图稿"
             )
 
-        # 检查刀模
+        # 检查刀模（任一必需字段为真即要求资产）
         processes_requiring_die = processes.filter(
             models.Q(requires_die=True) | models.Q(die_required=True)
         )
@@ -106,9 +106,9 @@ class WorkOrderValidator:
                 f"选择了需要刀模的工序（{process_names}），请至少选择一个刀模"
             )
 
-        # 检查烫金版
+        # 检查烫金版（任一必需字段为真即要求资产）
         processes_requiring_foiling_plate = processes.filter(
-            requires_foiling_plate=True, foiling_plate_required=True
+            models.Q(requires_foiling_plate=True) | models.Q(foiling_plate_required=True)
         )
         if (
             processes_requiring_foiling_plate.exists()
@@ -121,9 +121,9 @@ class WorkOrderValidator:
                 f"选择了需要烫金版的工序（{process_names}），请至少选择一个烫金版"
             )
 
-        # 检查压凸版
+        # 检查压凸版（任一必需字段为真即要求资产）
         processes_requiring_embossing_plate = processes.filter(
-            requires_embossing_plate=True, embossing_plate_required=True
+            models.Q(requires_embossing_plate=True) | models.Q(embossing_plate_required=True)
         )
         if (
             processes_requiring_embossing_plate.exists()

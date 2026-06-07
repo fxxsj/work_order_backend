@@ -799,7 +799,11 @@ class WorkOrderFlowService:
         # 批量创建工序（含快照数据）
         work_order_processes = []
         for index, (process_id, (process, product)) in enumerate(
-            sorted(process_config_map.items(), key=lambda x: x[0]), 1
+            sorted(
+                process_config_map.items(),
+                key=lambda x: (x[1][0].sort_order, x[1][0].code, x[0]),
+            ),
+            1,
         ):
             # 创建工序快照数据
             process_snapshot = {

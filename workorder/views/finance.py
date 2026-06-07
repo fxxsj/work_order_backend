@@ -331,7 +331,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         )
         .annotate(
             received_payment_amount=Coalesce(
-                Sum("payments__amount"),
+                Sum("payments__applied_amount"),
                 Value(Decimal("0")),
                 output_field=DecimalField(max_digits=12, decimal_places=2),
             )
@@ -564,6 +564,28 @@ class PaymentViewSet(viewsets.ModelViewSet):
         elif self.action in ["update", "partial_update"]:
             return PaymentUpdateSerializer
         return PaymentSerializer
+
+    def perform_create(self, serializer):
+        """创建收款记录后回写订单付款状态"""
+        payment = serializer.save(recorded_by=self.request.user)
+        from workorder.services.payment_service import PaymentService
+        PaymentService.apply_payment(payment=payment, user=self.request.user)
+
+    def perform_update(self, serializer):
+        """更新收款记录后回写订单付款状态"""
+        payment = serializer.save()
+        from workorder.services.payment_service import PaymentService
+        PaymentService.apply_payment(payment=payment, user=self.request.user)
+
+    def perform_destroy(self, instance):
+        """删除收款记录后重新计算关联订单付款状态"""
+        sales_order = instance.sales_order
+        super().perform_destroy(instance)
+        if sales_order:
+            from workorder.services.payment_service import PaymentService
+
+            PaymentService._update_sales_order_payment_status(sales_order)
+            PaymentService._distribute_to_plans(sales_order)
 
     def get_queryset(self):
         """支持过滤和搜索"""

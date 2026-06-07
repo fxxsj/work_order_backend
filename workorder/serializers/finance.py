@@ -240,7 +240,10 @@ class InvoiceSerializer(serializers.ModelSerializer):
         received = getattr(obj, "received_payment_amount", None)
         if received is not None:
             return received
-        return obj.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        return (
+            obj.payments.aggregate(total=Sum("applied_amount"))["total"]
+            or Decimal("0")
+        )
 
     def get_payment_remaining_amount(self, obj):
         total_amount = obj.total_amount or Decimal("0")
@@ -379,6 +382,10 @@ class PaymentSerializer(serializers.ModelSerializer):
 class PaymentCreateSerializer(serializers.ModelSerializer):
     """收款创建序列化器"""
 
+    applied_amount = serializers.DecimalField(
+        max_digits=12, decimal_places=2, required=False, allow_null=True
+    )
+
     class Meta:
         model = Payment
         fields = [
@@ -386,6 +393,7 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
             "invoice",
             "customer",
             "amount",
+            "applied_amount",
             "payment_method",
             "payment_date",
             "bank_account",
@@ -404,12 +412,40 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
         if amount and amount <= 0:
             raise serializers.ValidationError({"amount": "收款金额必须大于0"})
 
+        # 核销金额校验
+        applied_amount = data.get("applied_amount")
+        if applied_amount is not None:
+            if applied_amount < 0:
+                raise serializers.ValidationError(
+                    {"applied_amount": "核销金额不能为负数"}
+                )
+            if amount and applied_amount > amount:
+                raise serializers.ValidationError(
+                    {"applied_amount": "核销金额不能大于收款金额"}
+                )
+
         # 付款日期不能晚于今天
         payment_date = data.get("payment_date")
         if payment_date and payment_date > timezone.now().date():
             raise serializers.ValidationError({"payment_date": "付款日期不能晚于今天"})
 
         return data
+
+    def create(self, validated_data):
+        """
+        创建收款时，若绑定了销售订单或发票且未显式传入 applied_amount，
+        默认全额核销（applied_amount = amount）。
+        若需要记录为未核销预收款，请显式传入 applied_amount=0。
+        """
+        amount = validated_data.get("amount", Decimal("0"))
+        applied_amount = validated_data.get("applied_amount")
+        sales_order = validated_data.get("sales_order")
+        invoice = validated_data.get("invoice")
+
+        if applied_amount is None and (sales_order or invoice):
+            validated_data["applied_amount"] = amount
+
+        return super().create(validated_data)
 
 
 class PaymentUpdateSerializer(serializers.ModelSerializer):
