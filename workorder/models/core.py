@@ -920,6 +920,38 @@ class WorkOrderMaterial(models.Model):
     cut_date = models.DateField(
         "开料日期", null=True, blank=True, help_text="切料组开料日期"
     )
+    cut_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cut_materials",
+        verbose_name="开料人",
+    )
+    cut_quantity = models.DecimalField(
+        "实际开料数量",
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="实际开料数量",
+    )
+    wastage_quantity = models.DecimalField(
+        "开料损耗数量",
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="开料过程中产生的损耗数量",
+    )
+
+    # 成本相关：采购实际单价（优先于物料档案单价用于成本核算）
+    actual_unit_price = models.DecimalField(
+        "采购实际单价",
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="采购入库时的实际单价，用于成本核算",
+    )
 
     notes = models.TextField("备注", blank=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
@@ -1147,6 +1179,21 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
     version = models.IntegerField(
         "版本号", default=1, help_text="用于乐观锁，防止并发更新冲突"
     )
+    # 工时与设备（用于成本核算）
+    work_hours = models.DecimalField(
+        "工时(小时)",
+        max_digits=6,
+        decimal_places=2,
+        default=0,
+        help_text="完成该任务所花费的工时",
+    )
+    machine_name = models.CharField(
+        "设备名称", max_length=100, blank=True, help_text="使用的生产设备"
+    )
+    operator_count = models.IntegerField(
+        "操作人数", default=1, help_text="参与该任务的操作员人数"
+    )
+
     status = models.CharField(
         "状态",
         max_length=20,

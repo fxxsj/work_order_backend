@@ -103,9 +103,18 @@ class WorkOrderMaterialViewSet(viewsets.ModelViewSet):
 
         wom.purchase_status = MaterialPurchaseStatus.CUT
         wom.cut_date = timezone.now().date()
-        update_fields = ["purchase_status", "cut_date"]
+        wom.cut_by = request.user
+        update_fields = ["purchase_status", "cut_date", "cut_by"]
 
-        # 记录操作人、实际开料数量、损耗到备注
+        if cut_quantity is not None:
+            wom.cut_quantity = cut_quantity
+            update_fields.append("cut_quantity")
+
+        if wastage_quantity is not None:
+            wom.wastage_quantity = wastage_quantity
+            update_fields.append("wastage_quantity")
+
+        # 记录操作人、实际开料数量、损耗到备注（保留备注作为审计日志）
         log_parts = [f"确认开料 by {request.user.username}"]
         if cut_quantity is not None:
             log_parts.append(f"实际开料数量: {cut_quantity}")

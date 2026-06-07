@@ -32,3 +32,9 @@ class ProcessFactory(factory.django.DjangoModelFactory):
     task_generation_rule = 'general'
     artwork_required = False
     die_required = False
+    foiling_plate_required = False
+    embossing_plate_required = False
+    requires_artwork = False
+    requires_die = False
+    requires_foiling_plate = False
+    requires_embossing_plate = False

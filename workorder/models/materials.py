@@ -566,18 +566,28 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
 
             item.save()
 
-            # 回写施工单物料采购状态
+            # 回写施工单物料采购状态和实际采购单价
             if item.work_order_material:
                 from workorder.constants.status import MaterialPurchaseStatus
 
                 wom = item.work_order_material
+                update_fields = []
+
                 if item.status == "received":
                     wom.purchase_status = MaterialPurchaseStatus.RECEIVED
                     wom.received_date = timezone.now().date()
-                    wom.save(update_fields=["purchase_status", "received_date"])
+                    update_fields.extend(["purchase_status", "received_date"])
                 elif item.status == "partial":
                     wom.purchase_status = MaterialPurchaseStatus.ORDERED
-                    wom.save(update_fields=["purchase_status"])
+                    update_fields.append("purchase_status")
+
+                # 回写采购实际单价（首次入库时写入）
+                if wom.actual_unit_price is None and item.unit_price is not None:
+                    wom.actual_unit_price = item.unit_price
+                    update_fields.append("actual_unit_price")
+
+                if update_fields:
+                    wom.save(update_fields=update_fields)
 
             # 检查采购单是否全部收货完成
             self._check_purchase_order_completion()

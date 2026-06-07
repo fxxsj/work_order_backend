@@ -101,7 +101,7 @@ class TestConfirmCutting:
         assert wom.purchase_status == MaterialPurchaseStatus.ORDERED
 
     def test_received_status_allowed(self, api_client_with_user, cutting_material):
-        """received 状态可以确认开料"""
+        """received 状态可以确认开料，结构化字段正确写入"""
         client, user = api_client_with_user(is_superuser=True)
         wom, work_order, _ = cutting_material
 
@@ -114,6 +114,9 @@ class TestConfirmCutting:
         wom.refresh_from_db()
         assert wom.purchase_status == MaterialPurchaseStatus.CUT
         assert wom.cut_date is not None
+        assert wom.cut_by == user
+        assert wom.cut_quantity == Decimal("100")
+        assert wom.wastage_quantity == Decimal("5")
         assert "测试开料" in wom.notes
         assert "100" in wom.notes
         assert user.username in wom.notes

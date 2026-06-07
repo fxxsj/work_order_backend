@@ -132,6 +132,7 @@ class StockUpdateService:
                         quantity=quantity,
                         work_order=work_order,
                         status="in_stock",
+                        quality_status="pending",
                         production_date=timezone.now().date(),
                     )
 
@@ -200,10 +201,8 @@ class StockUpdateService:
                         if needs_update:
                             material_updates.append(work_order_material)
 
-            if material_updates:
-                WorkOrderMaterial.objects.bulk_update(
-                    material_updates, ["purchase_status", "cut_date"]
-                )
+            for wom in material_updates:
+                wom.save(update_fields=["purchase_status", "cut_date"])
 
             if not material_quantities:
                 return

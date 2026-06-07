@@ -793,8 +793,11 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
             # 1. 校验并扣减库存
             for item in delivery_order.items.all():
                 # 查找可用库存（FIFO - 先进先出）
+                # 只允许扣减质检合格或让步接收的批次
                 stocks = ProductStock.objects.filter(
-                    product=item.product, status="in_stock"
+                    product=item.product,
+                    status="in_stock",
+                    quality_status__in=["qualified", "concession"],
                 ).order_by("created_at")
 
                 remaining = item.quantity
@@ -810,8 +813,25 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
                     remaining -= deduct
 
                 if remaining > 0:
+                    # 区分库存不足和质检未放行
+                    pending_stock = ProductStock.objects.filter(
+                        product=item.product,
+                        status="in_stock",
+                        quality_status="pending",
+                    ).aggregate(total=models.Sum("quantity"))["total"] or 0
+                    unqualified_stock = ProductStock.objects.filter(
+                        product=item.product,
+                        status="in_stock",
+                        quality_status="unqualified",
+                    ).aggregate(total=models.Sum("quantity"))["total"] or 0
+
+                    message = f"产品 {item.product.name} 可发货库存不足，缺少 {remaining}"
+                    if pending_stock > 0:
+                        message += f"（另有 {pending_stock} 待检中）"
+                    if unqualified_stock > 0:
+                        message += f"（另有 {unqualified_stock} 不合格）"
                     return APIResponse.error(
-                        f"产品 {item.product.name} 库存不足，缺少 {remaining}",
+                        message,
                         code=status.HTTP_400_BAD_REQUEST,
                     )
 

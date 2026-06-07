@@ -183,16 +183,36 @@ class ProductionCost(TimeStampedModel, models.Model):
         self.save()
 
     def auto_calculate_material_cost(self):
-        """自动计算材料成本"""
+        """自动计算材料成本（优先使用采购实际单价）"""
         from workorder.models import WorkOrderMaterial
 
         materials = WorkOrderMaterial.objects.filter(work_order=self.work_order)
         total = 0
         for material in materials:
-            if material.material:
-                total += material.material_usage * material.material.unit_price
+            if not material.material:
+                continue
+            # 优先使用采购实际单价，其次使用物料档案单价
+            unit_price = material.actual_unit_price or material.material.unit_price
+            # material_usage 可能是字符串（如 "100张"），需要解析数字
+            usage_qty = self._parse_material_usage(material.material_usage)
+            total += usage_qty * unit_price
         self.material_cost = total
         self.save()
+
+    @staticmethod
+    def _parse_material_usage(usage_str):
+        """解析物料用量字符串，提取数字部分"""
+        from decimal import Decimal
+        import re
+        if not usage_str:
+            return Decimal("0")
+        numbers = re.findall(r'\d+\.?\d*', str(usage_str))
+        if numbers:
+            try:
+                return Decimal(numbers[0])
+            except (ValueError, IndexError):
+                return Decimal("0")
+        return Decimal("0")
 
     def auto_calculate_labor_cost(self):
         """自动计算人工成本（基于工时）"""

@@ -151,6 +151,9 @@ class TaskActionsMixin:
         quantity_increment = request.data.get("quantity_increment")
         quantity_defective = request.data.get("quantity_defective", 0)
         notes = request.data.get("notes", "")
+        work_hours = request.data.get("work_hours")
+        machine_name = request.data.get("machine_name", "")
+        operator_count = request.data.get("operator_count")
 
         if quantity_increment is None:
             return APIResponse.error("请提供本次完成数量", code=status.HTTP_400_BAD_REQUEST)
@@ -191,6 +194,20 @@ class TaskActionsMixin:
 
         if notes:
             task.production_requirements = notes
+
+        # 更新工时与设备信息
+        if work_hours is not None:
+            try:
+                task.work_hours = float(work_hours)
+            except (TypeError, ValueError):
+                pass
+        if machine_name:
+            task.machine_name = machine_name
+        if operator_count is not None:
+            try:
+                task.operator_count = int(operator_count)
+            except (TypeError, ValueError):
+                pass
 
         # 根据数量自动判断状态
         if (

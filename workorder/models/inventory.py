@@ -62,6 +62,21 @@ class ProductStock(TimeStampedModel, models.Model):
     production_date = models.DateField("生产日期", null=True, blank=True)
     expiry_date = models.DateField("有效期", null=True, blank=True)
 
+    # 质检状态（独立于库存状态，用于控制发货放行）
+    QUALITY_STATUS_CHOICES = [
+        ("pending", "待检"),
+        ("qualified", "合格"),
+        ("concession", "让步接收"),
+        ("unqualified", "不合格"),
+    ]
+    quality_status = models.CharField(
+        "质检状态",
+        max_length=20,
+        choices=QUALITY_STATUS_CHOICES,
+        default="pending",
+        help_text="成品质检状态，只有合格/让步接收的批次才能发货",
+    )
+
     # 状态
     STATUS_CHOICES = [
         ("in_stock", "在库"),
