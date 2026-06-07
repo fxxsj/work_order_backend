@@ -135,8 +135,16 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             )
         )
 
+        response_data = {
+            "id": work_order.id,
+            "order_number": work_order.order_number,
+        }
+        asset_link_result = getattr(work_order, "_asset_link_result", None)
+        if asset_link_result:
+            response_data["asset_link_result"] = asset_link_result
+
         return APIResponse.success(
-            data={"id": work_order.id, "order_number": work_order.order_number},
+            data=response_data,
             message="施工单创建成功",
             code=status.HTTP_201_CREATED,
         )

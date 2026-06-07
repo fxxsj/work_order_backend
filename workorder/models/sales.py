@@ -148,7 +148,9 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
         # 自动计算税额和总金额（仅在不是 update_fields 时计算）
         update_fields = kwargs.get("update_fields")
         if update_fields is None:
-            self.tax_amount = self.subtotal * (self.tax_rate / 100)
+            from decimal import Decimal
+            tax_rate = Decimal(str(self.tax_rate)) if self.tax_rate else Decimal("0")
+            self.tax_amount = self.subtotal * (tax_rate / Decimal("100"))
             self.total_amount = self.subtotal + self.tax_amount - self.discount_amount
 
             # 根据已付金额更新付款状态
@@ -164,6 +166,7 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
 
     def update_totals(self):
         """更新订单总金额（从订单明细汇总）"""
+        from decimal import Decimal
         from django.db.models import Sum
 
         items_total = (
@@ -177,7 +180,8 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
 
         self.subtotal = items_total
         self.discount_amount = discount_total
-        self.tax_amount = items_total * (self.tax_rate / 100)
+        tax_rate = Decimal(str(self.tax_rate)) if self.tax_rate else Decimal("0")
+        self.tax_amount = items_total * (tax_rate / Decimal("100"))
         self.total_amount = items_total + self.tax_amount - discount_total
 
         self.save(

@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.conf import settings
 from workorder.constants import ErrorCodes
 from workorder.response import APIResponse
+from workorder.services.service_errors import ServiceError
 from .response_format import extract_first_error_message
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,25 @@ def custom_exception_handler(exc, context):
     Returns:
         Response: 标准化的错误响应
     """
-    # 首先调用 DRF 的默认异常处理器
+    # 首先处理 ServiceError（服务层业务异常）
+    if isinstance(exc, ServiceError):
+        response_data = {
+            'success': False,
+            'code': exc.code,
+            'message': exc.message,
+            'errors': exc.data or {},
+            'data': None,
+            'timestamp': timezone.now().isoformat(),
+        }
+        response = APIResponse.error(
+            message=exc.message,
+            code=exc.code,
+            errors=response_data['errors'],
+            data=None,
+        )
+        return response
+
+    # 然后调用 DRF 的默认异常处理器
     response = exception_handler(exc, context)
 
     if response is not None:

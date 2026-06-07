@@ -282,8 +282,11 @@ class WorkOrderFlowService:
         WorkOrderFlowService._auto_generate_materials(work_order)
 
         # 7. 关联资产（图稿、刀模等）
-        if additional_data:
-            WorkOrderFlowService._link_assets(work_order, additional_data)
+        asset_link_result = WorkOrderFlowService._link_assets(
+            work_order, additional_data or {}
+        )
+        # 将资产关联结果附加到实例，供 API 层展示
+        work_order._asset_link_result = asset_link_result
 
         # 8. 记录操作日志
         WorkOrderFlowService._audit(
@@ -858,25 +861,75 @@ class WorkOrderFlowService:
         logger.info(f"为施工单 {work_order.order_number} 自动生成了物料清单")
 
     @staticmethod
-    def _link_assets(work_order: WorkOrder, additional_data: Dict[str, Any]) -> None:
-        """关联资产（图稿、刀模等）"""
+    def _link_assets(work_order: WorkOrder, additional_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        关联资产（图稿、刀模等）。
+
+        规则：
+        - 如果显式传入了 asset_ids（包括空列表），使用传入的值
+        - 如果没有传入，自动从产品关联中查找已确认的资产并关联
+
+        Returns:
+            Dict[str, Any]: 资产关联结果，包含 auto_linked（自动关联的资产）和 missing（缺失提醒）
+        """
+        from workorder.models.assets import ArtworkProduct, DieProduct, FoilingPlateProduct, EmbossingPlateProduct
+
+        result = {"auto_linked": {}, "missing": []}
+        product_ids = list(work_order.products.values_list("product_id", flat=True))
+
         # 图稿
         if "artwork_ids" in additional_data:
             work_order.artworks.set(additional_data["artwork_ids"])
+        else:
+            auto_artworks = ArtworkProduct.objects.filter(
+                product_id__in=product_ids,
+                artwork__confirmed=True,
+            ).values_list("artwork_id", flat=True).distinct()
+            if auto_artworks:
+                work_order.artworks.set(auto_artworks)
+                result["auto_linked"]["artworks"] = list(auto_artworks)
 
         # 刀模
         if "die_ids" in additional_data:
             work_order.dies.set(additional_data["die_ids"])
+        else:
+            auto_dies = DieProduct.objects.filter(
+                product_id__in=product_ids,
+                die__confirmed=True,
+            ).values_list("die_id", flat=True).distinct()
+            if auto_dies:
+                work_order.dies.set(auto_dies)
+                result["auto_linked"]["dies"] = list(auto_dies)
 
         # 烫金版
         if "foiling_plate_ids" in additional_data:
             work_order.foiling_plates.set(additional_data["foiling_plate_ids"])
+        else:
+            auto_fp = FoilingPlateProduct.objects.filter(
+                product_id__in=product_ids,
+                foiling_plate__confirmed=True,
+            ).values_list("foiling_plate_id", flat=True).distinct()
+            if auto_fp:
+                work_order.foiling_plates.set(auto_fp)
+                result["auto_linked"]["foiling_plates"] = list(auto_fp)
 
         # 压凸版
         if "embossing_plate_ids" in additional_data:
             work_order.embossing_plates.set(additional_data["embossing_plate_ids"])
+        else:
+            auto_ep = EmbossingPlateProduct.objects.filter(
+                product_id__in=product_ids,
+                embossing_plate__confirmed=True,
+            ).values_list("embossing_plate_id", flat=True).distinct()
+            if auto_ep:
+                work_order.embossing_plates.set(auto_ep)
+                result["auto_linked"]["embossing_plates"] = list(auto_ep)
 
-        logger.info(f"为施工单 {work_order.order_number} 关联了资产")
+        logger.info(
+            f"为施工单 {work_order.order_number} 关联了资产，"
+            f"自动关联: {result['auto_linked']}"
+        )
+        return result
 
     @staticmethod
     def _auto_dispatch_tasks(work_order: WorkOrder) -> Dict[str, Any]:

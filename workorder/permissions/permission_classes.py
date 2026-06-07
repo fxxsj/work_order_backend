@@ -235,7 +235,12 @@ class WorkOrderTaskPermission(permissions.BasePermission):
     2. 生产主管可以更新本部门的所有任务
     3. 管理员可以更新所有任务
     4. 跨部门操作需要特殊权限（change_workorder）
+    5. 任务中心相关操作（claimable/operator_center/claim/update_quantity/complete）
+       放宽全局模型权限，改为已登录 + 服务层对象权限判断
     """
+
+    # 允许已登录用户访问的操作，不强制要求 view_workorder 模型权限
+    OPERATOR_ACTIONS = {"claimable", "operator_center", "claim", "update_quantity", "complete"}
 
     def has_permission(self, request, view):
         # 检查用户是否已登录
@@ -244,6 +249,12 @@ class WorkOrderTaskPermission(permissions.BasePermission):
 
         # 超级用户拥有所有权限
         if request.user.is_superuser:
+            return True
+
+        action = getattr(view, "action", None)
+
+        # 任务中心相关操作：已登录即可，具体权限由服务层判断
+        if action in self.OPERATOR_ACTIONS:
             return True
 
         # 读取操作：检查是否有查看施工单的权限

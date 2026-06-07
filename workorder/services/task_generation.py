@@ -61,16 +61,20 @@ class TaskGenerationService:
         )
 
         # 批量分派任务
-        dispatched_count = TaskGenerationService._dispatch_tasks(created_tasks, work_order)
+        dispatch_result = TaskGenerationService._dispatch_tasks(created_tasks, work_order)
 
         logger.info(
-            f"施工单 {work_order.order_number} 生成了 {len(created_tasks)} 个任务，分派了 {dispatched_count} 个"
+            f"施工单 {work_order.order_number} 生成了 {len(created_tasks)} 个任务，"
+            f"分派了 {dispatch_result['dispatched_count']} 个，"
+            f"未分派 {dispatch_result['undispatched_count']} 个"
         )
 
         return {
             'created_count': len(created_tasks),
             'existing_count': existing_count,
-            'dispatched_count': dispatched_count,
+            'dispatched_count': dispatch_result['dispatched_count'],
+            'undispatched_count': dispatch_result['undispatched_count'],
+            'undispatched_reasons': dispatch_result['undispatched_reasons'],
             'skipped_count': existing_count,
             'tasks': list(created_tasks)
         }
@@ -300,18 +304,36 @@ class TaskGenerationService:
             work_order: 施工单对象
 
         Returns:
-            int: 分派的任务数量
+            dict: {
+                'dispatched_count': 已分派到部门的任务数,
+                'undispatched_count': 未分派到部门的任务数,
+                'undispatched_reasons': 未分派原因列表,
+            }
         """
         dispatched_count = 0
+        undispatched_count = 0
+        undispatched_reasons = []
 
         for task in tasks:
             work_order_process = task.work_order_process
             if work_order_process:
                 # 使用工序的分派逻辑
                 work_order_process._auto_assign_task(task)
-                dispatched_count += 1
+                if task.assigned_department_id:
+                    dispatched_count += 1
+                else:
+                    undispatched_count += 1
+                    reason = (
+                        f"工序 {work_order_process.process.name} "
+                        f"未配置负责部门或分派规则"
+                    )
+                    undispatched_reasons.append(reason)
 
-        return dispatched_count
+        return {
+            'dispatched_count': dispatched_count,
+            'undispatched_count': undispatched_count,
+            'undispatched_reasons': undispatched_reasons,
+        }
 
     @staticmethod
     def _parse_material_usage(usage_str):

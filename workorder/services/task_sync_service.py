@@ -173,9 +173,10 @@ class TaskSyncService:
                     ignore_conflicts=False
                 )
                 added_count = len(created_tasks)
-                dispatched_count = TaskGenerationService._dispatch_tasks(
+                dispatch_result = TaskGenerationService._dispatch_tasks(
                     created_tasks, locked_work_order
                 )
+                dispatched_count = dispatch_result['dispatched_count']
 
         message = (
             f'同步完成：已删除 {deleted_count} 个任务，'
