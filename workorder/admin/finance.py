@@ -22,6 +22,7 @@ from ..models import (
     PaymentPlan,
     ProductionCost,
     Statement,
+    SupplierPayment,
 )
 from .utils import FINANCE_STATUS_COLORS, create_status_badge_method
 
@@ -391,3 +392,27 @@ class StatementAdmin(admin.ModelAdmin):
             "cancelled": "#F56C6C",
         }
     )
+
+
+@admin.register(SupplierPayment)
+class SupplierPaymentAdmin(admin.ModelAdmin):
+    """供应商付款管理"""
+
+    list_display = [
+        "payment_number",
+        "supplier",
+        "purchase_order",
+        "amount",
+        "applied_amount",
+        "remaining_amount",
+        "payment_method",
+        "payment_date",
+        "status",
+        "created_at",
+    ]
+    search_fields = ["payment_number", "supplier__name", "purchase_order__order_number"]
+    list_filter = ["status", "payment_method", "payment_date", "created_at"]
+    autocomplete_fields = ["supplier", "purchase_order", "created_by", "submitted_by", "approved_by"]
+    readonly_fields = ["payment_number", "remaining_amount", "created_at"]
+    ordering = ["-payment_date"]
+    list_select_related = ["supplier", "purchase_order"]

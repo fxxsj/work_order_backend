@@ -60,6 +60,7 @@ from ..services.service_errors import ServiceError
 from ..services.approval_service import ApprovalService
 from ..services.purchase_order_flow_service import PurchaseOrderFlowService
 from .base_viewsets import BaseViewSet
+from .mixins import ApprovalTimelineMixin
 from ..import_export import export_model, import_model
 from ..import_export_configs import MATERIAL_EXPORT_CONFIG, get_material_import_config
 
@@ -171,7 +172,7 @@ class MaterialSupplierViewSet(BaseViewSet):
 
 
 @purchase_order_docs
-class PurchaseOrderViewSet(BaseViewSet):
+class PurchaseOrderViewSet(ApprovalTimelineMixin, BaseViewSet):
     """采购单视图集（优化版）"""
 
     queryset = PurchaseOrder.objects.all()

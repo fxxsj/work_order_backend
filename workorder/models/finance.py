@@ -618,3 +618,123 @@ class Statement(models.Model):
         )
 
         super().save(*args, **kwargs)
+
+
+class SupplierPayment(models.Model):
+    """供应商付款记录（应付账款核销）"""
+
+    METHOD_CHOICES = [
+        ("cash", "现金"),
+        ("transfer", "转账"),
+        ("check", "支票"),
+        ("acceptance", "承兑汇票"),
+    ]
+
+    STATUS_CHOICES = [
+        ("pending", "待审核"),
+        ("approved", "已审核"),
+        ("rejected", "已拒绝"),
+    ]
+
+    @classmethod
+    def generate_payment_number(cls):
+        """生成付款单号：FK + yyyymmdd + 4位序号"""
+        from workorder.utils import generate_order_number
+        return generate_order_number(
+            model_class=cls,
+            field_name="payment_number",
+            prefix="FK",
+        )
+
+    payment_number = models.CharField(
+        "付款单号", max_length=50, unique=True, editable=False
+    )
+
+    # 关联信息
+    purchase_order = models.ForeignKey(
+        "workorder.PurchaseOrder",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="supplier_payments",
+        verbose_name="采购单",
+    )
+    supplier = models.ForeignKey(
+        "workorder.Supplier",
+        on_delete=models.PROTECT,
+        related_name="payments",
+        verbose_name="供应商",
+    )
+
+    # 金额信息
+    amount = models.DecimalField("付款金额", max_digits=12, decimal_places=2)
+    applied_amount = models.DecimalField(
+        "核销金额", max_digits=12, decimal_places=2, default=0
+    )
+    remaining_amount = models.DecimalField(
+        "剩余金额", max_digits=12, decimal_places=2, default=0
+    )
+
+    payment_method = models.CharField(
+        "付款方式", max_length=20, choices=METHOD_CHOICES
+    )
+    payment_date = models.DateField("付款日期", default=timezone.now)
+
+    # 银行信息
+    bank_account = models.CharField("付款账户", max_length=50, blank=True)
+    transaction_number = models.CharField("交易流水号", max_length=100, blank=True)
+
+    # 审核信息
+    status = models.CharField(
+        "审核状态", max_length=20, choices=STATUS_CHOICES, default="pending"
+    )
+    submitted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="submitted_supplier_payments",
+        verbose_name="提交人",
+    )
+    submitted_at = models.DateTimeField("提交时间", null=True, blank=True)
+    approved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_supplier_payments",
+        verbose_name="审核人",
+    )
+    approved_at = models.DateTimeField("审核时间", null=True, blank=True)
+    approval_comment = models.TextField("审核意见", blank=True)
+
+    notes = models.TextField("备注", blank=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_supplier_payments",
+        verbose_name="创建人",
+    )
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "供应商付款"
+        verbose_name_plural = "供应商付款管理"
+        ordering = ["-payment_date"]
+        indexes = [
+            models.Index(fields=["supplier"]),
+            models.Index(fields=["payment_date"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.payment_number} - {self.supplier.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.payment_number:
+            self.payment_number = self.generate_payment_number()
+        # 计算剩余金额
+        self.remaining_amount = self.amount - self.applied_amount
+        super().save(*args, **kwargs)

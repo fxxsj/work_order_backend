@@ -26,6 +26,7 @@ from workorder.models import (
     PaymentPlan,
     ProductionCost,
     Statement,
+    SupplierPayment,
 )
 
 # ==================== 成本核算序列化器 ====================
@@ -650,6 +651,95 @@ class CostAnalysisSerializer(serializers.Serializer):
     variance = serializers.DecimalField(max_digits=12, decimal_places=2)
 
 
+# ==================== 供应商付款序列化器 ====================
+
+
+class SupplierPaymentSerializer(serializers.ModelSerializer):
+    """供应商付款序列化器"""
+
+    payment_method_display = serializers.CharField(
+        source="get_payment_method_display", read_only=True
+    )
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    purchase_order_number = serializers.CharField(
+        source="purchase_order.order_number", read_only=True, allow_null=True
+    )
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    created_by_name = serializers.CharField(
+        source="created_by.username", read_only=True, allow_null=True
+    )
+    submitted_by_name = serializers.CharField(
+        source="submitted_by.username", read_only=True, allow_null=True
+    )
+    approved_by_name = serializers.CharField(
+        source="approved_by.username", read_only=True, allow_null=True
+    )
+    follow_up_text = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SupplierPayment
+        fields = "__all__"
+        read_only_fields = ["payment_number", "remaining_amount"]
+
+    def get_follow_up_text(self, obj) -> str:
+        remaining = obj.remaining_amount or Decimal("0")
+        if obj.status == "pending":
+            return f"待审核，待核销 {remaining:.2f}"
+        if obj.status == "rejected":
+            return "已拒绝"
+        if remaining > 0:
+            return f"已审核，待核销 {remaining:.2f}"
+        return "已完成"
+
+
+class SupplierPaymentCreateSerializer(serializers.ModelSerializer):
+    """供应商付款创建序列化器"""
+
+    applied_amount = serializers.DecimalField(
+        max_digits=12, decimal_places=2, required=False, allow_null=True
+    )
+
+    class Meta:
+        model = SupplierPayment
+        fields = [
+            "purchase_order",
+            "supplier",
+            "amount",
+            "applied_amount",
+            "payment_method",
+            "payment_date",
+            "bank_account",
+            "transaction_number",
+            "notes",
+        ]
+
+    def validate(self, data):
+        if not data.get("supplier"):
+            raise serializers.ValidationError({"supplier": "必须选择供应商"})
+        amount = data.get("amount")
+        if amount and amount <= 0:
+            raise serializers.ValidationError({"amount": "付款金额必须大于0"})
+        applied_amount = data.get("applied_amount")
+        if applied_amount is not None:
+            if applied_amount < 0:
+                raise serializers.ValidationError(
+                    {"applied_amount": "核销金额不能为负数"}
+                )
+            if amount and applied_amount > amount:
+                raise serializers.ValidationError(
+                    {"applied_amount": "核销金额不能大于付款金额"}
+                )
+        return data
+
+    def create(self, validated_data):
+        amount = validated_data.get("amount", Decimal("0"))
+        applied_amount = validated_data.get("applied_amount")
+        purchase_order = validated_data.get("purchase_order")
+        if applied_amount is None and purchase_order:
+            validated_data["applied_amount"] = amount
+        return super().create(validated_data)
+
+
 # ==================== 导出所有序列化器 ====================
 
 __all__ = [
@@ -670,6 +760,9 @@ __all__ = [
     # 对账管理
     "StatementSerializer",
     "StatementCreateSerializer",
+    # 供应商付款
+    "SupplierPaymentSerializer",
+    "SupplierPaymentCreateSerializer",
     # 成本分析
     "CostAnalysisSerializer",
 ]

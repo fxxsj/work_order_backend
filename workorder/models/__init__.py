@@ -49,6 +49,7 @@ from .finance import (
     PaymentPlan,
     ProductionCost,
     Statement,
+    SupplierPayment,
 )
 from .inventory import (
     DeliveryItem,

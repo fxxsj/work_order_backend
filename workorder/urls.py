@@ -20,6 +20,7 @@ from .views.finance import (
     PaymentViewSet,
     ProductionCostViewSet,
     StatementViewSet,
+    SupplierPaymentViewSet,
 )
 from .views.inventory import (
     DeliveryItemViewSet,
@@ -105,6 +106,7 @@ router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'payments', PaymentViewSet, basename='payment')
 router.register(r'payment-plans', PaymentPlanViewSet, basename='payment-plan')
 router.register(r'statements', StatementViewSet, basename='statement')
+router.register(r'supplier-payments', SupplierPaymentViewSet, basename='supplier-payment')
 
 # 库存路由
 router.register(r'product-stocks', ProductStockViewSet, basename='product-stock')

@@ -138,5 +138,29 @@ class ApprovalService(Generic[T]):
         return obj
     
     def _log_approval(self, obj, user, action: str, comment: str) -> None:
-        """记录审核日志"""
-        pass
+        """记录审核日志到 AuditLog"""
+        from django.contrib.contenttypes.models import ContentType
+        from workorder.models.audit import AuditLog
+
+        action_map = {
+            "submit": AuditLog.ACTION_UPDATE,
+            "approve": AuditLog.ACTION_APPROVE,
+            "reject": AuditLog.ACTION_REJECT,
+        }
+
+        AuditLog.objects.create(
+            action_type=action_map.get(action, AuditLog.ACTION_UPDATE),
+            user=user,
+            content_type=ContentType.objects.get_for_model(obj),
+            object_id=str(obj.pk),
+            object_repr=str(obj),
+            changes={
+                "approval_action": action,
+                "approval_status": getattr(obj, "approval_status", None),
+                "comment": comment,
+            },
+            extra_context={
+                "model_name": self.model_name,
+                "approval_comment": comment,
+            },
+        )

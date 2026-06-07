@@ -233,6 +233,105 @@ class BusinessMetricsViewSet(viewsets.GenericViewSet):
 
         return APIResponse.success(data=quality_metrics, message="质量指标获取成功")
 
+    @action(detail=False, methods=["get"])
+    def operations_dashboard(self, request):
+        """运营仪表盘：展示未分派任务、待采购、待质检、待入库、待收款等关键指标"""
+        from datetime import timedelta
+        from ..models.core import WorkOrderTask, WorkOrder, WorkOrderProcess
+        from ..models.materials import PurchaseOrder, WorkOrderMaterial
+        from ..models.inventory import ProductStock, DeliveryOrder
+        from ..models.sales import SalesOrder
+        from ..models.finance import Invoice
+        from ..constants.status import MaterialPurchaseStatus
+
+        now = timezone.now()
+
+        # 1. 未分派任务
+        unassigned_tasks = WorkOrderTask.objects.filter(
+            assigned_department__isnull=True,
+            status__in=["pending", "in_progress"],
+        ).count()
+
+        # 2. 待采购物料
+        pending_materials = WorkOrderMaterial.objects.filter(
+            purchase_status=MaterialPurchaseStatus.PENDING
+        ).count()
+
+        # 3. 采购延迟（预计到货日期已过但未收货）
+        delayed_purchases = PurchaseOrder.objects.filter(
+            expected_date__lt=now.date(),
+            status__in=["pending", "ordered"],
+        ).count()
+
+        # 4. 待质检（这里简化统计待检库存批次）
+        pending_quality_check = ProductStock.objects.filter(
+            quality_status="pending"
+        ).count()
+
+        # 5. 待入库（已包装但未确认入库的成品）
+        # 简化：统计已完成但无库存批次的施工单
+        completed_work_orders = WorkOrder.objects.filter(status="completed")
+        pending_stock_in = 0  # 实际需要更复杂的逻辑，这里简化
+
+        # 6. 待收款（已发货但未全额收款的订单）
+        pending_payment_orders = SalesOrder.objects.filter(
+            status="completed",
+            payment_status__in=["unpaid", "partial"],
+        ).count()
+
+        # 7. 未分派任务列表（前10条）
+        unassigned_task_list = list(
+            WorkOrderTask.objects.filter(
+                assigned_department__isnull=True,
+                status__in=["pending", "in_progress"],
+            ).values("id", "work_content", "status")[:10]
+        )
+
+        # 8. 今日待发货
+        today_delivery = DeliveryOrder.objects.filter(
+            status="pending",
+            delivery_date=now.date(),
+        ).count()
+
+        # 9. 逾期订单（交货日期已过但未完成）
+        overdue_orders = SalesOrder.objects.filter(
+            delivery_date__lt=now.date(),
+            status__in=["pending", "in_production"],
+        ).count()
+
+        # 10. 库存差异（运行快速检查）
+        from ..services.data_consistency_service import DataConsistencyService
+        inventory_check = DataConsistencyService.check_inventory_consistency()
+
+        data = {
+            "unassigned_tasks": {
+                "count": unassigned_tasks,
+                "items": unassigned_task_list,
+            },
+            "pending_procurement": {
+                "materials_count": pending_materials,
+                "delayed_purchases": delayed_purchases,
+            },
+            "quality_and_inventory": {
+                "pending_quality_check": pending_quality_check,
+                "pending_stock_in": pending_stock_in,
+            },
+            "finance": {
+                "pending_payment_orders": pending_payment_orders,
+            },
+            "delivery": {
+                "today_delivery": today_delivery,
+                "overdue_orders": overdue_orders,
+            },
+            "inventory_consistency": {
+                "status": inventory_check["status"],
+                "issue_count": len(inventory_check["issues"]),
+            },
+            "generated_at": now.isoformat(),
+        }
+
+        return APIResponse.success(data=data)
+
 
 class SystemMonitoringViewSet(viewsets.GenericViewSet):
     """系统监控视图集"""
@@ -357,6 +456,14 @@ class SystemMonitoringViewSet(viewsets.GenericViewSet):
         # 这里可以实现告警设置的更新逻辑
         # 为了演示，暂时返回成功响应
         return APIResponse.success(message="告警设置更新成功")
+
+    @action(detail=False, methods=["get"])
+    def data_consistency(self, request):
+        """数据一致性检查"""
+        from ..services.data_consistency_service import DataConsistencyService
+
+        result = DataConsistencyService.run_all_checks()
+        return APIResponse.success(data=result)
 
 
 class DashboardMonitoringViewSet(viewsets.GenericViewSet):

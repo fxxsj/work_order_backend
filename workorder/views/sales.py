@@ -38,6 +38,7 @@ from ..services.sales_order_status_service import SalesOrderStatusService
 from ..services.approval_service import ApprovalService
 from ..services.service_errors import ServiceError
 from .base_viewsets import BaseViewSet
+from .mixins import ApprovalTimelineMixin
 
 
 class SalesOrderFilterSet(FilterSet):
@@ -63,7 +64,7 @@ def _scope_sales_orders(queryset, user):
 
 
 @sales_order_docs
-class SalesOrderViewSet(BaseViewSet):
+class SalesOrderViewSet(ApprovalTimelineMixin, BaseViewSet):
     """客户订单视图集"""
 
     queryset = SalesOrder.objects.all()

@@ -646,24 +646,12 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
 
             # 触发成本核算草稿生成
             try:
-                from workorder.models.finance import ProductionCost
-                from django.utils import timezone as dj_timezone
-
-                cost, created = ProductionCost.objects.get_or_create(
-                    work_order=work_order,
-                    defaults={
-                        "period": dj_timezone.now().strftime("%Y-%m"),
-                        "standard_cost": Decimal("0"),
-                    },
+                from workorder.services.cost_calculation_service import (
+                    CostCalculationService,
                 )
-                if created or cost.material_cost == 0:
-                    cost.auto_calculate_material_cost()
-                cost.auto_calculate_labor_cost()
-                cost.calculate_total_cost()
-            except Exception as e:
-                import logging
 
-                logger = logging.getLogger(__name__)
+                CostCalculationService.generate_cost_draft(work_order)
+            except Exception as e:
                 logger.warning(f"施工单完成时成本核算草稿生成失败: {e}")
 
             # 创建施工单完成通知

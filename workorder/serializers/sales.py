@@ -93,6 +93,14 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
     pending_payment_plan_amount = serializers.SerializerMethodField()
     unpaid_amount = serializers.SerializerMethodField()
 
+    # 财务概览字段
+    invoice_total_amount = serializers.SerializerMethodField()
+    invoice_received_amount = serializers.SerializerMethodField()
+    invoice_unreceived_amount = serializers.SerializerMethodField()
+    production_cost_total = serializers.SerializerMethodField()
+    gross_profit = serializers.SerializerMethodField()
+    gross_profit_rate = serializers.SerializerMethodField()
+
     class Meta:
         model = SalesOrder
         fields = "__all__"
@@ -213,6 +221,44 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
     def get_unpaid_amount(self, obj) -> float:
         """获取未回款金额"""
         return max(float(obj.total_amount - obj.paid_amount), 0)
+
+    def get_invoice_total_amount(self, obj) -> float:
+        """获取关联发票总额（价税合计）"""
+        from django.db.models import Sum
+        total = obj.invoices.aggregate(total=Sum("total_amount"))["total"]
+        return float(total or 0)
+
+    def get_invoice_received_amount(self, obj) -> float:
+        """获取发票已收金额（按核销金额汇总）"""
+        from django.db.models import Sum
+        total = obj.invoices.filter(payments__isnull=False).aggregate(
+            total=Sum("payments__applied_amount")
+        )["total"]
+        return float(total or 0)
+
+    def get_invoice_unreceived_amount(self, obj) -> float:
+        """获取发票未收金额"""
+        return max(self.get_invoice_total_amount(obj) - self.get_invoice_received_amount(obj), 0)
+
+    def get_production_cost_total(self, obj) -> float:
+        """获取关联施工单的生产成本汇总"""
+        from django.db.models import Sum
+        total = obj.source_work_orders.filter(
+            production_cost__isnull=False
+        ).aggregate(total=Sum("production_cost__total_cost"))["total"]
+        return float(total or 0)
+
+    def get_gross_profit(self, obj) -> float:
+        """毛利 = 订单金额 - 生产成本"""
+        return max(float(obj.total_amount) - self.get_production_cost_total(obj), 0)
+
+    def get_gross_profit_rate(self, obj) -> float:
+        """毛利率 = 毛利 / 订单金额"""
+        total = float(obj.total_amount) if obj.total_amount else 0
+        if total > 0:
+            profit = self.get_gross_profit(obj)
+            return round(profit / total * 100, 2)
+        return 0.0
 
     def validate_delivery_date(self, value):
         """验证交货日期

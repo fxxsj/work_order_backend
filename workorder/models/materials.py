@@ -215,6 +215,20 @@ class PurchaseOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
     total_amount = models.DecimalField(
         "总金额", max_digits=12, decimal_places=2, default=0
     )
+    # 付款信息
+    paid_amount = models.DecimalField(
+        "已付金额", max_digits=12, decimal_places=2, default=0
+    )
+    payment_status = models.CharField(
+        "付款状态",
+        max_length=20,
+        choices=[
+            ("unpaid", "未付款"),
+            ("partial", "部分付款"),
+            ("paid", "已付款"),
+        ],
+        default="unpaid",
+    )
     # 审核相关
     submitted_by = models.ForeignKey(
         User,

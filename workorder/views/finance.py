@@ -24,6 +24,7 @@ from workorder.permissions import SuperuserFriendlyModelPermissions
 from workorder.response import APIResponse
 from workorder.services.approval_service import ApprovalService
 from workorder.services.service_errors import ServiceError
+from .mixins import ApprovalTimelineMixin
 from workorder.docs.finance import (
     cost_center_docs,
     cost_item_docs,
@@ -52,6 +53,7 @@ from workorder.models import (
     PaymentPlan,
     ProductionCost,
     Statement,
+    SupplierPayment,
 )
 from workorder.serializers.finance import (
     CostCenterSerializer,
@@ -67,6 +69,8 @@ from workorder.serializers.finance import (
     ProductionCostUpdateSerializer,
     StatementCreateSerializer,
     StatementSerializer,
+    SupplierPaymentCreateSerializer,
+    SupplierPaymentSerializer,
 )
 
 
@@ -317,7 +321,7 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
 
 
 @invoice_docs
-class InvoiceViewSet(viewsets.ModelViewSet):
+class InvoiceViewSet(ApprovalTimelineMixin, viewsets.ModelViewSet):
     """发票视图集"""
 
     queryset = (
@@ -1042,3 +1046,65 @@ class StatementViewSet(viewsets.ModelViewSet):
                 "closing_balance": closing_balance,
             }
         )
+
+
+class SupplierPaymentViewSet(viewsets.ModelViewSet):
+    """供应商付款视图集"""
+
+    queryset = SupplierPayment.objects.select_related(
+        "purchase_order", "supplier", "created_by", "submitted_by", "approved_by"
+    ).all()
+    serializer_class = SupplierPaymentSerializer
+    permission_classes = [SuperuserFriendlyModelPermissions]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ["status", "supplier", "purchase_order", "payment_date"]
+    ordering_fields = ["payment_date", "amount", "created_at"]
+    ordering = ["-payment_date"]
+
+    def get_serializer_class(self):
+        if self.action in ["create", "update", "partial_update"]:
+            return SupplierPaymentCreateSerializer
+        return SupplierPaymentSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=["post"])
+    def submit(self, request, pk=None):
+        """提交付款审核"""
+        payment = self.get_object()
+        if payment.status != "pending":
+            return APIResponse.error("只有待审核状态才能提交", code=status.HTTP_400_BAD_REQUEST)
+        payment.status = "pending"
+        payment.submitted_by = request.user
+        payment.submitted_at = timezone.now()
+        payment.save(update_fields=["submitted_by", "submitted_at"])
+        return APIResponse.success(data=SupplierPaymentSerializer(payment).data)
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        """审核通过付款"""
+        payment = self.get_object()
+        if payment.status != "pending":
+            return APIResponse.error("只有待审核状态才能审核", code=status.HTTP_400_BAD_REQUEST)
+        payment.status = "approved"
+        payment.approved_by = request.user
+        payment.approved_at = timezone.now()
+        payment.save(update_fields=["status", "approved_by", "approved_at"])
+        # 回写采购单付款状态
+        from workorder.services.supplier_payment_service import SupplierPaymentService
+        SupplierPaymentService.apply_payment(payment=payment)
+        return APIResponse.success(data=SupplierPaymentSerializer(payment).data)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        """拒绝付款"""
+        payment = self.get_object()
+        if payment.status != "pending":
+            return APIResponse.error("只有待审核状态才能拒绝", code=status.HTTP_400_BAD_REQUEST)
+        payment.status = "rejected"
+        payment.approved_by = request.user
+        payment.approved_at = timezone.now()
+        payment.approval_comment = request.data.get("approval_comment", "")
+        payment.save(update_fields=["status", "approved_by", "approved_at", "approval_comment"])
+        return APIResponse.success(data=SupplierPaymentSerializer(payment).data)

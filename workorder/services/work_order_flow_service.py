@@ -562,6 +562,16 @@ class WorkOrderFlowService:
             work_order.status = WorkOrderStatus.COMPLETED
             work_order.save()
 
+            # 触发成本核算草稿生成
+            try:
+                from workorder.services.cost_calculation_service import (
+                    CostCalculationService,
+                )
+
+                CostCalculationService.generate_cost_draft(work_order)
+            except Exception as e:
+                logger.warning(f"施工单完成时成本核算草稿生成失败: {e}")
+
             # 记录日志
             WorkOrderFlowService._audit(
                 work_order=work_order,
