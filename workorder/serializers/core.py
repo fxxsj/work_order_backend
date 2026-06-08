@@ -98,6 +98,9 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
     embossing_plate_name = serializers.SerializerMethodField()
     # 物料状态（用于采购和开料任务）
     material_purchase_status = serializers.SerializerMethodField()
+    # 开料尺寸/用量（从 WorkOrderMaterial 关联获取）
+    material_size = serializers.SerializerMethodField()
+    material_usage = serializers.SerializerMethodField()
     # 工序和施工单信息
     work_order_process_info = serializers.SerializerMethodField()
     # 任务操作历史
@@ -189,6 +192,30 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
                     work_order=obj.work_order_process.work_order, material=obj.material
                 )
                 return material_record.purchase_status
+            except WorkOrderMaterial.DoesNotExist:
+                return None
+        return None
+
+    def get_material_size(self, obj) -> Optional[str]:
+        """获取开料尺寸（从 WorkOrderMaterial 关联获取）"""
+        if obj.material and obj.work_order_process:
+            try:
+                material_record = WorkOrderMaterial.objects.get(
+                    work_order=obj.work_order_process.work_order, material=obj.material
+                )
+                return material_record.material_size or None
+            except WorkOrderMaterial.DoesNotExist:
+                return None
+        return None
+
+    def get_material_usage(self, obj) -> Optional[str]:
+        """获取物料用量（从 WorkOrderMaterial 关联获取）"""
+        if obj.material and obj.work_order_process:
+            try:
+                material_record = WorkOrderMaterial.objects.get(
+                    work_order=obj.work_order_process.work_order, material=obj.material
+                )
+                return material_record.material_usage or None
             except WorkOrderMaterial.DoesNotExist:
                 return None
         return None

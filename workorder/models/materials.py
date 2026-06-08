@@ -58,6 +58,7 @@ class Material(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
     lead_time_days = models.IntegerField(
         "采购周期（天）", default=7, help_text="从下单到收货的天数"
     )
+    is_active = models.BooleanField("启用", default=True, help_text="停用后不再允许新业务选料")
     need_cutting = models.BooleanField(
         "需要开料", default=False, help_text="该物料是否需要开料工序处理"
     )
