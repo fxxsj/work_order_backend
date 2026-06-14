@@ -25,6 +25,12 @@ from workorder.models.inventory import (
     QualityInspection,
     StockIn,
 )
+from workorder.models.system import (
+    Notification,
+    NotificationTemplate,
+    SystemNotificationSettings,
+    UserProfile,
+)
 from workorder.services.asset_service import (
     ArtworkVersionService,
     AssetConfirmationService,
@@ -40,6 +46,12 @@ from workorder.services.inventory_service import (
     ProductStockService,
     QualityInspectionService,
     StockInService,
+)
+from workorder.services.notification_service import (
+    NotificationService,
+    NotificationTemplateService,
+    SystemNotificationService,
+    UserNotificationSettingsService,
 )
 from workorder.services.service_errors import ServiceError
 
@@ -341,3 +353,215 @@ class TestPaymentPlanService:
         assert "summary" in data
         assert "by_status" in data
         assert data["summary"]["total_count"] == 1
+
+
+class TestNotificationService:
+    """用户通知服务测试"""
+
+    @pytest.fixture
+    def notification(self, db, finance_user):
+        return Notification.objects.create(
+            recipient=finance_user,
+            notification_type="workorder_created",
+            title="测试通知",
+            content="内容",
+            priority="normal",
+        )
+
+    def test_mark_read_sets_read_at(self, notification):
+        NotificationService.mark_read(notification)
+        notification.refresh_from_db()
+        assert notification.is_read
+        assert notification.read_at is not None
+
+    def test_mark_all_read_returns_count(self, db, finance_user, notification):
+        Notification.objects.create(
+            recipient=finance_user,
+            notification_type="task_assigned",
+            title="未读",
+            content="内容",
+            priority="high",
+        )
+        count = NotificationService.mark_all_read(Notification.objects.filter(recipient=finance_user))
+        assert count == 2
+
+    def test_delete_all_read(self, db, finance_user, notification):
+        notification.is_read = True
+        notification.save()
+        count = NotificationService.delete_all_read(Notification.objects.filter(recipient=finance_user))
+        assert count == 1
+
+    def test_unread_count(self, notification):
+        assert NotificationService.unread_count(Notification.objects.filter(recipient=notification.recipient)) == 1
+
+    def test_statistics(self, db, finance_user, notification):
+        Notification.objects.create(
+            recipient=finance_user,
+            notification_type="system",
+            title="紧急",
+            content="内容",
+            priority="urgent",
+            is_read=True,
+        )
+        stats = NotificationService.statistics(Notification.objects.filter(recipient=finance_user))
+        assert stats["total_count"] == 2
+        assert stats["unread_count"] == 1
+        assert stats["urgent_count"] == 1
+
+    def test_ws_ticket(self, finance_user):
+        data = NotificationService.ws_ticket(finance_user.id)
+        assert "ticket" in data
+        assert data["expires_in"] == 60
+
+
+class TestSystemNotificationService:
+    """系统通知服务测试"""
+
+    def test_create_announcement_valid(self, db, finance_user):
+        result = SystemNotificationService.create_announcement(
+            title="公告",
+            content="内容",
+            recipient_ids=[finance_user.id],
+            priority="normal",
+        )
+        assert result["count"] == 1
+        assert result["batch_id"]
+
+    def test_create_announcement_missing_title(self):
+        with pytest.raises(ServiceError) as exc_info:
+            SystemNotificationService.create_announcement(title="", content="内容")
+        assert exc_info.value.code == 400
+
+    def test_create_announcement_invalid_priority(self):
+        with pytest.raises(ServiceError) as exc_info:
+            SystemNotificationService.create_announcement(title="公告", content="内容", priority="invalid")
+        assert exc_info.value.code == 400
+
+    def test_send_urgent_alert(self, db, finance_user):
+        result = SystemNotificationService.send_urgent_alert(
+            title="警报",
+            content="内容",
+            recipient_ids=[finance_user.id],
+        )
+        assert result["count"] == 1
+        assert Notification.objects.filter(data__kind="urgent_alert").exists()
+
+    def test_revoke(self, db, finance_user):
+        result = SystemNotificationService.create_announcement(
+            title="公告",
+            content="内容",
+            recipient_ids=[finance_user.id],
+        )
+        deleted = SystemNotificationService.revoke(result["batch_id"])
+        assert deleted == 1
+        assert Notification.objects.filter(data__batch_id=result["batch_id"]).count() == 0
+
+    def test_revoke_not_found(self):
+        with pytest.raises(ServiceError) as exc_info:
+            SystemNotificationService.revoke("non-existent-batch")
+        assert exc_info.value.code == 404
+
+    def test_update_settings_valid(self, db):
+        settings = SystemNotificationSettings.get_solo()
+        data = SystemNotificationService.update_settings({
+            "email_threshold": "urgent",
+            "notification_retention_days": 60,
+            "max_notifications_per_user": 2000,
+        })
+        assert data["email_threshold"] == "urgent"
+        assert data["notification_retention_days"] == 60
+
+    def test_update_settings_invalid_threshold(self, db):
+        with pytest.raises(ServiceError) as exc_info:
+            SystemNotificationService.update_settings({"email_threshold": "invalid"})
+        assert exc_info.value.code == 400
+
+    def test_update_settings_non_int(self, db):
+        with pytest.raises(ServiceError) as exc_info:
+            SystemNotificationService.update_settings({"notification_retention_days": "abc"})
+        assert exc_info.value.code == 400
+
+    def test_update_settings_negative(self, db):
+        with pytest.raises(ServiceError) as exc_info:
+            SystemNotificationService.update_settings({"notification_retention_days": -1})
+        assert exc_info.value.code == 400
+
+
+class TestUserNotificationSettingsService:
+    """用户通知偏好设置服务测试"""
+
+    def test_get_settings_creates_profile(self, db, finance_user):
+        assert not UserProfile.objects.filter(user=finance_user).exists()
+        data = UserNotificationSettingsService.get_settings(finance_user)
+        assert data["user_id"] == finance_user.id
+        assert UserProfile.objects.filter(user=finance_user).exists()
+
+    def test_update_settings_valid(self, db, finance_user):
+        data = UserNotificationSettingsService.update_settings(
+            finance_user, {"urgency_threshold": "high", "quiet_hours_start": "21:00"}
+        )
+        assert data["urgency_threshold"] == "high"
+        assert data["quiet_hours_start"] == "21:00"
+
+    def test_update_settings_invalid_threshold(self, db, finance_user):
+        with pytest.raises(ServiceError) as exc_info:
+            UserNotificationSettingsService.update_settings(finance_user, {"urgency_threshold": "xxx"})
+        assert exc_info.value.code == 400
+
+    def test_update_settings_invalid_time(self, db, finance_user):
+        with pytest.raises(ServiceError) as exc_info:
+            UserNotificationSettingsService.update_settings(
+                finance_user, {"quiet_hours_start": "25:00"}
+            )
+        assert exc_info.value.code == 400
+
+    def test_get_notification_preferences(self):
+        data = UserNotificationSettingsService.get_notification_preferences()
+        assert "task_assigned" in data
+        assert data["task_assigned"]["enabled"]
+
+
+class TestNotificationTemplateService:
+    """通知模板服务测试"""
+
+    def test_get_templates_seeds_defaults(self, db):
+        data = NotificationTemplateService.get_templates()
+        assert "workorder_created" in data
+
+    def test_update_template_valid(self, db):
+        result = NotificationTemplateService.update_template(
+            template_name="workorder_created",
+            title="新标题",
+            message="新消息 {workorder_number}",
+            variables=["workorder_number"],
+            is_active=True,
+        )
+        assert result["title"] == "新标题"
+
+    def test_update_template_missing_name(self):
+        with pytest.raises(ServiceError) as exc_info:
+            NotificationTemplateService.update_template(template_name="")
+        assert exc_info.value.code == 400
+
+    def test_update_template_not_found(self, db):
+        with pytest.raises(ServiceError) as exc_info:
+            NotificationTemplateService.update_template(template_name="not_exists")
+        assert exc_info.value.code == 404
+
+    def test_update_template_invalid_variables(self, db):
+        with pytest.raises(ServiceError) as exc_info:
+            NotificationTemplateService.update_template(
+                template_name="workorder_created", variables="not-list"
+            )
+        assert exc_info.value.code == 400
+
+    def test_preview_template(self, db):
+        result = NotificationTemplateService.preview_template(
+            "workorder_created", {"workorder_number": "WO001"}
+        )
+        assert "WO001" in result["message"]
+
+    def test_preview_template_not_found(self, db):
+        with pytest.raises(ServiceError) as exc_info:
+            NotificationTemplateService.preview_template("not_exists", {})
+        assert exc_info.value.code == 404
