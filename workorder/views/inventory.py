@@ -10,8 +10,9 @@
 - QualityInspectionViewSet: 质量检验
 """
 
-from django.db import transaction
-from django.db.models import Count, F, Q, Sum
+from datetime import timedelta
+
+from django.db.models import Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
@@ -48,7 +49,6 @@ from workorder.models import (
     DeliveryOrder,
     ProductStock,
     QualityInspection,
-    SalesOrder,
     StockIn,
     StockOut,
 )
@@ -69,9 +69,15 @@ from workorder.serializers.inventory import (
     StockInSerializer,
     StockOutCreateSerializer,
     StockOutSerializer,
-    upsert_delivery_exception_resolution,
 )
-from workorder.services.sales_order_status_service import SalesOrderStatusService
+from ..services.inventory_service import (
+    DeliveryOrderService,
+    ProductStockService,
+    QualityInspectionService,
+    StockInService,
+    StockOutService,
+)
+from ..services.service_errors import ServiceError
 
 
 def _apply_department_scope(queryset, department_id, path):
@@ -170,15 +176,7 @@ class ProductStockViewSet(viewsets.ModelViewSet):
     @product_stock_low_docs
     def low_stock(self, request):
         """库存预警 - 使用模型的 min_stock_level 字段"""
-        # 查询低库存产品（可用数量 <= 最小库存）
-        low_stocks = (
-            self.get_queryset()
-            .filter(status="in_stock")
-            .annotate(available=F("quantity") - F("reserved_quantity"))
-            .filter(available__lte=F("min_stock_level"))
-            .select_related("product")
-        )
-
+        low_stocks = ProductStockService.get_low_stock(self.get_queryset())
         serializer = self.get_serializer(low_stocks, many=True)
         return APIResponse.success(
             data={"count": low_stocks.count(), "results": serializer.data}
@@ -188,13 +186,7 @@ class ProductStockViewSet(viewsets.ModelViewSet):
     @product_stock_expired_docs
     def expired(self, request):
         """已过期库存"""
-        # 查询已过期的库存
-        expired_stocks = (
-            self.get_queryset()
-            .filter(expiry_date__lt=timezone.now().date())
-            .select_related("product")
-        )
-
+        expired_stocks = ProductStockService.get_expired(self.get_queryset())
         serializer = self.get_serializer(expired_stocks, many=True)
         return APIResponse.success(
             data={"count": expired_stocks.count(), "results": serializer.data}
@@ -204,20 +196,10 @@ class ProductStockViewSet(viewsets.ModelViewSet):
     @product_stock_expiring_docs
     def expiring_soon(self, request):
         """即将过期库存"""
-        from datetime import timedelta
-
-        # 默认30天内过期
         days = int(request.query_params.get("days", 30))
         threshold_date = timezone.now().date() + timedelta(days=days)
-
-        expiring_stocks = (
-            self.get_queryset()
-            .filter(
-                expiry_date__lte=threshold_date,
-                expiry_date__gt=timezone.now().date(),
-                status="in_stock",
-            )
-            .select_related("product")
+        expiring_stocks = ProductStockService.get_expiring_soon(
+            self.get_queryset(), days=days
         )
 
         serializer = self.get_serializer(expiring_stocks, many=True)
@@ -233,37 +215,8 @@ class ProductStockViewSet(viewsets.ModelViewSet):
     @product_stock_summary_docs
     def summary(self, request):
         """库存汇总 - 匹配前端期望格式"""
-        queryset = self.get_queryset()
-
-        # 统计数据
-        stats = queryset.aggregate(
-            total_quantity=Sum("quantity"),
-            total_products=Count("product", distinct=True),
-        )
-
-        # 低库存统计（可用数量 <= 最小库存）
-        low_stock_count = (
-            queryset.filter(status="in_stock")
-            .annotate(available=F("quantity") - F("reserved_quantity"))
-            .filter(available__lte=F("min_stock_level"))
-            .count()
-        )
-
-        # 过期统计（只统计有过期日期的记录）
-        expired_count = queryset.filter(
-            expiry_date__isnull=False, expiry_date__lt=timezone.now().date()
-        ).count()
-
-        return APIResponse.success(
-            data={
-                "total_quantity": stats["total_quantity"] or 0,
-                "total_products": stats["total_products"] or 0,
-                "low_stock_count": low_stock_count,
-                "expired_count": expired_count,
-                "reserved_count": queryset.filter(status="reserved").count(),
-                "quality_check_count": queryset.filter(status="quality_check").count(),
-            }
-        )
+        data = ProductStockService.get_summary(self.get_queryset())
+        return APIResponse.success(data=data)
 
     @action(detail=True, methods=["post"])
     @product_stock_adjust_docs
@@ -275,37 +228,22 @@ class ProductStockViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
 
-        adjust_type = serializer.validated_data["adjust_type"]
-        quantity = serializer.validated_data["quantity"]
-        reason = serializer.validated_data["reason"]
-
-        old_quantity = stock.quantity
-
-        # 执行调整
-        if adjust_type == "add":
-            stock.quantity += quantity
-        elif adjust_type == "subtract":
-            stock.quantity -= quantity
-        else:  # set
-            stock.quantity = quantity
-
-        # 添加调整备注
-        adjustment_note = (
-            f"库存调整: {old_quantity} -> {stock.quantity}, 原因: {reason}"
-        )
-        if stock.notes:
-            stock.notes = f"{stock.notes}\n{adjustment_note}"
-        else:
-            stock.notes = adjustment_note
-
-        stock.save()
+        try:
+            result = ProductStockService.adjust_stock(
+                stock=stock,
+                adjust_type=serializer.validated_data["adjust_type"],
+                quantity=serializer.validated_data["quantity"],
+                reason=serializer.validated_data["reason"],
+            )
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
         return APIResponse.success(
             data={
                 "message": "库存调整成功",
-                "old_quantity": float(old_quantity),
-                "new_quantity": float(stock.quantity),
-                "data": ProductStockSerializer(stock).data,
+                "old_quantity": result["old_quantity"],
+                "new_quantity": result["new_quantity"],
+                "data": ProductStockSerializer(result["stock"]).data,
             }
         )
 
@@ -375,16 +313,10 @@ class StockInViewSet(viewsets.ModelViewSet):
     def submit(self, request, pk=None):
         """提交入库单"""
         stock_in = self.get_object()
-
-        if stock_in.status != "draft":
-            return APIResponse.error(
-                "只有草稿状态的入库单可以提交", code=status.HTTP_400_BAD_REQUEST
-            )
-
-        stock_in.status = "submitted"
-        stock_in.submitted_by = request.user
-        stock_in.submitted_at = timezone.now()
-        stock_in.save()
+        try:
+            StockInService.submit(stock_in=stock_in, user=request.user)
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
         serializer = self.get_serializer(stock_in)
         return APIResponse.success(data=serializer.data, message="入库单提交成功")
@@ -394,46 +326,10 @@ class StockInViewSet(viewsets.ModelViewSet):
     def confirm(self, request, pk=None):
         """确认入库单"""
         stock_in = self.get_object()
-
-        if stock_in.status != "submitted":
-            return APIResponse.error(
-                "只有已提交状态的入库单可以确认", code=status.HTTP_400_BAD_REQUEST
-            )
-
-        # 前置条件检查：关联施工单的采购单必须已审核通过
-        work_order = stock_in.work_order
-        related_purchase_orders = work_order.purchase_orders.exclude(status="cancelled")
-        if related_purchase_orders.exists():
-            has_approved_po = related_purchase_orders.filter(status="approved").exists()
-            if not has_approved_po:
-                return APIResponse.error(
-                    "关联的采购单尚未审核通过，无法确认入库",
-                    code=status.HTTP_400_BAD_REQUEST,
-                )
-
-        with transaction.atomic():
-            stock_in.status = "completed"
-            stock_in.confirmed_by = request.user
-            stock_in.confirmed_at = timezone.now()
-            stock_in.save()
-
-            # 创建 ProductStock 记录（按施工单产品拆分批次）
-            work_order = stock_in.work_order
-            for wp in work_order.products.select_related("product").all():
-                if not wp.quantity or wp.quantity <= 0:
-                    continue
-                batch_no = f"{stock_in.order_number}-{wp.id}"
-                ProductStock.objects.get_or_create(
-                    batch_no=batch_no,
-                    defaults={
-                        "product": wp.product,
-                        "quantity": wp.quantity,
-                        "work_order": work_order,
-                        "production_date": stock_in.stock_in_date,
-                        "status": "in_stock",
-                        "notes": f"入库单 {stock_in.order_number}",
-                    },
-                )
+        try:
+            StockInService.confirm(stock_in=stock_in, user=request.user)
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
         serializer = self.get_serializer(stock_in)
         return APIResponse.success(data=serializer.data, message="入库单确认成功")
@@ -442,19 +338,8 @@ class StockInViewSet(viewsets.ModelViewSet):
     @stock_in_summary_docs
     def summary(self, request):
         """入库单汇总"""
-        queryset = self.get_queryset()
-        summary = queryset.aggregate(
-            total_count=Count("id"),
-            draft_count=Count("id", filter=Q(status="draft")),
-            submitted_count=Count("id", filter=Q(status="submitted")),
-            completed_count=Count("id", filter=Q(status="completed")),
-        )
-        status_stats = (
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
-        )
-        return APIResponse.success(
-            data={"summary": summary, "by_status": list(status_stats)}
-        )
+        data = StockInService.get_summary(self.get_queryset())
+        return APIResponse.success(data=data)
 
 
 @stock_out_docs
@@ -527,16 +412,10 @@ class StockOutViewSet(viewsets.ModelViewSet):
     def submit(self, request, pk=None):
         """提交出库单"""
         stock_out = self.get_object()
-
-        if stock_out.status != "draft":
-            return APIResponse.error(
-                "只有草稿状态的出库单可以提交", code=status.HTTP_400_BAD_REQUEST
-            )
-
-        stock_out.status = "submitted"
-        stock_out.submitted_by = request.user
-        stock_out.submitted_at = timezone.now()
-        stock_out.save()
+        try:
+            StockOutService.submit(stock_out=stock_out, user=request.user)
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
         serializer = self.get_serializer(stock_out)
         return APIResponse.success(data=serializer.data, message="出库单提交成功")
@@ -546,97 +425,10 @@ class StockOutViewSet(viewsets.ModelViewSet):
     def confirm(self, request, pk=None):
         """确认出库单"""
         stock_out = self.get_object()
-
-        if stock_out.status != "submitted":
-            return APIResponse.error(
-                "只有已提交状态的出库单可以确认", code=status.HTTP_400_BAD_REQUEST
-            )
-
-        if stock_out.out_type != "delivery" or not stock_out.delivery_order_id:
-            return APIResponse.error(
-                "当前仅支持【发货出库】的确认扣减库存", code=status.HTTP_400_BAD_REQUEST
-            )
-
-        delivery_order = stock_out.delivery_order
-        if delivery_order.status != "pending":
-            return APIResponse.error(
-                "送货单不是【待发货】状态，无法再次扣减库存",
-                code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        with transaction.atomic():
-            for item in delivery_order.items.select_related(
-                "product",
-                "sales_order_item",
-            ).all():
-                remaining = item.quantity
-
-                if item.stock_batch:
-                    stock = (
-                        ProductStock.objects.select_for_update()
-                        .filter(
-                            batch_no=item.stock_batch,
-                            product=item.product,
-                            status="in_stock",
-                        )
-                        .first()
-                    )
-                    if not stock:
-                        return APIResponse.error(
-                            f"库存批次不可用: {item.stock_batch}",
-                            code=status.HTTP_400_BAD_REQUEST,
-                        )
-
-                    available = stock.quantity - stock.reserved_quantity
-                    if available < remaining:
-                        missing = remaining - available
-                        return APIResponse.error(
-                            f"批次库存不足: {item.stock_batch} 缺少 {missing}",
-                            code=status.HTTP_400_BAD_REQUEST,
-                        )
-
-                    stock.quantity -= remaining
-                    stock.save(update_fields=["quantity", "updated_at"])
-                    remaining = 0
-                else:
-                    stocks = (
-                        ProductStock.objects.select_for_update()
-                        .filter(product=item.product, status="in_stock")
-                        .order_by("created_at")
-                    )
-
-                    for stock in stocks:
-                        if remaining <= 0:
-                            break
-                        available = stock.quantity - stock.reserved_quantity
-                        if available <= 0:
-                            continue
-                        deduct = min(available, remaining)
-                        stock.quantity -= deduct
-                        stock.save(update_fields=["quantity", "updated_at"])
-                        remaining -= deduct
-
-                if remaining > 0:
-                    return APIResponse.error(
-                        f"产品 {item.product.name} 库存不足，缺少 {remaining}",
-                        code=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                if item.sales_order_item:
-                    item.sales_order_item.delivered_quantity += item.quantity
-                    item.sales_order_item.save(update_fields=["delivered_quantity"])
-
-            stock_out.status = "completed"
-            stock_out.confirmed_by = request.user
-            stock_out.confirmed_at = timezone.now()
-            if not stock_out.operator_id:
-                stock_out.operator = request.user
-            stock_out.save()
-
-            delivery_order.status = "shipped"
-            if not delivery_order.delivery_date:
-                delivery_order.delivery_date = timezone.now().date()
-            delivery_order.save(update_fields=["status", "delivery_date", "updated_at"])
+        try:
+            StockOutService.confirm(stock_out=stock_out, user=request.user)
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
         serializer = self.get_serializer(stock_out)
         return APIResponse.success(data=serializer.data, message="出库单确认成功")
@@ -645,19 +437,8 @@ class StockOutViewSet(viewsets.ModelViewSet):
     @stock_out_summary_docs
     def summary(self, request):
         """出库单汇总"""
-        queryset = self.get_queryset()
-        summary = queryset.aggregate(
-            total_count=Count("id"),
-            draft_count=Count("id", filter=Q(status="draft")),
-            submitted_count=Count("id", filter=Q(status="submitted")),
-            completed_count=Count("id", filter=Q(status="completed")),
-        )
-        status_stats = (
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
-        )
-        return APIResponse.success(
-            data={"summary": summary, "by_status": list(status_stats)}
-        )
+        data = StockOutService.get_summary(self.get_queryset())
+        return APIResponse.success(data=data)
 
 
 @delivery_item_docs
@@ -784,105 +565,23 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         """发货 - 包含库存扣减逻辑"""
         delivery_order = self.get_object()
 
-        if delivery_order.status != "pending":
-            return APIResponse.error(
-                "只有待发货状态的送货单可以发货", code=status.HTTP_400_BAD_REQUEST
-            )
-
-        with transaction.atomic():
-            # 1. 校验并扣减库存
-            for item in delivery_order.items.all():
-                # 查找可用库存（FIFO - 先进先出）
-                # 只允许扣减质检合格或让步接收的批次
-                stocks = ProductStock.objects.filter(
-                    product=item.product,
-                    status="in_stock",
-                    quality_status__in=["qualified", "concession"],
-                ).order_by("created_at")
-
-                remaining = item.quantity
-                for stock in stocks:
-                    if remaining <= 0:
-                        break
-                    available = stock.quantity - stock.reserved_quantity
-                    if available <= 0:
-                        continue
-                    deduct = min(available, remaining)
-                    stock.quantity -= deduct
-                    stock.save()
-                    remaining -= deduct
-
-                if remaining > 0:
-                    # 区分库存不足和质检未放行
-                    pending_stock = ProductStock.objects.filter(
-                        product=item.product,
-                        status="in_stock",
-                        quality_status="pending",
-                    ).aggregate(total=models.Sum("quantity"))["total"] or 0
-                    unqualified_stock = ProductStock.objects.filter(
-                        product=item.product,
-                        status="in_stock",
-                        quality_status="unqualified",
-                    ).aggregate(total=models.Sum("quantity"))["total"] or 0
-
-                    message = f"产品 {item.product.name} 可发货库存不足，缺少 {remaining}"
-                    if pending_stock > 0:
-                        message += f"（另有 {pending_stock} 待检中）"
-                    if unqualified_stock > 0:
-                        message += f"（另有 {unqualified_stock} 不合格）"
-                    return APIResponse.error(
-                        message,
-                        code=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                # 2. 更新客户订单明细已发货数量
-                if item.sales_order_item:
-                    item.sales_order_item.delivered_quantity += item.quantity
-                    item.sales_order_item.save()
-
-            # 3. 创建出库单
-            stock_out = StockOut.objects.create(
-                out_type="delivery",
+        try:
+            result = DeliveryOrderService.ship(
                 delivery_order=delivery_order,
-                stock_out_date=timezone.now().date(),
-                status="completed",
-                operator=request.user,
-                notes=f"送货单 {delivery_order.order_number} 自动出库",
+                user=request.user,
+                logistics_company=request.data.get("logistics_company", ""),
+                tracking_number=request.data.get("tracking_number", ""),
             )
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
-            # 4. 更新发货信息
-            delivery_order.status = "shipped"
-            delivery_order.delivery_date = timezone.now().date()
-
-            # 获取物流信息
-            logistics_company = request.data.get("logistics_company")
-            tracking_number = request.data.get("tracking_number")
-            if logistics_company:
-                delivery_order.logistics_company = logistics_company
-            if tracking_number:
-                delivery_order.tracking_number = tracking_number
-
-            delivery_order.save()
-
-            # 5. 检查客户订单是否全部发货完成
-            self._update_sales_order_status(delivery_order.sales_order)
-
-        serializer = self.get_serializer(delivery_order)
+        serializer = self.get_serializer(result["delivery_order"])
         return APIResponse.success(
             data={
                 "message": "发货成功",
-                "stock_out_number": stock_out.order_number,
+                "stock_out_number": result["stock_out"].order_number,
                 "data": serializer.data,
             }
-        )
-
-    def _update_sales_order_status(self, sales_order):
-        """更新客户订单发货状态"""
-        if not sales_order:
-            return
-        SalesOrderStatusService.sync_status(
-            sales_order,
-            preserve_manual_completion=False,
         )
 
     @action(detail=True, methods=["post"])
@@ -891,25 +590,14 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         """签收"""
         delivery_order = self.get_object()
 
-        if delivery_order.status not in ["shipped", "in_transit"]:
-            return APIResponse.error(
-                "只有已发货或运输中的送货单可以签收", code=status.HTTP_400_BAD_REQUEST
+        try:
+            delivery_order = DeliveryOrderService.receive(
+                delivery_order=delivery_order,
+                received_notes=request.data.get("received_notes"),
+                receiver_signature=request.FILES.get("receiver_signature"),
             )
-
-        # 更新签收信息
-        delivery_order.status = "received"
-        delivery_order.received_date = timezone.now()
-
-        # 获取签收备注
-        received_notes = request.data.get("received_notes")
-        if received_notes:
-            delivery_order.received_notes = received_notes
-
-        receiver_signature = request.FILES.get("receiver_signature")
-        if receiver_signature:
-            delivery_order.receiver_signature = receiver_signature
-
-        delivery_order.save()
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
         serializer = self.get_serializer(delivery_order)
         return APIResponse.success(data=serializer.data, message="签收成功")
@@ -920,57 +608,13 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         """拒收 - 库存回退"""
         delivery_order = self.get_object()
 
-        if delivery_order.status not in ["shipped", "in_transit"]:
-            return APIResponse.error(
-                "只有已发货或运输中的送货单可以拒收", code=status.HTTP_400_BAD_REQUEST
+        try:
+            delivery_order = DeliveryOrderService.reject(
+                delivery_order=delivery_order,
+                reject_reason=request.data.get("reject_reason", ""),
             )
-
-        reject_reason = request.data.get("reject_reason", "")
-        if not reject_reason:
-            return APIResponse.error("请填写拒收原因", code=status.HTTP_400_BAD_REQUEST)
-
-        with transaction.atomic():
-            # 1. 回退库存
-            for item in delivery_order.items.all():
-                # 查找该产品最新的库存记录，或创建新的
-                stock = (
-                    ProductStock.objects.filter(product=item.product, status="in_stock")
-                    .order_by("-created_at")
-                    .first()
-                )
-
-                if stock:
-                    # 回加到现有库存
-                    stock.quantity += item.quantity
-                    stock.save()
-                else:
-                    # 创建新的库存记录
-                    ProductStock.objects.create(
-                        product=item.product,
-                        quantity=item.quantity,
-                        batch_no=f"REJECT-{delivery_order.order_number}-{item.id}",
-                        status="in_stock",
-                        notes=f"拒收回退: {delivery_order.order_number}",
-                    )
-
-                # 2. 回退客户订单明细的已发货数量
-                if item.sales_order_item:
-                    item.sales_order_item.delivered_quantity -= item.quantity
-                    if item.sales_order_item.delivered_quantity < 0:
-                        item.sales_order_item.delivered_quantity = 0
-                    item.sales_order_item.save()
-
-            # 3. 更新送货单状态
-            delivery_order.status = "rejected"
-            delivery_order.received_notes = f"拒收原因: {reject_reason}"
-            delivery_order.save()
-
-            # 4. 更新客户订单状态
-            if delivery_order.sales_order:
-                SalesOrderStatusService.sync_status(
-                    delivery_order.sales_order,
-                    preserve_manual_completion=False,
-                )
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
         serializer = self.get_serializer(delivery_order)
         return APIResponse.success(
@@ -989,133 +633,29 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         """
         delivery_order = self.get_object()
 
-        if delivery_order.status != "rejected":
-            return APIResponse.error(
-                "只有拒收状态的送货单可以登记处理", code=status.HTTP_400_BAD_REQUEST
+        try:
+            result = DeliveryOrderService.resolve_exception(
+                delivery_order=delivery_order,
+                resolution=request.data.get("resolution"),
+                resolution_notes=request.data.get("resolution_notes"),
+                user=request.user,
             )
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
-        resolution = (request.data.get("resolution") or "").strip()
-        resolution_notes = (request.data.get("resolution_notes") or "").strip()
-        if resolution not in {"reship", "rework", "terminate"}:
-            return APIResponse.error("处理结论无效，可选：reship（补发）、rework（返工）、terminate（终止）", code=status.HTTP_400_BAD_REQUEST)
-        if not resolution_notes:
-            return APIResponse.error("请填写处理说明", code=status.HTTP_400_BAD_REQUEST)
-
-        with transaction.atomic():
-            delivery_order.notes = upsert_delivery_exception_resolution(
-                delivery_order.notes,
-                resolution=resolution,
-                resolution_notes=resolution_notes.replace("|", "/"),
-                resolved_by=request.user.username or str(request.user.pk),
-                resolved_at=timezone.now().strftime("%Y-%m-%d %H:%M"),
-            )
-            delivery_order.save(update_fields=["notes", "updated_at"])
-
-            result_extra = {}
-
-            if resolution == "reship":
-                # 补发：自动生成新的送货单
-                reship_order = DeliveryOrder.objects.create(
-                    sales_order=delivery_order.sales_order,
-                    customer=delivery_order.customer,
-                    delivery_date=timezone.now().date(),
-                    receiver_name=delivery_order.receiver_name,
-                    receiver_phone=delivery_order.receiver_phone,
-                    delivery_address=delivery_order.delivery_address,
-                    notes=f"拒收补发（原送货单：{delivery_order.order_number}）\n{resolution_notes}",
-                )
-                for item in delivery_order.items.all():
-                    DeliveryItem.objects.create(
-                        delivery_order=reship_order,
-                        product=item.product,
-                        sales_order_item=item.sales_order_item,
-                        quantity=item.quantity,
-                        unit=item.unit,
-                        unit_price=item.unit_price,
-                    )
-                result_extra["reship_order_id"] = reship_order.id
-                result_extra["reship_order_number"] = reship_order.order_number
-
-            elif resolution == "rework":
-                # 返工：自动生成返工施工单
-                from workorder.services.work_order_flow_service import WorkOrderFlowService
-                from workorder.models.core import WorkOrder
-
-                sales_order = delivery_order.sales_order
-                if sales_order:
-                    # 尝试从原销售订单创建返工施工单
-                    try:
-                        rework_work_order = WorkOrderFlowService.create_from_sales_order(
-                            sales_order_id=sales_order.id,
-                            production_quantity=None,
-                            delivery_date=sales_order.delivery_date,
-                            priority="urgent",
-                            notes=f"返工施工单（原送货单拒收：{delivery_order.order_number}）\n{resolution_notes}",
-                            created_by=request.user,
-                            additional_data={},
-                        )
-                        # 标记为返工类型（通过 notes 或后续扩展字段标识）
-                        result_extra["rework_work_order_id"] = rework_work_order.id
-                        result_extra["rework_work_order_number"] = rework_work_order.order_number
-                    except Exception as e:
-                        import logging
-                        logger = logging.getLogger(__name__)
-                        logger.warning(f"自动创建返工施工单失败: {e}")
-
-            elif resolution == "terminate":
-                # 终止：取消关联客户订单
-                sales_order = delivery_order.sales_order
-                if sales_order and sales_order.status != "cancelled":
-                    sales_order.status = "cancelled"
-                    sales_order.completion_reason = f"送货单拒收后终止（{delivery_order.order_number}）\n{resolution_notes}"
-                    sales_order.save(update_fields=["status", "completion_reason"])
-                    result_extra["sales_order_status"] = "cancelled"
-
+        delivery_order = result.pop("delivery_order")
         serializer = self.get_serializer(delivery_order)
         return APIResponse.success(
-            data={"delivery_order": serializer.data, **result_extra},
-            message=f"拒收处理已登记：{resolution}"
+            data={"delivery_order": serializer.data, **result},
+            message=f"拒收处理已登记：{request.data.get('resolution')}",
         )
 
     @action(detail=False, methods=["get"])
     @delivery_summary_docs
     def summary(self, request):
         """发货汇总"""
-        queryset = self.get_queryset()
-
-        # 统计数据
-        summary = queryset.aggregate(
-            total_count=Count("id"),
-            pending_count=Count("id", filter=Q(status="pending")),
-            shipped_count=Count("id", filter=Q(status="shipped")),
-            in_transit_count=Count("id", filter=Q(status="in_transit")),
-            received_count=Count("id", filter=Q(status="received")),
-            rejected_followup_count=Count(
-                "id",
-                filter=Q(status="rejected")
-                & ~Q(notes__contains="[delivery_exception_resolution]"),
-            ),
-            pending_receive_count=Count(
-                "id", filter=Q(status__in=["shipped", "in_transit"])
-            ),
-            pending_invoice_count=Count(
-                "id",
-                filter=Q(status__in=["shipped", "in_transit", "received"])
-                & Q(sales_order__isnull=False)
-                & Q(sales_order__invoices__isnull=True),
-                distinct=True,
-            ),
-            total_freight=Sum("freight"),
-        )
-
-        # 按状态统计
-        status_stats = (
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
-        )
-
-        return APIResponse.success(
-            data={"summary": summary, "by_status": list(status_stats)}
-        )
+        data = DeliveryOrderService.get_summary(self.get_queryset())
+        return APIResponse.success(data=data)
 
 
 @quality_inspection_docs
@@ -1214,28 +754,15 @@ class QualityInspectionViewSet(viewsets.ModelViewSet):
         """完成检验"""
         inspection = self.get_object()
 
-        if inspection.result != "pending":
-            return APIResponse.error(
-                "该检验已经有结果了", code=status.HTTP_400_BAD_REQUEST
+        try:
+            QualityInspectionService.complete(
+                inspection=inspection,
+                result=request.data.get("result"),
+                passed_quantity=request.data.get("passed_quantity", 0),
+                failed_quantity=request.data.get("failed_quantity", 0),
             )
-
-        # 获取检验结果
-        result = request.data.get("result")
-        if not result:
-            return APIResponse.error(
-                "必须指定检验结果", code=status.HTTP_400_BAD_REQUEST
-            )
-
-        inspection.result = result
-
-        # 更新数量
-        passed_quantity = request.data.get("passed_quantity", 0)
-        failed_quantity = request.data.get("failed_quantity", 0)
-        inspection.passed_quantity = passed_quantity
-        inspection.failed_quantity = failed_quantity
-
-        # 保存（会自动计算不良率）
-        inspection.save()
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
         serializer = self.get_serializer(inspection)
         return APIResponse.success(data=serializer.data, message="检验完成")
@@ -1244,40 +771,5 @@ class QualityInspectionViewSet(viewsets.ModelViewSet):
     @quality_summary_docs
     def summary(self, request):
         """质检汇总"""
-        queryset = self.get_queryset()
-
-        # 统计数据
-        summary = queryset.aggregate(
-            total_count=Count("id"),
-            total_quantity=Sum("inspection_quantity"),
-            total_passed=Sum("passed_quantity"),
-            total_failed=Sum("failed_quantity"),
-            avg_defective_rate=Sum("defective_rate") / Count("id"),
-            pending_count=Count("id", filter=Q(result="pending")),
-            unresolved_exception_count=Count(
-                "id",
-                filter=Q(result__in=["failed", "conditional"])
-                & (Q(disposition="") | Q(disposition__isnull=True))
-                & (Q(disposition_notes="") | Q(disposition_notes__isnull=True)),
-            ),
-        )
-
-        # 按结果统计
-        result_stats = (
-            queryset.values("result").annotate(count=Count("id")).order_by("result")
-        )
-
-        # 按类型统计
-        type_stats = (
-            queryset.values("inspection_type")
-            .annotate(count=Count("id"))
-            .order_by("inspection_type")
-        )
-
-        return APIResponse.success(
-            data={
-                "summary": summary,
-                "by_result": list(result_stats),
-                "by_type": list(type_stats),
-            }
-        )
+        data = QualityInspectionService.get_summary(self.get_queryset())
+        return APIResponse.success(data=data)
