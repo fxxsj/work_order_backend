@@ -4,7 +4,6 @@
 包含物料、供应商、物料供应商、采购单、收货记录等视图集。
 """
 
-from django.db import transaction
 from django.db.models import Case, Count, F, FloatField, Sum, When
 from django.utils import timezone
 from django_filters import CharFilter, DateFromToRangeFilter, FilterSet
@@ -58,6 +57,8 @@ from ..serializers.materials import (
 )
 from ..services.service_errors import ServiceError
 from ..services.approval_service import ApprovalService
+from ..services.purchase_order_flow_service import PurchaseOrderFlowService
+from ..services.purchase_order_service import PurchaseOrderService
 from ..services.purchase_order_flow_service import PurchaseOrderFlowService
 from .base_viewsets import BaseViewSet
 from .mixins import ApprovalTimelineMixin
@@ -309,73 +310,42 @@ class PurchaseOrderViewSet(ApprovalTimelineMixin, BaseViewSet):
     @action(detail=True, methods=["post"])
     @purchase_order_receive_docs
     def receive(self, request, pk=None):
-        """分批收货（改进版）
-
-        支持分批收货，创建收货记录，不直接入库（需要质检后入库）
-        """
+        """分批收货（改进版）"""
         order = self.get_object()
-        if order.status != "ordered":
-            return APIResponse.error("只有已下单状态的采购单可以收货", code=status.HTTP_400_BAD_REQUEST)
 
         serializer = PurchaseReceiveRecordCreateSerializer(data=request.data)
         if not serializer.is_valid():
-            return APIResponse.error('请求参数错误', code=status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
+            return APIResponse.error(
+                '请求参数错误',
+                code=status.HTTP_400_BAD_REQUEST,
+                errors=serializer.errors,
+            )
 
-        items_data = serializer.validated_data.get("items", [])
-        received_date = serializer.validated_data.get(
-            "received_date", timezone.now().date()
-        )
+        try:
+            result = PurchaseOrderService.receive_items(
+                order=order,
+                items_data=serializer.validated_data.get("items", []),
+                received_date=serializer.validated_data.get(
+                    "received_date", timezone.now().date()
+                ),
+                user=request.user,
+            )
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code)
 
-        created_records = []
-        errors = []
-
-        with transaction.atomic():
-            for item_data in items_data:
-                item_id = item_data.get("item_id")
-                received_quantity = item_data.get("received_quantity")
-                delivery_note_number = item_data.get("delivery_note_number", "")
-                notes = item_data.get("notes", "")
-
-                # 查找采购单明细
-                item = order.items.filter(id=item_id).first()
-                if not item:
-                    errors.append(f"采购单明细 {item_id} 不存在")
-                    continue
-
-                # 计算已收货的数量（来自收货记录）
-                existing_received = sum(
-                    r.received_quantity or 0 for r in item.receive_records.all()
-                )
-                remaining = item.quantity - existing_received
-
-                if received_quantity > remaining:
-                    errors.append(
-                        f"物料 {item.material.name} 收货数量 {received_quantity} "
-                        f"超过剩余数量 {remaining}"
-                    )
-                    continue
-
-                # 创建收货记录
-                record = PurchaseReceiveRecord.objects.create(
-                    purchase_order_item=item,
-                    received_quantity=received_quantity,
-                    received_date=received_date,
-                    received_by=request.user,
-                    delivery_note_number=delivery_note_number,
-                    notes=notes,
-                    inspection_status="pending",
-                )
-                created_records.append(record.id)
-
-        if errors:
-            return APIResponse.success(data={
+        if result["errors"]:
+            return APIResponse.success(
+                data={
                     "message": "部分收货成功",
-                    "created_records": created_records,
-                    "errors": errors,
-                }, code=status.HTTP_207_MULTI_STATUS)
+                    "created_records": result["created_record_ids"],
+                    "errors": result["errors"],
+                },
+                code=status.HTTP_207_MULTI_STATUS,
+            )
 
         return APIResponse.success(
-            data={"created_records": created_records}, message="收货成功，请进行质检"
+            data={"created_records": result["created_record_ids"]},
+            message="收货成功，请进行质检",
         )
 
     @action(detail=True, methods=["get"])
@@ -421,181 +391,37 @@ class PurchaseOrderViewSet(ApprovalTimelineMixin, BaseViewSet):
     def cancel(self, request, pk=None):
         """取消采购单"""
         order = self.get_object()
-        if order.status in ["received", "cancelled"]:
-            return APIResponse.error("已收货或已取消的采购单无法取消", code=status.HTTP_400_BAD_REQUEST)
-
-        order.status = "cancelled"
-        order.save()
+        try:
+            PurchaseOrderService.cancel(order=order)
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code)
         return APIResponse.success(message="取消成功")
 
     @action(detail=False, methods=["post"])
     def create_from_work_order(self, request):
-        """从施工单创建采购单
-
-        按物料默认供应商自动分组，每组生成一个采购单。
-        自动关联 PurchaseOrderItem.work_order_material，打通回写链路。
-        """
-        from workorder.constants.status import MaterialPurchaseStatus
-
-        work_order_id = request.data.get("work_order_id")
-        material_ids = request.data.get("material_ids")
-        notes = request.data.get("notes", "")
-
-        if not work_order_id:
-            return APIResponse.error(
-                "缺少 work_order_id 参数", code=status.HTTP_400_BAD_REQUEST
-            )
-
+        """从施工单创建采购单"""
         try:
-            from ..models.core import WorkOrder
-
-            work_order = WorkOrder.objects.get(pk=work_order_id)
-        except WorkOrder.DoesNotExist:
+            result = PurchaseOrderService.create_from_work_order(
+                work_order_id=request.data.get("work_order_id"),
+                material_ids=request.data.get("material_ids"),
+                notes=request.data.get("notes", ""),
+                item_overrides=request.data.get("items", []),
+            )
+        except ServiceError as e:
+            data = e.data if e.data else {}
             return APIResponse.error(
-                "施工单不存在", code=status.HTTP_404_NOT_FOUND
+                message=str(e), code=e.code, data=data
             )
 
-        # 查询待采购的施工单物料
-        wo_materials = work_order.materials.select_related(
-            "material", "material__default_supplier"
-        ).filter(purchase_status=MaterialPurchaseStatus.PENDING)
-
-        if material_ids:
-            wo_materials = wo_materials.filter(material_id__in=material_ids)
-
-        if not wo_materials.exists():
-            return APIResponse.error(
-                "没有待采购的物料", code=status.HTTP_400_BAD_REQUEST
-            )
-
-        existing_item_wom_ids = set(
-            PurchaseOrderItem.objects.filter(
-                work_order_material__in=wo_materials,
-            )
-            .exclude(purchase_order__status="cancelled")
-            .values_list("work_order_material_id", flat=True)
-        )
-        skipped_items = []
-        if existing_item_wom_ids:
-            skipped_items = [
-                {
-                    "work_order_material_id": wom.id,
-                    "material_id": wom.material_id,
-                    "material_name": wom.material.name,
-                    "reason": "已存在未取消的关联采购单明细",
-                }
-                for wom in wo_materials
-                if wom.id in existing_item_wom_ids
-            ]
-            wo_materials = wo_materials.exclude(id__in=existing_item_wom_ids)
-
-        if not wo_materials.exists():
+        if result["total_count"] == 0:
             return APIResponse.success(
-                data={
-                    "purchase_orders": [],
-                    "total_count": 0,
-                    "created_item_count": 0,
-                    "skipped_item_count": len(skipped_items),
-                    "skipped_items": skipped_items,
-                    "blocked_items": [],
-                },
+                data=result,
                 message="没有可新建采购单的待采购物料",
             )
 
-        # 校验每个物料都有默认供应商
-        missing_supplier = []
-        for wom in wo_materials:
-            if not wom.material.default_supplier:
-                missing_supplier.append(
-                    {
-                        "work_order_material_id": wom.id,
-                        "material_id": wom.material_id,
-                        "material_name": wom.material.name,
-                        "reason": "物料未配置默认供应商",
-                    }
-                )
-
-        if missing_supplier:
-            return APIResponse.error(
-                "部分物料没有默认供应商，请先配置",
-                code=status.HTTP_400_BAD_REQUEST,
-                data={"blocked_items": missing_supplier},
-            )
-
-        # 按供应商分组
-        supplier_groups = {}
-        for wom in wo_materials:
-            supplier = wom.material.default_supplier
-            if supplier.id not in supplier_groups:
-                supplier_groups[supplier.id] = {"supplier": supplier, "items": []}
-            supplier_groups[supplier.id]["items"].append(wom)
-
-        # 解析可选的每项数量覆盖
-        quantity_overrides = {}
-        for item_override in request.data.get("items", []):
-            wom_id = item_override.get("work_order_material_id")
-            qty = item_override.get("quantity")
-            if wom_id and qty:
-                quantity_overrides[wom_id] = qty
-
-        created_orders = []
-        created_item_count = 0
-        with transaction.atomic():
-            for group_data in supplier_groups.values():
-                po = PurchaseOrder.objects.create(
-                    supplier=group_data["supplier"],
-                    work_order=work_order,
-                    notes=notes,
-                )
-
-                for wom in group_data["items"]:
-                    # 解析物料用量字符串，提取数量
-                    from ..services.task_generation import (
-                        TaskGenerationService,
-                    )
-
-                    quantity = quantity_overrides.get(
-                        wom.id,
-                        TaskGenerationService._parse_material_usage(
-                            wom.material_usage or ""
-                        ) or 1,
-                    )
-                    PurchaseOrderItem.objects.create(
-                        purchase_order=po,
-                        material=wom.material,
-                        quantity=quantity,
-                        unit_price=wom.material.unit_price or 0,
-                        work_order_material=wom,
-                    )
-                    created_item_count += 1
-
-                po.update_total_amount()
-                created_orders.append(po)
-
-        # 返回创建的采购单摘要
-        result = []
-        for po in created_orders:
-            po = PurchaseOrder.objects.select_related("supplier").get(pk=po.id)
-            result.append(
-                {
-                    "id": po.id,
-                    "order_number": po.order_number,
-                    "supplier_name": po.supplier.name,
-                    "total_amount": str(po.total_amount),
-                    "items_count": po.items.count(),
-                }
-            )
-
         return APIResponse.success(
-            data={
-                "purchase_orders": result,
-                "total_count": len(result),
-                "created_item_count": created_item_count,
-                "skipped_item_count": len(skipped_items),
-                "skipped_items": skipped_items,
-                "blocked_items": [],
-            },
-            message=f"成功创建 {len(result)} 个采购单，包含 {created_item_count} 个物料明细",
+            data=result,
+            message=f"成功创建 {result['total_count']} 个采购单，包含 {result['created_item_count']} 个物料明细",
         )
 
     @action(detail=False, methods=["get"])
