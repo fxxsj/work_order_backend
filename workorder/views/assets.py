@@ -4,10 +4,6 @@
 包含图稿、刀模、烫金版、压凸版等资产的视图集。
 """
 
-from pathlib import Path
-
-from django.db.models import Sum
-from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -39,7 +35,6 @@ from ..models.assets import (
     FoilingPlateImage,
     FoilingPlateProduct,
 )
-from ..models.core import WorkOrder, WorkOrderProcess, WorkOrderTask
 from ..serializers.assets import (
     ArtworkImageSerializer,
     ArtworkProductSerializer,
@@ -58,6 +53,12 @@ from ..permissions import (
     SuperuserFriendlyModelPermissions,
     WorkOrderSupportingDataPermission,
 )
+from ..services.asset_service import (
+    ArtworkVersionService,
+    AssetConfirmationService,
+    AssetImageService,
+)
+from ..services.service_errors import ServiceError
 from .base_viewsets import BaseViewSet
 
 
@@ -72,56 +73,25 @@ class PlateMakingConfirmMixin:
     @confirm_docs
     def confirm(self, request, pk=None):
         """设计部确认资产，并尝试完成对应制版任务"""
-        from django.db import transaction
+        asset = self.get_object()
 
-        if not self.confirm_fk_field:
-            return APIResponse.error(
-                "未配置 confirm_fk_field", code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        try:
+            AssetConfirmationService.confirm(
+                asset=asset,
+                fk_field=self.confirm_fk_field,
+                user=request.user,
             )
-
-        with transaction.atomic():
-            asset = self._confirm_select_for_update(pk)
-
-            if asset.confirmed:
-                return APIResponse.error(
-                    self.confirm_error_message, code=status.HTTP_400_BAD_REQUEST
-                )
-
-            asset.confirmed = True
-            asset.confirmed_by = request.user
-            asset.confirmed_at = timezone.now()
-            asset.save()
-
-            tasks = WorkOrderTask.objects.filter(
-                **{self.confirm_fk_field: asset},
-                task_type="plate_making",
-                work_order_process__status="in_progress",
-            )
-
-            for task in tasks:
-                related = getattr(task, self.confirm_fk_field, None)
-                if related and related.confirmed:
-                    task.status = "completed"
-                    task.quantity_completed = 1
-                    task.save()
-                    task.work_order_process.check_and_update_status()
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
         serializer = self.get_serializer(asset)
         return APIResponse.success(data=serializer.data)
 
 
 class ImageAssetActionsMixin:
-    allowed_image_extensions = {"jpg", "jpeg", "png", "webp", "gif"}
-    max_image_size_bytes = 10 * 1024 * 1024
-    max_image_count = 12
     image_model = None
     image_serializer_class = None
     image_parent_field = ""
-    image_missing_message = "图片不存在"
-    image_select_message = "请选择要上传的图片"
-    image_type_message = "仅支持 JPG、PNG、WebP、GIF 图片"
-    image_size_message = "图片不能超过 10MB"
-    image_count_message = "图片最多上传 12 张"
 
     def _get_image_config(self):
         if (
@@ -132,34 +102,12 @@ class ImageAssetActionsMixin:
             raise RuntimeError("图片上传配置不完整")
         return self.image_model, self.image_serializer_class, self.image_parent_field
 
-    def _validate_upload_image(self, asset, image_file):
-        if asset.images.count() >= self.max_image_count:
-            return APIResponse.error(
-                self.image_count_message,
-                code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        suffix = Path(getattr(image_file, "name", "")).suffix.lower().lstrip(".")
-        if suffix not in self.allowed_image_extensions:
-            return APIResponse.error(
-                self.image_type_message,
-                code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if getattr(image_file, "size", 0) > self.max_image_size_bytes:
-            return APIResponse.error(
-                self.image_size_message,
-                code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        return None
-
     @action(detail=True, methods=["get"])
     def images(self, request, pk=None):
         """获取资产的所有图片，按排序返回"""
         _, serializer_class, _ = self._get_image_config()
         asset = self.get_object()
-        images = asset.images.all().order_by("sort_order")
+        images = AssetImageService.list_images(asset)
         serializer = serializer_class(images, many=True)
         return APIResponse.success(data=serializer.data)
 
@@ -171,23 +119,22 @@ class ImageAssetActionsMixin:
         image_file = request.FILES.get("image")
         if not image_file:
             return APIResponse.error(
-                self.image_select_message,
+                "请选择要上传的图片",
                 code=status.HTTP_400_BAD_REQUEST,
             )
-        validation_error = self._validate_upload_image(asset, image_file)
-        if validation_error is not None:
-            return validation_error
 
-        sort_order = int(request.POST.get("sort_order", 0))
-        description = request.POST.get("description", "").strip()
-        image = image_model.objects.create(
-            **{
-                parent_field: asset,
-                "image": image_file,
-                "sort_order": sort_order,
-                "description": description,
-            }
-        )
+        try:
+            image = AssetImageService.create_image(
+                image_model=image_model,
+                parent_field=parent_field,
+                asset=asset,
+                image_file=image_file,
+                sort_order=int(request.POST.get("sort_order", 0)),
+                description=request.POST.get("description", "").strip(),
+            )
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
+
         serializer = serializer_class(image)
         return APIResponse.success(
             data=serializer.data,
@@ -199,18 +146,15 @@ class ImageAssetActionsMixin:
         """删除资产的指定图片"""
         image_model, _, parent_field = self._get_image_config()
         try:
-            image = image_model.objects.get(
-                pk=image_id,
-                **{f"{parent_field}_id": pk},
+            AssetImageService.delete_image(
+                image_model=image_model,
+                parent_field=parent_field,
+                asset_pk=pk,
+                image_id=image_id,
             )
-            image.image.delete(save=False)
-            image.delete()
-            return APIResponse.success(message="图片已删除")
-        except image_model.DoesNotExist:
-            return APIResponse.error(
-                self.image_missing_message,
-                code=status.HTTP_404_NOT_FOUND,
-            )
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
+        return APIResponse.success(message="图片已删除")
 
 
 @artwork_docs
@@ -252,50 +196,12 @@ class ArtworkViewSet(PlateMakingConfirmMixin, ImageAssetActionsMixin, BaseViewSe
         - 关联压凸版
         - 关联产品及拼版数量
         """
-        from django.db import transaction
-
         original_artwork = self.get_object()
 
-        with transaction.atomic():
-            # 获取下一个版本号
-            next_version = Artwork.get_next_version(original_artwork.base_code)
-
-            # 创建新版本，复制原图稿的所有信息
-            new_artwork = Artwork.objects.create(
-                base_code=original_artwork.base_code,
-                version=next_version,
-                name=original_artwork.name,
-                cmyk_colors=(
-                    original_artwork.cmyk_colors.copy()
-                    if original_artwork.cmyk_colors
-                    else []
-                ),
-                other_colors=(
-                    original_artwork.other_colors.copy()
-                    if original_artwork.other_colors
-                    else []
-                ),
-                imposition_size=original_artwork.imposition_size,
-                notes=original_artwork.notes,
-            )
-
-            # 复制关联的刀模
-            new_artwork.dies.set(original_artwork.dies.all())
-
-            # 复制关联的烫金版
-            new_artwork.foiling_plates.set(original_artwork.foiling_plates.all())
-
-            # 复制关联的压凸版
-            new_artwork.embossing_plates.set(original_artwork.embossing_plates.all())
-
-            # 复制关联的产品
-            for ap in original_artwork.products.all():
-                ArtworkProduct.objects.create(
-                    artwork=new_artwork,
-                    product=ap.product,
-                    imposition_quantity=ap.imposition_quantity,
-                    sort_order=ap.sort_order,
-                )
+        try:
+            new_artwork = ArtworkVersionService.create_version(original_artwork)
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
         serializer = self.get_serializer(new_artwork)
         return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
