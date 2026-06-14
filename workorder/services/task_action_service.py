@@ -3,6 +3,7 @@
 将 TaskActionsMixin 中的业务逻辑下沉到服务层，视图只负责序列化和响应。
 """
 
+import logging
 from typing import Optional
 
 from django.contrib.auth.models import User
@@ -11,12 +12,209 @@ from rest_framework import status
 from ..models.base import Department
 from ..models.core import TaskLog, WorkOrderTask
 from ..models.system import Notification
+from ..policies.task_policy import (
+    ensure_assets_confirmed,
+    ensure_material_cut_ready,
+)
+from ..services.realtime_notification import notification_service
 from ..services.task_assignment import TaskAssignmentService
 from ..services.service_errors import ServiceError
+
+logger = logging.getLogger(__name__)
 
 
 class TaskActionService:
     """任务操作服务"""
+
+    @staticmethod
+    def update_quantity(
+        *,
+        task: WorkOrderTask,
+        quantity_increment,
+        quantity_defective: int = 0,
+        notes: str = "",
+        work_hours=None,
+        machine_name: str = "",
+        operator_count=None,
+        user: User,
+    ) -> WorkOrderTask:
+        """更新任务完成数量并自动判断状态。"""
+        work_order_process = task.work_order_process
+        work_order = work_order_process.work_order
+        process_code = work_order_process.process.code
+
+        if quantity_increment is None:
+            raise ServiceError(
+                "请提供本次完成数量", code=status.HTTP_400_BAD_REQUEST
+            )
+
+        quantity_before = task.quantity_completed
+        new_quantity_completed = quantity_before + quantity_increment
+
+        ensure_assets_confirmed(task, "更新")
+        ensure_material_cut_ready(task, process_code, work_order, "更新")
+
+        if new_quantity_completed < 0:
+            raise ServiceError(
+                "更新后完成数量不能小于0", code=status.HTTP_400_BAD_REQUEST
+            )
+        if (
+            task.production_quantity
+            and new_quantity_completed > task.production_quantity
+        ):
+            raise ServiceError(
+                f"更新后完成数量（{new_quantity_completed}）不能超过生产数量（{task.production_quantity}）",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        status_before = task.status
+
+        task.quantity_completed = new_quantity_completed
+        if quantity_defective is not None:
+            task.quantity_defective = (task.quantity_defective or 0) + quantity_defective
+        if notes:
+            task.production_requirements = notes
+        if work_hours is not None:
+            try:
+                task.work_hours = float(work_hours)
+            except (TypeError, ValueError):
+                pass
+        if machine_name:
+            task.machine_name = machine_name
+        if operator_count is not None:
+            try:
+                task.operator_count = int(operator_count)
+            except (TypeError, ValueError):
+                pass
+
+        if (
+            task.production_quantity
+            and new_quantity_completed >= task.production_quantity
+        ):
+            task.status = "completed"
+        else:
+            if task.status == "pending":
+                task.status = "in_progress"
+            elif (
+                task.status == "completed"
+                and new_quantity_completed < task.production_quantity
+            ):
+                task.status = "in_progress"
+
+        task.save()
+
+        # 包装任务库存调整
+        stock_increment = new_quantity_completed - (task.stock_accounted_quantity or 0)
+        if stock_increment != 0 and task.product:
+            try:
+                if stock_increment > 0:
+                    task.product.add_stock(
+                        quantity=stock_increment,
+                        user=None,
+                        reason=f"施工单{work_order.order_number}包装任务数量编辑，入库{stock_increment}{task.product.unit}",
+                    )
+                else:
+                    try:
+                        task.product.reduce_stock(
+                            quantity=abs(stock_increment),
+                            user=None,
+                            reason=f"施工单{work_order.order_number}包装任务数量编辑，出库{abs(stock_increment)}{task.product.unit}",
+                        )
+                    except ValueError as e:
+                        logger.warning(f"库存不足警告：{e}")
+            except Exception as e:
+                logger.error(f"调整产品库存失败：{e}")
+
+            task.stock_accounted_quantity = new_quantity_completed
+            task.save(update_fields=["stock_accounted_quantity"])
+
+        defective_increment = quantity_defective if quantity_defective else 0
+        TaskLog.objects.create(
+            task=task,
+            log_type="update_quantity",
+            content=f"更新完成数量：{quantity_before} → {new_quantity_completed}，本次完成：{quantity_increment}，不良品：{defective_increment}，状态：{status_before} → {task.status}"
+            + (f"，备注：{notes}" if notes else ""),
+            quantity_before=quantity_before,
+            quantity_after=new_quantity_completed,
+            quantity_increment=quantity_increment,
+            quantity_defective_increment=defective_increment,
+            status_before=status_before,
+            status_after=task.status,
+            operator=user,
+        )
+
+        if task.is_subtask() and task.parent_task:
+            task.parent_task.update_from_subtasks()
+
+        task.work_order_process.check_and_update_status()
+        return task
+
+    @staticmethod
+    def complete_task(
+        *,
+        task: WorkOrderTask,
+        completion_reason: str = "",
+        quantity_defective: int = 0,
+        notes: str = "",
+        user: User,
+    ) -> WorkOrderTask:
+        """强制完成任务。"""
+        work_order_process = task.work_order_process
+        work_order = work_order_process.work_order
+        process_code = work_order_process.process.code
+
+        ensure_assets_confirmed(task, "完成")
+        ensure_material_cut_ready(task, process_code, work_order, "完成")
+
+        status_before = task.status
+        quantity_before = task.quantity_completed
+
+        task.status = "completed"
+        if notes:
+            task.production_requirements = notes
+
+        if task.task_type == "plate_making":
+            task.quantity_completed = 1
+        else:
+            task.quantity_completed = task.production_quantity
+
+        if quantity_defective is not None:
+            task.quantity_defective = quantity_defective
+
+        task.save()
+
+        quantity_increment = task.quantity_completed - quantity_before
+        defective_increment = quantity_defective if quantity_defective else 0
+
+        log_content = f"强制完成任务，完成数量：{quantity_before} → {task.quantity_completed}，不良品：{defective_increment}，状态：{status_before} → completed"
+        if quantity_increment != 0:
+            log_content += f"，本次完成：{quantity_increment}"
+        if completion_reason:
+            log_content += f"，完成理由：{completion_reason}"
+        if notes:
+            log_content += f"，备注：{notes}"
+
+        TaskLog.objects.create(
+            task=task,
+            log_type="complete",
+            content=log_content,
+            quantity_before=quantity_before,
+            quantity_after=task.quantity_completed,
+            quantity_increment=quantity_increment,
+            quantity_defective_increment=defective_increment,
+            status_before=status_before,
+            status_after="completed",
+            completion_reason=completion_reason,
+            operator=user,
+        )
+
+        notification_service.notify_task_completed(task=task, completed_by=user)
+
+        if task.is_subtask() and task.parent_task:
+            task.parent_task.update_from_subtasks()
+
+        task.work_order_process.check_and_update_status()
+        return task
 
     @staticmethod
     def split_task(*, task: WorkOrderTask, splits: list, user: User) -> dict:

@@ -22,9 +22,7 @@ from workorder.policies.task_policy import (
     ensure_user_can_modify_task,
 )
 
-from workorder.models.core import TaskLog
 from workorder.serializers.core import TaskAssignmentSerializer, WorkOrderTaskSerializer
-from workorder.services.realtime_notification import notification_service
 from workorder.services.task_assignment import TaskAssignmentService
 from workorder.services.task_action_service import TaskActionService
 
@@ -126,8 +124,6 @@ class TaskActionsMixin:
     @action(detail=True, methods=["post"])
     def update_quantity(self, request, pk=None):
         """更新任务数量（包含业务条件验证，根据数量自动判断状态，记录操作人）"""
-        from workorder.models.core import TaskLog
-
         task = self.get_object()
 
         try:
@@ -135,151 +131,34 @@ class TaskActionsMixin:
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
-        # 并发控制：检查版本号（乐观锁）
         expected_version = request.data.get("version")
         try:
             ensure_task_version(task, expected_version)
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
-        work_order_process = task.work_order_process
-        work_order = work_order_process.work_order
-        process_code = work_order_process.process.code
-
-        # 获取前端传递的数据
-        quantity_increment = request.data.get("quantity_increment")
-        quantity_defective = request.data.get("quantity_defective", 0)
-        notes = request.data.get("notes", "")
-        work_hours = request.data.get("work_hours")
-        machine_name = request.data.get("machine_name", "")
-        operator_count = request.data.get("operator_count")
-
-        if quantity_increment is None:
-            return APIResponse.error("请提供本次完成数量", code=status.HTTP_400_BAD_REQUEST)
-
-        # 计算新的完成数量（增量更新）
-        quantity_before = task.quantity_completed
-        new_quantity_completed = quantity_before + quantity_increment
-
         try:
-            ensure_assets_confirmed(task, "更新")
-            ensure_material_cut_ready(task, process_code, work_order, "更新")
+            TaskActionService.update_quantity(
+                task=task,
+                quantity_increment=request.data.get("quantity_increment"),
+                quantity_defective=request.data.get("quantity_defective", 0),
+                notes=request.data.get("notes", ""),
+                work_hours=request.data.get("work_hours"),
+                machine_name=request.data.get("machine_name", ""),
+                operator_count=request.data.get("operator_count"),
+                user=request.user,
+            )
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        except Exception as exc:
+            import logging
 
-        # 验证增量数量
-        if new_quantity_completed < 0:
-            return APIResponse.error("更新后完成数量不能小于0", code=status.HTTP_400_BAD_REQUEST)
-        if (
-            task.production_quantity
-            and new_quantity_completed > task.production_quantity
-        ):
+            logger = logging.getLogger(__name__)
+            logger.error(f"更新任务数量失败: {str(exc)}")
             return APIResponse.error(
-                f"更新后完成数量（{new_quantity_completed}）不能超过生产数量（{task.production_quantity}）",
-                code=status.HTTP_400_BAD_REQUEST,
+                "更新任务数量失败，请稍后重试",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
-        # 记录更新前的状态和数量
-        status_before = task.status
-
-        # 更新任务数量（增量更新）
-        task.quantity_completed = new_quantity_completed
-
-        # 更新不良品数量
-        if quantity_defective is not None:
-            task.quantity_defective = (
-                task.quantity_defective or 0
-            ) + quantity_defective
-
-        if notes:
-            task.production_requirements = notes
-
-        # 更新工时与设备信息
-        if work_hours is not None:
-            try:
-                task.work_hours = float(work_hours)
-            except (TypeError, ValueError):
-                pass
-        if machine_name:
-            task.machine_name = machine_name
-        if operator_count is not None:
-            try:
-                task.operator_count = int(operator_count)
-            except (TypeError, ValueError):
-                pass
-
-        # 根据数量自动判断状态
-        if (
-            task.production_quantity
-            and new_quantity_completed >= task.production_quantity
-        ):
-            task.status = "completed"
-        else:
-            if task.status == "pending":
-                task.status = "in_progress"
-            elif (
-                task.status == "completed"
-                and new_quantity_completed < task.production_quantity
-            ):
-                task.status = "in_progress"
-
-        # 保存任务
-        task.save()
-
-        # 如果是包装任务，调整库存差异
-        stock_increment = new_quantity_completed - (task.stock_accounted_quantity or 0)
-        if stock_increment != 0 and task.product:
-            try:
-                if stock_increment > 0:
-                    task.product.add_stock(
-                        quantity=stock_increment,
-                        user=None,
-                        reason=f"施工单{work_order.order_number}包装任务数量编辑，入库{stock_increment}{task.product.unit}",
-                    )
-                else:
-                    try:
-                        task.product.reduce_stock(
-                            quantity=abs(stock_increment),
-                            user=None,
-                            reason=f"施工单{work_order.order_number}包装任务数量编辑，出库{abs(stock_increment)}{task.product.unit}",
-                        )
-                    except ValueError as e:
-                        import logging
-
-                        logger = logging.getLogger(__name__)
-                        logger.warning(f"库存不足警告：{e}")
-            except Exception as e:
-                import logging
-
-                logger = logging.getLogger(__name__)
-                logger.error(f"调整产品库存失败：{e}")
-
-            # 更新已计入库存的数量
-            task.stock_accounted_quantity = new_quantity_completed
-            task.save(update_fields=["stock_accounted_quantity"])
-
-        # 记录操作日志
-        defective_increment = quantity_defective if quantity_defective else 0
-        TaskLog.objects.create(
-            task=task,
-            log_type="update_quantity",
-            content=f"更新完成数量：{quantity_before} → {new_quantity_completed}，本次完成：{quantity_increment}，不良品：{defective_increment}，状态：{status_before} → {task.status}"
-            + (f"，备注：{notes}" if notes else ""),
-            quantity_before=quantity_before,
-            quantity_after=new_quantity_completed,
-            quantity_increment=quantity_increment,
-            quantity_defective_increment=defective_increment,
-            status_before=status_before,
-            status_after=task.status,
-            operator=request.user,
-        )
-
-        # 如果是子任务，更新父任务
-        if task.is_subtask() and task.parent_task:
-            task.parent_task.update_from_subtasks()
-
-        # 检查工序是否完成
-        task.work_order_process.check_and_update_status()
 
         serializer = self.get_serializer(task)
         return APIResponse.success(data=serializer.data)
@@ -340,8 +219,6 @@ class TaskActionsMixin:
     @action(detail=True, methods=["post"])
     def complete(self, request, pk=None):
         """强制完成任务（用于完成数量小于生产数量但需要强制标志为已完成的情况）"""
-        from workorder.models.core import TaskLog
-
         task = self.get_object()
 
         try:
@@ -349,87 +226,31 @@ class TaskActionsMixin:
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
-        # 并发控制：检查版本号（乐观锁）
         expected_version = request.data.get("version")
         try:
             ensure_task_version(task, expected_version)
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
-        work_order_process = task.work_order_process
-        work_order = work_order_process.work_order
-        process_code = work_order_process.process.code
-
-        # 获取前端传递的数据
-        completion_reason = request.data.get("completion_reason", "")
-        quantity_defective = request.data.get("quantity_defective", 0)  # 不良品数量
-        notes = request.data.get("notes", "")
-
         try:
-            ensure_assets_confirmed(task, "完成")
-            ensure_material_cut_ready(task, process_code, work_order, "完成")
+            TaskActionService.complete_task(
+                task=task,
+                completion_reason=request.data.get("completion_reason", ""),
+                quantity_defective=request.data.get("quantity_defective", 0),
+                notes=request.data.get("notes", ""),
+                user=request.user,
+            )
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        except Exception as exc:
+            import logging
 
-        # 记录更新前的状态和数量
-        status_before = task.status
-        quantity_before = task.quantity_completed
-
-        # 强制设置为已完成（不根据数量判断）
-        task.status = "completed"
-        if notes:
-            task.production_requirements = notes
-
-        # 制版任务：完成数量固定为1
-        if task.task_type == "plate_making":
-            task.quantity_completed = 1
-        else:
-            # 其他任务：完成数量自动更新为生产数量
-            task.quantity_completed = task.production_quantity
-
-        # 更新不良品数量（如果提供了）
-        if quantity_defective is not None:
-            task.quantity_defective = quantity_defective
-
-        # 保存任务（模型会自动处理版本号）
-        task.save()
-
-        # 计算数量增量
-        quantity_increment = task.quantity_completed - quantity_before
-        defective_increment = quantity_defective if quantity_defective else 0
-
-        # 记录操作日志（增强协作追踪）
-        log_content = f"强制完成任务，完成数量：{quantity_before} → {task.quantity_completed}，不良品：{defective_increment}，状态：{status_before} → completed"
-        if quantity_increment != 0:
-            log_content += f"，本次完成：{quantity_increment}"
-        if completion_reason:
-            log_content += f"，完成理由：{completion_reason}"
-        if notes:
-            log_content += f"，备注：{notes}"
-
-        TaskLog.objects.create(
-            task=task,
-            log_type="complete",
-            content=log_content,
-            quantity_before=quantity_before,
-            quantity_after=task.quantity_completed,
-            quantity_increment=quantity_increment,
-            quantity_defective_increment=defective_increment,
-            status_before=status_before,
-            status_after="completed",
-            completion_reason=completion_reason,
-            operator=request.user,
-        )
-
-        # 发送任务完成通知
-        notification_service.notify_task_completed(task=task, completed_by=request.user)
-
-        # 如果是子任务，更新父任务
-        if task.is_subtask() and task.parent_task:
-            task.parent_task.update_from_subtasks()
-
-        # 检查工序是否完成
-        task.work_order_process.check_and_update_status()
+            logger = logging.getLogger(__name__)
+            logger.error(f"强制完成任务失败: {str(exc)}")
+            return APIResponse.error(
+                "强制完成任务失败，请稍后重试",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         serializer = self.get_serializer(task)
         return APIResponse.success(data=serializer.data)
