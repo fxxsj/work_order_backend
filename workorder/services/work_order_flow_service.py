@@ -45,6 +45,7 @@ from workorder.constants.status import (
     WorkOrderApprovalStatus,
     WorkOrderStatus,
 )
+from ..policies.work_order_flow_policy import WorkOrderFlowPolicy
 from .service_errors import ServiceError
 from .dispatch_service import AutoDispatchService
 from .notification_triggers_flow import NotificationTriggers
@@ -302,6 +303,130 @@ class WorkOrderFlowService:
             recipient=created_by,
         )
 
+        return work_order
+
+    @staticmethod
+    @transaction.atomic
+    def create_from_sales_orders_batch(
+        *,
+        sales_order_ids: list,
+        request_data: dict,
+        user,
+        allow_partial: bool = False,
+    ) -> dict:
+        """批量从客户订单创建施工单。
+
+        Args:
+            sales_order_ids: 客户订单ID列表
+            request_data: 原始请求数据（包含 production_quantity、delivery_date 等）
+            user: 当前用户
+            allow_partial: 是否允许部分成功
+
+        Returns:
+            dict: {"created": [...], "failed": [...]}
+
+        Raises:
+            ServiceError: 严格模式下任意失败时抛出
+        """
+        from ..views.sales import _scope_sales_orders
+
+        production_quantity = request_data.get("production_quantity")
+        delivery_date = request_data.get("delivery_date")
+        priority = request_data.get("priority", "normal")
+        notes = request_data.get("notes", "")
+
+        created = []
+        failed = []
+
+        with transaction.atomic():
+            for sales_order_id in sales_order_ids:
+                try:
+                    work_order = WorkOrderFlowService.create_from_sales_order(
+                        sales_order_id=sales_order_id,
+                        production_quantity=production_quantity,
+                        delivery_date=delivery_date,
+                        priority=priority,
+                        notes=notes,
+                        created_by=user,
+                        additional_data={},
+                    )
+                    created.append(
+                        {
+                            "sales_order_id": sales_order_id,
+                            "work_order_id": work_order.id,
+                            "order_number": work_order.order_number,
+                        }
+                    )
+                except ServiceError as e:
+                    if allow_partial:
+                        failed.append(
+                            {"sales_order_id": sales_order_id, "error": str(e)}
+                        )
+                    else:
+                        transaction.set_rollback(True)
+                        raise ServiceError(
+                            message=f"批量创建失败，已回滚所有创建：{str(e)}",
+                            code=status.HTTP_400_BAD_REQUEST,
+                            data={
+                                "created_count": len(created),
+                                "failed": {
+                                    "sales_order_id": sales_order_id,
+                                    "error": str(e),
+                                },
+                            },
+                        ) from e
+                except Exception as e:
+                    if allow_partial:
+                        failed.append(
+                            {
+                                "sales_order_id": sales_order_id,
+                                "error": f"创建失败：{str(e)}",
+                            }
+                        )
+                    else:
+                        transaction.set_rollback(True)
+                        raise ServiceError(
+                            message=f"批量创建失败，已回滚所有创建：{str(e)}",
+                            code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            data={
+                                "created_count": len(created),
+                                "failed": {
+                                    "sales_order_id": sales_order_id,
+                                    "error": f"创建失败：{str(e)}",
+                                },
+                            },
+                        ) from e
+
+        return {"created": created, "failed": failed}
+
+    @staticmethod
+    def mark_urgent(*, work_order: WorkOrder, reason: str, user) -> WorkOrder:
+        """标记施工单为紧急并记录审批日志。
+
+        Args:
+            work_order: 施工单对象
+            reason: 紧急原因
+            user: 当前用户
+
+        Returns:
+            WorkOrder: 更新后的施工单
+        """
+        WorkOrderFlowPolicy.require_permission(
+            user, "workorder.change_workorder", "无权标记紧急施工单"
+        )
+
+        if not reason.strip():
+            raise ServiceError("请输入紧急原因", code=status.HTTP_400_BAD_REQUEST)
+
+        work_order.priority = "urgent"
+        work_order.urgency_reason = reason
+        work_order.save(update_fields=["priority", "urgency_reason"])
+        WorkOrderApprovalLog.objects.create(
+            work_order=work_order,
+            action_type="mark_urgent",
+            action_by=user,
+            comments=reason,
+        )
         return work_order
 
     # ========== 流程 2: 提交审核 ==========

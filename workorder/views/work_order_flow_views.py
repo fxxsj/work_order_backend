@@ -1,19 +1,15 @@
-"""
-施工单流程视图（使用 WorkOrderFlowService）
+"""施工单流程视图
 
-展示如何在视图中使用流程编排服务，保持视图层简洁
+通过 WorkOrderFlowPolicy 校验权限、WorkOrderFlowService 执行业务，保持视图层仅负责入参/出参。
 """
 
-from django.db import transaction
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from workorder.response import APIResponse
 
-from ..models.sales import SalesOrder
 from ..models.core import WorkOrder
-from ..models.system import WorkOrderApprovalLog
-from ..permission_utils import PermissionUtils
+from ..policies.work_order_flow_policy import WorkOrderFlowPolicy
 from ..services.work_order_flow_service import WorkOrderFlowService
 from ..services.service_errors import ServiceError
 from ..serializers.core import WorkOrderDetailSerializer
@@ -21,62 +17,14 @@ from ._decorators import handle_flow_errors
 
 
 class WorkOrderFlowViewSet(viewsets.GenericViewSet):
-    """
-    施工单流程视图集
-
-    使用 WorkOrderFlowService 编排业务流程
-    """
+    """施工单流程视图集"""
 
     permission_classes = [IsAuthenticated]
     queryset = WorkOrder.objects.all()
     serializer_class = WorkOrderDetailSerializer
 
     @staticmethod
-    def _require_permission(user, permission: str, message: str = "权限不足") -> None:
-        if user.is_superuser or user.has_perm(permission):
-            return
-        raise ServiceError(message=message, code=status.HTTP_403_FORBIDDEN)
-
-    @staticmethod
-    def _ensure_sales_order_visible(*, sales_order_id, user) -> None:
-        if not sales_order_id:
-            raise ServiceError("请提供客户订单ID", code=status.HTTP_400_BAD_REQUEST)
-
-        queryset = SalesOrder.objects.filter(id=sales_order_id)
-        if user.is_superuser or PermissionUtils.is_finance_user(user):
-            visible = queryset.exists()
-        else:
-            visible = queryset.filter(
-                PermissionUtils.build_sales_order_scope_q(user, "")
-            ).exists()
-
-        if not visible:
-            raise ServiceError(
-                "客户订单不存在或无权访问", code=status.HTTP_404_NOT_FOUND
-            )
-
-    @staticmethod
-    def _ensure_work_order_writable(*, work_order: WorkOrder, user) -> None:
-        if user.is_superuser or user.has_perm("workorder.submit_workorder"):
-            return
-        raise ServiceError("您没有提交审核的权限", code=status.HTTP_403_FORBIDDEN)
-
-    @staticmethod
-    def _validate_approval_permissions(*, work_order: WorkOrder, user) -> None:
-        if work_order.approval_status != "submitted":
-            raise ServiceError(
-                '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。',
-                code=status.HTTP_400_BAD_REQUEST,
-            )
-        
-        if not user.is_superuser and not user.has_perm("workorder.approve_workorder"):
-            raise ServiceError(
-                "您没有审核施工单的权限",
-                code=status.HTTP_403_FORBIDDEN,
-            )
-
     def _build_create_payload(
-        self,
         request,
         *,
         sales_order_id,
@@ -97,28 +45,13 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=["post"])
     @handle_flow_errors(message_prefix="创建失败：")
     def create_from_sales_order(self, request):
-        """
-        从客户订单创建施工单
-
-        请求体：
-        {
-            "sales_order_id": 123,
-            "production_quantity": 1000,
-            "delivery_date": "2026-03-15",
-            "priority": "normal",
-            "notes": "备注信息",
-            "artwork_ids": [1, 2],  # 可选
-            "die_ids": [3],  # 可选
-            "foiling_plate_ids": [],  # 可选
-            "embossing_plate_ids": []  # 可选
-        }
-        """
-        self._require_permission(
+        """从客户订单创建施工单"""
+        WorkOrderFlowPolicy.require_permission(
             request.user,
             "workorder.add_workorder",
             "无权从客户订单创建施工单",
         )
-        self._ensure_sales_order_visible(
+        WorkOrderFlowPolicy.ensure_sales_order_visible(
             sales_order_id=request.data.get("sales_order_id"),
             user=request.user,
         )
@@ -151,20 +84,9 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
 
     # ========== 批量从客户订单创建施工单 ==========
     @action(detail=False, methods=["post"])
+    @handle_flow_errors(message_prefix="批量创建失败：")
     def create_from_sales_orders(self, request):
-        """
-        批量从客户订单创建施工单
-
-        请求体：
-        {
-            "sales_order_ids": [1, 2, 3],
-            "production_quantity": 1000,  # 可选，所有订单统一使用
-            "delivery_date": "2026-03-15",  # 可选
-            "priority": "normal",  # 可选
-            "notes": "备注信息",  # 可选
-            "allow_partial": false  # 可选，是否允许部分成功，默认 false（全部成功才提交）
-        }
-        """
+        """批量从客户订单创建施工单"""
         sales_order_ids = request.data.get("sales_order_ids") or []
         if not isinstance(sales_order_ids, list) or len(sales_order_ids) == 0:
             return APIResponse.error(
@@ -172,86 +94,20 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        allow_partial = request.data.get("allow_partial", False)
-        try:
-            self._require_permission(
-                request.user,
-                "workorder.add_workorder",
-                "无权从客户订单创建施工单",
+        for sales_order_id in sales_order_ids:
+            WorkOrderFlowPolicy.ensure_sales_order_visible(
+                sales_order_id=sales_order_id,
+                user=request.user,
             )
-            for sales_order_id in sales_order_ids:
-                self._ensure_sales_order_visible(
-                    sales_order_id=sales_order_id,
-                    user=request.user,
-                )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
 
-        created = []
-        failed = []
-
-        # 使用事务包装，确保原子性
-        with transaction.atomic():
-            for sales_order_id in sales_order_ids:
-                try:
-                    work_order = WorkOrderFlowService.create_from_sales_order(
-                        **self._build_create_payload(
-                            request,
-                            sales_order_id=sales_order_id,
-                            additional_data={},
-                        )
-                    )
-                    created.append(
-                        {
-                            "sales_order_id": sales_order_id,
-                            "work_order_id": work_order.id,
-                            "order_number": work_order.order_number,
-                        }
-                    )
-                except ServiceError as e:
-                    if allow_partial:
-                        # 部分成功模式：记录失败但继续
-                        failed.append(
-                            {
-                                "sales_order_id": sales_order_id,
-                                "error": str(e),
-                            }
-                        )
-                    else:
-                        # 严格模式：任何一个失败则全部回滚
-                        transaction.set_rollback(True)
-                        return APIResponse.error(
-                            message=f"批量创建失败，已回滚所有创建：{str(e)}",
-                            code=status.HTTP_400_BAD_REQUEST,
-                            data={
-                                "created_count": len(created),
-                                "failed": {
-                                    "sales_order_id": sales_order_id,
-                                    "error": str(e),
-                                },
-                            },
-                        )
-                except Exception as e:
-                    if allow_partial:
-                        failed.append(
-                            {
-                                "sales_order_id": sales_order_id,
-                                "error": f"创建失败：{str(e)}",
-                            }
-                        )
-                    else:
-                        transaction.set_rollback(True)
-                        return APIResponse.error(
-                            message=f"批量创建失败，已回滚所有创建：{str(e)}",
-                            code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            data={
-                                "created_count": len(created),
-                                "failed": {
-                                    "sales_order_id": sales_order_id,
-                                    "error": f"创建失败：{str(e)}",
-                                },
-                            },
-                        )
+        result = WorkOrderFlowService.create_from_sales_orders_batch(
+            sales_order_ids=sales_order_ids,
+            request_data=request.data,
+            user=request.user,
+            allow_partial=request.data.get("allow_partial", False),
+        )
+        created = result["created"]
+        failed = result["failed"]
 
         message = "批量创建完成"
         if created and not failed:
@@ -271,16 +127,9 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
     @action(detail=True, methods=["post"])
     @handle_flow_errors(message_prefix="提交失败：")
     def submit_approval(self, request, pk=None):
-        """
-        提交施工单审核
-
-        请求体：
-        {
-            "comment": "提交备注"  # 可选
-        }
-        """
+        """提交施工单审核"""
         work_order = self.get_object()
-        self._ensure_work_order_writable(
+        WorkOrderFlowPolicy.ensure_work_order_writable(
             work_order=work_order,
             user=request.user,
         )
@@ -302,16 +151,9 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
     @action(detail=True, methods=["post"])
     @handle_flow_errors(message_prefix="审核失败：")
     def approve(self, request, pk=None):
-        """
-        审核通过施工单（自动触发任务分派）
-
-        请求体：
-        {
-            "comment": "审核意见"  # 可选
-        }
-        """
+        """审核通过施工单（自动触发任务分派）"""
         work_order = self.get_object()
-        self._validate_approval_permissions(
+        WorkOrderFlowPolicy.validate_approval_permissions(
             work_order=work_order,
             user=request.user,
         )
@@ -343,17 +185,10 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
     @action(detail=True, methods=["post"])
     @handle_flow_errors(message_prefix="审核失败：")
     def reject(self, request, pk=None):
-        """
-        审核拒绝施工单
-
-        请求体：
-        {
-            "reason": "拒绝原因（必填）"
-        }
-        """
+        """审核拒绝施工单"""
         work_order = self.get_object()
         reason = request.data.get("reason", "")
-        self._validate_approval_permissions(
+        WorkOrderFlowPolicy.validate_approval_permissions(
             work_order=work_order,
             user=request.user,
         )
@@ -378,51 +213,37 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
 
     # ========== 工具方法：检查并完成施工单 ==========
     @action(detail=True, methods=["post"])
+    @handle_flow_errors(message_prefix="检查失败：")
     def check_completion(self, request, pk=None):
-        """
-        检查施工单是否所有任务都已完成
+        """检查施工单是否所有任务都已完成，如是则标记为已完成"""
+        work_order = self.get_object()
+        WorkOrderFlowPolicy.require_permission(
+            request.user,
+            "workorder.change_workorder",
+            "无权检查施工单完成状态",
+        )
 
-        当所有任务完成时，自动将施工单标记为已完成
-        """
-        try:
-            work_order = self.get_object()
-            self._require_permission(
-                request.user,
-                "workorder.change_workorder",
-                "无权检查施工单完成状态",
+        is_completed = WorkOrderFlowService.check_and_complete_workorder(
+            work_order=work_order
+        )
+
+        if is_completed:
+            serializer = WorkOrderDetailSerializer(work_order)
+            return APIResponse.success(
+                data=serializer.data,
+                message="所有任务已完成，施工单已标记为完成",
             )
-
-            is_completed = WorkOrderFlowService.check_and_complete_workorder(
-                work_order=work_order
-            )
-
-            if is_completed:
-                serializer = WorkOrderDetailSerializer(work_order)
-                return APIResponse.success(
-                    data=serializer.data,
-                    message="所有任务已完成，施工单已标记为完成",
-                )
-            else:
-                return APIResponse.success(
-                    data={"status": "in_progress"},
-                    message="施工单仍在进行中",
-                )
-
-        except Exception as e:
-            return APIResponse.error(
-                message=f"检查失败：{str(e)}",
-                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        else:
+            return APIResponse.success(
+                data={"status": "in_progress"},
+                message="施工单仍在进行中",
             )
 
     # ========== 数据完整性检查 ==========
     @action(detail=True, methods=["get"])
     @handle_flow_errors(message_prefix="检查失败：")
     def check_completeness(self, request, pk=None):
-        """
-        检查施工单数据完整性（提交审核前预校验）
-
-        返回所有验证错误，如果为空则可以提交审核。
-        """
+        """检查施工单数据完整性（提交审核前预校验）"""
         work_order = self.get_object()
         errors = work_order.validate_before_approval()
         return APIResponse.success(
@@ -434,30 +255,14 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
         )
 
     @action(detail=True, methods=["post"])
+    @handle_flow_errors(message_prefix="标记失败：")
     def mark_urgent(self, request, pk=None):
-        if not request.user.is_superuser and not request.user.has_perm(
-            "workorder.change_workorder"
-        ):
-            return APIResponse.error(
-                message="无权标记紧急施工单",
-                code=status.HTTP_403_FORBIDDEN,
-            )
-        reason = (request.data.get("reason") or "").strip()
-        if not reason:
-            return APIResponse.error(
-                message="请输入紧急原因",
-                code=status.HTTP_400_BAD_REQUEST,
-            )
-
+        """标记施工单为紧急"""
         work_order = self.get_object()
-        work_order.priority = "urgent"
-        work_order.urgency_reason = reason
-        work_order.save(update_fields=["priority", "urgency_reason"])
-        WorkOrderApprovalLog.objects.create(
+        updated_work_order = WorkOrderFlowService.mark_urgent(
             work_order=work_order,
-            action_type="mark_urgent",
-            action_by=request.user,
-            comments=reason,
+            reason=request.data.get("reason", ""),
+            user=request.user,
         )
-        serializer = WorkOrderDetailSerializer(work_order)
+        serializer = WorkOrderDetailSerializer(updated_work_order)
         return APIResponse.success(data=serializer.data, message="已标记为紧急施工单")
