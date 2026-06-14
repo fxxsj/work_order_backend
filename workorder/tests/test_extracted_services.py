@@ -47,6 +47,7 @@ from workorder.services.inventory_service import (
     QualityInspectionService,
     StockInService,
 )
+from workorder.services.monitoring import MonitoringStatsService
 from workorder.services.notification_service import (
     NotificationService,
     NotificationTemplateService,
@@ -565,3 +566,112 @@ class TestNotificationTemplateService:
         with pytest.raises(ServiceError) as exc_info:
             NotificationTemplateService.preview_template("not_exists", {})
         assert exc_info.value.code == 404
+
+
+class TestMonitoringStatsService:
+    """监控统计服务测试"""
+
+    def test_execution_time_stats_aggregates_and_sorts(self):
+        execution_times = [
+            {"name": "api/a", "execution_time": 0.1},
+            {"name": "api/a", "execution_time": 0.3},
+            {"name": "api/b", "execution_time": 0.5},
+        ]
+        result = MonitoringStatsService.get_execution_time_stats(execution_times)
+        assert len(result) == 2
+        assert result[0]["endpoint"] == "api/b"
+        assert result[0]["avg_time"] == 0.5
+        assert result[1]["count"] == 2
+        assert result[1]["avg_time"] == 0.2
+
+    def test_get_alert_settings_structure(self):
+        data = MonitoringStatsService.get_alert_settings()
+        assert "performance_alerts" in data
+        assert "business_alerts" in data
+        assert "notification_channels" in data
+        assert "email" in data["notification_channels"]
+
+    def test_get_alerts(self, monkeypatch):
+        monkeypatch.setattr(
+            "workorder.services.monitoring.monitoring_service.performance_monitor.get_performance_stats",
+            lambda: {"error_rate": 10.0},
+        )
+        monkeypatch.setattr(
+            "workorder.services.monitoring.BusinessMetrics.get_system_metrics",
+            staticmethod(
+                lambda: {
+                    "system_resources": {
+                        "cpu_percent": 85.0,
+                        "memory_percent": 90.0,
+                    }
+                }
+            ),
+        )
+        monkeypatch.setattr(
+            "workorder.services.monitoring.BusinessMetrics.get_workorder_metrics",
+            staticmethod(
+                lambda _time_range: {
+                    "time_metrics": {"orders_overdue": 10}
+                }
+            ),
+        )
+
+        alerts = MonitoringStatsService.get_alerts()
+        types = {alert["type"] for alert in alerts}
+        assert "performance" in types
+        assert "resource" in types
+        assert "business" in types
+
+    def test_get_productivity_trends(self):
+        trends = MonitoringStatsService.get_productivity_trends(days=7)
+        assert len(trends) == 7
+        assert "date" in trends[0]
+
+    def test_get_quality_metrics(self, db, test_work_order):
+        process = Process.objects.create(name="质检工序", code="QC")
+        wop = WorkOrderProcess.objects.create(
+            work_order=test_work_order, process=process, sequence=10
+        )
+        WorkOrderTask.objects.create(
+            work_order_process=wop,
+            task_type="quality_check",
+            work_content="质检",
+            production_quantity=100,
+            completed_quantity=90,
+            defective_quantity=5,
+        )
+        data = MonitoringStatsService.get_quality_metrics(days=30)
+        assert "defect_stats" in data
+        assert data["defect_stats"]["total_defects"] == 5
+        assert 0 <= data["quality_score"] <= 100
+
+    def test_get_operations_dashboard(self, db):
+        data = MonitoringStatsService.get_operations_dashboard()
+        assert "unassigned_tasks" in data
+        assert "pending_procurement" in data
+        assert "finance" in data
+        assert "inventory_consistency" in data
+        assert "generated_at" in data
+
+    def test_get_resource_usage_structure(self):
+        data = MonitoringStatsService.get_resource_usage()
+        assert "cpu" in data
+        assert "memory" in data
+        assert "disk" in data
+        assert "timestamp" in data
+
+    def test_get_user_performance(self, db, finance_user, test_work_order):
+        process = Process.objects.create(name="绩效工序", code="PERF")
+        wop = WorkOrderProcess.objects.create(
+            work_order=test_work_order, process=process, sequence=10
+        )
+        WorkOrderTask.objects.create(
+            work_order_process=wop,
+            task_type="production",
+            work_content="生产",
+            production_quantity=10,
+            status="completed",
+            assigned_to=finance_user,
+        )
+        result = MonitoringStatsService.get_user_performance(days=30)
+        assert any(item.get("assigned_to__username") == "finance_user" for item in result)
