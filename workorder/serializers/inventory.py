@@ -248,8 +248,10 @@ class StockInCreateSerializer(serializers.ModelSerializer):
         work_order = validated_data.get("work_order")
         stock_in = StockIn.objects.create(**validated_data)
 
-        # TODO: 自动创建ProductStock记录
-        # 这里需要根据施工单的产品信息创建库存记录
+        # NOTE: Auto-creation of ProductStock records from the work order's
+        # products is deferred. When implemented, it should run inside a
+        # transaction and respect existing inventory balances. See backlog
+        # ticket for inventory auto-creation.
 
         return stock_in
 

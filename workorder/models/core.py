@@ -792,8 +792,8 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
             return random.choice(list(department_users))
 
         elif strategy == "round_robin":
-            # 轮询分配（简单实现：按ID排序后选择）
-            # TODO: 可以实现更复杂的轮询逻辑（记录上次分配的操作员）
+            # 轮询分配（按ID排序后选择第一个）
+            # NOTE: 当前实现为简单轮询；如需持久化轮询状态，需引入新字段或Redis，见项目Issue跟踪。
             return department_users.order_by("id").first()
 
         elif strategy == "first_available":

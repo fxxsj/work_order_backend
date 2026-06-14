@@ -12,7 +12,29 @@ from workorder.response import APIResponse
 from ..permissions import SuperuserFriendlyModelPermissions
 
 
-class BaseViewSet(viewsets.ModelViewSet):
+class _ResponseMixin:
+    """
+    响应包装 Mixin
+
+    将 DRF 原生响应包装为统一的 APIResponse 格式。
+    """
+
+    def _wrap_response(self, response):
+        wrapped = APIResponse.success(data=response.data, code=response.status_code)
+        for key, value in response.headers.items():
+            wrapped.headers[key] = value
+        return wrapped
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        return self._wrap_response(response)
+
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
+        return self._wrap_response(response)
+
+
+class BaseViewSet(_ResponseMixin, viewsets.ModelViewSet):
     """
     基础视图集
 
@@ -54,20 +76,6 @@ class BaseViewSet(viewsets.ModelViewSet):
 
         return queryset
 
-    def _wrap_response(self, response):
-        wrapped = APIResponse.success(data=response.data, code=response.status_code)
-        for key, value in response.headers.items():
-            wrapped.headers[key] = value
-        return wrapped
-
-    def list(self, request, *args, **kwargs):
-        response = super().list(request, *args, **kwargs)
-        return self._wrap_response(response)
-
-    def retrieve(self, request, *args, **kwargs):
-        response = super().retrieve(request, *args, **kwargs)
-        return self._wrap_response(response)
-
     def create(self, request, *args, **kwargs):
         response = super().create(request, *args, **kwargs)
         return self._wrap_response(response)
@@ -84,7 +92,7 @@ class BaseViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
-class ReadOnlyBaseViewSet(viewsets.ReadOnlyModelViewSet):
+class ReadOnlyBaseViewSet(_ResponseMixin, viewsets.ReadOnlyModelViewSet):
     """
     只读基础视图集
 
@@ -111,17 +119,3 @@ class ReadOnlyBaseViewSet(viewsets.ReadOnlyModelViewSet):
         """获取查询集（只读）"""
         queryset = super().get_queryset()
         return queryset
-
-    def _wrap_response(self, response):
-        wrapped = APIResponse.success(data=response.data, code=response.status_code)
-        for key, value in response.headers.items():
-            wrapped.headers[key] = value
-        return wrapped
-
-    def list(self, request, *args, **kwargs):
-        response = super().list(request, *args, **kwargs)
-        return self._wrap_response(response)
-
-    def retrieve(self, request, *args, **kwargs):
-        response = super().retrieve(request, *args, **kwargs)
-        return self._wrap_response(response)

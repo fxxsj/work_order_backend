@@ -18,6 +18,18 @@ from workorder.docs.work_order_tasks_stats import task_export_post_docs
 
 logger = logging.getLogger(__name__)
 
+# Excel 导出主题配置（集中管理颜色、字体、边框等样式常量）
+EXCEL_THEME = {
+    "header_font_color": "FFFFFF",
+    "header_fill": "4472C4",
+    "completed_fill": "C6EFCE",
+    "cancelled_fill": "FFC7CE",
+    "draft_fill": "E2EFDA",
+    "border_style": "thin",
+    "header_height": 25,
+    "max_export": 10000,
+}
+
 
 class TaskExportMixin:
     """
@@ -73,7 +85,7 @@ class TaskExportMixin:
             queryset = self.filter_queryset(self.get_queryset())
 
         # 限制导出数量（防止导出过多数据）
-        max_export = 10000
+        max_export = EXCEL_THEME["max_export"]
         if queryset.count() > max_export:
             return APIResponse.error(
                 f"导出数据量过大（{queryset.count()}条），最多支持导出{max_export}条",
@@ -105,16 +117,16 @@ class TaskExportMixin:
         }
 
         # 设置列标题
-        header_style = Font(bold=True, color="FFFFFF")
+        header_style = Font(bold=True, color=EXCEL_THEME["header_font_color"])
         header_fill = PatternFill(
-            start_color="4472C4", end_color="4472C4", fill_type="solid"
+            start_color=EXCEL_THEME["header_fill"], end_color=EXCEL_THEME["header_fill"], fill_type="solid"
         )
         header_alignment = Alignment(horizontal="center", vertical="center")
         border = Border(
-            left=Side(style="thin"),
-            right=Side(style="thin"),
-            top=Side(style="thin"),
-            bottom=Side(style="thin"),
+            left=Side(style=EXCEL_THEME["border_style"]),
+            right=Side(style=EXCEL_THEME["border_style"]),
+            top=Side(style=EXCEL_THEME["border_style"]),
+            bottom=Side(style=EXCEL_THEME["border_style"]),
         )
 
         for col_idx, col_key in enumerate(columns, 1):
@@ -152,15 +164,15 @@ class TaskExportMixin:
                 if columns[col_idx - 1] == "status":
                     if task.status == "completed":
                         cell.fill = PatternFill(
-                            start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"
+                            start_color=EXCEL_THEME["completed_fill"], end_color=EXCEL_THEME["completed_fill"], fill_type="solid"
                         )
                     elif task.status == "cancelled":
                         cell.fill = PatternFill(
-                            start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"
+                            start_color=EXCEL_THEME["cancelled_fill"], end_color=EXCEL_THEME["cancelled_fill"], fill_type="solid"
                         )
                     elif task.status == "draft":
                         cell.fill = PatternFill(
-                            start_color="E2EFDA", end_color="E2EFDA", fill_type="solid"
+                            start_color=EXCEL_THEME["draft_fill"], end_color=EXCEL_THEME["draft_fill"], fill_type="solid"
                         )
 
             row_idx += 1
@@ -169,7 +181,7 @@ class TaskExportMixin:
         ws.freeze_panes = "A2"
 
         # 设置行高
-        ws.row_dimensions[1].height = 25
+        ws.row_dimensions[1].height = EXCEL_THEME["header_height"]
 
         # 生成文件名
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

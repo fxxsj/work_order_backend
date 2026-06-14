@@ -108,7 +108,7 @@ class WorkOrderModelTest(TestCase):
         # 注意：当前版本未实现自动完成逻辑
         # 施工单保持 in_progress 状态，需要手动完成
         self.assertEqual(work_order.status, 'in_progress')
-        # TODO: 实现自动完成逻辑后更新此测试
+        self.skipTest('Auto-complete logic not yet implemented')
 
 
 class WorkOrderProcessModelTest(TestCase):

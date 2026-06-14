@@ -105,7 +105,7 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
 
     def test_supervisor_can_see_department_related_orders(self):
         """测试生产主管可以看到相关部门的施工单"""
-        # TODO: 实现生产主管可以看到相关部门任务时的测试
+        self.skipTest("Supervisor department-scoped view not yet implemented")
         pass
 
     def test_workorder_editor_can_read_related_customers_without_customer_permission(

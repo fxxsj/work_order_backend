@@ -260,6 +260,23 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
     ]
     ordering = ["-created_at"]
 
+    MAX_OPERATOR_CENTER_LIMIT = 500
+
+    def _build_service_error_response(self, e: ServiceError) -> dict:
+        """Build a standardized error response dict from a ServiceError."""
+        error_response = {
+            "detail": str(e),
+            "code": "error",
+        }
+        if e.data:
+            if e.data.get("current_owner"):
+                error_response["current_owner"] = e.data["current_owner"]
+            if e.data.get("task_id"):
+                error_response["task_id"] = e.data["task_id"]
+        retry_info = TaskAssignmentService.get_retry_suggestion(e)
+        error_response["retry"] = retry_info
+        return error_response
+
     def _wrap_response(self, response):
         wrapped = APIResponse.success(data=response.data, code=response.status_code)
         for key, value in response.headers.items():
@@ -445,23 +462,7 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             )
 
         except ServiceError as e:
-            # 构建错误响应
-            error_response = {
-                "detail": str(e),
-                "code": "error",
-            }
-
-            # 如果有额外数据（如冲突信息），添加到响应
-            if e.data:
-                if e.data.get("current_owner"):
-                    error_response["current_owner"] = e.data["current_owner"]
-                if e.data.get("task_id"):
-                    error_response["task_id"] = e.data["task_id"]
-
-            # 添加重试建议
-            retry_info = TaskAssignmentService.get_retry_suggestion(e)
-            error_response["retry"] = retry_info
-
+            error_response = self._build_service_error_response(e)
             return APIResponse.error(
                 error_response.get("detail", "请求失败"),
                 code=e.code,
@@ -569,23 +570,7 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             )
 
         except ServiceError as e:
-            # 构建错误响应
-            error_response = {
-                "detail": str(e),
-                "code": "error",
-            }
-
-            # 如果有额外数据（如冲突信息），添加到响应
-            if e.data:
-                if e.data.get("current_owner"):
-                    error_response["current_owner"] = e.data["current_owner"]
-                if e.data.get("task_id"):
-                    error_response["task_id"] = e.data["task_id"]
-
-            # 添加重试建议
-            retry_info = TaskAssignmentService.get_retry_suggestion(e)
-            error_response["retry"] = retry_info
-
+            error_response = self._build_service_error_response(e)
             return APIResponse.error(
                 error_response.get("detail", "请求失败"),
                 code=e.code,
@@ -745,7 +730,9 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
                 },
             })
 
-    def _get_operator_center_limit(self, param_name, default, max_value=500):
+    def _get_operator_center_limit(self, param_name, default, max_value=None):
+        if max_value is None:
+            max_value = self.MAX_OPERATOR_CENTER_LIMIT
         raw_value = self.request.query_params.get(param_name)
         if raw_value in (None, ""):
             return default

@@ -12,8 +12,7 @@ import logging
 from decimal import Decimal
 
 from django.db import models
-from django.db.models import Avg, Count, F, Max, Q, Sum
-from django.utils import timezone
+from django.db.models import Count, Q, Sum
 from django_filters import CharFilter, DateFilter, FilterSet, NumberFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
@@ -52,12 +51,10 @@ from ..models.core import (
     WorkOrder,
     WorkOrderMaterial,
     WorkOrderProcess,
-    WorkOrderProduct,
     WorkOrderTask,
 )
 from ..models.materials import Material
 from ..models.products import Product, ProductMaterial
-from ..models.sales import SalesOrder
 from ..permissions import (
     SuperuserFriendlyModelPermissions,
     WorkOrderDataPermission,
@@ -66,7 +63,7 @@ from ..permissions import (
     WorkOrderTaskPermission,
 )
 from ..permission_utils import PermissionCache
-from ..permissions.permission_utils import is_manager_user, is_sales_user
+from ..permissions.permission_utils import is_manager_user
 from ..serializers.base import ProcessSerializer
 from ..serializers.core import (
     ProcessLogSerializer,
@@ -78,6 +75,10 @@ from ..serializers.core import (
     WorkOrderProcessUpdateSerializer,
     WorkOrderProductSerializer,
     WorkOrderTaskSerializer,
+)
+from ..services.work_order_statistics_service import (
+    SalesOrderCandidateService,
+    WorkOrderStatisticsService,
 )
 from ..services.task_sync_service import TaskSyncService
 from ..services.service_errors import ServiceError
@@ -527,326 +528,20 @@ class WorkOrderViewSet(BaseViewSet):
     @work_order_statistics_docs
     def statistics(self, request):
         """统计数据（增强版：包含任务统计和生产效率分析）"""
-        from datetime import timedelta
-
         queryset = self.filter_queryset(self.get_queryset())
-
-        total_count = queryset.count()
-
-        # 状态统计：确保所有状态都有数据，即使数量为0
-        status_stats = list(
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
-        )
-        # 确保所有状态都包含在内
-        all_statuses = ["pending", "in_progress", "paused", "completed", "cancelled"]
-        status_dict = {item["status"]: item["count"] for item in status_stats}
-        status_statistics = [
-            {"status": status, "count": status_dict.get(status, 0)}
-            for status in all_statuses
-        ]
-
-        # 优先级统计：确保所有优先级都有数据，即使数量为0
-        priority_stats = list(
-            queryset.values("priority").annotate(count=Count("id")).order_by("priority")
-        )
-        # 确保所有优先级都包含在内
-        all_priorities = ["low", "normal", "high", "urgent"]
-        priority_dict = {item["priority"]: item["count"] for item in priority_stats}
-        priority_statistics = [
-            {"priority": priority, "count": priority_dict.get(priority, 0)}
-            for priority in all_priorities
-        ]
-
-        # 即将到期的订单（7天内）
-        upcoming_deadline = queryset.filter(
-            delivery_date__lte=timezone.now().date() + timedelta(days=7),
-            status__in=["pending", "in_progress"],
-        ).count()
-
-        # 未审核施工单数量（仅业务员可见，只统计自己负责的）
-        pending_approval_count = 0
-        if is_sales_user(request.user):
-            pending_approval_count = queryset.filter(
-                approval_status="submitted", customer__salesperson=request.user
-            ).count()
-
-        # ========== 新增：任务统计 ==========
-        from ..models.core import WorkOrderProcess, WorkOrderTask
-
-        # 任务总数统计
-        all_tasks = WorkOrderTask.objects.filter(
-            work_order_process__work_order__in=queryset
-        )
-        task_total_count = all_tasks.count()
-
-        # 任务状态统计
-        task_status_stats = list(
-            all_tasks.values("status").annotate(count=Count("id")).order_by("status")
-        )
-        all_task_statuses = ["pending", "in_progress", "completed", "cancelled"]
-        task_status_dict = {item["status"]: item["count"] for item in task_status_stats}
-        task_status_statistics = [
-            {"status": status, "count": task_status_dict.get(status, 0)}
-            for status in all_task_statuses
-        ]
-
-        # 任务类型统计
-        task_type_stats = list(
-            all_tasks.values("task_type")
-            .annotate(count=Count("id"))
-            .order_by("task_type")
-        )
-        task_type_statistics = [
-            {"task_type": item["task_type"], "count": item["count"]}
-            for item in task_type_stats
-        ]
-
-        # 按部门统计任务
-        task_dept_stats = list(
-            all_tasks.filter(assigned_department__isnull=False)
-            .values("assigned_department__name")
-            .annotate(
-                count=Count("id"), completed=Count("id", filter=Q(status="completed"))
-            )
-            .order_by("-count")
-        )
-        task_department_statistics = [
-            {
-                "department": item["assigned_department__name"],
-                "total": item["count"],
-                "completed": item["completed"],
-                "completion_rate": (
-                    round(item["completed"] / item["count"] * 100, 2)
-                    if item["count"] > 0
-                    else 0
-                ),
-            }
-            for item in task_dept_stats
-        ]
-
-        # ========== 新增：生产效率分析 ==========
-
-        # 工序完成率统计
-        all_processes = WorkOrderProcess.objects.filter(work_order__in=queryset)
-        process_total = all_processes.count()
-        process_completed = all_processes.filter(status="completed").count()
-        process_completion_rate = (
-            round(process_completed / process_total * 100, 2)
-            if process_total > 0
-            else 0
-        )
-
-        # 平均完成时间（已完成工序）
-        completed_processes = all_processes.filter(
-            status="completed",
-            actual_start_time__isnull=False,
-            actual_end_time__isnull=False,
-        )
-        avg_completion_time = None
-        if completed_processes.exists():
-            # 计算平均完成时间（小时）
-            completion_times = []
-            for process in completed_processes:
-                if process.actual_start_time and process.actual_end_time:
-                    delta = process.actual_end_time - process.actual_start_time
-                    completion_times.append(delta.total_seconds() / 3600)  # 转换为小时
-
-            if completion_times:
-                avg_completion_time = round(
-                    sum(completion_times) / len(completion_times), 2
-                )
-
-        # 任务完成率统计
-        task_completed = all_tasks.filter(status="completed").count()
-        task_completion_rate = (
-            round(task_completed / task_total_count * 100, 2)
-            if task_total_count > 0
-            else 0
-        )
-
-        # 不良品率统计（已完成任务）
-        completed_tasks = all_tasks.filter(status="completed")
-        total_production_quantity = completed_tasks.aggregate(
-            total=Sum("production_quantity", default=0)
-        )["total"]
-        total_defective_quantity = completed_tasks.aggregate(
-            total=Sum("quantity_defective", default=0)
-        )["total"]
-        defective_rate = (
-            round(total_defective_quantity / total_production_quantity * 100, 2)
-            if total_production_quantity > 0
-            else 0
-        )
-
-        # 按客户统计
-        customer_stats = list(
-            queryset.values("customer__name")
-            .annotate(
-                count=Count("id"), completed=Count("id", filter=Q(status="completed"))
-            )
-            .order_by("-count")[:10]  # 前10个客户
-        )
-        customer_statistics = [
-            {
-                "customer": item["customer__name"],
-                "total": item["count"],
-                "completed": item["completed"],
-                "completion_rate": (
-                    round(item["completed"] / item["count"] * 100, 2)
-                    if item["count"] > 0
-                    else 0
-                ),
-            }
-            for item in customer_stats
-        ]
-
-        # 按产品统计
-        from ..models.core import WorkOrderProduct
-
-        product_stats = list(
-            WorkOrderProduct.objects.filter(work_order__in=queryset)
-            .values("product__name", "product__code")
-            .annotate(
-                count=Count("work_order", distinct=True), total_quantity=Sum("quantity")
-            )
-            .order_by("-count")[:10]  # 前10个产品
-        )
-        product_statistics = [
-            {
-                "product_name": item["product__name"],
-                "product_code": item["product__code"],
-                "order_count": item["count"],
-                "total_quantity": item["total_quantity"],
-            }
-            for item in product_stats
-        ]
-
-        return APIResponse.success(
-            data={
-                # 基础统计
-                "total_count": total_count,
-                "status_statistics": status_statistics,
-                "priority_statistics": priority_statistics,
-                "upcoming_deadline_count": upcoming_deadline,
-                "pending_approval_count": pending_approval_count,
-                # 任务统计
-                "task_statistics": {
-                    "total_count": task_total_count,
-                    "status_statistics": task_status_statistics,
-                    "type_statistics": task_type_statistics,
-                    "department_statistics": task_department_statistics,
-                    "completion_rate": task_completion_rate,
-                },
-                # 生产效率分析
-                "efficiency_analysis": {
-                    "process_completion_rate": process_completion_rate,
-                    "process_total": process_total,
-                    "process_completed": process_completed,
-                    "avg_completion_time_hours": avg_completion_time,
-                    "task_completion_rate": task_completion_rate,
-                    "defective_rate": defective_rate,
-                    "total_production_quantity": total_production_quantity,
-                    "total_defective_quantity": total_defective_quantity,
-                },
-                # 业务分析
-                "business_analysis": {
-                    "customer_statistics": customer_statistics,
-                    "product_statistics": product_statistics,
-                },
-            }
-        )
+        data = WorkOrderStatisticsService.get_dashboard_stats(queryset, request.user)
+        return APIResponse.success(data=data)
 
     @action(detail=False, methods=["get"])
     def sales_order_candidates(self, request):
         """返回可关联到施工单的客户订单候选及其可用产品。"""
         exclude_work_order_id = request.query_params.get("exclude_work_order_id")
-        include_sales_order_id = None
-        excluded_work_order_id = None
-        if exclude_work_order_id:
-            try:
-                excluded_work_order_id = int(exclude_work_order_id)
-            except (TypeError, ValueError):
-                return APIResponse.error(
-                    "exclude_work_order_id 参数无效",
-                    code=status.HTTP_400_BAD_REQUEST,
-                )
-
-            existing_work_order = (
-                WorkOrder.objects.filter(pk=excluded_work_order_id)
-                .only("sales_order_id")
-                .first()
+        try:
+            candidates = SalesOrderCandidateService.get_candidates(
+                exclude_work_order_id, request.user
             )
-            if existing_work_order is not None:
-                include_sales_order_id = existing_work_order.sales_order_id
-
-        queryset = SalesOrder.objects.select_related("customer").prefetch_related(
-            "items__product",
-            "source_work_orders__products__product",
-        )
-        queryset = _scope_sales_orders(queryset, request.user).filter(
-            Q(status__in=["approved", "in_production"]) | Q(pk=include_sales_order_id)
-        )
-
-        candidates = []
-        for sales_order in queryset.order_by("-order_date", "-id"):
-            allocated_quantities_by_item = {}
-            for work_order in sales_order.source_work_orders.all():
-                if excluded_work_order_id and work_order.id == excluded_work_order_id:
-                    continue
-                for product_item in work_order.products.all():
-                    if not product_item.sales_order_item_id:
-                        continue
-                    allocated_quantities_by_item[
-                        product_item.sales_order_item_id
-                    ] = allocated_quantities_by_item.get(
-                        product_item.sales_order_item_id, 0
-                    ) + int(
-                        product_item.quantity or 0
-                    )
-
-            available_products = []
-            for item in sales_order.items.all():
-                if not item.product_id:
-                    continue
-                allocated_quantity = int(
-                    allocated_quantities_by_item.get(item.id, 0) or 0
-                )
-                remaining_quantity = max(
-                    int(item.quantity) - allocated_quantity,
-                    0,
-                )
-                if remaining_quantity <= 0:
-                    continue
-                available_products.append(
-                    {
-                        "sales_order_item_id": item.id,
-                        "product_id": item.product_id,
-                        "product_name": item.product.name if item.product_id else "",
-                        "product_code": item.product.code if item.product_id else "",
-                        "quantity": item.quantity,
-                        "allocated_quantity": allocated_quantity,
-                        "remaining_quantity": remaining_quantity,
-                        "unit": item.unit,
-                    }
-                )
-
-            if not available_products and sales_order.id != include_sales_order_id:
-                continue
-
-            candidates.append(
-                {
-                    "id": sales_order.id,
-                    "order_number": sales_order.order_number,
-                    "customer": sales_order.customer_id,
-                    "customer_name": sales_order.customer.name,
-                    "status": sales_order.status,
-                    "status_display": sales_order.get_status_display(),
-                    "order_date": sales_order.order_date,
-                    "delivery_date": sales_order.delivery_date,
-                    "available_products": available_products,
-                }
-            )
-
+        except ServiceError as exc:
+            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
         return APIResponse.success(data=candidates)
 
     @action(detail=False, methods=["get"])

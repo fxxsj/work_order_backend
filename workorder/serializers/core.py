@@ -170,19 +170,15 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
             return getattr(related, field_name, None)
         return getter
 
-    get_artwork_code = _related_field.__func__('artwork', 'get_full_code', method=True)
-    get_artwork_name = _related_field.__func__('artwork', 'name')
-    get_artwork_confirmed = _related_field.__func__('artwork', 'confirmed')
-    get_die_code = _related_field.__func__('die', 'code')
-    get_die_name = _related_field.__func__('die', 'name')
-    get_product_code = _related_field.__func__('product', 'code')
-    get_product_name = _related_field.__func__('product', 'name')
-    get_material_code = _related_field.__func__('material', 'code')
-    get_material_name = _related_field.__func__('material', 'name')
-    get_foiling_plate_code = _related_field.__func__('foiling_plate', 'code')
-    get_foiling_plate_name = _related_field.__func__('foiling_plate', 'name')
-    get_embossing_plate_code = _related_field.__func__('embossing_plate', 'code')
-    get_embossing_plate_name = _related_field.__func__('embossing_plate', 'name')
+    @staticmethod
+    def _add_related_fields(cls, fields_config):
+        """Register get_xxx getters in bulk for related code/name pairs."""
+        for field_name, relation_name, attr_name, is_method in fields_config:
+            setattr(
+                cls,
+                f"get_{field_name}",
+                cls._related_field(relation_name, attr_name, method=is_method),
+            )
 
     def get_material_purchase_status(self, obj) -> Optional[str]:
         """获取物料采购状态"""
@@ -262,6 +258,26 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
                 },
             }
         return None
+
+
+WorkOrderTaskSerializer._add_related_fields(
+    WorkOrderTaskSerializer,
+    [
+        ("artwork_code", "artwork", "get_full_code", True),
+        ("artwork_name", "artwork", "name", False),
+        ("artwork_confirmed", "artwork", "confirmed", False),
+        ("die_code", "die", "code", False),
+        ("die_name", "die", "name", False),
+        ("product_code", "product", "code", False),
+        ("product_name", "product", "name", False),
+        ("material_code", "material", "code", False),
+        ("material_name", "material", "name", False),
+        ("foiling_plate_code", "foiling_plate", "code", False),
+        ("foiling_plate_name", "foiling_plate", "name", False),
+        ("embossing_plate_code", "embossing_plate", "code", False),
+        ("embossing_plate_name", "embossing_plate", "name", False),
+    ]
+)
 
 
 class TaskAssignmentSerializer(serializers.Serializer):
