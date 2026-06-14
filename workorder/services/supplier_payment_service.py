@@ -10,6 +10,10 @@ from decimal import Decimal
 
 from django.db import transaction
 from django.db.models import Sum
+from django.utils import timezone
+from rest_framework import status
+
+from .service_errors import ServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -84,3 +88,48 @@ class SupplierPaymentService:
         purchase_order.save(
             update_fields=["paid_amount", "payment_status"]
         )
+
+    @staticmethod
+    def submit(payment, user):
+        """提交供应商付款审核。"""
+        if payment.status != "pending":
+            raise ServiceError(
+                "只有待审核状态才能提交",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        payment.submitted_by = user
+        payment.submitted_at = timezone.now()
+        payment.save(update_fields=["submitted_by", "submitted_at"])
+        return payment
+
+    @staticmethod
+    def approve(payment, user):
+        """审核通过供应商付款并回写采购单状态。"""
+        if payment.status != "pending":
+            raise ServiceError(
+                "只有待审核状态才能审核",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        payment.status = "approved"
+        payment.approved_by = user
+        payment.approved_at = timezone.now()
+        payment.save(update_fields=["status", "approved_by", "approved_at"])
+        SupplierPaymentService.apply_payment(payment=payment)
+        return payment
+
+    @staticmethod
+    def reject(payment, user, approval_comment: str = ""):
+        """拒绝供应商付款。"""
+        if payment.status != "pending":
+            raise ServiceError(
+                "只有待审核状态才能拒绝",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        payment.status = "rejected"
+        payment.approved_by = user
+        payment.approved_at = timezone.now()
+        payment.approval_comment = approval_comment
+        payment.save(
+            update_fields=["status", "approved_by", "approved_at", "approval_comment"]
+        )
+        return payment

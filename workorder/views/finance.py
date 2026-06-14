@@ -13,7 +13,7 @@
 
 from decimal import Decimal
 
-from django.db.models import Count, DecimalField, F, Q, Sum, Value
+from django.db.models import DecimalField, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -22,8 +22,15 @@ from rest_framework.decorators import action
 from workorder.permission_utils import PermissionUtils, apply_data_scope
 from workorder.permissions import SuperuserFriendlyModelPermissions
 from workorder.response import APIResponse
-from workorder.services.approval_service import ApprovalService
+from workorder.services.finance_service import (
+    InvoiceService,
+    PaymentPlanService,
+    ProductionCostService,
+    StatementService,
+)
+from workorder.services.payment_service import PaymentService
 from workorder.services.service_errors import ServiceError
+from workorder.services.supplier_payment_service import SupplierPaymentService
 from .mixins import ApprovalTimelineMixin
 from workorder.docs.finance import (
     cost_center_docs,
@@ -270,14 +277,11 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
         cost = self.get_object()
 
         try:
-            cost.auto_calculate_material_cost()
+            ProductionCostService.calculate_material(cost)
             serializer = self.get_serializer(cost)
             return APIResponse.success(data=serializer.data, message="材料成本计算成功")
-        except Exception as e:
-            return APIResponse.error(
-                f"计算失败: {str(e)}",
-                code=status.HTTP_400_BAD_REQUEST,
-            )
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
     @action(detail=True, methods=["post"])
     @production_cost_total_docs
@@ -286,38 +290,19 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
         cost = self.get_object()
 
         try:
-            cost.calculate_total_cost()
+            ProductionCostService.calculate_total(cost)
             serializer = self.get_serializer(cost)
             return APIResponse.success(data=serializer.data, message="总成本计算成功")
-        except Exception as e:
-            return APIResponse.error(
-                f"计算失败: {str(e)}",
-                code=status.HTTP_400_BAD_REQUEST,
-            )
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
     @action(detail=False, methods=["get"])
     @production_cost_stats_docs
     def stats(self, request):
         """成本统计"""
-        # 获取查询参数
         period = request.query_params.get("period")
-
-        queryset = self.get_queryset()
-        if period:
-            queryset = queryset.filter(period=period)
-
-        # 统计数据
-        stats = queryset.aggregate(
-            total_orders=Count("work_order"),
-            total_cost=Sum("total_cost"),
-            total_material=Sum("material_cost"),
-            total_labor=Sum("labor_cost"),
-            total_equipment=Sum("equipment_cost"),
-            total_overhead=Sum("overhead_cost"),
-            total_variance=Sum("variance"),
-        )
-
-        return APIResponse.success(data=stats)
+        data = ProductionCostService.get_stats(self.get_queryset(), period=period)
+        return APIResponse.success(data=data)
 
 
 @invoice_docs
@@ -432,18 +417,12 @@ class InvoiceViewSet(ApprovalTimelineMixin, viewsets.ModelViewSet):
         """提交发票"""
         invoice = self.get_object()
 
-        if invoice.approval_status not in ["draft", "rejected"]:
-            return APIResponse.error(
-                "只有草稿或已拒绝状态的发票可以提交", code=status.HTTP_400_BAD_REQUEST
-            )
-
-        service = ApprovalService(Invoice)
         try:
-            auto_approve = request.data.get("auto_approve", False)
-            invoice = service.submit_for_approval(invoice, request.user, auto_approve=auto_approve)
-            if invoice.status == "draft":
-                invoice.status = "issued"
-            invoice.save(update_fields=["status"])
+            InvoiceService.submit(
+                invoice=invoice,
+                user=request.user,
+                auto_approve=request.data.get("auto_approve", False),
+            )
         except ServiceError as e:
             return APIResponse.error(message=str(e), code=e.code)
 
@@ -456,29 +435,13 @@ class InvoiceViewSet(ApprovalTimelineMixin, viewsets.ModelViewSet):
         """审核发票"""
         invoice = self.get_object()
 
-        if invoice.approval_status != "submitted":
-            return APIResponse.error(
-                "只有已提交状态的发票可以审核", code=status.HTTP_400_BAD_REQUEST
-            )
-
-        approval_comment = request.data.get("approval_comment", "")
-        approved = request.data.get("approved", True)
-
-        service = ApprovalService(Invoice)
         try:
-            if approved:
-                invoice = service.approve(invoice, request.user, approval_comment)
-                invoice.status = "received"
-            else:
-                invoice = service.reject(invoice, request.user, approval_comment, approval_comment)
-                invoice.status = "cancelled"
-                if approval_comment:
-                    invoice.notes = (
-                        f"{invoice.notes}\n审核意见: {approval_comment}"
-                        if invoice.notes
-                        else f"审核意见: {approval_comment}"
-                    )
-            invoice.save(update_fields=["status", "notes"])
+            InvoiceService.approve(
+                invoice=invoice,
+                user=request.user,
+                approved=request.data.get("approved", True),
+                approval_comment=request.data.get("approval_comment", ""),
+            )
         except ServiceError as e:
             return APIResponse.error(message=str(e), code=e.code)
 
@@ -489,52 +452,8 @@ class InvoiceViewSet(ApprovalTimelineMixin, viewsets.ModelViewSet):
     @invoice_summary_docs
     def summary(self, request):
         """发票汇总"""
-        queryset = self.get_queryset()
-        actionable_statuses = ["issued", "sent", "received"]
-        pending_payment_queryset = queryset.filter(
-            status__in=actionable_statuses,
-            received_payment_amount__lt=F("total_amount"),
-        )
-
-        # 统计数据
-        summary = queryset.aggregate(
-            total_count=Count("id"),
-            total_amount=Sum("total_amount"),
-            tax_amount=Sum("tax_amount"),
-            pending_issue_count=Count("id", filter=Q(status="draft")),
-            pending_attachment_count=Count(
-                "id",
-                filter=Q(status__in=actionable_statuses)
-                & (Q(attachment="") | Q(attachment__isnull=True)),
-            ),
-            pending_receipt_count=Count("id", filter=Q(status__in=["issued", "sent"])),
-        )
-        
-        # 兜底空值
-        summary["total_amount"] = summary["total_amount"] or Decimal("0")
-        summary["tax_amount"] = summary["tax_amount"] or Decimal("0")
-        
-        # 由于 received_payment_amount 是一个聚合字段，Django 不允许直接在 aggregate 中对其使用 filter (嵌套聚合)
-        # 所以我们单独计算 pending_payment_count
-        summary["pending_payment_count"] = pending_payment_queryset.count()
-
-        pending_payment_amount = Decimal("0")
-        for _, total_amount, received_amount in pending_payment_queryset.values_list(
-            "id", "total_amount", "received_payment_amount"
-        ):
-            gap = (total_amount or Decimal("0")) - (received_amount or Decimal("0"))
-            if gap > 0:
-                pending_payment_amount += gap
-        summary["pending_payment_amount"] = pending_payment_amount
-
-        # 按状态统计
-        status_stats = (
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
-        )
-
-        return APIResponse.success(
-            data={"summary": summary, "by_status": list(status_stats)}
-        )
+        data = InvoiceService.get_summary(self.get_queryset())
+        return APIResponse.success(data=data)
 
 
 @payment_docs
@@ -640,39 +559,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
     @payment_summary_docs
     def summary(self, request):
         """收款汇总"""
-        queryset = self.get_queryset()
-
-        # 统计数据
-        summary = queryset.aggregate(
-            total_count=Count("id"),
-            total_amount=Sum("amount"),
-            applied_amount=Sum("applied_amount"),
-            remaining_amount=Sum("remaining_amount"),
-            missing_invoice_link_count=Count(
-                "id", filter=Q(invoice__isnull=True) & Q(sales_order__isnull=False)
-            ),
-        )
-        
-        # 兜底空值
-        summary["total_amount"] = summary["total_amount"] or Decimal("0")
-        summary["applied_amount"] = summary["applied_amount"] or Decimal("0")
-        summary["remaining_amount"] = summary["remaining_amount"] or Decimal("0")
-        
-        summary["pending_writeoff_count"] = queryset.filter(remaining_amount__gt=0).count()
-        summary["pending_writeoff_amount"] = queryset.filter(
-            remaining_amount__gt=0
-        ).aggregate(total=Sum("remaining_amount"))["total"] or Decimal("0")
-
-        # 按收款方式统计
-        method_stats = (
-            queryset.values("payment_method")
-            .annotate(count=Count("id"), total=Sum("amount"))
-            .order_by("payment_method")
-        )
-
-        return APIResponse.success(
-            data={"summary": summary, "by_method": list(method_stats)}
-        )
+        data = PaymentService.get_summary(self.get_queryset())
+        return APIResponse.success(data=data)
 
 
 @payment_plan_docs
@@ -746,41 +634,8 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def summary(self, request):
         """收款计划汇总"""
-        queryset = self.get_queryset()
-        today = timezone.localdate()
-        summary = queryset.aggregate(
-            total_count=Count("id"),
-            planned_amount=Sum("plan_amount"),
-            paid_amount=Sum("paid_amount"),
-            pending_count=Count("id", filter=Q(status="pending")),
-            partial_count=Count("id", filter=Q(status="partial")),
-            completed_count=Count("id", filter=Q(status="completed")),
-            overdue_count=Count(
-                "id", filter=Q(plan_date__lt=today) & ~Q(status="completed")
-            ),
-            due_today_count=Count(
-                "id", filter=Q(plan_date=today) & ~Q(status="completed")
-            ),
-        )
-        remaining_amount = Decimal("0")
-        overdue_amount = Decimal("0")
-        for plan_amount, paid_amount, plan_date, plan_status in queryset.values_list(
-            "plan_amount", "paid_amount", "plan_date", "status"
-        ):
-            gap = (plan_amount or Decimal("0")) - (paid_amount or Decimal("0"))
-            if gap <= 0:
-                continue
-            remaining_amount += gap
-            if plan_status != "completed" and plan_date and plan_date < today:
-                overdue_amount += gap
-        summary["remaining_amount"] = remaining_amount
-        summary["overdue_amount"] = overdue_amount
-        by_status = (
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
-        )
-        return APIResponse.success(
-            data={"summary": summary, "by_status": list(by_status)}
-        )
+        data = PaymentPlanService.get_summary(self.get_queryset())
+        return APIResponse.success(data=data)
 
 
 @statement_docs
@@ -879,27 +734,16 @@ class StatementViewSet(viewsets.ModelViewSet):
         """确认对账单"""
         statement = self.get_object()
 
-        if statement.status not in ["draft", "sent"]:
-            return APIResponse.error(
-                "只有草稿或已发送状态的对账单可以确认", code=status.HTTP_400_BAD_REQUEST
+        try:
+            StatementService.confirm(
+                statement=statement,
+                user=request.user,
+                confirmed=request.data.get("confirmed", True),
+                confirmation_notes=request.data.get("confirm_notes")
+                or request.data.get("confirmation_notes"),
             )
-
-        # 获取确认信息
-        confirmed = request.data.get("confirmed", True)
-        confirmation_notes = request.data.get("confirm_notes") or request.data.get(
-            "confirmation_notes"
-        )
-
-        statement.confirmed_by = request.user
-        statement.confirmed_at = timezone.now()
-        statement.confirmation_notes = confirmation_notes
-
-        if confirmed:
-            statement.status = "confirmed"
-        else:
-            statement.status = "disputed"
-
-        statement.save()
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
         serializer = self.get_serializer(statement)
         return APIResponse.success(data=serializer.data, message="对账单确认成功")
@@ -907,145 +751,23 @@ class StatementViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def summary(self, request):
         """对账单汇总"""
-        queryset = self.get_queryset()
-        summary = queryset.aggregate(
-            total_count=Count("id"),
-            pending_confirm_count=Count("id", filter=Q(status__in=["draft", "sent"])),
-            disputed_count=Count("id", filter=Q(status="disputed")),
-            confirmed_count=Count("id", filter=Q(status="confirmed")),
-            total_debit=Sum("total_debit"),
-            total_credit=Sum("total_credit"),
-            closing_balance=Sum("closing_balance"),
-        )
-        summary["total_debit"] = summary["total_debit"] or Decimal("0")
-        summary["total_credit"] = summary["total_credit"] or Decimal("0")
-        summary["closing_balance"] = summary["closing_balance"] or Decimal("0")
-        by_status = (
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
-        )
-        return APIResponse.success(
-            data={"summary": summary, "by_status": list(by_status)}
-        )
+        data = StatementService.get_summary(self.get_queryset())
+        return APIResponse.success(data=data)
 
     @action(detail=False, methods=["get"])
     @statement_generate_docs
     def generate(self, request):
         """生成对账单"""
-        # 获取参数
-        customer_id = request.query_params.get("customer")
-        supplier_id = request.query_params.get("supplier")
-        period = request.query_params.get("period")
-
-        if not period:
-            return APIResponse.error(
-                "必须指定对账周期", code=status.HTTP_400_BAD_REQUEST
-            )
-
-        # 解析周期 (格式: 2024-01)
         try:
-            year, month = period.split("-")
-            from calendar import monthrange
-            from datetime import date
-
-            start_date = date(int(year), int(month), 1)
-            last_day = monthrange(int(year), int(month))[1]
-            end_date = date(int(year), int(month), last_day)
-        except Exception:
-            return APIResponse.error(
-                "周期格式错误，应为 YYYY-MM", code=status.HTTP_400_BAD_REQUEST
+            data = StatementService.generate(
+                customer_id=request.query_params.get("customer"),
+                supplier_id=request.query_params.get("supplier"),
+                period=request.query_params.get("period"),
             )
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
 
-        statement_type = None
-        opening_balance = 0
-        total_debit = 0
-        total_credit = 0
-
-        if customer_id:
-            statement_type = "customer"
-
-            previous = (
-                Statement.objects.filter(
-                    statement_type="customer",
-                    customer_id=customer_id,
-                    period__lt=period,
-                )
-                .order_by("-period")
-                .only("closing_balance")
-                .first()
-            )
-            opening_balance = previous.closing_balance if previous else 0
-
-            from workorder.models import SalesOrder
-
-            orders = (
-                SalesOrder.objects.filter(
-                    customer_id=customer_id,
-                    order_date__gte=start_date,
-                    order_date__lte=end_date,
-                )
-                .exclude(status__in=["draft", "rejected", "cancelled"])
-                .only("total_amount")
-            )
-            total_debit = orders.aggregate(total=Sum("total_amount"))["total"] or 0
-
-            payments = Payment.objects.filter(
-                customer_id=customer_id,
-                payment_date__gte=start_date,
-                payment_date__lte=end_date,
-            ).only("amount")
-            total_credit = payments.aggregate(total=Sum("amount"))["total"] or 0
-
-        elif supplier_id:
-            statement_type = "supplier"
-
-            previous = (
-                Statement.objects.filter(
-                    statement_type="supplier",
-                    supplier_id=supplier_id,
-                    period__lt=period,
-                )
-                .order_by("-period")
-                .only("closing_balance")
-                .first()
-            )
-            opening_balance = previous.closing_balance if previous else 0
-
-            from workorder.models import PurchaseOrder
-
-            purchase_orders = (
-                PurchaseOrder.objects.filter(
-                    supplier_id=supplier_id,
-                    created_at__date__gte=start_date,
-                    created_at__date__lte=end_date,
-                )
-                .exclude(status="cancelled")
-                .only("total_amount")
-            )
-            total_debit = (
-                purchase_orders.aggregate(total=Sum("total_amount"))["total"] or 0
-            )
-
-            # NOTE: 当前系统未建模“供应商付款”记录，本期贷方暂不计算。
-            total_credit = 0
-        else:
-            return APIResponse.error(
-                "必须指定客户或供应商", code=status.HTTP_400_BAD_REQUEST
-            )
-
-        closing_balance = opening_balance + total_debit - total_credit
-
-        return APIResponse.success(
-            data={
-                "statement_type": statement_type,
-                "period": period,
-                "start_date": start_date,
-                "end_date": end_date,
-                "opening_balance": opening_balance,
-                "total_debit": total_debit,
-                "total_credit": total_credit,
-                "closing_balance": closing_balance,
-            }
-        )
+        return APIResponse.success(data=data)
 
 
 class SupplierPaymentViewSet(viewsets.ModelViewSet):
@@ -1073,38 +795,32 @@ class SupplierPaymentViewSet(viewsets.ModelViewSet):
     def submit(self, request, pk=None):
         """提交付款审核"""
         payment = self.get_object()
-        if payment.status != "pending":
-            return APIResponse.error("只有待审核状态才能提交", code=status.HTTP_400_BAD_REQUEST)
-        payment.status = "pending"
-        payment.submitted_by = request.user
-        payment.submitted_at = timezone.now()
-        payment.save(update_fields=["submitted_by", "submitted_at"])
+        try:
+            SupplierPaymentService.submit(payment=payment, user=request.user)
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
         return APIResponse.success(data=SupplierPaymentSerializer(payment).data)
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         """审核通过付款"""
         payment = self.get_object()
-        if payment.status != "pending":
-            return APIResponse.error("只有待审核状态才能审核", code=status.HTTP_400_BAD_REQUEST)
-        payment.status = "approved"
-        payment.approved_by = request.user
-        payment.approved_at = timezone.now()
-        payment.save(update_fields=["status", "approved_by", "approved_at"])
-        # 回写采购单付款状态
-        from workorder.services.supplier_payment_service import SupplierPaymentService
-        SupplierPaymentService.apply_payment(payment=payment)
+        try:
+            SupplierPaymentService.approve(payment=payment, user=request.user)
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
         return APIResponse.success(data=SupplierPaymentSerializer(payment).data)
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
         """拒绝付款"""
         payment = self.get_object()
-        if payment.status != "pending":
-            return APIResponse.error("只有待审核状态才能拒绝", code=status.HTTP_400_BAD_REQUEST)
-        payment.status = "rejected"
-        payment.approved_by = request.user
-        payment.approved_at = timezone.now()
-        payment.approval_comment = request.data.get("approval_comment", "")
-        payment.save(update_fields=["status", "approved_by", "approved_at", "approval_comment"])
+        try:
+            SupplierPaymentService.reject(
+                payment=payment,
+                user=request.user,
+                approval_comment=request.data.get("approval_comment", ""),
+            )
+        except ServiceError as e:
+            return APIResponse.error(message=str(e), code=e.code, data=e.data)
         return APIResponse.success(data=SupplierPaymentSerializer(payment).data)

@@ -9,7 +9,7 @@ import logging
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -134,3 +134,36 @@ class PaymentService:
                 remaining = Decimal("0")
 
             plan.update_status()  # 内部调用 save()
+
+    @staticmethod
+    def get_summary(queryset) -> dict:
+        """收款汇总统计。"""
+        summary = queryset.aggregate(
+            total_count=Count("id"),
+            total_amount=Sum("amount"),
+            applied_amount=Sum("applied_amount"),
+            remaining_amount=Sum("remaining_amount"),
+            missing_invoice_link_count=Count(
+                "id", filter=Q(invoice__isnull=True) & Q(sales_order__isnull=False)
+            ),
+        )
+
+        summary["total_amount"] = summary["total_amount"] or Decimal("0")
+        summary["applied_amount"] = summary["applied_amount"] or Decimal("0")
+        summary["remaining_amount"] = summary["remaining_amount"] or Decimal("0")
+
+        summary["pending_writeoff_count"] = queryset.filter(remaining_amount__gt=0).count()
+        summary["pending_writeoff_amount"] = (
+            queryset.filter(remaining_amount__gt=0).aggregate(total=Sum("remaining_amount"))[
+                "total"
+            ]
+            or Decimal("0")
+        )
+
+        method_stats = (
+            queryset.values("payment_method")
+            .annotate(count=Count("id"), total=Sum("amount"))
+            .order_by("payment_method")
+        )
+
+        return {"summary": summary, "by_method": list(method_stats)}
