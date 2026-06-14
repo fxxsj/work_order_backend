@@ -63,7 +63,7 @@ from ..permissions import (
     WorkOrderTaskPermission,
 )
 from ..permission_utils import PermissionCache
-from ..permissions.permission_utils import is_manager_user
+from ..permissions.permission_utils import is_manager_user, is_sales_user
 from ..serializers.base import ProcessSerializer
 from ..serializers.core import (
     ProcessLogSerializer,

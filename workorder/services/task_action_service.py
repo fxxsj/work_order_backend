@@ -284,7 +284,6 @@ class TaskActionService:
 
         if task.status == "pending":
             task.status = "in_progress"
-            task.version += 1
             task.save()
 
         TaskLog.objects.create(
@@ -434,7 +433,6 @@ class TaskActionService:
 
         status_before = task.status
         task.status = "cancelled"
-        task.version += 1
         task.save()
 
         log_content = f"取消任务，原因：{cancellation_reason}"

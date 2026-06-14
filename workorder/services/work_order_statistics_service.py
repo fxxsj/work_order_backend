@@ -317,9 +317,9 @@ class SalesOrderCandidateService:
             .select_related("product")
             .annotate(
                 allocated_quantity=Coalesce(Subquery(allocated_subquery), 0),
-                remaining_quantity=F("quantity") - F("allocated_quantity"),
+                remaining_qty=F("quantity") - F("allocated_quantity"),
             )
-            .filter(remaining_quantity__gt=0)
+            .filter(remaining_qty__gt=0)
         )
 
         products_by_sales_order = defaultdict(list)
@@ -332,7 +332,7 @@ class SalesOrderCandidateService:
                     "product_code": item.product.code if item.product_id else "",
                     "quantity": item.quantity,
                     "allocated_quantity": item.allocated_quantity,
-                    "remaining_quantity": item.remaining_quantity,
+                    "remaining_quantity": item.remaining_qty,
                     "unit": item.unit,
                 }
             )

@@ -330,6 +330,12 @@ class WorkOrderFlowService:
         """
         from ..views.sales import _scope_sales_orders
 
+        if not sales_order_ids:
+            raise ServiceError(
+                "sales_order_ids 不能为空",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
         production_quantity = request_data.get("production_quantity")
         delivery_date = request_data.get("delivery_date")
         priority = request_data.get("priority", "normal")
