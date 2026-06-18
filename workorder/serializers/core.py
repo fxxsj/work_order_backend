@@ -180,41 +180,31 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
                 cls._related_field(relation_name, attr_name, method=is_method),
             )
 
+    def _get_work_order_material(self, obj):
+        """获取关联的 WorkOrderMaterial 记录，不存在时返回 None"""
+        if not (obj.material and obj.work_order_process):
+            return None
+        try:
+            return WorkOrderMaterial.objects.get(
+                work_order=obj.work_order_process.work_order, material=obj.material
+            )
+        except WorkOrderMaterial.DoesNotExist:
+            return None
+
     def get_material_purchase_status(self, obj) -> Optional[str]:
         """获取物料采购状态"""
-        if obj.material and obj.work_order_process:
-            try:
-                material_record = WorkOrderMaterial.objects.get(
-                    work_order=obj.work_order_process.work_order, material=obj.material
-                )
-                return material_record.purchase_status
-            except WorkOrderMaterial.DoesNotExist:
-                return None
-        return None
+        material_record = self._get_work_order_material(obj)
+        return material_record.purchase_status if material_record else None
 
     def get_material_size(self, obj) -> Optional[str]:
         """获取开料尺寸（从 WorkOrderMaterial 关联获取）"""
-        if obj.material and obj.work_order_process:
-            try:
-                material_record = WorkOrderMaterial.objects.get(
-                    work_order=obj.work_order_process.work_order, material=obj.material
-                )
-                return material_record.material_size or None
-            except WorkOrderMaterial.DoesNotExist:
-                return None
-        return None
+        material_record = self._get_work_order_material(obj)
+        return (material_record.material_size or None) if material_record else None
 
     def get_material_usage(self, obj) -> Optional[str]:
         """获取物料用量（从 WorkOrderMaterial 关联获取）"""
-        if obj.material and obj.work_order_process:
-            try:
-                material_record = WorkOrderMaterial.objects.get(
-                    work_order=obj.work_order_process.work_order, material=obj.material
-                )
-                return material_record.material_usage or None
-            except WorkOrderMaterial.DoesNotExist:
-                return None
-        return None
+        material_record = self._get_work_order_material(obj)
+        return (material_record.material_usage or None) if material_record else None
 
     def get_work_order_process_info(self, obj) -> Optional[Dict[str, Any]]:
         """获取工序和施工单信息"""

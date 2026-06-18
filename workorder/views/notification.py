@@ -177,7 +177,7 @@ class NotificationFilterSet(django_filters.FilterSet):
         summary="获取通知列表",
         description="返回当前用户的通知列表，仅显示最近30天的通知。",
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response("NotificationListResponse"),
                 description="通知列表",
             )
@@ -239,11 +239,11 @@ class NotificationViewSet(viewsets.GenericViewSet):
         tags=["通知"],
         summary="标记通知为已读",
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response("NotificationMarkReadActionResponse"),
                 description="标记成功",
             ),
-            404: OpenApiResponse(
+            status.HTTP_404_NOT_FOUND: OpenApiResponse(
                 response=standard_error_response("NotificationMarkReadNotFound"),
                 description="通知不存在",
             ),
@@ -270,7 +270,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
         tags=["通知"],
         summary="标记所有通知为已读",
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response("NotificationMarkAllReadResponse"),
                 description="批量标记成功",
             )
@@ -292,11 +292,11 @@ class NotificationViewSet(viewsets.GenericViewSet):
         tags=["通知"],
         summary="删除通知",
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response("NotificationDeleteResponse"),
                 description="删除成功",
             ),
-            404: OpenApiResponse(
+            status.HTTP_404_NOT_FOUND: OpenApiResponse(
                 response=standard_error_response("NotificationDeleteNotFoundResponse"),
                 description="通知不存在",
             ),
@@ -318,7 +318,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
         tags=["通知"],
         summary="删除所有已读通知",
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response("NotificationDeleteAllReadResponse"),
                 description="删除成功",
             )
@@ -337,7 +337,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
         tags=["通知"],
         summary="获取未读通知数量",
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response("NotificationUnreadCountResponse"),
                 description="未读数量",
             )
@@ -356,7 +356,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
         tags=["通知"],
         summary="获取通知统计",
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response("NotificationStatisticsResponse"),
                 description="通知统计",
             )
@@ -376,7 +376,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
         tags=["通知"],
         summary="获取 WebSocket 连接票据",
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response("NotificationWsTicketResponse"),
                 description="连接票据",
             )

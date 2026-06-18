@@ -77,7 +77,7 @@ logger = logging.getLogger(__name__)
             ),
         ],
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response("WorkOrderTaskListResponse"),
                 description="任务列表",
                 examples=[
@@ -121,7 +121,7 @@ logger = logging.getLogger(__name__)
         summary="获取任务详情",
         description="获取指定任务的完整信息，包括关联的施工单、工序、部门和操作员。",
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response(
                     "WorkOrderTaskDetailResponse", WorkOrderTaskSerializer
                 ),
@@ -162,7 +162,7 @@ logger = logging.getLogger(__name__)
                     )
                 ],
             ),
-            404: OpenApiResponse(
+            status.HTTP_404_NOT_FOUND: OpenApiResponse(
                 response=standard_error_response("WorkOrderTaskNotFoundResponse"),
                 description="任务不存在",
             ),
@@ -173,11 +173,11 @@ logger = logging.getLogger(__name__)
         summary="删除任务",
         description="删除指定的任务。只有草稿状态的任务可以被删除。",
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response("WorkOrderTaskDeleteResponse"),
                 description="删除成功",
             ),
-            400: OpenApiResponse(
+            status.HTTP_400_BAD_REQUEST: OpenApiResponse(
                 response=standard_error_response("WorkOrderTaskDeleteErrorResponse"),
                 description="无法删除该任务",
             ),
@@ -557,7 +557,7 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             )
 
             # 重新获取更新后的任务数据
-            task = self.queryset.get(pk=pk)
+            task = self.get_object()
             response_serializer = self.get_serializer(task)
 
             return APIResponse.success(

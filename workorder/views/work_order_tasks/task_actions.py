@@ -80,7 +80,7 @@ class TaskActionsMixin:
             )
         ],
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response(
                     "TaskUpdateQuantityResponse", WorkOrderTaskSerializer
                 ),
@@ -107,15 +107,15 @@ class TaskActionsMixin:
                     )
                 ],
             ),
-            400: OpenApiResponse(
+            status.HTTP_400_BAD_REQUEST: OpenApiResponse(
                 response=standard_error_response("TaskUpdateQuantityBadRequest"),
                 description="请求无效或业务规则验证失败",
             ),
-            403: OpenApiResponse(
+            status.HTTP_403_FORBIDDEN: OpenApiResponse(
                 response=standard_error_response("TaskUpdateQuantityForbidden"),
                 description="权限不足",
             ),
-            409: OpenApiResponse(
+            status.HTTP_409_CONFLICT: OpenApiResponse(
                 response=standard_error_response("TaskUpdateQuantityConflict"),
                 description="并发冲突",
             ),
@@ -196,21 +196,21 @@ class TaskActionsMixin:
             },
         ),
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response(
                     "TaskCompleteResponse", WorkOrderTaskSerializer
                 ),
                 description="完成成功",
             ),
-            400: OpenApiResponse(
+            status.HTTP_400_BAD_REQUEST: OpenApiResponse(
                 response=standard_error_response("TaskCompleteBadRequest"),
                 description="请求无效或业务规则验证失败",
             ),
-            403: OpenApiResponse(
+            status.HTTP_403_FORBIDDEN: OpenApiResponse(
                 response=standard_error_response("TaskCompleteForbidden"),
                 description="权限不足",
             ),
-            409: OpenApiResponse(
+            status.HTTP_409_CONFLICT: OpenApiResponse(
                 response=standard_error_response("TaskCompleteConflict"),
                 description="并发冲突",
             ),

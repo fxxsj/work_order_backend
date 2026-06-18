@@ -145,7 +145,7 @@ class WorkOrderFilterSet(FilterSet):
         summary="获取施工单列表",
         description="返回分页的施工单列表，支持按客户、状态、优先级等条件筛选。",
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response("WorkOrderListResponse"),
                 description="施工单列表",
                 examples=[
@@ -225,7 +225,7 @@ class WorkOrderFilterSet(FilterSet):
             )
         ],
         responses={
-            201: OpenApiResponse(
+            status.HTTP_201_CREATED: OpenApiResponse(
                 response=standard_success_response(
                     "WorkOrderCreateResponse", WorkOrderDetailSerializer
                 ),
@@ -256,7 +256,7 @@ class WorkOrderFilterSet(FilterSet):
                     )
                 ],
             ),
-            400: OpenApiResponse(
+            status.HTTP_400_BAD_REQUEST: OpenApiResponse(
                 response=standard_error_response("WorkOrderCreateBadRequest"),
                 description="请求无效",
             ),
@@ -267,7 +267,7 @@ class WorkOrderFilterSet(FilterSet):
         summary="获取施工单详情",
         description="获取施工单的完整信息，包括关联的任务、产品和工序。",
         responses={
-            200: OpenApiResponse(
+            status.HTTP_200_OK: OpenApiResponse(
                 response=standard_success_response(
                     "WorkOrderDetailResponse", WorkOrderDetailSerializer
                 ),
@@ -315,7 +315,7 @@ class WorkOrderFilterSet(FilterSet):
                     )
                 ],
             ),
-            404: OpenApiResponse(
+            status.HTTP_404_NOT_FOUND: OpenApiResponse(
                 response=standard_error_response("WorkOrderNotFoundResponse"),
                 description="施工单不存在",
             ),

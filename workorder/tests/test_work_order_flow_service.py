@@ -13,6 +13,12 @@ from workorder.models.core import WorkOrder, WorkOrderTask
 from workorder.models.sales import SalesOrder, SalesOrderItem
 from workorder.models.base import Customer, Process
 from workorder.models.products import Product
+from workorder.constants.status import (
+    WorkOrderStatus,
+    WorkOrderApprovalStatus,
+    TaskStatus,
+    SalesOrderStatus,
+)
 from workorder.services.work_order_flow_service import WorkOrderFlowService
 from workorder.services.service_errors import ServiceError
 
@@ -70,7 +76,7 @@ class WorkOrderFlowServiceTest(TestCase):
             order_date=timezone.now().date(),
             delivery_date=timezone.now().date() + timedelta(days=7),
             total_amount=1000.0,
-            status="approved",
+            status=SalesOrderStatus.APPROVED,
             created_by=self.salesperson,
         )
 
@@ -103,8 +109,8 @@ class WorkOrderFlowServiceTest(TestCase):
         self.assertEqual(work_order.delivery_date, self.sales_order.delivery_date)
         self.assertEqual(work_order.production_quantity, 100)
         self.assertEqual(work_order.total_amount, self.sales_order.total_amount)
-        self.assertEqual(work_order.status, "pending")
-        self.assertEqual(work_order.approval_status, "draft")
+        self.assertEqual(work_order.status, WorkOrderStatus.PENDING)
+        self.assertEqual(work_order.approval_status, WorkOrderApprovalStatus.DRAFT)
         self.assertEqual(work_order.products.count(), 1)
         self.assertEqual(work_order.products.first().source_type, "sales_order")
         self.assertEqual(
@@ -119,7 +125,7 @@ class WorkOrderFlowServiceTest(TestCase):
     def test_create_from_sales_order_invalid_status(self):
         """测试客户订单状态不正确时创建失败"""
         # 修改客户订单状态
-        self.sales_order.status = "cancelled"
+        self.sales_order.status = SalesOrderStatus.CANCELLED
         self.sales_order.save()
 
         # 应该抛出错误
@@ -162,7 +168,7 @@ class WorkOrderFlowServiceTest(TestCase):
         )
 
         # 验证状态变更
-        self.assertEqual(updated_work_order.approval_status, "submitted")
+        self.assertEqual(updated_work_order.approval_status, WorkOrderApprovalStatus.SUBMITTED)
 
     def test_create_from_sales_order_with_selected_items(self):
         """测试按选定订单明细创建施工单，并同步客户订单状态"""
@@ -186,7 +192,7 @@ class WorkOrderFlowServiceTest(TestCase):
         self.assertEqual(work_order.products.first().source_type, "sales_order")
         self.assertEqual(work_order.products.first().sales_order_item_id, sales_item.id)
         self.sales_order.refresh_from_db()
-        self.assertEqual(self.sales_order.status, "in_production")
+        self.assertEqual(self.sales_order.status, SalesOrderStatus.IN_PRODUCTION)
 
     def test_create_from_sales_order_allows_split_quantities(self):
         """同一订单明细可按数量拆成多张施工单。"""
@@ -259,7 +265,7 @@ class WorkOrderFlowServiceTest(TestCase):
         )
 
         # 修改状态为已审核
-        work_order.approval_status = "submitted"
+        work_order.approval_status = WorkOrderApprovalStatus.SUBMITTED
         work_order.save()
 
         # 已提交的施工单再次提交审核应该失败
@@ -281,18 +287,18 @@ class WorkOrderFlowServiceTest(TestCase):
             delivery_date=timezone.now().date() + timedelta(days=7),
             priority="normal",
             created_by=self.creator,
-            status="pending",
-            approval_status="submitted",
+            status=WorkOrderStatus.PENDING,
+            approval_status=WorkOrderApprovalStatus.SUBMITTED,
         )
 
         self.sales_order.refresh_from_db()
-        self.assertEqual(self.sales_order.status, "in_production")
+        self.assertEqual(self.sales_order.status, SalesOrderStatus.IN_PRODUCTION)
 
-        work_order.status = "completed"
+        work_order.status = WorkOrderStatus.COMPLETED
         work_order.save()
 
         self.sales_order.refresh_from_db()
-        self.assertEqual(self.sales_order.status, "approved")
+        self.assertEqual(self.sales_order.status, SalesOrderStatus.APPROVED)
 
     def test_work_order_fk_relation_syncs_sales_order_status(self):
         """测试仅通过 sales_order FK 关联时也能同步客户订单状态"""
@@ -304,18 +310,18 @@ class WorkOrderFlowServiceTest(TestCase):
             delivery_date=timezone.now().date() + timedelta(days=7),
             priority="normal",
             created_by=self.creator,
-            status="pending",
-            approval_status="submitted",
+            status=WorkOrderStatus.PENDING,
+            approval_status=WorkOrderApprovalStatus.SUBMITTED,
         )
 
         self.sales_order.refresh_from_db()
-        self.assertEqual(self.sales_order.status, "in_production")
+        self.assertEqual(self.sales_order.status, SalesOrderStatus.IN_PRODUCTION)
 
-        work_order.status = "completed"
+        work_order.status = WorkOrderStatus.COMPLETED
         work_order.save()
 
         self.sales_order.refresh_from_db()
-        self.assertEqual(self.sales_order.status, "approved")
+        self.assertEqual(self.sales_order.status, SalesOrderStatus.APPROVED)
 
     def test_sales_order_related_work_orders_uses_fk_relation(self):
         """测试客户订单读取关联施工单时基于 FK 返回结果。"""
@@ -327,8 +333,8 @@ class WorkOrderFlowServiceTest(TestCase):
             delivery_date=timezone.now().date() + timedelta(days=7),
             priority="normal",
             created_by=self.creator,
-            status="pending",
-            approval_status="submitted",
+            status=WorkOrderStatus.PENDING,
+            approval_status=WorkOrderApprovalStatus.SUBMITTED,
         )
 
         related_ids = {
@@ -359,8 +365,8 @@ class WorkOrderFlowServiceTest(TestCase):
         )
 
         # 验证状态
-        self.assertEqual(updated_work_order.approval_status, "approved")
-        self.assertEqual(updated_work_order.status, "in_progress")
+        self.assertEqual(updated_work_order.approval_status, WorkOrderApprovalStatus.APPROVED)
+        self.assertEqual(updated_work_order.status, WorkOrderStatus.IN_PROGRESS)
         self.assertEqual(updated_work_order.approved_by, self.approver)
         self.assertIsNotNone(updated_work_order.approved_at)
 
@@ -387,7 +393,7 @@ class WorkOrderFlowServiceTest(TestCase):
         )
 
         # 验证状态
-        self.assertEqual(updated_work_order.approval_status, "rejected")
+        self.assertEqual(updated_work_order.approval_status, WorkOrderApprovalStatus.REJECTED)
         self.assertEqual(updated_work_order.approved_by, self.approver)
         self.assertEqual(updated_work_order.approval_comment, "数据不完整")
 
@@ -413,7 +419,7 @@ class WorkOrderFlowServiceTest(TestCase):
         # 完成所有任务
         WorkOrderTask.objects.filter(
             work_order_process__work_order=work_order
-        ).update(status="completed")
+        ).update(status=TaskStatus.COMPLETED)
 
         # 检查并完成
         is_completed = WorkOrderFlowService.check_and_complete_workorder(
@@ -423,7 +429,7 @@ class WorkOrderFlowServiceTest(TestCase):
         # 验证
         self.assertTrue(is_completed)
         work_order.refresh_from_db()
-        self.assertEqual(work_order.status, "completed")
+        self.assertEqual(work_order.status, WorkOrderStatus.COMPLETED)
 
     def test_check_and_complete_workorder_incomplete(self):
         """测试任务未完成时不标记施工单为完成"""
@@ -447,7 +453,7 @@ class WorkOrderFlowServiceTest(TestCase):
             work_order_process__work_order=work_order
         )
         if tasks.exists():
-            tasks.first().status = "completed"
+            tasks.first().status = TaskStatus.COMPLETED
             tasks.first().save()
 
         # 检查并完成
@@ -458,7 +464,7 @@ class WorkOrderFlowServiceTest(TestCase):
         # 验证
         self.assertFalse(is_completed)
         work_order.refresh_from_db()
-        self.assertEqual(work_order.status, "in_progress")
+        self.assertEqual(work_order.status, WorkOrderStatus.IN_PROGRESS)
 
     # ========== 测试状态转换验证 ==========
 
@@ -517,7 +523,7 @@ class WorkOrderFlowIntegrationTest(TestCase):
             order_date=timezone.now().date(),
             delivery_date=timezone.now().date() + timedelta(days=10),
             total_amount=5000.0,
-            status="approved",
+            status=SalesOrderStatus.APPROVED,
             created_by=self.user,
         )
         SalesOrderItem.objects.create(
@@ -538,14 +544,14 @@ class WorkOrderFlowIntegrationTest(TestCase):
             notes="集成测试",
             created_by=self.user,
         )
-        self.assertEqual(work_order.status, "pending")
+        self.assertEqual(work_order.status, WorkOrderStatus.PENDING)
 
         # 2. 提交审核
         work_order = WorkOrderFlowService.submit_for_approval(
             work_order_id=work_order.id,
             submitted_by=self.user,
         )
-        self.assertEqual(work_order.approval_status, "submitted")
+        self.assertEqual(work_order.approval_status, WorkOrderApprovalStatus.SUBMITTED)
 
         # 3. 审核通过（自动分派任务）
         work_order = WorkOrderFlowService.handle_approval_passed(
@@ -553,20 +559,20 @@ class WorkOrderFlowIntegrationTest(TestCase):
             approved_by=self.user,
             comment="审核通过",
         )
-        self.assertEqual(work_order.approval_status, "approved")
-        self.assertEqual(work_order.status, "in_progress")
+        self.assertEqual(work_order.approval_status, WorkOrderApprovalStatus.APPROVED)
+        self.assertEqual(work_order.status, WorkOrderStatus.IN_PROGRESS)
 
         # 4. 完成所有任务
         WorkOrderTask.objects.filter(
             work_order_process__work_order=work_order
-        ).update(status="completed")
+        ).update(status=TaskStatus.COMPLETED)
 
         # 5. 检查并完成施工单
         is_completed = WorkOrderFlowService.check_and_complete_workorder(
             work_order=work_order
         )
         self.assertTrue(is_completed)
-        self.assertEqual(work_order.status, "completed")
+        self.assertEqual(work_order.status, WorkOrderStatus.COMPLETED)
 
         # 完整流程验证成功！
         self.assertTrue(True)

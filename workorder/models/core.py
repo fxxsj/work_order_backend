@@ -1353,13 +1353,9 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
         if self.pk:
             # 使用 update() 方法实现乐观锁，避免 select_for_update 行锁
             # 这种方式只在版本号匹配时更新，返回更新的行数
-            updated = (
-                WorkOrderTask.objects.filter(pk=self.pk, version=self.version)
-                .exclude(
-                    # 排除当前对象本身（如果它已经在内存中）
-                )
-                .update(version=self.version + 1)
-            )
+            updated = WorkOrderTask.objects.filter(
+                pk=self.pk, version=self.version
+            ).update(version=self.version + 1)
 
             if updated == 0:
                 # 版本号不匹配，说明数据已被其他用户修改

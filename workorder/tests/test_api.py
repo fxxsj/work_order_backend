@@ -4,6 +4,7 @@ API 端点测试
 """
 from django.test import TestCase
 from django.contrib.auth.models import User
+from rest_framework import status
 from rest_framework.test import APIClient
 from .conftest import TestDataFactory, APITestCaseMixin
 from ..models import WorkOrder, Customer, Product, Process
@@ -50,7 +51,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         response = self.api_get('/api/v1/workorders/', user=self.user)
 
         # 应该成功
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreater(len(response.data['data']['results']), 0)
 
     def test_create_workorder(self):
@@ -72,7 +73,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         response = self.api_post('/api/v1/workorders/', data, user=self.user)
 
         # 应该成功创建
-        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn('order_number', response.data['data'])
 
     def test_create_workorder_with_split_sales_order_item_quantity(self):
@@ -113,8 +114,8 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         first_response = self.api_post('/api/v1/workorders/', first_payload, user=self.user)
         second_response = self.api_post('/api/v1/workorders/', second_payload, user=self.user)
 
-        self.assertEqual(first_response.status_code, 201)
-        self.assertEqual(second_response.status_code, 201)
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_201_CREATED)
 
     def test_create_workorder_rejects_over_allocated_sales_order_item_quantity(self):
         """测试手工创建施工单时超出订单明细剩余可开数量会被拒绝。"""
@@ -154,8 +155,8 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         first_response = self.api_post('/api/v1/workorders/', first_payload, user=self.user)
         over_response = self.api_post('/api/v1/workorders/', over_payload, user=self.user)
 
-        self.assertEqual(first_response.status_code, 201)
-        self.assertEqual(over_response.status_code, 400)
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(over_response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('products_data', over_response.data['errors'])
 
     def test_sales_order_candidates_include_remaining_quantity(self):
@@ -177,7 +178,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
 
         response = self.api_get('/api/v1/workorders/sales_order_candidates/', user=self.user)
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         candidates = response.data['data']
         self.assertEqual(len(candidates), 1)
         available_products = candidates[0]['available_products']
@@ -195,7 +196,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         response = self.api_get(f'/api/v1/workorders/{work_order.id}/', user=self.user)
 
         # 应该成功
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['data']['id'], work_order.id)
 
     def test_update_workorder(self):
@@ -221,7 +222,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
 
         response = self.api_patch(f'/api/v1/workorders/{work_order.id}/', data, user=self.user)
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_delete_workorder(self):
         """测试删除施工单"""
@@ -234,7 +235,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         response = self.api_delete(f'/api/v1/workorders/{work_order.id}/', user=self.admin_user)
 
         # 删除成功返回 204 No Content
-        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
         # 验证已删除
         self.assertFalse(WorkOrder.objects.filter(id=work_order.id).exists())
@@ -280,7 +281,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         # 调试输出已清理
 
         # 应该只返回待开始的
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['data']['results']), 1)
         self.assertEqual(response.data['data']['results'][0]['status'], 'pending')
 
@@ -295,7 +296,7 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         response = self.api_get(f'/api/v1/workorders/?search={work_order.order_number}', user=self.user)
 
         # 应该找到
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreater(len(response.data['data']['results']), 0)
 
 
@@ -324,7 +325,7 @@ class WorkOrderProcessAPITest(APITestCaseMixin, TestCase):
         response = self.api_get(f'/api/v1/workorder-processes/?work_order={self.work_order.id}', user=self.user)
 
         # 应该成功
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreater(len(response.data['data']['results']), 0)
 
     def test_start_process(self):
@@ -340,7 +341,7 @@ class WorkOrderProcessAPITest(APITestCaseMixin, TestCase):
         response = self.api_post(f'/api/v1/workorder-processes/{wo_process.id}/start/', user=self.user)
 
         # 应该成功
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # 验证状态已更新
         wo_process.refresh_from_db()
@@ -371,7 +372,7 @@ class WorkOrderProcessAPITest(APITestCaseMixin, TestCase):
         response = self.api_post('/api/v1/workorder-processes/batch_start/', data, user=self.user)
 
         # 应该成功
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
 class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
@@ -409,7 +410,7 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
 
         response = self.api_get(f'/api/v1/workorder-tasks/?work_order_process={wo_process.id}', user=self.user)
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreater(len(response.data['data']['results']), 0)
 
     def test_update_task_quantity(self):
@@ -437,7 +438,7 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
         response = self.api_post(f'/api/v1/workorder-tasks/{task.id}/update_quantity/', data, user=self.user)
 
         # 应该成功
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # 验证数量已更新
         task.refresh_from_db()
@@ -464,7 +465,7 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
         response = self.api_post(f'/api/v1/workorder-tasks/{task.id}/complete/', user=self.user)
 
         # 应该成功
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # 验证任务已完成
         task.refresh_from_db()
@@ -508,7 +509,7 @@ class WorkOrderTaskAPITest(APITestCaseMixin, TestCase):
         response = self.api_post(f'/api/v1/workorder-tasks/{task.id}/assign/', data, user=self.admin_user)
 
         # 应该成功
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # 验证已分派
         task.refresh_from_db()

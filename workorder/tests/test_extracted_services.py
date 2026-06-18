@@ -17,7 +17,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
 from workorder.models.assets import Artwork, ArtworkProduct
-from workorder.models.base import Customer, Process, Product
+from workorder.models.base import Customer, Process
+from workorder.models.products import Product
 from workorder.models.core import WorkOrder, WorkOrderProcess, WorkOrderTask
 from workorder.models.finance import Invoice, PaymentPlan, ProductionCost, Statement
 from workorder.models.inventory import (
