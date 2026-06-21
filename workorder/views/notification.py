@@ -22,7 +22,7 @@ from workorder.docs.notification_extra import (
 )
 
 from ..models.system import Notification
-from ..services.notification_service import (
+from ..services.notifications import (
     NotificationService,
     NotificationTemplateService,
     SystemNotificationService,
