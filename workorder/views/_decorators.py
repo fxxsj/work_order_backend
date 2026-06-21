@@ -11,6 +11,21 @@ from workorder.services.service_errors import ServiceError
 logger = logging.getLogger(__name__)
 
 
+def handle_service_error(func):
+    """统一处理视图方法中的 ServiceError，返回 APIResponse.error。"""
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except ServiceError as exc:
+            return APIResponse.error(
+                message=str(exc), code=exc.code, data=exc.data
+            )
+
+    return wrapper
+
+
 def handle_flow_errors(message_prefix: str = "操作失败："):
     """统一处理流程接口中的 ServiceError 和非预期异常。"""
 

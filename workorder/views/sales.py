@@ -30,7 +30,7 @@ from ..serializers.sales import (
     SalesOrderListSerializer,
 )
 from ..services.sales_order_service import SalesOrderService
-from ..services.service_errors import ServiceError
+from ._decorators import handle_service_error
 from .base_viewsets import BaseViewSet
 from .mixins import ApprovalTimelineMixin
 
@@ -120,115 +120,94 @@ class SalesOrderViewSet(ApprovalTimelineMixin, BaseViewSet):
 
     @action(detail=True, methods=["post"])
     @sales_order_submit_docs
+    @handle_service_error
     def submit(self, request, pk=None):
         """提交客户订单"""
         sales_order = self.get_object()
-        try:
-            SalesOrderService.submit_for_approval(
-                sales_order=sales_order,
-                user=request.user,
-                auto_approve=request.data.get("auto_approve", False),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        SalesOrderService.submit_for_approval(
+            sales_order=sales_order,
+            user=request.user,
+            auto_approve=request.data.get("auto_approve", False),
+        )
         serializer = self.get_serializer(sales_order)
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     @sales_order_approve_docs
+    @handle_service_error
     def approve(self, request, pk=None):
         """审核通过客户订单"""
         sales_order = self.get_object()
-        try:
-            SalesOrderService.approve(
-                sales_order=sales_order,
-                user=request.user,
-                comment=request.data.get("approval_comment", ""),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        SalesOrderService.approve(
+            sales_order=sales_order,
+            user=request.user,
+            comment=request.data.get("approval_comment", ""),
+        )
         serializer = self.get_serializer(sales_order)
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     @sales_order_reject_docs
+    @handle_service_error
     def reject(self, request, pk=None):
         """拒绝客户订单"""
         sales_order = self.get_object()
-        try:
-            SalesOrderService.reject(
-                sales_order=sales_order,
-                user=request.user,
-                reason=request.data.get("reason", ""),
-                comment=request.data.get("approval_comment", ""),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        SalesOrderService.reject(
+            sales_order=sales_order,
+            user=request.user,
+            reason=request.data.get("reason", ""),
+            comment=request.data.get("approval_comment", ""),
+        )
         serializer = self.get_serializer(sales_order)
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     @sales_order_start_docs
+    @handle_service_error
     def start_production(self, request, pk=None):
         """根据关联施工单同步生产状态。"""
         sales_order = self.get_object()
-        try:
-            SalesOrderService.start_production(sales_order=sales_order)
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
-
+        SalesOrderService.start_production(sales_order=sales_order)
         serializer = self.get_serializer(sales_order)
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     @sales_order_complete_docs
+    @handle_service_error
     def complete(self, request, pk=None):
         """完成订单"""
         sales_order = self.get_object()
-        try:
-            SalesOrderService.complete(
-                sales_order=sales_order,
-                completion_reason=request.data.get("completion_reason", ""),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
-
+        SalesOrderService.complete(
+            sales_order=sales_order,
+            completion_reason=request.data.get("completion_reason", ""),
+        )
         serializer = self.get_serializer(sales_order)
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     @sales_order_cancel_docs
+    @handle_service_error
     def cancel(self, request, pk=None):
         """取消订单"""
         sales_order = self.get_object()
-        try:
-            SalesOrderService.cancel(
-                sales_order=sales_order,
-                reason=request.data.get("reason", ""),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
-
+        SalesOrderService.cancel(
+            sales_order=sales_order,
+            reason=request.data.get("reason", ""),
+        )
         serializer = self.get_serializer(sales_order)
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     @sales_order_update_payment_docs
+    @handle_service_error
     def update_payment(self, request, pk=None):
         """更新付款信息"""
         sales_order = self.get_object()
-        try:
-            SalesOrderService.update_payment(
-                sales_order=sales_order,
-                paid_amount=request.data.get("paid_amount"),
-                payment_date=request.data.get("payment_date"),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
-
+        SalesOrderService.update_payment(
+            sales_order=sales_order,
+            paid_amount=request.data.get("paid_amount"),
+            payment_date=request.data.get("payment_date"),
+        )
         serializer = self.get_serializer(sales_order)
         return APIResponse.success(data=serializer.data)
 

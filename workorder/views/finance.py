@@ -29,8 +29,8 @@ from workorder.services.finance_service import (
     StatementService,
 )
 from workorder.services.payment_service import PaymentService
-from workorder.services.service_errors import ServiceError
 from workorder.services.supplier_payment_service import SupplierPaymentService
+from ._decorators import handle_service_error
 from .mixins import ApprovalTimelineMixin
 from workorder.docs.finance import (
     cost_center_docs,
@@ -272,29 +272,23 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     @production_cost_material_docs
+    @handle_service_error
     def calculate_material(self, request, pk=None):
         """自动计算材料成本"""
         cost = self.get_object()
-
-        try:
-            ProductionCostService.calculate_material(cost)
-            serializer = self.get_serializer(cost)
-            return APIResponse.success(data=serializer.data, message="材料成本计算成功")
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
+        ProductionCostService.calculate_material(cost)
+        serializer = self.get_serializer(cost)
+        return APIResponse.success(data=serializer.data, message="材料成本计算成功")
 
     @action(detail=True, methods=["post"])
     @production_cost_total_docs
+    @handle_service_error
     def calculate_total(self, request, pk=None):
         """计算总成本和差异"""
         cost = self.get_object()
-
-        try:
-            ProductionCostService.calculate_total(cost)
-            serializer = self.get_serializer(cost)
-            return APIResponse.success(data=serializer.data, message="总成本计算成功")
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
+        ProductionCostService.calculate_total(cost)
+        serializer = self.get_serializer(cost)
+        return APIResponse.success(data=serializer.data, message="总成本计算成功")
 
     @action(detail=False, methods=["get"])
     @production_cost_stats_docs
@@ -413,38 +407,30 @@ class InvoiceViewSet(ApprovalTimelineMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     @invoice_submit_docs
+    @handle_service_error
     def submit(self, request, pk=None):
         """提交发票"""
         invoice = self.get_object()
-
-        try:
-            InvoiceService.submit(
-                invoice=invoice,
-                user=request.user,
-                auto_approve=request.data.get("auto_approve", False),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
-
+        InvoiceService.submit(
+            invoice=invoice,
+            user=request.user,
+            auto_approve=request.data.get("auto_approve", False),
+        )
         serializer = self.get_serializer(invoice)
         return APIResponse.success(data=serializer.data, message="发票提交成功")
 
     @action(detail=True, methods=["post"])
     @invoice_approve_docs
+    @handle_service_error
     def approve(self, request, pk=None):
         """审核发票"""
         invoice = self.get_object()
-
-        try:
-            InvoiceService.approve(
-                invoice=invoice,
-                user=request.user,
-                approved=request.data.get("approved", True),
-                approval_comment=request.data.get("approval_comment", ""),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
-
+        InvoiceService.approve(
+            invoice=invoice,
+            user=request.user,
+            approved=request.data.get("approved", True),
+            approval_comment=request.data.get("approval_comment", ""),
+        )
         serializer = self.get_serializer(invoice)
         return APIResponse.success(data=serializer.data, message="发票审核成功")
 
@@ -730,21 +716,17 @@ class StatementViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     @statement_confirm_docs
+    @handle_service_error
     def confirm(self, request, pk=None):
         """确认对账单"""
         statement = self.get_object()
-
-        try:
-            StatementService.confirm(
-                statement=statement,
-                user=request.user,
-                confirmed=request.data.get("confirmed", True),
-                confirmation_notes=request.data.get("confirm_notes")
-                or request.data.get("confirmation_notes"),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        StatementService.confirm(
+            statement=statement,
+            user=request.user,
+            confirmed=request.data.get("confirmed", True),
+            confirmation_notes=request.data.get("confirm_notes")
+            or request.data.get("confirmation_notes"),
+        )
         serializer = self.get_serializer(statement)
         return APIResponse.success(data=serializer.data, message="对账单确认成功")
 
@@ -756,17 +738,14 @@ class StatementViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"])
     @statement_generate_docs
+    @handle_service_error
     def generate(self, request):
         """生成对账单"""
-        try:
-            data = StatementService.generate(
-                customer_id=request.query_params.get("customer"),
-                supplier_id=request.query_params.get("supplier"),
-                period=request.query_params.get("period"),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        data = StatementService.generate(
+            customer_id=request.query_params.get("customer"),
+            supplier_id=request.query_params.get("supplier"),
+            period=request.query_params.get("period"),
+        )
         return APIResponse.success(data=data)
 
 
@@ -792,35 +771,29 @@ class SupplierPaymentViewSet(viewsets.ModelViewSet):
         serializer.save(created_by=self.request.user)
 
     @action(detail=True, methods=["post"])
+    @handle_service_error
     def submit(self, request, pk=None):
         """提交付款审核"""
         payment = self.get_object()
-        try:
-            SupplierPaymentService.submit(payment=payment, user=request.user)
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
+        SupplierPaymentService.submit(payment=payment, user=request.user)
         return APIResponse.success(data=SupplierPaymentSerializer(payment).data)
 
     @action(detail=True, methods=["post"])
+    @handle_service_error
     def approve(self, request, pk=None):
         """审核通过付款"""
         payment = self.get_object()
-        try:
-            SupplierPaymentService.approve(payment=payment, user=request.user)
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
+        SupplierPaymentService.approve(payment=payment, user=request.user)
         return APIResponse.success(data=SupplierPaymentSerializer(payment).data)
 
     @action(detail=True, methods=["post"])
+    @handle_service_error
     def reject(self, request, pk=None):
         """拒绝付款"""
         payment = self.get_object()
-        try:
-            SupplierPaymentService.reject(
-                payment=payment,
-                user=request.user,
-                approval_comment=request.data.get("approval_comment", ""),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
+        SupplierPaymentService.reject(
+            payment=payment,
+            user=request.user,
+            approval_comment=request.data.get("approval_comment", ""),
+        )
         return APIResponse.success(data=SupplierPaymentSerializer(payment).data)
