@@ -569,6 +569,65 @@ class WorkOrderDetailSerializer(WorkOrderProductInfoMixin, serializers.ModelSeri
         model = WorkOrder
         fields = "__all__"
 
+    EXPAND_GROUPS = {
+        "customer": ["customer_detail"],
+        "assets": [
+            "artwork_names",
+            "artwork_codes",
+            "artwork_details",
+            "artwork_colors",
+            "die_names",
+            "die_codes",
+            "foiling_plate_names",
+            "foiling_plate_codes",
+            "embossing_plate_names",
+            "embossing_plate_codes",
+        ],
+        "processes": ["order_processes"],
+        "products": ["products"],
+        "materials": ["materials"],
+        "financial": [
+            "sales_order_numbers",
+            "quality_inspection_numbers",
+            "invoice_numbers",
+            "sales_order_summaries",
+            "quality_inspection_summaries",
+            "invoice_summaries",
+            "sales_order_total_amount",
+            "sales_order_paid_amount",
+            "sales_order_unpaid_amount",
+            "settled_sales_order_count",
+            "unsettled_sales_order_count",
+            "invoice_count",
+            "purchase_order_summaries",
+        ],
+        "approval": ["approval_logs"],
+        "progress": [
+            "progress_percentage",
+            "product_name",
+            "quantity",
+            "unit",
+            "total_task_count",
+        ],
+    }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        expand = self.context.get("expand")
+        if expand is None:
+            return
+
+        requested = {g.strip() for g in expand.split(",") if g.strip()}
+        field_to_group = {}
+        for group, fields in self.EXPAND_GROUPS.items():
+            for field in fields:
+                field_to_group[field] = group
+
+        for field_name in list(self.fields.keys()):
+            group = field_to_group.get(field_name)
+            if group and group not in requested:
+                self.fields.pop(field_name)
+
     def get_customer_detail(self, obj) -> Optional[Dict[str, Any]]:
         """获取客户详细信息"""
         from .base import CustomerSerializer

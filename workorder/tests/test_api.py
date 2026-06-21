@@ -199,6 +199,33 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['data']['id'], work_order.id)
 
+    def test_get_workorder_detail_with_expand(self):
+        """测试使用 ?expand= 控制详情返回字段"""
+        work_order = TestDataFactory.create_workorder(
+            customer=self.customer,
+            creator=self.user
+        )
+
+        # 默认请求包含所有字段
+        full_response = self.api_get(
+            f'/api/v1/workorders/{work_order.id}/', user=self.user
+        )
+        self.assertIn('products', full_response.data['data'])
+        self.assertIn('order_processes', full_response.data['data'])
+
+        # 仅展开 assets 和 progress
+        partial_response = self.api_get(
+            f'/api/v1/workorders/{work_order.id}/',
+            user=self.user,
+            data={'expand': 'assets,progress'}
+        )
+        self.assertEqual(partial_response.status_code, status.HTTP_200_OK)
+        data = partial_response.data['data']
+        self.assertIn('progress_percentage', data)
+        self.assertIn('artwork_names', data)
+        self.assertNotIn('products', data)
+        self.assertNotIn('order_processes', data)
+
     def test_update_workorder(self):
         """测试更新施工单"""
         work_order = TestDataFactory.create_workorder(

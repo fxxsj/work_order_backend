@@ -326,6 +326,14 @@ class WorkOrderViewSet(
             return WorkOrderCreateUpdateSerializer
         return WorkOrderDetailSerializer
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if self.action == "retrieve":
+            expand = self.request.query_params.get("expand")
+            if expand is not None:
+                context["expand"] = expand
+        return context
+
     def update(self, request, *args, **kwargs):
         """重写update方法以捕获详细错误信息（P1 优化：使用日志记录）"""
         try:
