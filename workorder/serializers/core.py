@@ -986,130 +986,46 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         if process_ids:
             processes = Process.objects.filter(id__in=process_ids, is_active=True)
 
-            # 检查是否有工序需要图稿
-            processes_requiring_artwork = processes.filter(requires_artwork=True)
-            if processes_requiring_artwork.exists():
-                processes_requiring_artwork_mandatory = (
-                    processes_requiring_artwork.filter(artwork_required=True)
-                )
-                if processes_requiring_artwork_mandatory.exists():
-                    # 如果artworks字段被发送，使用发送的值；否则使用数据库中的值
-                    artworks_to_check = (
-                        artworks
-                        if artworks is not None
-                        else (
-                            list(instance.artworks.values_list("id", flat=True))
-                            if instance
-                            else []
-                        )
-                    )
-                    if not artworks_to_check or len(artworks_to_check) == 0:
-                        process_names = ", ".join(
-                            [p.name for p in processes_requiring_artwork_mandatory]
-                        )
-                        raise serializers.ValidationError(
-                            {
-                                "artworks": f"选择了需要图稿的工序（{process_names}），请至少选择一个图稿"
-                            }
-                        )
-
-            # 检查是否有工序需要刀模
-            processes_requiring_die = processes.filter(requires_die=True)
-            if processes_requiring_die.exists():
-                processes_requiring_die_mandatory = processes_requiring_die.filter(
-                    die_required=True
-                )
-                if processes_requiring_die_mandatory.exists():
-                    # 如果dies字段被发送，使用发送的值；否则使用数据库中的值
-                    dies_to_check = (
-                        dies
-                        if dies is not None
-                        else (
-                            list(instance.dies.values_list("id", flat=True))
-                            if instance
-                            else []
-                        )
-                    )
-                    if not dies_to_check or len(dies_to_check) == 0:
-                        process_names = ", ".join(
-                            [p.name for p in processes_requiring_die_mandatory]
-                        )
-                        raise serializers.ValidationError(
-                            {
-                                "dies": f"选择了需要刀模的工序（{process_names}），请至少选择一个刀模"
-                            }
-                        )
-
-            # 检查是否有工序需要烫金版
-            processes_requiring_foiling_plate = processes.filter(
-                requires_foiling_plate=True
+            self._validate_plate_requirement(
+                processes,
+                instance,
+                artworks,
+                relation_name="artworks",
+                process_filter_field="requires_artwork",
+                required_filter_field="artwork_required",
+                error_field_name="artworks",
+                error_message_template="选择了需要图稿的工序（{process_names}），请至少选择一个图稿",
             )
-            if processes_requiring_foiling_plate.exists():
-                processes_requiring_foiling_plate_mandatory = (
-                    processes_requiring_foiling_plate.filter(
-                        foiling_plate_required=True
-                    )
-                )
-                if processes_requiring_foiling_plate_mandatory.exists():
-                    # 如果foiling_plates字段被发送，使用发送的值；否则使用数据库中的值
-                    foiling_plates_to_check = (
-                        foiling_plates
-                        if foiling_plates is not None
-                        else (
-                            list(instance.foiling_plates.values_list("id", flat=True))
-                            if instance
-                            else []
-                        )
-                    )
-                    if not foiling_plates_to_check or len(foiling_plates_to_check) == 0:
-                        process_names = ", ".join(
-                            [
-                                p.name
-                                for p in processes_requiring_foiling_plate_mandatory
-                            ]
-                        )
-                        raise serializers.ValidationError(
-                            {
-                                "foiling_plates": f"选择了需要烫金版的工序（{process_names}），请至少选择一个烫金版"
-                            }
-                        )
-
-            # 检查是否有工序需要压凸版
-            processes_requiring_embossing_plate = processes.filter(
-                requires_embossing_plate=True
+            self._validate_plate_requirement(
+                processes,
+                instance,
+                dies,
+                relation_name="dies",
+                process_filter_field="requires_die",
+                required_filter_field="die_required",
+                error_field_name="dies",
+                error_message_template="选择了需要刀模的工序（{process_names}），请至少选择一个刀模",
             )
-            if processes_requiring_embossing_plate.exists():
-                processes_requiring_embossing_plate_mandatory = (
-                    processes_requiring_embossing_plate.filter(
-                        embossing_plate_required=True
-                    )
-                )
-                if processes_requiring_embossing_plate_mandatory.exists():
-                    # 如果embossing_plates字段被发送，使用发送的值；否则使用数据库中的值
-                    embossing_plates_to_check = (
-                        embossing_plates
-                        if embossing_plates is not None
-                        else (
-                            list(instance.embossing_plates.values_list("id", flat=True))
-                            if instance
-                            else []
-                        )
-                    )
-                    if (
-                        not embossing_plates_to_check
-                        or len(embossing_plates_to_check) == 0
-                    ):
-                        process_names = ", ".join(
-                            [
-                                p.name
-                                for p in processes_requiring_embossing_plate_mandatory
-                            ]
-                        )
-                        raise serializers.ValidationError(
-                            {
-                                "embossing_plates": f"选择了需要压凸版的工序（{process_names}），请至少选择一个压凸版"
-                            }
-                        )
+            self._validate_plate_requirement(
+                processes,
+                instance,
+                foiling_plates,
+                relation_name="foiling_plates",
+                process_filter_field="requires_foiling_plate",
+                required_filter_field="foiling_plate_required",
+                error_field_name="foiling_plates",
+                error_message_template="选择了需要烫金版的工序（{process_names}），请至少选择一个烫金版",
+            )
+            self._validate_plate_requirement(
+                processes,
+                instance,
+                embossing_plates,
+                relation_name="embossing_plates",
+                process_filter_field="requires_embossing_plate",
+                required_filter_field="embossing_plate_required",
+                error_field_name="embossing_plates",
+                error_message_template="选择了需要压凸版的工序（{process_names}），请至少选择一个压凸版",
+            )
 
         # 只有在 artworks 字段被发送时才处理 printing_type
         if "artworks" in data:
@@ -1151,48 +1067,20 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
         work_order = WorkOrder.objects.create(**validated_data)
 
-        # 设置图稿（ManyToMany 字段需要在对象创建后设置）
-        if artworks:
-            work_order.artworks.set(artworks)
-
-        # 设置刀模（ManyToMany 字段需要在对象创建后设置）
-        if dies:
-            work_order.dies.set(dies)
-
-        # 设置烫金版（ManyToMany 字段需要在对象创建后设置）
-        if foiling_plates:
-            work_order.foiling_plates.set(foiling_plates)
-
-        # 设置压凸版（ManyToMany 字段需要在对象创建后设置）
-        if embossing_plates:
-            work_order.embossing_plates.set(embossing_plates)
+        # 设置 M2M 关系
+        self._sync_many_to_many(
+            work_order,
+            artworks=artworks,
+            dies=dies,
+            foiling_plates=foiling_plates,
+            embossing_plates=embossing_plates,
+        )
 
         # 创建关联的产品记录
-        if products_data:
-            for item in products_data:
-                WorkOrderProduct.objects.create(
-                    work_order=work_order,
-                    product_id=item.get("product"),
-                    quantity=item.get("quantity", 1),
-                    unit=item.get("unit", "件"),
-                    specification=item.get("specification", ""),
-                    source_type=item.get("source_type", "stock"),
-                    sales_order_item_id=item.get("sales_order_item"),
-                    sort_order=item.get("sort_order", 0),
-                )
+        self._sync_products(work_order, products_data)
 
         # 创建关联的物料记录
-        if materials_data:
-            for item in materials_data:
-                WorkOrderMaterial.objects.create(
-                    work_order=work_order,
-                    material_id=item.get("material"),
-                    material_size=item.get("material_size", ""),
-                    material_usage=item.get("material_usage", ""),
-                    need_cutting=item.get("need_cutting", False),
-                    notes=item.get("notes", ""),
-                    purchase_status=item.get("purchase_status", "pending"),
-                )
+        self._sync_materials(work_order, materials_data)
 
         # 自动创建工序（使用用户选择的工序ID列表）
         self._create_work_order_processes(work_order, process_ids=process_ids)
@@ -1223,26 +1111,11 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
                 if not can_edit_approved:
                     # 检查是否尝试修改核心字段
-                    modified_protected_fields = []
-
-                    # 检查 ManyToMany 字段（版选择）
-                    many_to_many_fields = {
-                        "artworks": artworks,
-                        "dies": dies,
-                        "foiling_plates": foiling_plates,
-                        "embossing_plates": embossing_plates,
-                    }
-
-                    for field_name, field_value in many_to_many_fields.items():
-                        if field_value is not None:
-                            old_ids = set(
-                                getattr(instance, field_name).values_list(
-                                    "id", flat=True
-                                )
-                            )
-                            new_ids = set(field_value or [])
-                            if old_ids != new_ids:
-                                modified_protected_fields.append(field_name)
+                    modified_protected_fields = (
+                        self._get_modified_protected_m2m_fields(
+                            instance, artworks, dies, foiling_plates, embossing_plates
+                        )
+                    )
 
                     # 检查产品列表
                     if products_data is not None:
@@ -1302,15 +1175,22 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                     instance.approval_status = "submitted"
                     instance.approval_comment = ""
 
-        # 更新图稿（ManyToMany 字段）
+        # 根据 artworks 调整印刷形式
         if artworks is not None:
-            instance.artworks.set(artworks)
-            # 如果没有选择图稿，自动设置印刷形式为"不需要印刷"
             if not artworks or len(artworks) == 0:
                 validated_data["printing_type"] = "none"
             elif validated_data.get("printing_type") == "none":
                 # 如果选择了图稿但印刷形式是"不需要印刷"，默认改为"正面印刷"
                 validated_data["printing_type"] = "front"
+
+        # 更新 M2M 关系
+        self._sync_many_to_many(
+            instance,
+            artworks=artworks,
+            dies=dies,
+            foiling_plates=foiling_plates,
+            embossing_plates=embossing_plates,
+        )
 
         # 更新施工单基本信息
         for attr, value in validated_data.items():
@@ -1324,35 +1204,9 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
         instance.save()
 
-        # 更新刀模（ManyToMany 字段）
-        if dies is not None:
-            instance.dies.set(dies)
-
-        # 更新烫金版（ManyToMany 字段）
-        if foiling_plates is not None:
-            instance.foiling_plates.set(foiling_plates)
-
-        # 更新压凸版（ManyToMany 字段）
-        if embossing_plates is not None:
-            instance.embossing_plates.set(embossing_plates)
-
         # 如果提供了 products_data，更新产品列表
         if products_data is not None:
-            # 删除现有产品关联
-            WorkOrderProduct.objects.filter(work_order=instance).delete()
-
-            # 创建新的产品关联
-            for item in products_data:
-                WorkOrderProduct.objects.create(
-                    work_order=instance,
-                    product_id=item.get("product"),
-                    quantity=item.get("quantity", 1),
-                    unit=item.get("unit", "件"),
-                    specification=item.get("specification", ""),
-                    source_type=item.get("source_type", "stock"),
-                    sales_order_item_id=item.get("sales_order_item"),
-                    sort_order=item.get("sort_order", 0),
-                )
+            self._sync_products(instance, products_data)
 
             # 如果产品列表发生变化，重新创建工序（使用用户选择的工序ID列表）
             # 如果process_ids为空列表，则使用产品的默认工序
@@ -1374,20 +1228,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
         # 如果提供了 materials_data，更新物料列表
         if materials_data is not None:
-            # 删除现有物料关联
-            WorkOrderMaterial.objects.filter(work_order=instance).delete()
-
-            # 创建新的物料关联
-            for item in materials_data:
-                WorkOrderMaterial.objects.create(
-                    work_order=instance,
-                    material_id=item.get("material"),
-                    material_size=item.get("material_size", ""),
-                    material_usage=item.get("material_usage", ""),
-                    need_cutting=item.get("need_cutting", False),
-                    notes=item.get("notes", ""),
-                    purchase_status=item.get("purchase_status", "pending"),
-                )
+            self._sync_materials(instance, materials_data)
 
         return instance
 
@@ -1449,6 +1290,118 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
         # 重新创建工序（使用用户选择的工序ID列表）
         self._create_work_order_processes(work_order, process_ids=process_ids)
+
+    # --- 辅助方法：校验与同步 ---
+
+    def _get_plate_value_to_check(self, instance, sent_values, relation_name):
+        """获取用于校验的版值：优先使用发送值，否则回退到数据库当前值。"""
+        if sent_values is not None:
+            return sent_values
+        if instance:
+            return list(getattr(instance, relation_name).values_list("id", flat=True))
+        return []
+
+    def _validate_plate_requirement(
+        self,
+        processes,
+        instance,
+        sent_values,
+        relation_name,
+        process_filter_field,
+        required_filter_field,
+        error_field_name,
+        error_message_template,
+    ):
+        """校验选中工序是否要求某种版，且必须至少选择一项。"""
+        processes_requiring = processes.filter(**{process_filter_field: True})
+        if not processes_requiring.exists():
+            return
+
+        mandatory = processes_requiring.filter(**{required_filter_field: True})
+        if not mandatory.exists():
+            return
+
+        values_to_check = self._get_plate_value_to_check(
+            instance, sent_values, relation_name
+        )
+        if not values_to_check or len(values_to_check) == 0:
+            process_names = ", ".join([p.name for p in mandatory])
+            raise serializers.ValidationError(
+                {error_field_name: error_message_template.format(process_names=process_names)}
+            )
+
+    def _sync_many_to_many(
+        self,
+        instance,
+        *,
+        artworks=None,
+        dies=None,
+        foiling_plates=None,
+        embossing_plates=None,
+    ):
+        """同步施工单的 M2M 版关系。仅当对应字段被发送（不为 None）时才更新。"""
+        if artworks is not None:
+            instance.artworks.set(artworks)
+        if dies is not None:
+            instance.dies.set(dies)
+        if foiling_plates is not None:
+            instance.foiling_plates.set(foiling_plates)
+        if embossing_plates is not None:
+            instance.embossing_plates.set(embossing_plates)
+
+    def _sync_products(self, work_order, products_data):
+        """同步施工单产品：删除旧记录并重建。"""
+        if products_data is None:
+            return
+        WorkOrderProduct.objects.filter(work_order=work_order).delete()
+        for item in products_data:
+            WorkOrderProduct.objects.create(
+                work_order=work_order,
+                product_id=item.get("product"),
+                quantity=item.get("quantity", 1),
+                unit=item.get("unit", "件"),
+                specification=item.get("specification", ""),
+                source_type=item.get("source_type", "stock"),
+                sales_order_item_id=item.get("sales_order_item"),
+                sort_order=item.get("sort_order", 0),
+            )
+
+    def _sync_materials(self, work_order, materials_data):
+        """同步施工单物料：删除旧记录并重建。"""
+        if materials_data is None:
+            return
+        WorkOrderMaterial.objects.filter(work_order=work_order).delete()
+        for item in materials_data:
+            WorkOrderMaterial.objects.create(
+                work_order=work_order,
+                material_id=item.get("material"),
+                material_size=item.get("material_size", ""),
+                material_usage=item.get("material_usage", ""),
+                need_cutting=item.get("need_cutting", False),
+                notes=item.get("notes", ""),
+                purchase_status=item.get("purchase_status", "pending"),
+            )
+
+    def _get_modified_protected_m2m_fields(
+        self, instance, artworks, dies, foiling_plates, embossing_plates
+    ):
+        """检查已审核施工单的 M2M 版字段是否被修改。"""
+        modified = []
+        many_to_many_fields = {
+            "artworks": artworks,
+            "dies": dies,
+            "foiling_plates": foiling_plates,
+            "embossing_plates": embossing_plates,
+        }
+        for field_name, field_value in many_to_many_fields.items():
+            if field_value is not None:
+                old_ids = set(
+                    getattr(instance, field_name).values_list("id", flat=True)
+                )
+                new_ids = set(field_value or [])
+                if old_ids != new_ids:
+                    modified.append(field_name)
+        return modified
 
 
 class WorkOrderProcessUpdateSerializer(serializers.ModelSerializer):

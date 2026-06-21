@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.test import APIClient
 from .conftest import TestDataFactory, APITestCaseMixin
-from ..models import WorkOrder, Customer, Product, Process
+from ..models import WorkOrder, Customer, Product, Process, Artwork
 from ..models.sales import SalesOrder, SalesOrderItem
 import json
 
@@ -223,6 +223,59 @@ class WorkOrderAPITest(APITestCaseMixin, TestCase):
         response = self.api_patch(f'/api/v1/workorders/{work_order.id}/', data, user=self.user)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_create_workorder_syncs_m2m_and_products(self):
+        """测试创建施工单时正确同步 M2M 版关系与产品"""
+        artwork = Artwork.objects.create(name='测试图稿')
+        data = {
+            'customer': self.customer.id,
+            'production_quantity': 100,
+            'delivery_date': '2026-12-31',
+            'products_data': [
+                {
+                    'product': self.product.id,
+                    'quantity': 50,
+                    'unit': '件'
+                }
+            ],
+            'processes': [self.process.id],
+            'artworks': [artwork.id],
+        }
+
+        response = self.api_post('/api/v1/workorders/', data, user=self.user)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        work_order = WorkOrder.objects.get(id=response.data['data']['id'])
+        self.assertIn(artwork, work_order.artworks.all())
+        self.assertEqual(work_order.products.count(), 1)
+
+    def test_update_workorder_preserves_m2m_when_not_sent(self):
+        """测试更新施工单时未发送 M2M 字段应保持原关系"""
+        artwork = Artwork.objects.create(name='测试图稿')
+        work_order = TestDataFactory.create_workorder(
+            customer=self.customer,
+            creator=self.user,
+            status='pending'
+        )
+        work_order.products.create(
+            product=self.product,
+            quantity=100,
+            unit='件',
+            source_type='stock'
+        )
+        work_order.order_processes.create(process=self.process, sequence=10)
+        work_order.artworks.add(artwork)
+
+        data = {
+            'production_quantity': 200,
+            'notes': '更新备注但不修改图稿'
+        }
+
+        response = self.api_patch(f'/api/v1/workorders/{work_order.id}/', data, user=self.user)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        work_order.refresh_from_db()
+        self.assertIn(artwork, work_order.artworks.all())
 
     def test_delete_workorder(self):
         """测试删除施工单"""
