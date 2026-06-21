@@ -328,8 +328,6 @@ class WorkOrderFlowService:
         Raises:
             ServiceError: 严格模式下任意失败时抛出
         """
-        from ..views.sales import _scope_sales_orders
-
         if not sales_order_ids:
             raise ServiceError(
                 "sales_order_ids 不能为空",

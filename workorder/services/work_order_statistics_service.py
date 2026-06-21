@@ -20,8 +20,8 @@ from rest_framework import status
 from ..permissions.permission_utils import is_sales_user
 from ..models.core import WorkOrder, WorkOrderProcess, WorkOrderProduct, WorkOrderTask
 from ..models.sales import SalesOrder, SalesOrderItem
+from ..queries import scope_sales_orders
 from .service_errors import ServiceError
-from ..views.sales import _scope_sales_orders
 
 logger = logging.getLogger(__name__)
 
@@ -285,7 +285,7 @@ class SalesOrderCandidateService:
             if existing_work_order is not None:
                 include_sales_order_id = existing_work_order.sales_order_id
 
-        sales_order_queryset = _scope_sales_orders(
+        sales_order_queryset = scope_sales_orders(
             SalesOrder.objects.select_related("customer"), user
         ).filter(
             Q(status__in=["approved", "in_production"]) | Q(pk=include_sales_order_id)

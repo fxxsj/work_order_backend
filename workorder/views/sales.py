@@ -29,6 +29,7 @@ from ..serializers.sales import (
     SalesOrderItemSerializer,
     SalesOrderListSerializer,
 )
+from ..queries import scope_sales_orders
 from ..services.sales_order_service import SalesOrderService
 from ._decorators import handle_service_error
 from .base_viewsets import BaseViewSet
@@ -45,16 +46,6 @@ class SalesOrderFilterSet(FilterSet):
     class Meta:
         model = SalesOrder
         fields = ["customer", "status", "approval_status", "payment_status"]
-
-
-def _scope_sales_orders(queryset, user):
-    if not user.is_authenticated:
-        return queryset.none()
-    if user.is_superuser or PermissionUtils.is_finance_user(user):
-        return queryset
-
-    scope = PermissionUtils.build_sales_order_scope_q(user, "")
-    return queryset.filter(scope).distinct()
 
 
 @sales_order_docs
@@ -99,7 +90,7 @@ class SalesOrderViewSet(ApprovalTimelineMixin, BaseViewSet):
             items_count=Count("items", distinct=True),
             work_order_count=Count("source_work_orders", distinct=True),
         )
-        return _scope_sales_orders(queryset, self.request.user)
+        return scope_sales_orders(queryset, self.request.user)
 
     def get_serializer_class(self):
         """根据action选择序列化器"""

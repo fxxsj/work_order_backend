@@ -87,7 +87,6 @@ from ..services.work_order_service import WorkOrderService
 # P1 优化: 导入自定义速率限制
 from ..throttling import ApprovalRateThrottle, CreateRateThrottle, ExportRateThrottle
 from .base_viewsets import BaseViewSet
-from .sales import _scope_sales_orders
 
 
 class WorkOrderFilterSet(FilterSet):
