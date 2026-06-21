@@ -903,37 +903,77 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         read_only_fields = ["order_number"]
 
     def validate(self, data):
-        """验证数据，根据工序验证版的选择"""
+        """验证数据，根据工序验证版的选择。"""
         instance = getattr(self, "instance", None)
         sales_order = data.get("sales_order", getattr(instance, "sales_order", None))
         products_data = data.get("products_data", [])
-        artworks = data.get("artworks")  # 不设置默认值，以便区分是否发送
-        dies = data.get("dies")  # 不设置默认值，以便区分是否发送
-        foiling_plates = data.get("foiling_plates")  # 不设置默认值，以便区分是否发送
-        embossing_plates = data.get(
-            "embossing_plates"
-        )  # 不设置默认值，以便区分是否发送
-        printing_type = data.get("printing_type")
+        artworks = data.get("artworks")
+        dies = data.get("dies")
+        foiling_plates = data.get("foiling_plates")
+        embossing_plates = data.get("embossing_plates")
         process_ids = data.get("processes", [])
 
         if sales_order is not None:
-            customer = data.get("customer")
-            if customer is None:
-                data["customer"] = sales_order.customer
-            elif customer.id != sales_order.customer_id:
-                raise serializers.ValidationError(
-                    {"customer": "所选客户订单与当前客户不一致，请重新选择"}
-                )
+            data = self._validate_sales_order_consistency(data, sales_order)
 
-            if not data.get("order_date"):
-                data["order_date"] = sales_order.order_date
-            if not data.get("delivery_date"):
-                data["delivery_date"] = sales_order.delivery_date
-            if not products_data and not data.get("total_amount"):
-                data["total_amount"] = sales_order.total_amount
+        validated_products_data = self._validate_products_data(
+            products_data, sales_order, instance
+        )
+        if validated_products_data:
+            data["products_data"] = validated_products_data
+            products_data = validated_products_data
+
+        if process_ids:
+            processes = Process.objects.filter(id__in=process_ids, is_active=True)
+            self._validate_plate_requirements(
+                processes,
+                instance,
+                artworks,
+                dies,
+                foiling_plates,
+                embossing_plates,
+            )
+
+        if "artworks" in data:
+            data = self._normalize_printing_type(data, artworks)
+
+        if products_data:
+            data["total_amount"] = self._compute_total_amount(
+                products_data, data.get("total_amount")
+            )
+
+        return data
+
+    def _validate_sales_order_consistency(self, data, sales_order):
+        """当存在客户订单时，校验并补齐客户、日期、金额等字段。"""
+        instance = getattr(self, "instance", None)
+        customer = data.get("customer")
+        if customer is None:
+            data["customer"] = sales_order.customer
+        elif customer.id != sales_order.customer_id:
+            raise serializers.ValidationError(
+                {"customer": "所选客户订单与当前客户不一致，请重新选择"}
+            )
+
+        if not data.get("order_date"):
+            data["order_date"] = sales_order.order_date
+        if not data.get("delivery_date"):
+            data["delivery_date"] = sales_order.delivery_date
+
+        products_data = data.get("products_data", [])
+        if not products_data and not data.get("total_amount"):
+            data["total_amount"] = sales_order.total_amount
+
+        return data
+
+    def _validate_products_data(self, products_data, sales_order, instance):
+        """校验并规范化 products_data，返回规范化后的列表。"""
+        if not products_data:
+            return []
 
         validated_products_data = []
         requested_quantities_by_sales_item = {}
+
         for index, item in enumerate(products_data, start=1):
             if not isinstance(item, dict):
                 raise serializers.ValidationError(
@@ -996,121 +1036,128 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             validated_products_data.append(normalized_item)
 
         if requested_quantities_by_sales_item:
-            sales_order_item_ids = list(requested_quantities_by_sales_item.keys())
-            allocated_queryset = WorkOrderProduct.objects.filter(
-                sales_order_item_id__in=sales_order_item_ids,
-                source_type="sales_order",
+            self._validate_sales_order_item_quantities(
+                requested_quantities_by_sales_item, instance
             )
-            if instance is not None:
-                allocated_queryset = allocated_queryset.exclude(work_order=instance)
 
-            allocated_totals = {
-                item["sales_order_item_id"]: item["total_quantity"] or 0
-                for item in allocated_queryset.values("sales_order_item_id").annotate(
-                    total_quantity=Sum("quantity")
+        return validated_products_data
+
+    def _validate_sales_order_item_quantities(
+        self, requested_quantities_by_sales_item, instance
+    ):
+        """校验客户订单明细的剩余可开数量是否足够。"""
+        sales_order_item_ids = list(requested_quantities_by_sales_item.keys())
+        allocated_queryset = WorkOrderProduct.objects.filter(
+            sales_order_item_id__in=sales_order_item_ids,
+            source_type="sales_order",
+        )
+        if instance is not None:
+            allocated_queryset = allocated_queryset.exclude(work_order=instance)
+
+        allocated_totals = {
+            item["sales_order_item_id"]: item["total_quantity"] or 0
+            for item in allocated_queryset.values("sales_order_item_id").annotate(
+                total_quantity=Sum("quantity")
+            )
+        }
+
+        sales_order_items = {
+            item.id: item
+            for item in SalesOrderItem.objects.filter(id__in=sales_order_item_ids)
+        }
+        for (
+            sales_order_item_id,
+            requested_quantity,
+        ) in requested_quantities_by_sales_item.items():
+            sales_order_item = sales_order_items.get(sales_order_item_id)
+            if sales_order_item is None:
+                raise serializers.ValidationError(
+                    {"products_data": "来源订单明细不存在"}
                 )
-            }
-
-            sales_order_items = {
-                item.id: item
-                for item in SalesOrderItem.objects.filter(id__in=sales_order_item_ids)
-            }
-            for sales_order_item_id, requested_quantity in requested_quantities_by_sales_item.items():
-                sales_order_item = sales_order_items.get(sales_order_item_id)
-                if sales_order_item is None:
-                    raise serializers.ValidationError(
-                        {"products_data": "来源订单明细不存在"}
-                    )
-                allocated_quantity = int(allocated_totals.get(sales_order_item_id, 0) or 0)
-                remaining_quantity = max(
-                    int(sales_order_item.quantity) - allocated_quantity,
-                    0,
+            allocated_quantity = int(
+                allocated_totals.get(sales_order_item_id, 0) or 0
+            )
+            remaining_quantity = max(
+                int(sales_order_item.quantity) - allocated_quantity,
+                0,
+            )
+            if requested_quantity > remaining_quantity:
+                raise serializers.ValidationError(
+                    {
+                        "products_data": (
+                            f"{sales_order_item.product.name} 来源订单明细剩余可开数量为 "
+                            f"{remaining_quantity}，当前提交了 {requested_quantity}"
+                        )
+                    }
                 )
-                if requested_quantity > remaining_quantity:
-                    raise serializers.ValidationError(
-                        {
-                            "products_data": (
-                                f"{sales_order_item.product.name} 来源订单明细剩余可开数量为 "
-                                f"{remaining_quantity}，当前提交了 {requested_quantity}"
-                            )
-                        }
-                    )
 
-        if validated_products_data:
-            data["products_data"] = validated_products_data
-            products_data = validated_products_data
+    def _validate_plate_requirements(
+        self, processes, instance, artworks, dies, foiling_plates, embossing_plates
+    ):
+        """根据选中工序校验图稿/刀模/烫金版/压凸版是否已选择。"""
+        self._validate_plate_requirement(
+            processes,
+            instance,
+            artworks,
+            relation_name="artworks",
+            process_filter_field="requires_artwork",
+            required_filter_field="artwork_required",
+            error_field_name="artworks",
+            error_message_template="选择了需要图稿的工序（{process_names}），请至少选择一个图稿",
+        )
+        self._validate_plate_requirement(
+            processes,
+            instance,
+            dies,
+            relation_name="dies",
+            process_filter_field="requires_die",
+            required_filter_field="die_required",
+            error_field_name="dies",
+            error_message_template="选择了需要刀模的工序（{process_names}），请至少选择一个刀模",
+        )
+        self._validate_plate_requirement(
+            processes,
+            instance,
+            foiling_plates,
+            relation_name="foiling_plates",
+            process_filter_field="requires_foiling_plate",
+            required_filter_field="foiling_plate_required",
+            error_field_name="foiling_plates",
+            error_message_template="选择了需要烫金版的工序（{process_names}），请至少选择一个烫金版",
+        )
+        self._validate_plate_requirement(
+            processes,
+            instance,
+            embossing_plates,
+            relation_name="embossing_plates",
+            process_filter_field="requires_embossing_plate",
+            required_filter_field="embossing_plate_required",
+            error_field_name="embossing_plates",
+            error_message_template="选择了需要压凸版的工序（{process_names}），请至少选择一个压凸版",
+        )
 
-        # process_ids 已经在 validate_processes 方法中过滤了 null 值
-        # 根据选中的工序验证版的选择（只验证发送的字段）
-        if process_ids:
-            processes = Process.objects.filter(id__in=process_ids, is_active=True)
-
-            self._validate_plate_requirement(
-                processes,
-                instance,
-                artworks,
-                relation_name="artworks",
-                process_filter_field="requires_artwork",
-                required_filter_field="artwork_required",
-                error_field_name="artworks",
-                error_message_template="选择了需要图稿的工序（{process_names}），请至少选择一个图稿",
-            )
-            self._validate_plate_requirement(
-                processes,
-                instance,
-                dies,
-                relation_name="dies",
-                process_filter_field="requires_die",
-                required_filter_field="die_required",
-                error_field_name="dies",
-                error_message_template="选择了需要刀模的工序（{process_names}），请至少选择一个刀模",
-            )
-            self._validate_plate_requirement(
-                processes,
-                instance,
-                foiling_plates,
-                relation_name="foiling_plates",
-                process_filter_field="requires_foiling_plate",
-                required_filter_field="foiling_plate_required",
-                error_field_name="foiling_plates",
-                error_message_template="选择了需要烫金版的工序（{process_names}），请至少选择一个烫金版",
-            )
-            self._validate_plate_requirement(
-                processes,
-                instance,
-                embossing_plates,
-                relation_name="embossing_plates",
-                process_filter_field="requires_embossing_plate",
-                required_filter_field="embossing_plate_required",
-                error_field_name="embossing_plates",
-                error_message_template="选择了需要压凸版的工序（{process_names}），请至少选择一个压凸版",
-            )
-
-        # 只有在 artworks 字段被发送时才处理 printing_type
-        if "artworks" in data:
-            artworks_value = artworks if artworks is not None else []
-            if not artworks_value or len(artworks_value) == 0:
-                data["printing_type"] = "none"
-            elif printing_type == "none":
-                # 如果选择了图稿但印刷形式是"不需要印刷"，默认改为"正面印刷"
-                data["printing_type"] = "front"
-
-        # 如果提供了 products_data，计算总金额
-        if products_data:
-            total = 0
-            for item in products_data:
-                product_id = item.get("product")
-                if product_id:
-                    try:
-                        product_obj = Product.objects.get(id=product_id)
-                        quantity = item.get("quantity", 1)
-                        total += product_obj.unit_price * quantity
-                    except Product.DoesNotExist:
-                        pass
-            if total > 0:
-                data["total_amount"] = total
-
+    def _normalize_printing_type(self, data, artworks):
+        """根据 artworks 选择情况规范化 printing_type。"""
+        artworks_value = artworks if artworks is not None else []
+        if not artworks_value or len(artworks_value) == 0:
+            data["printing_type"] = "none"
+        elif data.get("printing_type") == "none":
+            data["printing_type"] = "front"
         return data
+
+    def _compute_total_amount(self, products_data, current_total):
+        """根据产品列表计算总金额；若无有效金额则保留当前值。"""
+        total = 0
+        for item in products_data:
+            product_id = item.get("product")
+            if product_id:
+                try:
+                    product_obj = Product.objects.get(id=product_id)
+                    quantity = item.get("quantity", 1)
+                    total += product_obj.unit_price * quantity
+                except Product.DoesNotExist:
+                    pass
+        return total if total > 0 else current_total
 
     def create(self, validated_data):
         """创建施工单并处理多个产品和图稿"""
