@@ -55,11 +55,11 @@ from ..serializers.materials import (
     ReturnProcessSerializer,
     SupplierSerializer,
 )
-from ..services.service_errors import ServiceError
 from ..services.approval_service import ApprovalService
 from ..services.purchase_order_flow_service import PurchaseOrderFlowService
 from ..services.purchase_order_service import PurchaseOrderService
 from ..services.purchase_order_flow_service import PurchaseOrderFlowService
+from ._decorators import handle_service_error
 from .base_viewsets import BaseViewSet
 from .mixins import ApprovalTimelineMixin
 from ..import_export import export_model, import_model
@@ -260,6 +260,7 @@ class PurchaseOrderViewSet(ApprovalTimelineMixin, BaseViewSet):
 
     @action(detail=True, methods=["post"])
     @purchase_order_approve_docs
+    @handle_service_error
     def approve(self, request, pk=None):
         """批准采购单"""
         order = self.get_object()
@@ -267,11 +268,7 @@ class PurchaseOrderViewSet(ApprovalTimelineMixin, BaseViewSet):
             return APIResponse.error("只有已提交状态的采购单可以批准", code=status.HTTP_400_BAD_REQUEST)
 
         service = ApprovalService(PurchaseOrder)
-        try:
-            order = service.approve(order, request.user)
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
-            
+        order = service.approve(order, request.user)
         return APIResponse.success(message="批准成功")
 
     @action(detail=True, methods=["post"])
@@ -294,17 +291,14 @@ class PurchaseOrderViewSet(ApprovalTimelineMixin, BaseViewSet):
 
     @action(detail=True, methods=["post"])
     @purchase_order_place_docs
+    @handle_service_error
     def place_order(self, request, pk=None):
         """下单"""
         order = self.get_object()
-        try:
-            PurchaseOrderFlowService.place_order(
-                order=order,
-                ordered_date=request.data.get("ordered_date"),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
-
+        PurchaseOrderFlowService.place_order(
+            order=order,
+            ordered_date=request.data.get("ordered_date"),
+        )
         return APIResponse.success(message="下单成功")
 
     @action(detail=True, methods=["post"])
@@ -388,13 +382,11 @@ class PurchaseOrderViewSet(ApprovalTimelineMixin, BaseViewSet):
 
     @action(detail=True, methods=["post"])
     @purchase_order_cancel_docs
+    @handle_service_error
     def cancel(self, request, pk=None):
         """取消采购单"""
         order = self.get_object()
-        try:
-            PurchaseOrderService.cancel(order=order)
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code)
+        PurchaseOrderService.cancel(order=order)
         return APIResponse.success(message="取消成功")
 
     @action(detail=False, methods=["post"])

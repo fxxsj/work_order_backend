@@ -28,7 +28,7 @@ from ..services.notification_service import (
     SystemNotificationService,
     UserNotificationSettingsService,
 )
-from ..services.service_errors import ServiceError
+from ._decorators import handle_service_error
 
 
 class NotificationPagination(PageNumberPagination):
@@ -276,16 +276,14 @@ class NotificationViewSet(viewsets.GenericViewSet):
             )
         },
     )
+    @handle_service_error
     def mark_all_read(self, request):
         """标记所有通知为已读"""
-        try:
-            count = NotificationService.mark_all_read(self.get_queryset())
-            return APIResponse.success(
-                data={"count": count},
-                message=f"已标记 {count} 条通知为已读",
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        count = NotificationService.mark_all_read(self.get_queryset())
+        return APIResponse.success(
+            data={"count": count},
+            message=f"已标记 {count} 条通知为已读",
+        )
 
     @action(detail=True, methods=["delete"])
     @extend_schema(
@@ -324,13 +322,11 @@ class NotificationViewSet(viewsets.GenericViewSet):
             )
         },
     )
+    @handle_service_error
     def delete_all_read(self, request):
         """删除所有已读通知"""
-        try:
-            count = NotificationService.delete_all_read(self.get_queryset())
-            return APIResponse.success(data={"count": count}, message=f"已删除 {count} 条已读通知")
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        count = NotificationService.delete_all_read(self.get_queryset())
+        return APIResponse.success(data={"count": count}, message=f"已删除 {count} 条已读通知")
 
     @action(detail=False, methods=["get"])
     @extend_schema(
@@ -343,13 +339,11 @@ class NotificationViewSet(viewsets.GenericViewSet):
             )
         },
     )
+    @handle_service_error
     def unread_count(self, request):
         """获取未读通知数量"""
-        try:
-            count = NotificationService.unread_count(self.get_queryset())
-            return APIResponse.success(data={"unread_count": count})
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        count = NotificationService.unread_count(self.get_queryset())
+        return APIResponse.success(data={"unread_count": count})
 
     @action(detail=False, methods=["get"])
     @extend_schema(
@@ -362,14 +356,12 @@ class NotificationViewSet(viewsets.GenericViewSet):
             )
         },
     )
+    @handle_service_error
     def statistics(self, request):
         """获取通知统计"""
-        try:
-            queryset = self.filter_queryset(self.get_queryset())
-            data = NotificationService.statistics(queryset)
-            return APIResponse.success(data=data)
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        queryset = self.filter_queryset(self.get_queryset())
+        data = NotificationService.statistics(queryset)
+        return APIResponse.success(data=data)
 
     @action(detail=False, methods=["post"])
     @extend_schema(
@@ -382,13 +374,11 @@ class NotificationViewSet(viewsets.GenericViewSet):
             )
         },
     )
+    @handle_service_error
     def ws_ticket(self, request):
         """获取 WebSocket 连接票据（短期有效，一次性使用）"""
-        try:
-            data = NotificationService.ws_ticket(request.user.id)
-            return APIResponse.success(data=data)
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        data = NotificationService.ws_ticket(request.user.id)
+        return APIResponse.success(data=data)
 
 
 @system_notification_docs
@@ -454,91 +444,79 @@ class SystemNotificationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
             ordering = "-created_at"
         return queryset.order_by(ordering)
 
+    @handle_service_error
     def list(self, request):
-        try:
-            queryset = self.filter_queryset(self._get_announcement_queryset())
-            ordering = request.query_params.get("ordering") or "-created_at"
-            rows = SystemNotificationService.list_announcements(
-                queryset, ordering, self.ordering_fields
-            )
+        queryset = self.filter_queryset(self._get_announcement_queryset())
+        ordering = request.query_params.get("ordering") or "-created_at"
+        rows = SystemNotificationService.list_announcements(
+            queryset, ordering, self.ordering_fields
+        )
 
-            page = self.paginate_queryset(rows)
-            if page is not None:
-                data = [SystemNotificationAdminSerializer.serialize_row(row) for row in page]
-                paginated = self.get_paginated_response(data)
-                return APIResponse.success(data=paginated.data)
+        page = self.paginate_queryset(rows)
+        if page is not None:
+            data = [SystemNotificationAdminSerializer.serialize_row(row) for row in page]
+            paginated = self.get_paginated_response(data)
+            return APIResponse.success(data=paginated.data)
 
-            data = [SystemNotificationAdminSerializer.serialize_row(row) for row in rows]
-            return APIResponse.success(data=data)
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        data = [SystemNotificationAdminSerializer.serialize_row(row) for row in rows]
+        return APIResponse.success(data=data)
 
     @action(detail=False, methods=["post"])
+    @handle_service_error
     def create_announcement(self, request):
         """创建系统公告"""
-        try:
-            result = SystemNotificationService.create_announcement(
-                title=(request.data.get("title") or "").strip(),
-                content=(request.data.get("content") or "").strip(),
-                recipient_ids=request.data.get("recipient_ids"),
-                only_staff=bool(request.data.get("only_staff", False)),
-                expires_in_days=request.data.get("expires_in_days"),
-                priority=request.data.get("priority") or "normal",
-            )
-            return APIResponse.success(
-                data=result,
-                message="系统公告已创建",
-                code=status.HTTP_201_CREATED,
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        result = SystemNotificationService.create_announcement(
+            title=(request.data.get("title") or "").strip(),
+            content=(request.data.get("content") or "").strip(),
+            recipient_ids=request.data.get("recipient_ids"),
+            only_staff=bool(request.data.get("only_staff", False)),
+            expires_in_days=request.data.get("expires_in_days"),
+            priority=request.data.get("priority") or "normal",
+        )
+        return APIResponse.success(
+            data=result,
+            message="系统公告已创建",
+            code=status.HTTP_201_CREATED,
+        )
 
     @action(detail=False, methods=["post"])
+    @handle_service_error
     def send_urgent_alert(self, request):
         """发送紧急警报"""
-        try:
-            result = SystemNotificationService.send_urgent_alert(
-                title=(request.data.get("title") or "").strip(),
-                content=(request.data.get("content") or "").strip(),
-                recipient_ids=request.data.get("recipient_ids"),
-                only_staff=bool(request.data.get("only_staff", False)),
-            )
-            return APIResponse.success(
-                data=result,
-                message="紧急警报已发送",
-                code=status.HTTP_201_CREATED,
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        result = SystemNotificationService.send_urgent_alert(
+            title=(request.data.get("title") or "").strip(),
+            content=(request.data.get("content") or "").strip(),
+            recipient_ids=request.data.get("recipient_ids"),
+            only_staff=bool(request.data.get("only_staff", False)),
+        )
+        return APIResponse.success(
+            data=result,
+            message="紧急警报已发送",
+            code=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["delete"])
+    @handle_service_error
     def revoke(self, request, pk=None):
         """撤回系统公告批次。"""
-        try:
-            count = SystemNotificationService.revoke(pk)
-            return APIResponse.success(
-                data={"count": count},
-                message="系统通知已撤回",
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        count = SystemNotificationService.revoke(pk)
+        return APIResponse.success(
+            data={"count": count},
+            message="系统通知已撤回",
+        )
 
     @action(detail=False, methods=["get"])
+    @handle_service_error
     def notification_settings(self, request):
         """获取通知设置"""
-        try:
-            return APIResponse.success(data=SystemNotificationService.get_settings())
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        return APIResponse.success(data=SystemNotificationService.get_settings())
 
     @action(detail=False, methods=["post"])
+    @handle_service_error
     def update_notification_settings(self, request):
         """更新通知设置"""
-        try:
-            data = SystemNotificationService.update_settings(request.data)
-            return APIResponse.success(data=data, message="通知设置已更新")
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        data = SystemNotificationService.update_settings(request.data)
+        return APIResponse.success(data=data, message="通知设置已更新")
 
     @action(detail=False, methods=["get"])
     def system_status(self, request):
@@ -561,34 +539,28 @@ class UserNotificationSettingsViewSet(viewsets.GenericViewSet):
     serializer_class = EmptySerializer
 
     @action(detail=False, methods=["get"])
+    @handle_service_error
     def get_settings(self, request):
         """获取用户通知设置"""
-        try:
-            data = UserNotificationSettingsService.get_settings(request.user)
-            return APIResponse.success(data=data)
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        data = UserNotificationSettingsService.get_settings(request.user)
+        return APIResponse.success(data=data)
 
     @action(detail=False, methods=["post"])
+    @handle_service_error
     def update_settings(self, request):
         """更新用户通知设置"""
-        try:
-            data = UserNotificationSettingsService.update_settings(
-                request.user, request.data
-            )
-            return APIResponse.success(data=data, message="通知设置已更新")
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        data = UserNotificationSettingsService.update_settings(
+            request.user, request.data
+        )
+        return APIResponse.success(data=data, message="通知设置已更新")
 
     @action(detail=False, methods=["get"])
+    @handle_service_error
     def notification_preferences(self, request):
         """获取通知偏好设置"""
-        try:
-            return APIResponse.success(
-                data=UserNotificationSettingsService.get_notification_preferences()
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        return APIResponse.success(
+            data=UserNotificationSettingsService.get_notification_preferences()
+        )
 
 
 @notification_template_docs
@@ -599,36 +571,30 @@ class NotificationTemplateViewSet(viewsets.GenericViewSet):
     serializer_class = EmptySerializer
 
     @action(detail=False, methods=["get"])
+    @handle_service_error
     def get_templates(self, request):
         """获取通知模板"""
-        try:
-            return APIResponse.success(data=NotificationTemplateService.get_templates())
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        return APIResponse.success(data=NotificationTemplateService.get_templates())
 
     @action(detail=False, methods=["post"])
+    @handle_service_error
     def update_template(self, request):
         """更新通知模板"""
-        try:
-            result = NotificationTemplateService.update_template(
-                template_name=(request.data.get("template_name") or "").strip(),
-                title=request.data.get("title"),
-                message=request.data.get("message"),
-                variables=request.data.get("variables"),
-                is_active=request.data.get("is_active"),
-            )
-            return APIResponse.success(data=result, message="模板已更新")
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        result = NotificationTemplateService.update_template(
+            template_name=(request.data.get("template_name") or "").strip(),
+            title=request.data.get("title"),
+            message=request.data.get("message"),
+            variables=request.data.get("variables"),
+            is_active=request.data.get("is_active"),
+        )
+        return APIResponse.success(data=result, message="模板已更新")
 
     @action(detail=False, methods=["post"])
+    @handle_service_error
     def preview_template(self, request):
         """预览通知模板"""
-        try:
-            result = NotificationTemplateService.preview_template(
-                template_name=request.data.get("template_name"),
-                variables=request.data.get("variables", {}),
-            )
-            return APIResponse.success(data=result)
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        result = NotificationTemplateService.preview_template(
+            template_name=request.data.get("template_name"),
+            variables=request.data.get("variables", {}),
+        )
+        return APIResponse.success(data=result)
