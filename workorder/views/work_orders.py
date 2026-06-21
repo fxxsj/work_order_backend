@@ -81,7 +81,7 @@ from ..services.work_order_statistics_service import (
     WorkOrderStatisticsService,
 )
 from ..services.task_sync_service import TaskSyncService
-from ..services.service_errors import ServiceError
+from ._decorators import handle_service_error
 from ..services.work_order_service import WorkOrderService
 
 # P1 优化: 导入自定义速率限制
@@ -473,54 +473,42 @@ class WorkOrderViewSet(BaseViewSet):
 
     @action(detail=True, methods=["post"])
     @work_order_add_process_docs
+    @handle_service_error
     def add_process(self, request, pk=None):
         """为施工单添加工序"""
         work_order = self.get_object()
         process_id = request.data.get("process_id")
         sequence = request.data.get("sequence", 0)
-
-        try:
-            work_order_process = WorkOrderService.add_process(
-                work_order=work_order, process_id=process_id, sequence=sequence
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
+        work_order_process = WorkOrderService.add_process(
+            work_order=work_order, process_id=process_id, sequence=sequence
+        )
         serializer = WorkOrderProcessSerializer(work_order_process)
         return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     @work_order_add_material_docs
+    @handle_service_error
     def add_material(self, request, pk=None):
         """为施工单添加物料"""
         work_order = self.get_object()
         material_id = request.data.get("material_id")
         notes = request.data.get("notes", "")
-
-        try:
-            work_order_material = WorkOrderService.add_material(
-                work_order=work_order, material_id=material_id, notes=notes
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
+        work_order_material = WorkOrderService.add_material(
+            work_order=work_order, material_id=material_id, notes=notes
+        )
         serializer = WorkOrderMaterialSerializer(work_order_material)
         return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     @work_order_update_status_docs
+    @handle_service_error
     def update_status(self, request, pk=None):
         """更新施工单状态"""
         work_order = self.get_object()
         new_status = request.data.get("status")
-
-        try:
-            work_order = WorkOrderService.update_status(
-                work_order=work_order, new_status=new_status
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
+        work_order = WorkOrderService.update_status(
+            work_order=work_order, new_status=new_status
+        )
         serializer = self.get_serializer(work_order)
         return APIResponse.success(data=serializer.data)
 
@@ -533,15 +521,13 @@ class WorkOrderViewSet(BaseViewSet):
         return APIResponse.success(data=data)
 
     @action(detail=False, methods=["get"])
+    @handle_service_error
     def sales_order_candidates(self, request):
         """返回可关联到施工单的客户订单候选及其可用产品。"""
         exclude_work_order_id = request.query_params.get("exclude_work_order_id")
-        try:
-            candidates = SalesOrderCandidateService.get_candidates(
-                exclude_work_order_id, request.user
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
+        candidates = SalesOrderCandidateService.get_candidates(
+            exclude_work_order_id, request.user
+        )
         return APIResponse.success(data=candidates)
 
     @action(detail=False, methods=["get"])

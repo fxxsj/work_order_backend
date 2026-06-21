@@ -53,8 +53,8 @@ from ..serializers.core import (
 
 # P1 优化: 导入自定义速率限制
 from ..throttling import ApprovalRateThrottle, CreateRateThrottle, ExportRateThrottle
-from ..services.service_errors import ServiceError
 from ..services.work_order_process_service import WorkOrderProcessService
+from ._decorators import handle_service_error
 from .base_viewsets import BaseViewSet
 from workorder.docs.work_order_processes import (
     process_bulk_create_docs,
@@ -88,24 +88,22 @@ class WorkOrderProcessViewSet(BaseViewSet):
 
     @action(detail=True, methods=["post"])
     @process_start_docs
+    @handle_service_error
     def start(self, request, pk=None):
         """开始工序（生成任务）"""
         process = self.get_object()
-        try:
-            process = WorkOrderProcessService.start_process(
-                process=process,
-                user=request.user,
-                operator_id=request.data.get("operator"),
-                department_id=request.data.get("department"),
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
+        process = WorkOrderProcessService.start_process(
+            process=process,
+            user=request.user,
+            operator_id=request.data.get("operator"),
+            department_id=request.data.get("department"),
+        )
         serializer = self.get_serializer(process)
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
     @process_complete_docs
+    @handle_service_error
     def complete(self, request, pk=None):
         """完成工序
 
@@ -121,23 +119,20 @@ class WorkOrderProcessViewSet(BaseViewSet):
         quantity_defective = request.data.get("quantity_defective", 0)
         force_complete = request.data.get("force_complete", False)
         force_reason = request.data.get("force_reason", "")
-        try:
-            process = WorkOrderProcessService.complete_process(
-                process=process,
-                user=request.user,
-                quantity_completed=quantity_completed,
-                quantity_defective=quantity_defective,
-                force_complete=force_complete,
-                force_reason=force_reason,
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
+        process = WorkOrderProcessService.complete_process(
+            process=process,
+            user=request.user,
+            quantity_completed=quantity_completed,
+            quantity_defective=quantity_defective,
+            force_complete=force_complete,
+            force_reason=force_reason,
+        )
         serializer = self.get_serializer(process)
         return APIResponse.success(data=serializer.data)
 
     @action(detail=False, methods=["post"])
     @process_bulk_create_docs
+    @handle_service_error
     def batch_start(self, request):
         """批量开始工序
 
@@ -149,20 +144,17 @@ class WorkOrderProcessViewSet(BaseViewSet):
         process_ids = request.data.get("process_ids", [])
         operator_id = request.data.get("operator")
         department_id = request.data.get("department")
-        try:
-            result = WorkOrderProcessService.batch_start(
-                process_ids=process_ids,
-                user=request.user,
-                operator_id=operator_id,
-                department_id=department_id,
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
+        result = WorkOrderProcessService.batch_start(
+            process_ids=process_ids,
+            user=request.user,
+            operator_id=operator_id,
+            department_id=department_id,
+        )
         return APIResponse.success(data=result)
 
     @action(detail=True, methods=["post"])
     @process_reassign_docs
+    @handle_service_error
     def reassign_tasks(self, request, pk=None):
         """批量重新分派工序的所有任务到新部门/操作员
 
@@ -184,19 +176,15 @@ class WorkOrderProcessViewSet(BaseViewSet):
         reason = request.data.get("reason", "")
         notes = request.data.get("notes", "")
         update_process_department = request.data.get("update_process_department", False)
-        try:
-            result = WorkOrderProcessService.reassign_tasks(
-                work_order_process=work_order_process,
-                user=request.user,
-                department_id=department_id,
-                operator_id=operator_id,
-                reason=reason,
-                notes=notes,
-                update_process_department=update_process_department,
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
+        result = WorkOrderProcessService.reassign_tasks(
+            work_order_process=work_order_process,
+            user=request.user,
+            department_id=department_id,
+            operator_id=operator_id,
+            reason=reason,
+            notes=notes,
+            update_process_department=update_process_department,
+        )
         serializer = self.get_serializer(work_order_process)
         return APIResponse.success(data={
                 **serializer.data,

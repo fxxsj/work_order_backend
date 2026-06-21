@@ -18,7 +18,7 @@ from ..models.core import WorkOrderMaterial
 from ..permissions import WorkOrderMaterialPermission
 from ..serializers.core import WorkOrderMaterialSerializer
 from ..services.work_order_material_service import WorkOrderMaterialService
-from ..services.service_errors import ServiceError
+from ._decorators import handle_service_error
 
 
 @work_order_material_docs
@@ -34,20 +34,17 @@ class WorkOrderMaterialViewSet(viewsets.ModelViewSet):
     filterset_fields = ["work_order", "material", "purchase_status"]
 
     @action(detail=True, methods=["post"])
+    @handle_service_error
     def confirm_cutting(self, request, pk=None):
         """确认物料开料完成。"""
         wom = self.get_object()
-        try:
-            WorkOrderMaterialService.confirm_cutting(
-                wom=wom,
-                user=request.user,
-                cut_quantity=request.data.get("cut_quantity"),
-                wastage_quantity=request.data.get("wastage_quantity"),
-                notes=request.data.get("notes", ""),
-            )
-        except ServiceError as exc:
-            return APIResponse.error(exc.message, code=exc.code, data=exc.data)
-
+        WorkOrderMaterialService.confirm_cutting(
+            wom=wom,
+            user=request.user,
+            cut_quantity=request.data.get("cut_quantity"),
+            wastage_quantity=request.data.get("wastage_quantity"),
+            notes=request.data.get("notes", ""),
+        )
         serializer = self.get_serializer(wom)
         return APIResponse.success(
             data=serializer.data,

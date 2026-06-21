@@ -58,7 +58,7 @@ from ..services.asset_service import (
     AssetConfirmationService,
     AssetImageService,
 )
-from ..services.service_errors import ServiceError
+from ._decorators import handle_service_error
 from .base_viewsets import BaseViewSet
 
 
@@ -71,19 +71,15 @@ class PlateMakingConfirmMixin:
 
     @action(detail=True, methods=["post"])
     @confirm_docs
+    @handle_service_error
     def confirm(self, request, pk=None):
         """设计部确认资产，并尝试完成对应制版任务"""
         asset = self.get_object()
-
-        try:
-            AssetConfirmationService.confirm(
-                asset=asset,
-                fk_field=self.confirm_fk_field,
-                user=request.user,
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        AssetConfirmationService.confirm(
+            asset=asset,
+            fk_field=self.confirm_fk_field,
+            user=request.user,
+        )
         serializer = self.get_serializer(asset)
         return APIResponse.success(data=serializer.data)
 
@@ -112,6 +108,7 @@ class ImageAssetActionsMixin:
         return APIResponse.success(data=serializer.data)
 
     @action(detail=True, methods=["post"])
+    @handle_service_error
     def upload_image(self, request, pk=None):
         """上传图片到指定资产"""
         image_model, serializer_class, parent_field = self._get_image_config()
@@ -123,18 +120,14 @@ class ImageAssetActionsMixin:
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            image = AssetImageService.create_image(
-                image_model=image_model,
-                parent_field=parent_field,
-                asset=asset,
-                image_file=image_file,
-                sort_order=int(request.POST.get("sort_order", 0)),
-                description=request.POST.get("description", "").strip(),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        image = AssetImageService.create_image(
+            image_model=image_model,
+            parent_field=parent_field,
+            asset=asset,
+            image_file=image_file,
+            sort_order=int(request.POST.get("sort_order", 0)),
+            description=request.POST.get("description", "").strip(),
+        )
         serializer = serializer_class(image)
         return APIResponse.success(
             data=serializer.data,
@@ -142,18 +135,16 @@ class ImageAssetActionsMixin:
         )
 
     @action(detail=True, methods=["delete"], url_path=r"images/(?P<image_id>\d+)")
+    @handle_service_error
     def delete_image(self, request, pk=None, image_id=None):
         """删除资产的指定图片"""
         image_model, _, parent_field = self._get_image_config()
-        try:
-            AssetImageService.delete_image(
-                image_model=image_model,
-                parent_field=parent_field,
-                asset_pk=pk,
-                image_id=image_id,
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
+        AssetImageService.delete_image(
+            image_model=image_model,
+            parent_field=parent_field,
+            asset_pk=pk,
+            image_id=image_id,
+        )
         return APIResponse.success(message="图片已删除")
 
 
@@ -186,6 +177,7 @@ class ArtworkViewSet(PlateMakingConfirmMixin, ImageAssetActionsMixin, BaseViewSe
 
     @action(detail=True, methods=["post"])
     @artwork_create_version_docs
+    @handle_service_error
     def create_version(self, request, pk=None):
         """基于现有图稿创建新版本
 
@@ -197,12 +189,7 @@ class ArtworkViewSet(PlateMakingConfirmMixin, ImageAssetActionsMixin, BaseViewSe
         - 关联产品及拼版数量
         """
         original_artwork = self.get_object()
-
-        try:
-            new_artwork = ArtworkVersionService.create_version(original_artwork)
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        new_artwork = ArtworkVersionService.create_version(original_artwork)
         serializer = self.get_serializer(new_artwork)
         return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
 

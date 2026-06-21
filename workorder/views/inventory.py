@@ -77,7 +77,7 @@ from ..services.inventory_service import (
     StockInService,
     StockOutService,
 )
-from ..services.service_errors import ServiceError
+from ._decorators import handle_service_error
 
 
 def _apply_department_scope(queryset, department_id, path):
@@ -220,6 +220,7 @@ class ProductStockViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     @product_stock_adjust_docs
+    @handle_service_error
     def adjust(self, request, pk=None):
         """库存调整"""
         stock = self.get_object()
@@ -228,15 +229,12 @@ class ProductStockViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
 
-        try:
-            result = ProductStockService.adjust_stock(
-                stock=stock,
-                adjust_type=serializer.validated_data["adjust_type"],
-                quantity=serializer.validated_data["quantity"],
-                reason=serializer.validated_data["reason"],
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
+        result = ProductStockService.adjust_stock(
+            stock=stock,
+            adjust_type=serializer.validated_data["adjust_type"],
+            quantity=serializer.validated_data["quantity"],
+            reason=serializer.validated_data["reason"],
+        )
 
         return APIResponse.success(
             data={
@@ -310,27 +308,21 @@ class StockInViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     @stock_in_submit_docs
+    @handle_service_error
     def submit(self, request, pk=None):
         """提交入库单"""
         stock_in = self.get_object()
-        try:
-            StockInService.submit(stock_in=stock_in, user=request.user)
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        StockInService.submit(stock_in=stock_in, user=request.user)
         serializer = self.get_serializer(stock_in)
         return APIResponse.success(data=serializer.data, message="入库单提交成功")
 
     @action(detail=True, methods=["post"])
     @stock_in_confirm_docs
+    @handle_service_error
     def confirm(self, request, pk=None):
         """确认入库单"""
         stock_in = self.get_object()
-        try:
-            StockInService.confirm(stock_in=stock_in, user=request.user)
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        StockInService.confirm(stock_in=stock_in, user=request.user)
         serializer = self.get_serializer(stock_in)
         return APIResponse.success(data=serializer.data, message="入库单确认成功")
 
@@ -409,27 +401,21 @@ class StockOutViewSet(viewsets.ModelViewSet):
         return queryset
 
     @action(detail=True, methods=["post"])
+    @handle_service_error
     def submit(self, request, pk=None):
         """提交出库单"""
         stock_out = self.get_object()
-        try:
-            StockOutService.submit(stock_out=stock_out, user=request.user)
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        StockOutService.submit(stock_out=stock_out, user=request.user)
         serializer = self.get_serializer(stock_out)
         return APIResponse.success(data=serializer.data, message="出库单提交成功")
 
     @action(detail=True, methods=["post"])
     @stock_out_confirm_docs
+    @handle_service_error
     def confirm(self, request, pk=None):
         """确认出库单"""
         stock_out = self.get_object()
-        try:
-            StockOutService.confirm(stock_out=stock_out, user=request.user)
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        StockOutService.confirm(stock_out=stock_out, user=request.user)
         serializer = self.get_serializer(stock_out)
         return APIResponse.success(data=serializer.data, message="出库单确认成功")
 
@@ -561,20 +547,16 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     @delivery_ship_docs
+    @handle_service_error
     def ship(self, request, pk=None):
         """发货 - 包含库存扣减逻辑"""
         delivery_order = self.get_object()
-
-        try:
-            result = DeliveryOrderService.ship(
-                delivery_order=delivery_order,
-                user=request.user,
-                logistics_company=request.data.get("logistics_company", ""),
-                tracking_number=request.data.get("tracking_number", ""),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        result = DeliveryOrderService.ship(
+            delivery_order=delivery_order,
+            user=request.user,
+            logistics_company=request.data.get("logistics_company", ""),
+            tracking_number=request.data.get("tracking_number", ""),
+        )
         serializer = self.get_serializer(result["delivery_order"])
         return APIResponse.success(
             data={
@@ -586,42 +568,35 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     @delivery_receive_docs
+    @handle_service_error
     def receive(self, request, pk=None):
         """签收"""
         delivery_order = self.get_object()
-
-        try:
-            delivery_order = DeliveryOrderService.receive(
-                delivery_order=delivery_order,
-                received_notes=request.data.get("received_notes"),
-                receiver_signature=request.FILES.get("receiver_signature"),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        delivery_order = DeliveryOrderService.receive(
+            delivery_order=delivery_order,
+            received_notes=request.data.get("received_notes"),
+            receiver_signature=request.FILES.get("receiver_signature"),
+        )
         serializer = self.get_serializer(delivery_order)
         return APIResponse.success(data=serializer.data, message="签收成功")
 
     @action(detail=True, methods=["post"])
     @delivery_reject_docs
+    @handle_service_error
     def reject(self, request, pk=None):
         """拒收 - 库存回退"""
         delivery_order = self.get_object()
-
-        try:
-            delivery_order = DeliveryOrderService.reject(
-                delivery_order=delivery_order,
-                reject_reason=request.data.get("reject_reason", ""),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        delivery_order = DeliveryOrderService.reject(
+            delivery_order=delivery_order,
+            reject_reason=request.data.get("reject_reason", ""),
+        )
         serializer = self.get_serializer(delivery_order)
         return APIResponse.success(
             data=serializer.data, message="拒收处理成功，库存已回退"
         )
 
     @action(detail=True, methods=["post"])
+    @handle_service_error
     def resolve_exception(self, request, pk=None):
         """
         登记拒收后的处理动作，并驱动后续业务。
@@ -632,17 +607,12 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
         - terminate: 终止，取消关联客户订单
         """
         delivery_order = self.get_object()
-
-        try:
-            result = DeliveryOrderService.resolve_exception(
-                delivery_order=delivery_order,
-                resolution=request.data.get("resolution"),
-                resolution_notes=request.data.get("resolution_notes"),
-                user=request.user,
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        result = DeliveryOrderService.resolve_exception(
+            delivery_order=delivery_order,
+            resolution=request.data.get("resolution"),
+            resolution_notes=request.data.get("resolution_notes"),
+            user=request.user,
+        )
         delivery_order = result.pop("delivery_order")
         serializer = self.get_serializer(delivery_order)
         return APIResponse.success(
@@ -750,20 +720,16 @@ class QualityInspectionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     @quality_complete_docs
+    @handle_service_error
     def complete(self, request, pk=None):
         """完成检验"""
         inspection = self.get_object()
-
-        try:
-            QualityInspectionService.complete(
-                inspection=inspection,
-                result=request.data.get("result"),
-                passed_quantity=request.data.get("passed_quantity", 0),
-                failed_quantity=request.data.get("failed_quantity", 0),
-            )
-        except ServiceError as e:
-            return APIResponse.error(message=str(e), code=e.code, data=e.data)
-
+        QualityInspectionService.complete(
+            inspection=inspection,
+            result=request.data.get("result"),
+            passed_quantity=request.data.get("passed_quantity", 0),
+            failed_quantity=request.data.get("failed_quantity", 0),
+        )
         serializer = self.get_serializer(inspection)
         return APIResponse.success(data=serializer.data, message="检验完成")
 
