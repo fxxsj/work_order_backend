@@ -215,7 +215,7 @@ class NotificationDataIsolationTest(TestCase):
         user_b = self._create_user("notif_user_b")
 
         response_b = self.api_client.get(
-            "/api/v1/notifications/settings/",
+            "/api/v1/user-notification-settings/get_settings/",
             **self._get_auth_header(user_b),
         )
 
@@ -235,14 +235,14 @@ class NotificationDataIsolationTest(TestCase):
         user_b = self._create_user("notif_user_b")
 
         response = self.api_client.patch(
-            "/api/v1/notifications/settings/",
+            "/api/v1/user-notification-settings/update_settings/",
             {"email_enabled": False},
             format="json",
             **self._get_auth_header(user_a),
         )
         if response.status_code == status.HTTP_200_OK:
             response_b = self.api_client.get(
-                "/api/v1/notifications/settings/",
+                "/api/v1/user-notification-settings/get_settings/",
                 **self._get_auth_header(user_b),
             )
             if response_b.status_code == status.HTTP_200_OK:

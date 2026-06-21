@@ -11,6 +11,7 @@ from ..models import (
     WorkOrder, WorkOrderProcess, WorkOrderTask, WorkOrderProduct,
     Customer, Product, Process, Artwork, Department
 )
+from ..services.task_generation import TaskGenerationService
 
 
 class WorkOrderModelTest(TestCase):
@@ -142,7 +143,7 @@ class WorkOrderProcessModelTest(TestCase):
         )
 
         # 生成任务
-        wo_process.generate_tasks()
+        TaskGenerationService.generate_tasks_for_process(wo_process)
 
         # 应该生成通用任务
         tasks = wo_process.tasks.all()

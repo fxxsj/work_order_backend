@@ -15,6 +15,7 @@ from workorder.constants.status import ProcessStatus, TaskStatus, WorkOrderStatu
 from ..models.core import ProcessLog, TaskLog, WorkOrderProcess
 from ..models.base import Department
 from .service_errors import ServiceError
+from .task_generation import TaskGenerationService
 
 
 class WorkOrderProcessService:
@@ -187,7 +188,7 @@ class WorkOrderProcessService:
                     )
                     continue
 
-                process.generate_tasks()
+                TaskGenerationService.generate_tasks_for_process(process)
 
                 process.status = ProcessStatus.IN_PROGRESS
                 process.actual_start_time = timezone.now()

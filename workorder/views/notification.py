@@ -28,6 +28,7 @@ from ..services.notification_service import (
     SystemNotificationService,
     UserNotificationSettingsService,
 )
+from ..services.service_errors import ServiceError
 from ._decorators import handle_service_error
 
 

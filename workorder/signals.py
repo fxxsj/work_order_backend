@@ -6,12 +6,15 @@
 业务逻辑委托给 services/material_task_trigger_service.py，
 此处只负责信号连接和条件判断。
 """
+import logging
+
 from django.db import transaction
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from .models import (
     WorkOrder,
     WorkOrderMaterial,
+    WorkOrderProcess,
     Artwork,
     Die,
     FoilingPlate,
@@ -23,6 +26,10 @@ from .services.material_task_trigger_service import (
     complete_plate_tasks,
     update_cutting_tasks_on_material_cut,
 )
+from .services.stock_update_service import StockUpdateService
+from .services.cost_calculation_service import CostCalculationService
+
+logger = logging.getLogger(__name__)
 
 # 使用实例属性缓存保存前的状态，避免全局缓存带来的并发问题
 
@@ -158,6 +165,63 @@ def register_asset_confirmation_handlers(model_class, asset_kwarg_name):
         weak=False,
         dispatch_uid=f"update_tasks_on_confirmation_for_{model_class.__name__}",
     )
+
+
+# --- 工序完成：库存更新 ---
+
+@receiver(pre_save, sender=WorkOrderProcess)
+def cache_work_order_process_status(sender, instance, **kwargs):
+    """保存前缓存工序状态，供 post_save 比较使用。"""
+    if not instance.pk:
+        instance._previous_status = None
+        return
+
+    try:
+        previous = WorkOrderProcess.objects.only("status").get(pk=instance.pk)
+        instance._previous_status = previous.status
+    except WorkOrderProcess.DoesNotExist:
+        instance._previous_status = None
+
+
+@receiver(post_save, sender=WorkOrderProcess)
+def update_stock_on_process_completed(sender, instance, created, **kwargs):
+    """工序状态变为 completed 时，根据工序类型触发库存更新。"""
+    if created:
+        return
+
+    previous_status = getattr(instance, "_previous_status", None)
+    if previous_status == instance.status:
+        return
+
+    if instance.status != "completed":
+        return
+
+    process_code = instance.process.code
+    try:
+        if process_code == "PACK":
+            StockUpdateService.update_product_stock_on_packaging(instance)
+        elif process_code == "CUT":
+            StockUpdateService.update_material_stock_on_cutting(instance)
+    except Exception as e:
+        logger.warning(f"工序 {instance.id} 完成时库存更新失败: {e}")
+
+
+# --- 施工单完成：成本核算草稿 ---
+
+@receiver(post_save, sender=WorkOrder)
+def generate_cost_draft_on_work_order_completed(sender, instance, created, **kwargs):
+    """施工单状态变为 completed 时，自动生成成本核算草稿。"""
+    if created:
+        return
+
+    previous_status = getattr(instance, "_previous_status", None)
+    if previous_status == "completed" or instance.status != "completed":
+        return
+
+    try:
+        CostCalculationService.generate_cost_draft(instance)
+    except Exception as e:
+        logger.warning(f"施工单 {instance.order_number} 完成时成本核算草稿生成失败: {e}")
 
 
 # --- 信号注册 ---

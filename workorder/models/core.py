@@ -604,15 +604,6 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
         self.actual_end_time = timezone.now()
         self.save()
 
-        # 如果是包装任务，更新产品库存
-        if self.process.code == "PACK":
-            from workorder.services.stock_update_service import StockUpdateService
-            StockUpdateService.update_product_stock_on_packaging(self)
-
-        if self.process.code == "CUT":
-            from workorder.services.stock_update_service import StockUpdateService
-            StockUpdateService.update_material_stock_on_cutting(self)
-
         # 创建工序完成通知
         from .system import Notification
 
@@ -643,16 +634,6 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
         if all_processes_completed and work_order.status != "completed":
             work_order.status = "completed"
             work_order.save()
-
-            # 触发成本核算草稿生成
-            try:
-                from workorder.services.cost_calculation_service import (
-                    CostCalculationService,
-                )
-
-                CostCalculationService.generate_cost_draft(work_order)
-            except Exception as e:
-                logger.warning(f"施工单完成时成本核算草稿生成失败: {e}")
 
             # 创建施工单完成通知
             if work_order.created_by:
@@ -803,23 +784,6 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
         else:
             # 默认使用least_tasks策略
             return self._select_operator_by_strategy(department, "least_tasks")
-
-    def generate_tasks(self):
-        """为工序生成任务（在工序开始时调用）
-
-        委托给 TaskGenerationService 处理业务逻辑。
-        """
-        from ..services.task_generation import TaskGenerationService
-        TaskGenerationService.generate_tasks_for_process(self)
-
-    def _parse_material_usage(self, usage_str):
-        """解析物料用量字符串，提取数字部分
-
-        委托给 TaskGenerationService 处理。
-        """
-        from ..services.task_generation import TaskGenerationService
-        return TaskGenerationService._parse_material_usage(usage_str)
-
 
     def calculate_duration(self):
         """计算工序耗时"""
