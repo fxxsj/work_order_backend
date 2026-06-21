@@ -21,6 +21,7 @@ from workorder.models.base import Customer, Process
 from workorder.models.products import Product
 from workorder.models.core import WorkOrder, WorkOrderProcess, WorkOrderTask
 from workorder.models.finance import Invoice, PaymentPlan, ProductionCost, Statement
+from workorder.models.sales import SalesOrder
 from workorder.models.inventory import (
     ProductStock,
     QualityInspection,
@@ -84,6 +85,20 @@ def test_work_order(db, test_customer, finance_user):
         delivery_date=timezone.now().date() + timedelta(days=1),
         created_by=finance_user,
         manager=finance_user,
+    )
+
+
+@pytest.fixture
+def test_sales_order(db, test_customer, finance_user):
+    return SalesOrder.objects.create(
+        order_number="SO202601010001",
+        customer=test_customer,
+        order_date=timezone.now().date(),
+        delivery_date=timezone.now().date() + timedelta(days=7),
+        total_amount=Decimal("1000.00"),
+        status="pending",
+        payment_status="unpaid",
+        created_by=finance_user,
     )
 
 
@@ -228,7 +243,7 @@ class TestAssetImageService:
             )
         assert exc_info.value.code == 400
 
-    def test_delete_image_not_found(self):
+    def test_delete_image_not_found(self, db):
         with pytest.raises(ServiceError) as exc_info:
             AssetImageService.delete_image(ArtworkProduct, "artwork", 1, 9999)
         assert exc_info.value.code == 404
@@ -316,6 +331,9 @@ class TestStatementService:
             statement_type="customer",
             customer=test_customer,
             status="draft",
+            period="2026-01",
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 1, 31),
         )
 
     def test_generate_requires_period(self):
@@ -344,8 +362,9 @@ class TestStatementService:
 class TestPaymentPlanService:
     """收款计划服务测试"""
 
-    def test_summary_structure(self, db):
+    def test_summary_structure(self, db, test_sales_order):
         PaymentPlan.objects.create(
+            sales_order=test_sales_order,
             plan_amount=Decimal("100"),
             paid_amount=Decimal("0"),
             plan_date=date.today(),
@@ -458,7 +477,7 @@ class TestSystemNotificationService:
         assert deleted == 1
         assert Notification.objects.filter(data__batch_id=result["batch_id"]).count() == 0
 
-    def test_revoke_not_found(self):
+    def test_revoke_not_found(self, db):
         with pytest.raises(ServiceError) as exc_info:
             SystemNotificationService.revoke("non-existent-batch")
         assert exc_info.value.code == 404
@@ -623,7 +642,7 @@ class TestMonitoringStatsService:
         assert "resource" in types
         assert "business" in types
 
-    def test_get_productivity_trends(self):
+    def test_get_productivity_trends(self, db):
         trends = MonitoringStatsService.get_productivity_trends(days=7)
         assert len(trends) == 7
         assert "date" in trends[0]
@@ -638,8 +657,8 @@ class TestMonitoringStatsService:
             task_type="quality_check",
             work_content="质检",
             production_quantity=100,
-            completed_quantity=90,
-            defective_quantity=5,
+            quantity_completed=90,
+            quantity_defective=5,
         )
         data = MonitoringStatsService.get_quality_metrics(days=30)
         assert "defect_stats" in data
@@ -672,7 +691,7 @@ class TestMonitoringStatsService:
             work_content="生产",
             production_quantity=10,
             status="completed",
-            assigned_to=finance_user,
+            assigned_operator=finance_user,
         )
         result = MonitoringStatsService.get_user_performance(days=30)
-        assert any(item.get("assigned_to__username") == "finance_user" for item in result)
+        assert any(item.get("assigned_operator__username") == "finance_user" for item in result)

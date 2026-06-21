@@ -366,11 +366,13 @@ class Invoice(TimeStampedModel, ApprovalFieldsMixin, models.Model):
         return f"{self.invoice_number} - {self.customer.name}"
 
     def save(self, *args, **kwargs):
+        from decimal import Decimal
+
         if not self.invoice_number:
             self.invoice_number = self.generate_invoice_number()
 
         # 自动计算税额和价税合计
-        self.tax_amount = self.amount * (self.tax_rate / 100)
+        self.tax_amount = self.amount * (self.tax_rate / Decimal("100"))
         self.total_amount = self.amount + self.tax_amount
 
         super().save(*args, **kwargs)

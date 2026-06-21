@@ -235,7 +235,7 @@ class BusinessMetrics:
             'priority_distribution': list(priority_stats),
             'time_metrics': {
                 'avg_completion_days': avg_completion_time,
-                'orders_overdue': queryset.filter(deadline__lt=now, status__in=['pending', 'in_progress']).count()
+                'orders_overdue': queryset.filter(delivery_date__lt=now, status__in=['pending', 'in_progress']).count()
             }
         }
 
@@ -260,15 +260,15 @@ class BusinessMetrics:
         in_progress_tasks = queryset.filter(status='in_progress').count()
 
         # 用户指标
-        user_stats = queryset.values('assigned_to__username').annotate(
+        user_stats = queryset.values('assigned_operator__username').annotate(
             total_tasks=Count('id'),
             completed_tasks=Count('id', filter=Q(status='completed')),
-            avg_completion_time=Avg('completed_at') - Avg('started_at')
+            avg_completion_time=Avg(F('updated_at') - F('created_at'))
         ).order_by('-total_tasks')[:10]
 
-        # 超时任务
+        # 超时任务（WorkOrderTask 无 deadline 字段，按更新时间超过 24h/7d 的在办任务兜底）
         overdue_tasks = queryset.filter(
-            deadline__lt=now,
+            updated_at__lt=now,
             status__in=['pending', 'in_progress']
         ).count()
 
@@ -481,13 +481,13 @@ class MonitoringStatsService:
             WorkOrderTask.objects.filter(
                 created_at__gte=start_date, created_at__lte=end_date
             )
-            .values("assigned_to__username")
+            .values("assigned_operator__username")
             .annotate(
                 total_tasks=Count("id"),
                 completed_tasks=Count("id", filter=Q(status="completed")),
-                avg_completion_time=Avg(F("completed_at") - F("started_at")),
+                avg_completion_time=Avg(F("updated_at") - F("created_at")),
             )
-            .filter(assigned_to__is_active=True)
+            .filter(assigned_operator__is_active=True)
             .order_by("-completed_tasks")[:20]
         )
         return list(user_stats)
@@ -500,8 +500,12 @@ class MonitoringStatsService:
         daily_data = []
         for i in range(days):
             date = (timezone.now() - timedelta(days=i)).date()
-            completed_orders = WorkOrder.objects.filter(completed_at__date=date).count()
-            completed_tasks = WorkOrderTask.objects.filter(completed_at__date=date).count()
+            completed_orders = WorkOrder.objects.filter(
+                status="completed", updated_at__date=date
+            ).count()
+            completed_tasks = WorkOrderTask.objects.filter(
+                status="completed", updated_at__date=date
+            ).count()
             daily_data.append(
                 {
                     "date": date.isoformat(),
@@ -521,11 +525,11 @@ class MonitoringStatsService:
         start_date = end_date - timedelta(days=days)
 
         tasks_with_defects = WorkOrderTask.objects.filter(
-            created_at__gte=start_date, defective_quantity__gt=0
+            created_at__gte=start_date, quantity_defective__gt=0
         ).aggregate(
             total_tasks=Count("id"),
-            total_defects=Sum("defective_quantity"),
-            total_completed=Sum("completed_quantity"),
+            total_defects=Sum("quantity_defective"),
+            total_completed=Sum("quantity_completed"),
         )
 
         total_tasks = tasks_with_defects["total_tasks"] or 0
@@ -554,9 +558,9 @@ class MonitoringStatsService:
     def get_operations_dashboard() -> Dict[str, Any]:
         """运营仪表盘关键指标聚合。"""
         from ..constants.status import MaterialPurchaseStatus
-        from ..models.core import WorkOrder, WorkOrderTask
+        from ..models.core import WorkOrder, WorkOrderMaterial, WorkOrderTask
         from ..models.inventory import DeliveryOrder, ProductStock
-        from ..models.materials import PurchaseOrder, WorkOrderMaterial
+        from ..models.materials import PurchaseOrder
         from ..models.sales import SalesOrder
         from ..services.data_consistency_service import DataConsistencyService
 
