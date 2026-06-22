@@ -12,7 +12,6 @@
 """
 
 from django.contrib import admin
-from django.utils.html import format_html
 
 from ..models import (
     CostCenter,
@@ -24,14 +23,21 @@ from ..models import (
     Statement,
     SupplierPayment,
 )
-from .utils import FINANCE_STATUS_COLORS, create_status_badge_method
+from .utils import create_status_badge_method
 
 
 @admin.register(CostCenter)
 class CostCenterAdmin(admin.ModelAdmin):
     """成本中心管理"""
 
-    list_display = ["code", "name", "type", "parent", "is_active", "created_at"]
+    list_display = [
+        "code",
+        "name",
+        "type",
+        "parent",
+        "is_active",
+        "created_at",
+    ]
     search_fields = ["code", "name", "description"]
     list_filter = ["type", "is_active", "created_at"]
     list_editable = ["is_active"]
@@ -41,7 +47,10 @@ class CostCenterAdmin(admin.ModelAdmin):
     list_select_related = ["parent", "manager"]
 
     fieldsets = (
-        ("基本信息", {"fields": ("code", "name", "type", "parent", "is_active")}),
+        (
+            "基本信息",
+            {"fields": ("code", "name", "type", "parent", "is_active")},
+        ),
         ("详细信息", {"fields": ("description", "manager")}),
         (
             "系统信息",
@@ -71,7 +80,15 @@ class CostItemAdmin(admin.ModelAdmin):
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("code", "name", "type", "allocation_method", "is_active")},
+            {
+                "fields": (
+                    "code",
+                    "name",
+                    "type",
+                    "allocation_method",
+                    "is_active",
+                )
+            },
         ),
         ("详细信息", {"fields": ("description",)}),
         (
@@ -164,7 +181,12 @@ class InvoiceAdmin(admin.ModelAdmin):
         "sales_order",
         "work_order",
     ]
-    list_select_related = ["customer", "submitted_by", "approved_by", "created_by"]
+    list_select_related = [
+        "customer",
+        "submitted_by",
+        "approved_by",
+        "created_by",
+    ]
     readonly_fields = [
         "invoice_number",
         "tax_amount",
@@ -177,14 +199,31 @@ class InvoiceAdmin(admin.ModelAdmin):
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("invoice_number", "customer", "invoice_type", "status")},
+            {
+                "fields": (
+                    "invoice_number",
+                    "customer",
+                    "invoice_type",
+                    "status",
+                )
+            },
         ),
-        ("金额信息", {"fields": ("amount", "tax_rate", "tax_amount", "total_amount")}),
+        (
+            "金额信息",
+            {"fields": ("amount", "tax_rate", "tax_amount", "total_amount")},
+        ),
         ("关联信息", {"fields": ("sales_order", "work_order", "notes")}),
         ("日期信息", {"fields": ("issue_date",)}),
         (
             "审核信息",
-            {"fields": ("submitted_by", "submitted_at", "approved_by", "approved_at")},
+            {
+                "fields": (
+                    "submitted_by",
+                    "submitted_at",
+                    "approved_by",
+                    "approved_at",
+                )
+            },
         ),
         (
             "其他信息",
@@ -226,7 +265,12 @@ class PaymentAdmin(admin.ModelAdmin):
         "recorded_by",
         "created_at",
     ]
-    search_fields = ["payment_number", "customer__name", "transaction_number", "bank_account"]
+    search_fields = [
+        "payment_number",
+        "customer__name",
+        "transaction_number",
+        "bank_account",
+    ]
     list_filter = ["payment_method", "payment_date", "created_at"]
     autocomplete_fields = ["customer", "sales_order", "invoice", "recorded_by"]
     readonly_fields = ["payment_number", "remaining_amount", "created_at"]
@@ -247,7 +291,10 @@ class PaymentAdmin(admin.ModelAdmin):
                 )
             },
         ),
-        ("金额信息", {"fields": ("amount", "applied_amount", "remaining_amount")}),
+        (
+            "金额信息",
+            {"fields": ("amount", "applied_amount", "remaining_amount")},
+        ),
         ("支付信息", {"fields": ("bank_account", "transaction_number")}),
         ("其他信息", {"fields": ("notes",)}),
         (
@@ -274,7 +321,11 @@ class PaymentPlanAdmin(admin.ModelAdmin):
         "remaining_amount",
         "created_at",
     ]
-    search_fields = ["sales_order__order_number", "sales_order__customer__name", "notes"]
+    search_fields = [
+        "sales_order__order_number",
+        "sales_order__customer__name",
+        "notes",
+    ]
     list_filter = ["status", "plan_date", "created_at"]
     autocomplete_fields = ["sales_order"]
     readonly_fields = ["created_at", "remaining_amount"]
@@ -283,7 +334,10 @@ class PaymentPlanAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ("基本信息", {"fields": ("sales_order", "status")}),
-        ("金额信息", {"fields": ("plan_amount", "paid_amount", "remaining_amount")}),
+        (
+            "金额信息",
+            {"fields": ("plan_amount", "paid_amount", "remaining_amount")},
+        ),
         ("日期信息", {"fields": ("plan_date",)}),
         ("其他信息", {"fields": ("notes",)}),
         (
@@ -326,7 +380,12 @@ class StatementAdmin(admin.ModelAdmin):
         "confirmed_at",
         "created_at",
     ]
-    search_fields = ["statement_number", "customer__name", "supplier__name", "period"]
+    search_fields = [
+        "statement_number",
+        "customer__name",
+        "supplier__name",
+        "period",
+    ]
     list_filter = [
         "statement_type",
         "status",
@@ -335,10 +394,20 @@ class StatementAdmin(admin.ModelAdmin):
         "confirmed_at",
         "created_at",
     ]
-    autocomplete_fields = ["customer", "supplier", "confirmed_by", "created_by"]
+    autocomplete_fields = [
+        "customer",
+        "supplier",
+        "confirmed_by",
+        "created_by",
+    ]
     readonly_fields = ["statement_number", "closing_balance", "created_at"]
     ordering = ["-created_at"]
-    list_select_related = ["customer", "supplier", "confirmed_by", "created_by"]
+    list_select_related = [
+        "customer",
+        "supplier",
+        "confirmed_by",
+        "created_by",
+    ]
 
     fieldsets = (
         (
@@ -365,7 +434,10 @@ class StatementAdmin(admin.ModelAdmin):
                 )
             },
         ),
-        ("确认信息", {"fields": ("confirmed_by", "confirmed_at", "confirmation_notes")}),
+        (
+            "确认信息",
+            {"fields": ("confirmed_by", "confirmed_at", "confirmation_notes")},
+        ),
         ("其他信息", {"fields": ("notes",)}),
         (
             "系统信息",
@@ -410,9 +482,19 @@ class SupplierPaymentAdmin(admin.ModelAdmin):
         "status",
         "created_at",
     ]
-    search_fields = ["payment_number", "supplier__name", "purchase_order__order_number"]
+    search_fields = [
+        "payment_number",
+        "supplier__name",
+        "purchase_order__order_number",
+    ]
     list_filter = ["status", "payment_method", "payment_date", "created_at"]
-    autocomplete_fields = ["supplier", "purchase_order", "created_by", "submitted_by", "approved_by"]
+    autocomplete_fields = [
+        "supplier",
+        "purchase_order",
+        "created_by",
+        "submitted_by",
+        "approved_by",
+    ]
     readonly_fields = ["payment_number", "remaining_amount", "created_at"]
     ordering = ["-payment_date"]
     list_select_related = ["supplier", "purchase_order"]

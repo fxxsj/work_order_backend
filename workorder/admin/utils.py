@@ -67,7 +67,9 @@ def create_status_badge_method(
     return status_badge
 
 
-def create_priority_badge_method(priority_colors=None, default_color="#409EFF"):
+def create_priority_badge_method(
+    priority_colors=None, default_color="#409EFF"
+):
     """
     创建优先级徽章显示方法的工厂函数
 
@@ -191,7 +193,9 @@ def create_foreign_key_display_method(field_name, display_name=None):
             list_display = ['order_number', 'customer_name']
     """
 
-    @admin.display(description=display_name or field_name.replace("_", " ").title())
+    @admin.display(
+        description=display_name or field_name.replace("_", " ").title()
+    )
     def foreign_key_display(self, obj):
         """显示外键关联对象的名称"""
         foreign_obj = getattr(obj, field_name, None)
@@ -220,7 +224,9 @@ def create_user_display_method(field_name, display_name=None):
             list_display = ['order_number', 'created_by_name']
     """
 
-    @admin.display(description=display_name or field_name.replace("_", " ").title())
+    @admin.display(
+        description=display_name or field_name.replace("_", " ").title()
+    )
     def user_display(self, obj):
         """显示用户名"""
         user = getattr(obj, field_name, None)
@@ -242,12 +248,20 @@ class TimestampMixin:
     @admin.display(description="创建时间")
     def created_at_display(self, obj):
         """创建时间显示"""
-        return obj.created_at.strftime("%Y-%m-%d %H:%M") if obj.created_at else "-"
+        return (
+            obj.created_at.strftime("%Y-%m-%d %H:%M")
+            if obj.created_at
+            else "-"
+        )
 
     @admin.display(description="更新时间")
     def updated_at_display(self, obj):
         """更新时间显示"""
-        return obj.updated_at.strftime("%Y-%m-%d %H:%M") if obj.updated_at else "-"
+        return (
+            obj.updated_at.strftime("%Y-%m-%d %H:%M")
+            if obj.updated_at
+            else "-"
+        )
 
 
 class CreatedByMixin:

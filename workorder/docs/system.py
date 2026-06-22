@@ -10,7 +10,10 @@ from drf_spectacular.utils import (
 )
 
 from workorder.schema import standard_error_response, standard_success_response
-from workorder.serializers.system import NotificationSerializer, TaskAssignmentRuleSerializer
+from workorder.serializers.system import (
+    NotificationSerializer,
+    TaskAssignmentRuleSerializer,
+)
 
 
 notification_docs = extend_schema_view(
@@ -19,7 +22,9 @@ notification_docs = extend_schema_view(
         summary="获取通知列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("SystemNotificationListResponse"),
+                response=standard_success_response(
+                    "SystemNotificationListResponse"
+                ),
                 description="通知列表",
                 examples=[
                     OpenApiExample(
@@ -39,7 +44,8 @@ notification_docs = extend_schema_view(
                                         "title": "任务提醒",
                                         "notification_type": "task_assigned",
                                         "is_read": False,
-                                        "created_at": "2026-03-02T09:00:00+08:00",
+                                        "created_at": "2026-03-02T09:00:00"
+                                        "+08:00",
                                     }
                                 ],
                             },
@@ -70,7 +76,9 @@ notification_mark_read_docs = extend_schema(
     summary="标记通知为已读",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("SystemNotificationMarkReadResponse"),
+            response=standard_success_response(
+                "SystemNotificationMarkReadResponse"
+            ),
             description="标记成功",
         )
     },
@@ -81,7 +89,9 @@ notification_mark_all_docs = extend_schema(
     summary="标记全部通知为已读",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("SystemNotificationMarkAllResponse"),
+            response=standard_success_response(
+                "SystemNotificationMarkAllResponse"
+            ),
             description="标记成功",
         )
     },
@@ -92,7 +102,9 @@ notification_unread_docs = extend_schema(
     summary="获取未读通知数量",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("SystemNotificationUnreadResponse"),
+            response=standard_success_response(
+                "SystemNotificationUnreadResponse"
+            ),
             description="未读数量",
         )
     },
@@ -105,7 +117,9 @@ task_assignment_rule_docs = extend_schema_view(
         summary="获取任务分派规则列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("TaskAssignmentRuleListResponse"),
+                response=standard_success_response(
+                    "TaskAssignmentRuleListResponse"
+                ),
                 description="分派规则列表",
             )
         },
@@ -116,7 +130,8 @@ task_assignment_rule_docs = extend_schema_view(
         responses={
             200: OpenApiResponse(
                 response=standard_success_response(
-                    "TaskAssignmentRuleDetailResponse", TaskAssignmentRuleSerializer
+                    "TaskAssignmentRuleDetailResponse",
+                    TaskAssignmentRuleSerializer,
                 ),
                 description="分派规则详情",
             )
@@ -129,7 +144,9 @@ task_assignment_preview_docs = extend_schema(
     summary="生成分派预览",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("TaskAssignmentPreviewResponse"),
+            response=standard_success_response(
+                "TaskAssignmentPreviewResponse"
+            ),
             description="分派预览",
         )
     },
@@ -140,7 +157,9 @@ task_assignment_global_state_docs = extend_schema(
     summary="获取全局自动分派状态",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("TaskAssignmentGlobalStateResponse"),
+            response=standard_success_response(
+                "TaskAssignmentGlobalStateResponse"
+            ),
             description="全局状态",
         )
     },
@@ -151,11 +170,15 @@ task_assignment_set_state_docs = extend_schema(
     summary="设置全局自动分派状态",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("TaskAssignmentSetStateResponse"),
+            response=standard_success_response(
+                "TaskAssignmentSetStateResponse"
+            ),
             description="设置成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("TaskAssignmentSetStateBadRequest"),
+            response=standard_error_response(
+                "TaskAssignmentSetStateBadRequest"
+            ),
             description="请求无效",
         ),
     },

@@ -139,7 +139,9 @@ product_material_docs = extend_schema_view(
         summary="获取产品物料列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("ProductMaterialListResponse"),
+                response=standard_success_response(
+                    "ProductMaterialListResponse"
+                ),
                 description="产品物料列表",
             )
         },
@@ -191,7 +193,9 @@ product_material_docs = extend_schema_view(
         summary="删除产品物料",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("ProductMaterialDeleteResponse"),
+                response=standard_success_response(
+                    "ProductMaterialDeleteResponse"
+                ),
                 description="删除成功",
             ),
             400: OpenApiResponse(
@@ -239,7 +243,9 @@ product_group_docs = extend_schema_view(
                 description="创建成功",
             ),
             400: OpenApiResponse(
-                response=standard_error_response("ProductGroupCreateBadRequest"),
+                response=standard_error_response(
+                    "ProductGroupCreateBadRequest"
+                ),
                 description="请求无效",
             ),
         },
@@ -261,11 +267,15 @@ product_group_docs = extend_schema_view(
         summary="删除产品组",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("ProductGroupDeleteResponse"),
+                response=standard_success_response(
+                    "ProductGroupDeleteResponse"
+                ),
                 description="删除成功",
             ),
             400: OpenApiResponse(
-                response=standard_error_response("ProductGroupDeleteBadRequest"),
+                response=standard_error_response(
+                    "ProductGroupDeleteBadRequest"
+                ),
                 description="删除失败",
             ),
         },
@@ -279,7 +289,9 @@ product_group_item_docs = extend_schema_view(
         summary="获取产品组子项列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("ProductGroupItemListResponse"),
+                response=standard_success_response(
+                    "ProductGroupItemListResponse"
+                ),
                 description="产品组子项列表",
             )
         },
@@ -290,7 +302,8 @@ product_group_item_docs = extend_schema_view(
         responses={
             200: OpenApiResponse(
                 response=standard_success_response(
-                    "ProductGroupItemDetailResponse", ProductGroupItemSerializer
+                    "ProductGroupItemDetailResponse",
+                    ProductGroupItemSerializer,
                 ),
                 description="产品组子项详情",
             )
@@ -302,7 +315,8 @@ product_group_item_docs = extend_schema_view(
         responses={
             201: OpenApiResponse(
                 response=standard_success_response(
-                    "ProductGroupItemCreateResponse", ProductGroupItemSerializer
+                    "ProductGroupItemCreateResponse",
+                    ProductGroupItemSerializer,
                 ),
                 description="创建成功",
             ),
@@ -320,7 +334,8 @@ product_group_item_docs = extend_schema_view(
         responses={
             200: OpenApiResponse(
                 response=standard_success_response(
-                    "ProductGroupItemUpdateResponse", ProductGroupItemSerializer
+                    "ProductGroupItemUpdateResponse",
+                    ProductGroupItemSerializer,
                 ),
                 description="更新成功",
             )
@@ -331,7 +346,9 @@ product_group_item_docs = extend_schema_view(
         summary="删除产品组子项",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("ProductGroupItemDeleteResponse"),
+                response=standard_success_response(
+                    "ProductGroupItemDeleteResponse"
+                ),
                 description="删除成功",
             ),
             400: OpenApiResponse(

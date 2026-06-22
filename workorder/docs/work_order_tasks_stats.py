@@ -59,7 +59,9 @@ task_assignment_history_docs = extend_schema(
     summary="分派历史查询",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("TaskAssignmentHistoryResponse"),
+            response=standard_success_response(
+                "TaskAssignmentHistoryResponse"
+            ),
             description="分派历史",
         )
     },
@@ -70,7 +72,9 @@ task_collaboration_stats_docs = extend_schema(
     summary="协作统计",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("TaskCollaborationStatsResponse"),
+            response=standard_success_response(
+                "TaskCollaborationStatsResponse"
+            ),
             description="协作统计",
         )
     },
@@ -81,15 +85,21 @@ task_department_workload_docs = extend_schema(
     summary="部门工作负载统计",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("TaskDepartmentWorkloadResponse"),
+            response=standard_success_response(
+                "TaskDepartmentWorkloadResponse"
+            ),
             description="部门工作负载",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("TaskDepartmentWorkloadBadRequest"),
+            response=standard_error_response(
+                "TaskDepartmentWorkloadBadRequest"
+            ),
             description="请求无效",
         ),
         403: OpenApiResponse(
-            response=standard_error_response("TaskDepartmentWorkloadForbidden"),
+            response=standard_error_response(
+                "TaskDepartmentWorkloadForbidden"
+            ),
             description="权限不足",
         ),
     },

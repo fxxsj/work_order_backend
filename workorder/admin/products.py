@@ -67,8 +67,19 @@ class ProductAdmin(admin.ModelAdmin):
         "created_at",
     ]
     search_fields = ["code", "name", "specification"]
-    list_filter = ["is_active", "product_type", "unit", "product_group", "created_at"]
-    list_editable = ["unit_price", "stock_quantity", "min_stock_quantity", "is_active"]
+    list_filter = [
+        "is_active",
+        "product_type",
+        "unit",
+        "product_group",
+        "created_at",
+    ]
+    list_editable = [
+        "unit_price",
+        "stock_quantity",
+        "min_stock_quantity",
+        "is_active",
+    ]
     ordering = ["code"]
     filter_horizontal = ["default_processes"]
     autocomplete_fields = ["product_group"]
@@ -77,7 +88,15 @@ class ProductAdmin(admin.ModelAdmin):
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("code", "name", "specification", "unit", "unit_price")},
+            {
+                "fields": (
+                    "code",
+                    "name",
+                    "specification",
+                    "unit",
+                    "unit_price",
+                )
+            },
         ),
         (
             "产品类型与分组",
@@ -128,7 +147,13 @@ class ProductGroupAdmin(admin.ModelAdmin):
 class ProductGroupItemAdmin(admin.ModelAdmin):
     """产品组项目管理"""
 
-    list_display = ["product_group", "product", "item_name", "sort_order", "created_at"]
+    list_display = [
+        "product_group",
+        "product",
+        "item_name",
+        "sort_order",
+        "created_at",
+    ]
     list_filter = ["product_group", "created_at"]
     search_fields = [
         "product_group__name",
@@ -144,7 +169,14 @@ class ProductGroupItemAdmin(admin.ModelAdmin):
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("product_group", "product", "item_name", "sort_order")},
+            {
+                "fields": (
+                    "product_group",
+                    "product",
+                    "item_name",
+                    "sort_order",
+                )
+            },
         ),
         ("系统信息", {"fields": ("created_at",), "classes": ("collapse",)}),
     )
@@ -164,7 +196,12 @@ class ProductStockLogAdmin(admin.ModelAdmin):
         "created_at",
     ]
     list_filter = ["change_type", "created_at"]
-    search_fields = ["product__name", "product__code", "reason", "created_by__username"]
+    search_fields = [
+        "product__name",
+        "product__code",
+        "reason",
+        "created_by__username",
+    ]
     autocomplete_fields = ["product", "created_by"]
     readonly_fields = ["created_at"]
     ordering = ["-created_at"]

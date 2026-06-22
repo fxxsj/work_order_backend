@@ -2,7 +2,11 @@
 监控与统计相关视图集的 OpenAPI 文档定义。
 """
 
-from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiResponse,
+    extend_schema,
+)
 
 from workorder.schema import standard_success_response
 
@@ -96,7 +100,9 @@ user_performance_docs = extend_schema(
     summary="获取用户绩效指标",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("UserPerformanceMetricsResponse"),
+            response=standard_success_response(
+                "UserPerformanceMetricsResponse"
+            ),
             description="用户绩效指标",
         )
     },

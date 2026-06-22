@@ -26,8 +26,6 @@ from ..models import (
 )
 from .mixins import FixedInlineModelAdminMixin
 from .utils import (
-    IN_OUT_ORDER_STATUS_COLORS,
-    QUALITY_STATUS_COLORS,
     STOCK_STATUS_COLORS,
     create_status_badge_method,
 )
@@ -77,11 +75,19 @@ class ProductStockAdmin(admin.ModelAdmin):
     list_filter = ["status", "production_date", "expiry_date", "created_at"]
     list_select_related = ["product", "work_order"]
     autocomplete_fields = ["product", "work_order"]
-    readonly_fields = ["created_at", "updated_at", "available_quantity", "total_value"]
+    readonly_fields = [
+        "created_at",
+        "updated_at",
+        "available_quantity",
+        "total_value",
+    ]
     ordering = ["-created_at"]
 
     fieldsets = (
-        ("基本信息", {"fields": ("product", "batch_no", "work_order", "status")}),
+        (
+            "基本信息",
+            {"fields": ("product", "batch_no", "work_order", "status")},
+        ),
         (
             "数量信息",
             {
@@ -138,19 +144,43 @@ class StockInAdmin(admin.ModelAdmin):
     ]
     search_fields = ["order_number", "work_order__order_number", "notes"]
     list_filter = ["status", "stock_in_date", "confirmed_at", "created_at"]
-    list_select_related = ["work_order", "confirmed_by", "submitted_by", "operator"]
-    autocomplete_fields = ["work_order", "confirmed_by", "submitted_by", "operator"]
+    list_select_related = [
+        "work_order",
+        "confirmed_by",
+        "submitted_by",
+        "operator",
+    ]
+    autocomplete_fields = [
+        "work_order",
+        "confirmed_by",
+        "submitted_by",
+        "operator",
+    ]
     readonly_fields = ["order_number", "created_at"]
     ordering = ["-created_at"]
 
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("order_number", "work_order", "status", "stock_in_date")},
+            {
+                "fields": (
+                    "order_number",
+                    "work_order",
+                    "status",
+                    "stock_in_date",
+                )
+            },
         ),
         (
             "审核信息",
-            {"fields": ("submitted_by", "submitted_at", "confirmed_by", "confirmed_at")},
+            {
+                "fields": (
+                    "submitted_by",
+                    "submitted_at",
+                    "confirmed_by",
+                    "confirmed_at",
+                )
+            },
         ),
         ("其他信息", {"fields": ("operator", "notes")}),
         (
@@ -196,20 +226,44 @@ class StockOutAdmin(admin.ModelAdmin):
     ]
     search_fields = ["order_number", "delivery_order__order_number", "notes"]
     list_filter = ["out_type", "status", "stock_out_date", "created_at"]
-    list_select_related = ["delivery_order", "submitted_by", "confirmed_by", "operator"]
-    autocomplete_fields = ["delivery_order", "submitted_by", "confirmed_by", "operator"]
+    list_select_related = [
+        "delivery_order",
+        "submitted_by",
+        "confirmed_by",
+        "operator",
+    ]
+    autocomplete_fields = [
+        "delivery_order",
+        "submitted_by",
+        "confirmed_by",
+        "operator",
+    ]
     readonly_fields = ["order_number", "created_at"]
     ordering = ["-created_at"]
 
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("order_number", "out_type", "delivery_order", "status")},
+            {
+                "fields": (
+                    "order_number",
+                    "out_type",
+                    "delivery_order",
+                    "status",
+                )
+            },
         ),
         ("日期信息", {"fields": ("stock_out_date",)}),
         (
             "审核信息",
-            {"fields": ("submitted_by", "submitted_at", "confirmed_by", "confirmed_at")},
+            {
+                "fields": (
+                    "submitted_by",
+                    "submitted_at",
+                    "confirmed_by",
+                    "confirmed_at",
+                )
+            },
         ),
         ("其他信息", {"fields": ("notes",)}),
         (
@@ -262,10 +316,19 @@ class DeliveryOrderAdmin(admin.ModelAdmin):
     inlines = [DeliveryItemInline]
 
     fieldsets = (
-        ("基本信息", {"fields": ("order_number", "customer", "sales_order", "status")}),
+        (
+            "基本信息",
+            {"fields": ("order_number", "customer", "sales_order", "status")},
+        ),
         (
             "收货信息",
-            {"fields": ("receiver_name", "receiver_phone", "delivery_address")},
+            {
+                "fields": (
+                    "receiver_name",
+                    "receiver_phone",
+                    "delivery_address",
+                )
+            },
         ),
         (
             "物流信息",
@@ -389,7 +452,14 @@ class QualityInspectionAdmin(admin.ModelAdmin):
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("inspection_number", "product", "work_order", "batch_no")},
+            {
+                "fields": (
+                    "inspection_number",
+                    "product",
+                    "work_order",
+                    "batch_no",
+                )
+            },
         ),
         (
             "检验信息",
@@ -413,8 +483,14 @@ class QualityInspectionAdmin(admin.ModelAdmin):
             },
         ),
         ("质量指标", {"fields": ("defective_rate",)}),
-        ("结果信息", {"fields": ("result", "disposition", "disposition_notes")}),
-        ("检验项目", {"fields": ("inspection_items", "defects", "defect_description")}),
+        (
+            "结果信息",
+            {"fields": ("result", "disposition", "disposition_notes")},
+        ),
+        (
+            "检验项目",
+            {"fields": ("inspection_items", "defects", "defect_description")},
+        ),
         ("附件", {"fields": ("attachment",)}),
         ("备注", {"fields": ("notes",)}),
         (

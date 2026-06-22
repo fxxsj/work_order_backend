@@ -26,7 +26,7 @@ from ..models import (
     Supplier,
 )
 from .mixins import FixedInlineModelAdminMixin
-from .utils import PURCHASE_STATUS_COLORS, create_status_badge_method
+from .utils import create_status_badge_method
 
 # ==================== Inline 类 ====================
 
@@ -75,7 +75,15 @@ class MaterialAdmin(admin.ModelAdmin):
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("code", "name", "specification", "unit", "unit_price")},
+            {
+                "fields": (
+                    "code",
+                    "name",
+                    "specification",
+                    "unit",
+                    "unit_price",
+                )
+            },
         ),
         (
             "库存信息",
@@ -87,7 +95,11 @@ class MaterialAdmin(admin.ModelAdmin):
         (
             "采购信息",
             {
-                "fields": ("default_supplier", "lead_time_days", "need_cutting"),
+                "fields": (
+                    "default_supplier",
+                    "lead_time_days",
+                    "need_cutting",
+                ),
             },
         ),
         ("其他", {"fields": ("notes",)}),
@@ -166,17 +178,17 @@ class MaterialSupplierAdmin(admin.ModelAdmin):
     def material_code(self, obj):
         """显示物料编码"""
         return obj.material.code
- 
+
     @admin.display(description="物料名称")
     def material_name(self, obj):
         """显示物料名称"""
         return obj.material.name
- 
+
     @admin.display(description="供应商编码")
     def supplier_code(self, obj):
         """显示供应商编码"""
         return obj.supplier.code
- 
+
     @admin.display(description="供应商名称")
     def supplier_name(self, obj):
         """显示供应商名称"""
@@ -198,25 +210,59 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
         "received_progress",
         "created_at",
     ]
-    list_filter = ["status", "supplier", "submitted_at", "approved_at", "created_at"]
-    list_select_related = ["supplier", "submitted_by", "approved_by", "work_order"]
-    search_fields = ["order_number", "supplier__name", "work_order__order_number"]
+    list_filter = [
+        "status",
+        "supplier",
+        "submitted_at",
+        "approved_at",
+        "created_at",
+    ]
+    list_select_related = [
+        "supplier",
+        "submitted_by",
+        "approved_by",
+        "work_order",
+    ]
+    search_fields = [
+        "order_number",
+        "supplier__name",
+        "work_order__order_number",
+    ]
     autocomplete_fields = ["supplier", "work_order"]
     readonly_fields = ["order_number", "created_at", "updated_at"]
     ordering = ["-created_at"]
     inlines = [PurchaseOrderItemInline]
 
     fieldsets = (
-        ("基本信息", {"fields": ("order_number", "supplier", "work_order", "status")}),
+        (
+            "基本信息",
+            {"fields": ("order_number", "supplier", "work_order", "status")},
+        ),
         (
             "审核信息",
-            {"fields": ("submitted_by", "submitted_at", "approved_by", "approved_at")},
+            {
+                "fields": (
+                    "submitted_by",
+                    "submitted_at",
+                    "approved_by",
+                    "approved_at",
+                )
+            },
         ),
         (
             "采购时间",
-            {"fields": ("ordered_date", "expected_date", "actual_received_date")},
+            {
+                "fields": (
+                    "ordered_date",
+                    "expected_date",
+                    "actual_received_date",
+                )
+            },
         ),
-        ("其他信息", {"fields": ("total_amount", "notes", "rejection_reason")}),
+        (
+            "其他信息",
+            {"fields": ("total_amount", "notes", "rejection_reason")},
+        ),
         (
             "系统信息",
             {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
@@ -243,22 +289,22 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
     def supplier_name(self, obj):
         """显示供应商名称"""
         return obj.supplier.name
- 
+
     @admin.display(description="提交人")
     def submitted_by_name(self, obj):
         """显示提交人"""
         return obj.submitted_by.username if obj.submitted_by else "-"
- 
+
     @admin.display(description="审核人")
     def approved_by_name(self, obj):
         """显示审核人"""
         return obj.approved_by.username if obj.approved_by else "-"
- 
+
     @admin.display(description="明细数量")
     def items_count(self, obj):
         """显示明细数量（优化版）"""
         return getattr(obj, "_items_count", obj.items.count())
- 
+
     @admin.display(description="收货进度")
     def received_progress(self, obj):
         """显示收货进度（优化版）"""
@@ -285,9 +331,11 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
         )
 
         return format_html(
-            '<div style="width: 100px; background-color: #f0f0f0; border-radius: 3px;">'
-            '<div style="width: {}%; height: 20px; background-color: {}; border-radius: 3px; '
-            'text-align: center; color: white; line-height: 20px;">{}%</div></div>',
+            '<div style="width: 100px; background-color: #f0f0f0; '
+            'border-radius: 3px;">'
+            '<div style="width: {}%; height: 20px; background-color: {}; '
+            'border-radius: 3px; text-align: center; color: white; '
+            'line-height: 20px;">{}%</div></div>',
             percentage,
             color,
             percentage,
@@ -323,7 +371,11 @@ class PurchaseOrderItemAdmin(admin.ModelAdmin):
     ]
     list_filter = ["status", "material", "purchase_order", "created_at"]
     list_select_related = ["purchase_order", "material"]
-    search_fields = ["purchase_order__order_number", "material__name", "material__code"]
+    search_fields = [
+        "purchase_order__order_number",
+        "material__name",
+        "material__code",
+    ]
     autocomplete_fields = ["material", "purchase_order", "work_order_material"]
     readonly_fields = ["created_at", "updated_at"]
     ordering = ["purchase_order", "id"]
@@ -332,17 +384,17 @@ class PurchaseOrderItemAdmin(admin.ModelAdmin):
     def purchase_order_number(self, obj):
         """显示采购单号"""
         return obj.purchase_order.order_number
- 
+
     @admin.display(description="物料编码")
     def material_code(self, obj):
         """显示物料编码"""
         return obj.material.code
- 
+
     @admin.display(description="物料名称")
     def material_name(self, obj):
         """显示物料名称"""
         return obj.material.name
- 
+
     @admin.display(description="小计", ordering="subtotal")
     def subtotal(self, obj):
         """计算小计"""
@@ -480,7 +532,12 @@ class MaterialStockLogAdmin(admin.ModelAdmin):
     ]
     list_filter = ["change_type", "created_at"]
     list_select_related = ["material", "work_order", "created_by"]
-    search_fields = ["material__name", "material__code", "reason", "created_by__username"]
+    search_fields = [
+        "material__name",
+        "material__code",
+        "reason",
+        "created_by__username",
+    ]
     autocomplete_fields = ["material", "work_order", "created_by"]
     readonly_fields = ["created_at"]
     ordering = ["-created_at"]

@@ -16,7 +16,6 @@ from workorder.serializers.materials import (
     MaterialSupplierSerializer,
     PurchaseOrderDetailSerializer,
     PurchaseOrderItemSerializer,
-    PurchaseOrderListSerializer,
     PurchaseReceiveRecordCreateSerializer,
     PurchaseReceiveRecordSerializer,
     ReturnProcessSerializer,
@@ -155,7 +154,9 @@ material_supplier_docs = extend_schema_view(
         summary="获取物料供应商关联列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("MaterialSupplierListResponse"),
+                response=standard_success_response(
+                    "MaterialSupplierListResponse"
+                ),
                 description="物料供应商列表",
             )
         },
@@ -166,7 +167,8 @@ material_supplier_docs = extend_schema_view(
         responses={
             200: OpenApiResponse(
                 response=standard_success_response(
-                    "MaterialSupplierDetailResponse", MaterialSupplierSerializer
+                    "MaterialSupplierDetailResponse",
+                    MaterialSupplierSerializer,
                 ),
                 description="物料供应商详情",
             )
@@ -178,12 +180,15 @@ material_supplier_docs = extend_schema_view(
         responses={
             201: OpenApiResponse(
                 response=standard_success_response(
-                    "MaterialSupplierCreateResponse", MaterialSupplierSerializer
+                    "MaterialSupplierCreateResponse",
+                    MaterialSupplierSerializer,
                 ),
                 description="创建成功",
             ),
             400: OpenApiResponse(
-                response=standard_error_response("MaterialSupplierCreateBadRequest"),
+                response=standard_error_response(
+                    "MaterialSupplierCreateBadRequest"
+                ),
                 description="请求无效",
             ),
         },
@@ -197,7 +202,9 @@ purchase_order_docs = extend_schema_view(
         summary="获取采购单列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("PurchaseOrderListResponse"),
+                response=standard_success_response(
+                    "PurchaseOrderListResponse"
+                ),
                 description="采购单列表",
                 examples=[
                     OpenApiExample(
@@ -236,7 +243,8 @@ purchase_order_docs = extend_schema_view(
         responses={
             200: OpenApiResponse(
                 response=standard_success_response(
-                    "PurchaseOrderDetailResponse", PurchaseOrderDetailSerializer
+                    "PurchaseOrderDetailResponse",
+                    PurchaseOrderDetailSerializer,
                 ),
                 description="采购单详情",
             )
@@ -248,12 +256,15 @@ purchase_order_docs = extend_schema_view(
         responses={
             201: OpenApiResponse(
                 response=standard_success_response(
-                    "PurchaseOrderCreateResponse", PurchaseOrderDetailSerializer
+                    "PurchaseOrderCreateResponse",
+                    PurchaseOrderDetailSerializer,
                 ),
                 description="创建成功",
             ),
             400: OpenApiResponse(
-                response=standard_error_response("PurchaseOrderCreateBadRequest"),
+                response=standard_error_response(
+                    "PurchaseOrderCreateBadRequest"
+                ),
                 description="请求无效",
             ),
         },
@@ -267,7 +278,9 @@ purchase_order_item_docs = extend_schema_view(
         summary="获取采购单明细列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("PurchaseOrderItemListResponse"),
+                response=standard_success_response(
+                    "PurchaseOrderItemListResponse"
+                ),
                 description="采购单明细列表",
             )
         },
@@ -278,7 +291,8 @@ purchase_order_item_docs = extend_schema_view(
         responses={
             200: OpenApiResponse(
                 response=standard_success_response(
-                    "PurchaseOrderItemDetailResponse", PurchaseOrderItemSerializer
+                    "PurchaseOrderItemDetailResponse",
+                    PurchaseOrderItemSerializer,
                 ),
                 description="采购单明细详情",
             )
@@ -293,7 +307,9 @@ purchase_receive_record_docs = extend_schema_view(
         summary="获取收货记录列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("PurchaseReceiveRecordListResponse"),
+                response=standard_success_response(
+                    "PurchaseReceiveRecordListResponse"
+                ),
                 description="收货记录列表",
             )
         },
@@ -397,7 +413,9 @@ purchase_order_receive_docs = extend_schema(
             description="收货成功",
         ),
         207: OpenApiResponse(
-            response=standard_success_response("PurchaseOrderReceivePartialResponse"),
+            response=standard_success_response(
+                "PurchaseOrderReceivePartialResponse"
+            ),
             description="部分收货成功",
         ),
         400: OpenApiResponse(
@@ -427,7 +445,9 @@ purchase_order_receive_records_docs = extend_schema(
     summary="获取采购单收货记录",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("PurchaseOrderReceiveRecordsResponse"),
+            response=standard_success_response(
+                "PurchaseOrderReceiveRecordsResponse"
+            ),
             description="收货记录列表",
         )
     },
@@ -482,11 +502,15 @@ receive_stock_in_docs = extend_schema(
     summary="合格物料入库",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("PurchaseReceiveStockInResponse"),
+            response=standard_success_response(
+                "PurchaseReceiveStockInResponse"
+            ),
             description="入库成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("PurchaseReceiveStockInBadRequest"),
+            response=standard_error_response(
+                "PurchaseReceiveStockInBadRequest"
+            ),
             description="状态不允许",
         ),
     },
@@ -498,11 +522,15 @@ receive_return_docs = extend_schema(
     request=ReturnProcessSerializer,
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("PurchaseReceiveReturnResponse"),
+            response=standard_success_response(
+                "PurchaseReceiveReturnResponse"
+            ),
             description="退货成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("PurchaseReceiveReturnBadRequest"),
+            response=standard_error_response(
+                "PurchaseReceiveReturnBadRequest"
+            ),
             description="请求无效",
         ),
     },
@@ -513,7 +541,9 @@ receive_pending_list_docs = extend_schema(
     summary="获取待质检收货记录（全局）",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("PurchaseReceivePendingListResponse"),
+            response=standard_success_response(
+                "PurchaseReceivePendingListResponse"
+            ),
             description="待质检列表",
         )
     },

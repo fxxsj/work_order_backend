@@ -108,7 +108,9 @@ sales_order_approve_docs = extend_schema(
     request=inline_serializer(
         name="SalesOrderApproveRequest",
         fields={
-            "approval_comment": serializers.CharField(required=False, allow_blank=True)
+            "approval_comment": serializers.CharField(
+                required=False, allow_blank=True
+            )
         },
     ),
     examples=[
@@ -225,11 +227,15 @@ sales_order_update_payment_docs = extend_schema(
     ],
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("SalesOrderUpdatePaymentResponse"),
+            response=standard_success_response(
+                "SalesOrderUpdatePaymentResponse"
+            ),
             description="更新成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("SalesOrderUpdatePaymentBadRequest"),
+            response=standard_error_response(
+                "SalesOrderUpdatePaymentBadRequest"
+            ),
             description="请求无效",
         ),
     },
@@ -252,7 +258,9 @@ sales_order_item_docs = extend_schema_view(
         summary="获取客户订单明细列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("SalesOrderItemListResponse"),
+                response=standard_success_response(
+                    "SalesOrderItemListResponse"
+                ),
                 description="订单明细列表",
             )
         },

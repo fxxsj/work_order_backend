@@ -19,7 +19,9 @@ work_order_process_docs = extend_schema_view(
         summary="获取工序列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("WorkOrderProcessListResponse"),
+                response=standard_success_response(
+                    "WorkOrderProcessListResponse"
+                ),
                 description="工序列表",
                 examples=[
                     OpenApiExample(
@@ -56,7 +58,8 @@ work_order_process_docs = extend_schema_view(
         responses={
             200: OpenApiResponse(
                 response=standard_success_response(
-                    "WorkOrderProcessDetailResponse", WorkOrderProcessSerializer
+                    "WorkOrderProcessDetailResponse",
+                    WorkOrderProcessSerializer,
                 ),
                 description="工序详情",
             )
@@ -69,11 +72,15 @@ process_start_docs = extend_schema(
     summary="开始工序",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("WorkOrderProcessStartResponse"),
+            response=standard_success_response(
+                "WorkOrderProcessStartResponse"
+            ),
             description="开始成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("WorkOrderProcessStartBadRequest"),
+            response=standard_error_response(
+                "WorkOrderProcessStartBadRequest"
+            ),
             description="无法开始",
         ),
     },
@@ -84,11 +91,15 @@ process_complete_docs = extend_schema(
     summary="完成工序",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("WorkOrderProcessCompleteResponse"),
+            response=standard_success_response(
+                "WorkOrderProcessCompleteResponse"
+            ),
             description="完成成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("WorkOrderProcessCompleteBadRequest"),
+            response=standard_error_response(
+                "WorkOrderProcessCompleteBadRequest"
+            ),
             description="无法完成",
         ),
     },
@@ -99,11 +110,15 @@ process_bulk_create_docs = extend_schema(
     summary="为施工单批量创建工序",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("WorkOrderProcessBulkCreateResponse"),
+            response=standard_success_response(
+                "WorkOrderProcessBulkCreateResponse"
+            ),
             description="创建成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("WorkOrderProcessBulkCreateBadRequest"),
+            response=standard_error_response(
+                "WorkOrderProcessBulkCreateBadRequest"
+            ),
             description="请求无效",
         ),
     },
@@ -114,11 +129,15 @@ process_reassign_docs = extend_schema(
     summary="批量重新分派工序任务",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("WorkOrderProcessReassignResponse"),
+            response=standard_success_response(
+                "WorkOrderProcessReassignResponse"
+            ),
             description="分派成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("WorkOrderProcessReassignBadRequest"),
+            response=standard_error_response(
+                "WorkOrderProcessReassignBadRequest"
+            ),
             description="请求无效",
         ),
     },

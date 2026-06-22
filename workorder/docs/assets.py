@@ -90,7 +90,9 @@ die_docs = extend_schema_view(
         summary="获取刀模详情",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("DieDetailResponse", DieSerializer),
+                response=standard_success_response(
+                    "DieDetailResponse", DieSerializer
+                ),
                 description="刀模详情",
             )
         },
@@ -128,7 +130,9 @@ embossing_plate_docs = extend_schema_view(
         summary="获取压凸版列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("EmbossingPlateListResponse"),
+                response=standard_success_response(
+                    "EmbossingPlateListResponse"
+                ),
                 description="压凸版列表",
             )
         },
@@ -200,7 +204,9 @@ artwork_product_docs = extend_schema_view(
         summary="获取图稿-产品关联列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("ArtworkProductListResponse"),
+                response=standard_success_response(
+                    "ArtworkProductListResponse"
+                ),
                 description="关联列表",
             )
         },
@@ -250,7 +256,9 @@ foiling_product_docs = extend_schema_view(
         summary="获取烫金版-产品关联列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("FoilingPlateProductListResponse"),
+                response=standard_success_response(
+                    "FoilingPlateProductListResponse"
+                ),
                 description="关联列表",
             )
         },
@@ -276,7 +284,9 @@ embossing_product_docs = extend_schema_view(
         summary="获取压凸版-产品关联列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("EmbossingPlateProductListResponse"),
+                response=standard_success_response(
+                    "EmbossingPlateProductListResponse"
+                ),
                 description="关联列表",
             )
         },

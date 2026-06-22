@@ -19,7 +19,9 @@ batch_update_quantity_docs = extend_schema(
     request=inline_serializer(
         name="TaskBatchUpdateQuantityRequest",
         fields={
-            "task_ids": serializers.ListField(child=serializers.IntegerField()),
+            "task_ids": serializers.ListField(
+                child=serializers.IntegerField()
+            ),
             "quantity_increment": serializers.JSONField(),
             "quantity_defective": serializers.JSONField(required=False),
             "notes": serializers.CharField(required=False, allow_blank=True),
@@ -40,15 +42,21 @@ batch_update_quantity_docs = extend_schema(
     ],
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("TaskBatchUpdateQuantityResponse"),
+            response=standard_success_response(
+                "TaskBatchUpdateQuantityResponse"
+            ),
             description="更新成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("TaskBatchUpdateQuantityBadRequest"),
+            response=standard_error_response(
+                "TaskBatchUpdateQuantityBadRequest"
+            ),
             description="请求无效",
         ),
         403: OpenApiResponse(
-            response=standard_error_response("TaskBatchUpdateQuantityForbidden"),
+            response=standard_error_response(
+                "TaskBatchUpdateQuantityForbidden"
+            ),
             description="权限不足",
         ),
     },
@@ -60,7 +68,9 @@ batch_delete_docs = extend_schema(
     summary="批量删除任务",
     request=inline_serializer(
         name="TaskBatchDeleteRequest",
-        fields={"task_ids": serializers.ListField(child=serializers.IntegerField())},
+        fields={
+            "task_ids": serializers.ListField(child=serializers.IntegerField())
+        },
     ),
     examples=[
         OpenApiExample(

@@ -81,7 +81,9 @@ class FoilingPlateImageInline(AssetImageInlineMixin, admin.TabularInline):
     model = FoilingPlateImage
 
 
-class FoilingPlateProductInline(FixedInlineModelAdminMixin, admin.TabularInline):
+class FoilingPlateProductInline(
+    FixedInlineModelAdminMixin, admin.TabularInline
+):
     """烫金版产品关联内联"""
 
     model = FoilingPlateProduct
@@ -95,7 +97,9 @@ class EmbossingPlateImageInline(AssetImageInlineMixin, admin.TabularInline):
     model = EmbossingPlateImage
 
 
-class EmbossingPlateProductInline(FixedInlineModelAdminMixin, admin.TabularInline):
+class EmbossingPlateProductInline(
+    FixedInlineModelAdminMixin, admin.TabularInline
+):
     """压凸版产品关联内联"""
 
     model = EmbossingPlateProduct
@@ -166,7 +170,10 @@ class ArtworkAdmin(admin.ModelAdmin):
                 "classes": ("collapse",),
             },
         ),
-        ("确认状态", {"fields": ("confirmed", "confirmed_by", "confirmed_at")}),
+        (
+            "确认状态",
+            {"fields": ("confirmed", "confirmed_by", "confirmed_at")},
+        ),
         ("其他", {"fields": ("notes", "created_at", "updated_at")}),
     )
 
@@ -196,7 +203,9 @@ class ArtworkAdmin(admin.ModelAdmin):
 
         # 其他颜色：用逗号分隔
         if obj.other_colors:
-            other_colors_list = [c.strip() for c in obj.other_colors if c and c.strip()]
+            other_colors_list = [
+                c.strip() for c in obj.other_colors if c and c.strip()
+            ]
             if other_colors_list:
                 other_colors_str = ",".join(other_colors_list)  # 用逗号分隔
                 parts.append(other_colors_str)
@@ -249,9 +258,21 @@ class DieAdmin(admin.ModelAdmin):
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("code", "name", "die_type", "size", "material", "thickness")},
+            {
+                "fields": (
+                    "code",
+                    "name",
+                    "die_type",
+                    "size",
+                    "material",
+                    "thickness",
+                )
+            },
         ),
-        ("确认状态", {"fields": ("confirmed", "confirmed_by", "confirmed_at")}),
+        (
+            "确认状态",
+            {"fields": ("confirmed", "confirmed_by", "confirmed_at")},
+        ),
         ("其他", {"fields": ("notes", "created_at", "updated_at")}),
     )
 
@@ -298,7 +319,10 @@ class FoilingPlateAdmin(admin.ModelAdmin):
                 )
             },
         ),
-        ("确认状态", {"fields": ("confirmed", "confirmed_by", "confirmed_at")}),
+        (
+            "确认状态",
+            {"fields": ("confirmed", "confirmed_by", "confirmed_at")},
+        ),
         ("其他", {"fields": ("notes", "created_at", "updated_at")}),
     )
 
@@ -331,8 +355,14 @@ class EmbossingPlateAdmin(admin.ModelAdmin):
     inlines = [EmbossingPlateImageInline, EmbossingPlateProductInline]
 
     fieldsets = (
-        ("基本信息", {"fields": ("code", "name", "size", "material", "thickness")}),
-        ("确认状态", {"fields": ("confirmed", "confirmed_by", "confirmed_at")}),
+        (
+            "基本信息",
+            {"fields": ("code", "name", "size", "material", "thickness")},
+        ),
+        (
+            "确认状态",
+            {"fields": ("confirmed", "confirmed_by", "confirmed_at")},
+        ),
         ("其他", {"fields": ("notes", "created_at", "updated_at")}),
     )
 

@@ -67,8 +67,14 @@ class DepartmentAdmin(admin.ModelAdmin):
     filter_horizontal = ["processes"]
 
     fieldsets = (
-        ("基本信息", {"fields": ("code", "name", "parent", "sort_order", "is_active")}),
-        ("工序关联", {"fields": ("processes",), "description": "选择该部门负责的工序"}),
+        (
+            "基本信息",
+            {"fields": ("code", "name", "parent", "sort_order", "is_active")},
+        ),
+        (
+            "工序关联",
+            {"fields": ("processes",), "description": "选择该部门负责的工序"},
+        ),
         ("系统信息", {"fields": ("created_at",), "classes": ("collapse",)}),
     )
 
@@ -125,7 +131,11 @@ class ProcessAdmin(admin.ModelAdmin):
                     ("requires_foiling_plate", "foiling_plate_required"),
                     ("requires_embossing_plate", "embossing_plate_required"),
                 ),
-                "description": "配置该工序需要哪些版，以及版是否必选。如果版必选，选择该工序时必须选择对应的版；如果版可选，未选择时将生成设计任务。",
+                "description": (
+                    "配置该工序需要哪些版，以及版是否必选。"
+                    "如果版必选，选择该工序时必须选择对应的版；"
+                    "如果版可选，未选择时将生成设计任务。"
+                ),
             },
         ),
         ("系统信息", {"fields": ("created_at",), "classes": ("collapse",)}),

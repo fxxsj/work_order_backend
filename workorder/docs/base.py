@@ -126,7 +126,11 @@ department_docs = extend_schema_view(
                                 "next": None,
                                 "previous": None,
                                 "results": [
-                                    {"id": 2, "name": "印刷车间", "code": "PRINT"}
+                                    {
+                                        "id": 2,
+                                        "name": "印刷车间",
+                                        "code": "PRINT",
+                                    }
                                 ],
                             },
                             "timestamp": "2026-03-02T09:00:00+08:00",
@@ -303,11 +307,15 @@ process_batch_update_active_docs = extend_schema(
     ),
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("ProcessBatchUpdateActiveResponse"),
+            response=standard_success_response(
+                "ProcessBatchUpdateActiveResponse"
+            ),
             description="更新成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("ProcessBatchUpdateActiveBadRequest"),
+            response=standard_error_response(
+                "ProcessBatchUpdateActiveBadRequest"
+            ),
             description="请求无效",
         ),
     },

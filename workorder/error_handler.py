@@ -33,17 +33,17 @@ def custom_exception_handler(exc, context):
     # 首先处理 ServiceError（服务层业务异常）
     if isinstance(exc, ServiceError):
         response_data = {
-            'success': False,
-            'code': exc.code,
-            'message': exc.message,
-            'errors': exc.data or {},
-            'data': None,
-            'timestamp': timezone.now().isoformat(),
+            "success": False,
+            "code": exc.code,
+            "message": exc.message,
+            "errors": exc.data or {},
+            "data": None,
+            "timestamp": timezone.now().isoformat(),
         }
         response = APIResponse.error(
             message=exc.message,
             code=exc.code,
-            errors=response_data['errors'],
+            errors=response_data["errors"],
             data=None,
         )
         return response
@@ -53,7 +53,7 @@ def custom_exception_handler(exc, context):
 
     if response is not None:
         # DRF 异常（如 APIException）
-        message = str(exc.detail) if hasattr(exc, 'detail') else str(exc)
+        message = str(exc.detail) if hasattr(exc, "detail") else str(exc)
 
         # 处理字段级验证错误（400 状态码且数据是字典）
         errors = None
@@ -67,29 +67,34 @@ def custom_exception_handler(exc, context):
             if any(isinstance(v, (list, str)) for v in response.data.values()):
                 errors = response.data
             else:
-                errors = {'detail': response.data}
+                errors = {"detail": response.data}
         elif response.status_code >= 400:
-            errors = {'detail': response.data} if not isinstance(response.data, dict) else response.data
+            errors = (
+                {"detail": response.data}
+                if not isinstance(response.data, dict)
+                else response.data
+            )
 
         custom_response_data = {
-            'success': False,
-            'code': response.status_code,
-            'message': message,
-            'errors': errors or {},
-            'data': None,
-            'timestamp': timezone.now().isoformat(),
+            "success": False,
+            "code": response.status_code,
+            "message": message,
+            "errors": errors or {},
+            "data": None,
+            "timestamp": timezone.now().isoformat(),
         }
 
         response.data = custom_response_data
 
         # 记录错误日志
         logger.error(
-            f"API Error: {response.status_code} - {custom_response_data['message']}",
+            f"API Error: {response.status_code} - "
+            f"{custom_response_data['message']}",
             extra={
-                'status_code': response.status_code,
-                'path': context['request'].path,
-                'method': context['request'].method,
-            }
+                "status_code": response.status_code,
+                "path": context["request"].path,
+                "method": context["request"].method,
+            },
         )
 
     else:
@@ -101,27 +106,27 @@ def custom_exception_handler(exc, context):
             error_details = traceback.format_exc()
         else:
             # 生产环境：显示通用错误信息
-            error_message = '服务器内部错误'
+            error_message = "服务器内部错误"
             error_details = None
 
         response_data = {
-            'success': False,
-            'code': 500,
-            'message': error_message,
-            'errors': {
-                'code': ErrorCodes.INTERNAL_ERROR.value,
+            "success": False,
+            "code": 500,
+            "message": error_message,
+            "errors": {
+                "code": ErrorCodes.INTERNAL_ERROR.value,
             },
-            'data': None,
-            'timestamp': timezone.now().isoformat(),
+            "data": None,
+            "timestamp": timezone.now().isoformat(),
         }
 
         if error_details:
-            response_data['errors']['debug'] = error_details
+            response_data["errors"]["debug"] = error_details
 
         response = APIResponse.error(
             message=error_message,
             code=500,
-            errors=response_data['errors'],
+            errors=response_data["errors"],
             data=None,
         )
 
@@ -129,9 +134,9 @@ def custom_exception_handler(exc, context):
         logger.exception(
             f"Unhandled Exception: {exc}",
             extra={
-                'path': context['request'].path,
-                'method': context['request'].method,
-            }
+                "path": context["request"].path,
+                "method": context["request"].method,
+            },
         )
 
     return response
@@ -156,13 +161,15 @@ class ErrorHandler:
         Returns:
             Response: 错误响应
         """
-        errors = {'code': ErrorCodes.VALIDATION_ERROR.value}
+        errors = {"code": ErrorCodes.VALIDATION_ERROR.value}
         if details:
-            errors['details'] = details
-        return APIResponse.error(message=message, code=400, errors=errors, data=None)
+            errors["details"] = details
+        return APIResponse.error(
+            message=message, code=400, errors=errors, data=None
+        )
 
     @staticmethod
-    def permission_denied(message='权限不足'):
+    def permission_denied(message="权限不足"):
         """
         创建权限拒绝响应
 
@@ -175,12 +182,12 @@ class ErrorHandler:
         return APIResponse.error(
             message=message,
             code=403,
-            errors={'code': ErrorCodes.PERMISSION_DENIED.value},
+            errors={"code": ErrorCodes.PERMISSION_DENIED.value},
             data=None,
         )
 
     @staticmethod
-    def not_found(message='资源未找到'):
+    def not_found(message="资源未找到"):
         """
         创建资源未找到响应
 
@@ -193,7 +200,7 @@ class ErrorHandler:
         return APIResponse.error(
             message=message,
             code=404,
-            errors={'code': ErrorCodes.NOT_FOUND.value},
+            errors={"code": ErrorCodes.NOT_FOUND.value},
             data=None,
         )
 
@@ -209,9 +216,9 @@ class ErrorHandler:
         Returns:
             Response: 错误响应
         """
-        errors = {'code': ErrorCodes.BUSINESS_LOGIC_ERROR.value}
+        errors = {"code": ErrorCodes.BUSINESS_LOGIC_ERROR.value}
         if details:
-            errors['details'] = details
+            errors["details"] = details
         return APIResponse.error(
             message=message,
             code=422,

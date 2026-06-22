@@ -88,7 +88,9 @@ product_stock_docs = extend_schema_view(
                 description="创建成功",
             ),
             400: OpenApiResponse(
-                response=standard_error_response("ProductStockCreateBadRequest"),
+                response=standard_error_response(
+                    "ProductStockCreateBadRequest"
+                ),
                 description="请求无效",
             ),
         },
@@ -332,7 +334,9 @@ delivery_order_docs = extend_schema_view(
         summary="获取送货单列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("DeliveryOrderListResponse"),
+                response=standard_success_response(
+                    "DeliveryOrderListResponse"
+                ),
                 description="送货单列表",
             )
         },
@@ -357,8 +361,12 @@ delivery_ship_docs = extend_schema(
     request=inline_serializer(
         name="DeliveryShipRequest",
         fields={
-            "logistics_company": serializers.CharField(required=False, allow_blank=True),
-            "tracking_number": serializers.CharField(required=False, allow_blank=True),
+            "logistics_company": serializers.CharField(
+                required=False, allow_blank=True
+            ),
+            "tracking_number": serializers.CharField(
+                required=False, allow_blank=True
+            ),
         },
     ),
     examples=[
@@ -390,7 +398,9 @@ delivery_receive_docs = extend_schema(
     request=inline_serializer(
         name="DeliveryReceiveRequest",
         fields={
-            "received_notes": serializers.CharField(required=False, allow_blank=True),
+            "received_notes": serializers.CharField(
+                required=False, allow_blank=True
+            ),
         },
     ),
     examples=[
@@ -460,7 +470,9 @@ quality_inspection_docs = extend_schema_view(
         summary="获取质检列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("QualityInspectionListResponse"),
+                response=standard_success_response(
+                    "QualityInspectionListResponse"
+                ),
                 description="质检列表",
             )
         },
@@ -471,7 +483,8 @@ quality_inspection_docs = extend_schema_view(
         responses={
             200: OpenApiResponse(
                 response=standard_success_response(
-                    "QualityInspectionDetailResponse", QualityInspectionSerializer
+                    "QualityInspectionDetailResponse",
+                    QualityInspectionSerializer,
                 ),
                 description="质检详情",
             )
@@ -486,25 +499,37 @@ quality_complete_docs = extend_schema(
         name="QualityInspectionCompleteRequest",
         fields={
             "result": serializers.CharField(),
-            "passed_quantity": serializers.IntegerField(required=False, default=0),
-            "failed_quantity": serializers.IntegerField(required=False, default=0),
+            "passed_quantity": serializers.IntegerField(
+                required=False, default=0
+            ),
+            "failed_quantity": serializers.IntegerField(
+                required=False, default=0
+            ),
         },
     ),
     examples=[
         OpenApiExample(
             name="示例请求",
             summary="提交质检结果",
-            value={"result": "passed", "passed_quantity": 980, "failed_quantity": 20},
+            value={
+                "result": "passed",
+                "passed_quantity": 980,
+                "failed_quantity": 20,
+            },
             request_only=True,
         )
     ],
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("QualityInspectionCompleteResponse"),
+            response=standard_success_response(
+                "QualityInspectionCompleteResponse"
+            ),
             description="完成成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("QualityInspectionCompleteBadRequest"),
+            response=standard_error_response(
+                "QualityInspectionCompleteBadRequest"
+            ),
             description="请求无效",
         ),
     },
@@ -515,7 +540,9 @@ quality_summary_docs = extend_schema(
     summary="质检汇总",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("QualityInspectionSummaryResponse"),
+            response=standard_success_response(
+                "QualityInspectionSummaryResponse"
+            ),
             description="质检汇总",
         )
     },

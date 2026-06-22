@@ -81,7 +81,9 @@ production_cost_docs = extend_schema_view(
         summary="获取生产成本列表",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("ProductionCostListResponse"),
+                response=standard_success_response(
+                    "ProductionCostListResponse"
+                ),
                 description="生产成本列表",
             )
         },
@@ -105,11 +107,15 @@ production_cost_material_docs = extend_schema(
     summary="计算材料成本",
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("ProductionCostMaterialResponse"),
+            response=standard_success_response(
+                "ProductionCostMaterialResponse"
+            ),
             description="计算成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("ProductionCostMaterialBadRequest"),
+            response=standard_error_response(
+                "ProductionCostMaterialBadRequest"
+            ),
             description="计算失败",
         ),
     },
@@ -218,7 +224,9 @@ invoice_approve_docs = extend_schema(
         name="InvoiceApproveRequest",
         fields={
             "approved": serializers.BooleanField(required=False, default=True),
-            "approval_comment": serializers.CharField(required=False, allow_blank=True),
+            "approval_comment": serializers.CharField(
+                required=False, allow_blank=True
+            ),
         },
     ),
     examples=[
@@ -358,8 +366,12 @@ statement_confirm_docs = extend_schema(
     request=inline_serializer(
         name="StatementConfirmRequest",
         fields={
-            "confirmed": serializers.BooleanField(required=False, default=True),
-            "confirm_notes": serializers.CharField(required=False, allow_blank=True),
+            "confirmed": serializers.BooleanField(
+                required=False, default=True
+            ),
+            "confirm_notes": serializers.CharField(
+                required=False, allow_blank=True
+            ),
         },
     ),
     examples=[

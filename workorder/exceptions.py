@@ -21,8 +21,8 @@ class ValidationError(APIException):
     """
 
     status_code = 400
-    default_detail = _('验证失败')
-    default_code = 'validation_error'
+    default_detail = _("验证失败")
+    default_code = "validation_error"
 
 
 class BusinessLogicError(APIException):
@@ -33,18 +33,17 @@ class BusinessLogicError(APIException):
     """
 
     status_code = 422
-    default_detail = _('业务逻辑错误')
-    default_code = 'business_logic_error'
+    default_detail = _("业务逻辑错误")
+    default_code = "business_logic_error"
 
 
 class InsufficientStockError(BusinessLogicError):
     """
     库存不足错误
     """
-    default_detail = _('库存不足')
-    default_code = 'insufficient_stock'
 
-
+    default_detail = _("库存不足")
+    default_code = "insufficient_stock"
 
 
 class PermissionDeniedError(APIException):
@@ -55,8 +54,8 @@ class PermissionDeniedError(APIException):
     """
 
     status_code = 403
-    default_detail = _('权限不足')
-    default_code = 'permission_denied'
+    default_detail = _("权限不足")
+    default_code = "permission_denied"
 
 
 class ResourceNotFoundError(APIException):
@@ -67,8 +66,8 @@ class ResourceNotFoundError(APIException):
     """
 
     status_code = 404
-    default_detail = _('资源未找到')
-    default_code = 'resource_not_found'
+    default_detail = _("资源未找到")
+    default_code = "resource_not_found"
 
 
 class ConflictError(APIException):
@@ -79,8 +78,8 @@ class ConflictError(APIException):
     """
 
     status_code = 409
-    default_detail = _('资源冲突')
-    default_code = 'conflict_error'
+    default_detail = _("资源冲突")
+    default_code = "conflict_error"
 
 
 class TaskConflictError(ConflictError):
@@ -92,8 +91,8 @@ class TaskConflictError(ConflictError):
     """
 
     status_code = 409
-    default_detail = _('该任务正在被其他用户操作，请刷新后重试')
-    default_code = 'task_conflict'
+    default_detail = _("该任务正在被其他用户操作，请刷新后重试")
+    default_code = "task_conflict"
 
     def __init__(self, detail=None, current_owner=None, task_id=None):
         """
@@ -122,8 +121,8 @@ class RateLimitError(APIException):
     """
 
     status_code = 429
-    default_detail = _('请求过于频繁，请稍后再试')
-    default_code = 'rate_limit_error'
+    default_detail = _("请求过于频繁，请稍后再试")
+    default_code = "rate_limit_error"
 
 
 class ServiceUnavailableError(APIException):
@@ -134,5 +133,5 @@ class ServiceUnavailableError(APIException):
     """
 
     status_code = 503
-    default_detail = _('服务暂时不可用，请稍后再试')
-    default_code = 'service_unavailable'
+    default_detail = _("服务暂时不可用，请稍后再试")
+    default_code = "service_unavailable"

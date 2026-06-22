@@ -123,7 +123,9 @@ def configure_admin_site(site):
                         **app,
                         "name": group_name,
                         "app_label": f"workorder_{len(grouped_app_list)}",
-                        "models": sorted(models, key=lambda model: model["name"]),
+                        "models": sorted(
+                            models, key=lambda model: model["name"]
+                        ),
                     }
                 )
 

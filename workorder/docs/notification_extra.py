@@ -20,7 +20,9 @@ system_notification_docs = extend_schema_view(
         summary="获取系统通知发布记录",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("SystemNotificationAdminListResponse"),
+                response=standard_success_response(
+                    "SystemNotificationAdminListResponse"
+                ),
                 description="系统通知发布记录",
             )
         },
@@ -36,7 +38,9 @@ system_notification_docs = extend_schema_view(
                 "recipient_ids": serializers.ListField(
                     child=serializers.IntegerField(), required=False
                 ),
-                "only_staff": serializers.BooleanField(required=False, default=False),
+                "only_staff": serializers.BooleanField(
+                    required=False, default=False
+                ),
                 "expires_in_days": serializers.IntegerField(required=False),
                 "priority": serializers.ChoiceField(
                     choices=["low", "normal", "high", "urgent"],
@@ -60,11 +64,15 @@ system_notification_docs = extend_schema_view(
         ],
         responses={
             201: OpenApiResponse(
-                response=standard_success_response("SystemAnnouncementResponse"),
+                response=standard_success_response(
+                    "SystemAnnouncementResponse"
+                ),
                 description="创建成功",
             ),
             400: OpenApiResponse(
-                response=standard_error_response("SystemAnnouncementBadRequest"),
+                response=standard_error_response(
+                    "SystemAnnouncementBadRequest"
+                ),
                 description="请求无效",
             ),
         },
@@ -80,7 +88,9 @@ system_notification_docs = extend_schema_view(
                 "recipient_ids": serializers.ListField(
                     child=serializers.IntegerField(), required=False
                 ),
-                "only_staff": serializers.BooleanField(required=False, default=False),
+                "only_staff": serializers.BooleanField(
+                    required=False, default=False
+                ),
             },
         ),
         examples=[
@@ -97,11 +107,15 @@ system_notification_docs = extend_schema_view(
         ],
         responses={
             201: OpenApiResponse(
-                response=standard_success_response("SystemUrgentAlertResponse"),
+                response=standard_success_response(
+                    "SystemUrgentAlertResponse"
+                ),
                 description="发送成功",
             ),
             400: OpenApiResponse(
-                response=standard_error_response("SystemUrgentAlertBadRequest"),
+                response=standard_error_response(
+                    "SystemUrgentAlertBadRequest"
+                ),
                 description="请求无效",
             ),
         },
@@ -111,11 +125,15 @@ system_notification_docs = extend_schema_view(
         summary="撤回系统通知发布批次",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("SystemNotificationRevokeResponse"),
+                response=standard_success_response(
+                    "SystemNotificationRevokeResponse"
+                ),
                 description="撤回成功",
             ),
             404: OpenApiResponse(
-                response=standard_error_response("SystemNotificationRevokeNotFound"),
+                response=standard_error_response(
+                    "SystemNotificationRevokeNotFound"
+                ),
                 description="通知不存在",
             ),
         },
@@ -125,7 +143,9 @@ system_notification_docs = extend_schema_view(
         summary="获取通知设置",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("SystemNotificationSettingsResponse"),
+                response=standard_success_response(
+                    "SystemNotificationSettingsResponse"
+                ),
                 description="通知设置",
             )
         },
@@ -135,7 +155,9 @@ system_notification_docs = extend_schema_view(
         summary="更新通知设置",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("SystemNotificationSettingsUpdateResponse"),
+                response=standard_success_response(
+                    "SystemNotificationSettingsUpdateResponse"
+                ),
                 description="更新成功",
             )
         },
@@ -145,11 +167,15 @@ system_notification_docs = extend_schema_view(
         summary="获取通知系统状态",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("SystemNotificationStatusResponse"),
+                response=standard_success_response(
+                    "SystemNotificationStatusResponse"
+                ),
                 description="系统状态",
             ),
             500: OpenApiResponse(
-                response=standard_error_response("SystemNotificationStatusError"),
+                response=standard_error_response(
+                    "SystemNotificationStatusError"
+                ),
                 description="系统异常",
             ),
         },
@@ -163,7 +189,9 @@ user_notification_settings_docs = extend_schema_view(
         summary="获取用户通知设置",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("UserNotificationSettingsResponse"),
+                response=standard_success_response(
+                    "UserNotificationSettingsResponse"
+                ),
                 description="用户通知设置",
             )
         },
@@ -173,7 +201,9 @@ user_notification_settings_docs = extend_schema_view(
         summary="更新用户通知设置",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("UserNotificationSettingsUpdateResponse"),
+                response=standard_success_response(
+                    "UserNotificationSettingsUpdateResponse"
+                ),
                 description="更新成功",
             )
         },
@@ -183,7 +213,9 @@ user_notification_settings_docs = extend_schema_view(
         summary="获取通知偏好设置",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("UserNotificationPreferencesResponse"),
+                response=standard_success_response(
+                    "UserNotificationPreferencesResponse"
+                ),
                 description="通知偏好",
             )
         },
@@ -197,7 +229,9 @@ notification_template_docs = extend_schema_view(
         summary="获取通知模板",
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("NotificationTemplateListResponse"),
+                response=standard_success_response(
+                    "NotificationTemplateListResponse"
+                ),
                 description="模板列表",
             )
         },
@@ -214,11 +248,15 @@ notification_template_docs = extend_schema_view(
         ),
         responses={
             200: OpenApiResponse(
-                response=standard_success_response("NotificationTemplatePreviewResponse"),
+                response=standard_success_response(
+                    "NotificationTemplatePreviewResponse"
+                ),
                 description="预览结果",
             ),
             404: OpenApiResponse(
-                response=standard_error_response("NotificationTemplateNotFoundResponse"),
+                response=standard_error_response(
+                    "NotificationTemplateNotFoundResponse"
+                ),
                 description="模板不存在",
             ),
         },

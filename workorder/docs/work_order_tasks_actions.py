@@ -71,15 +71,21 @@ task_department_operators_docs = extend_schema(
     ],
     responses={
         200: OpenApiResponse(
-            response=standard_success_response("TaskDepartmentOperatorsResponse"),
+            response=standard_success_response(
+                "TaskDepartmentOperatorsResponse"
+            ),
             description="操作员列表",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("TaskDepartmentOperatorsBadRequest"),
+            response=standard_error_response(
+                "TaskDepartmentOperatorsBadRequest"
+            ),
             description="请求无效",
         ),
         404: OpenApiResponse(
-            response=standard_error_response("TaskDepartmentOperatorsNotFound"),
+            response=standard_error_response(
+                "TaskDepartmentOperatorsNotFound"
+            ),
             description="部门不存在",
         ),
     },
@@ -91,7 +97,9 @@ task_claim_docs = extend_schema(
     summary="认领任务",
     request=inline_serializer(
         name="TaskClaimRequest",
-        fields={"notes": serializers.CharField(required=False, allow_blank=True)},
+        fields={
+            "notes": serializers.CharField(required=False, allow_blank=True)
+        },
     ),
     examples=[
         OpenApiExample(

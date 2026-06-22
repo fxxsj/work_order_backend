@@ -39,7 +39,8 @@ process_log_docs = extend_schema_view(
                                         "log_type": "start",
                                         "log_type_display": "开始",
                                         "content": "开始工序",
-                                        "created_at": "2026-03-02T09:10:00+08:00",
+                                        "created_at": "2026-03-02T09:10:00"
+                                        "+08:00",
                                     }
                                 ],
                             },

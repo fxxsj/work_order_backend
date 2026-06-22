@@ -2,7 +2,12 @@
 施工单相关视图集的 OpenAPI 文档定义。
 """
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view, inline_serializer
+from drf_spectacular.utils import (
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
 from rest_framework import serializers
 
 from workorder.schema import standard_error_response, standard_success_response
@@ -118,7 +123,9 @@ work_order_update_status_docs = extend_schema(
             description="更新成功",
         ),
         400: OpenApiResponse(
-            response=standard_error_response("WorkOrderUpdateStatusBadRequest"),
+            response=standard_error_response(
+                "WorkOrderUpdateStatusBadRequest"
+            ),
             description="请求无效",
         ),
     },
@@ -163,7 +170,11 @@ work_order_sync_preview_docs = extend_schema(
     summary="同步任务预览",
     request=inline_serializer(
         name="WorkOrderSyncPreviewRequest",
-        fields={"process_ids": serializers.ListField(child=serializers.IntegerField())},
+        fields={
+            "process_ids": serializers.ListField(
+                child=serializers.IntegerField()
+            )
+        },
     ),
     responses={
         200: OpenApiResponse(
@@ -183,7 +194,9 @@ work_order_sync_execute_docs = extend_schema(
     request=inline_serializer(
         name="WorkOrderSyncExecuteRequest",
         fields={
-            "process_ids": serializers.ListField(child=serializers.IntegerField()),
+            "process_ids": serializers.ListField(
+                child=serializers.IntegerField()
+            ),
             "confirmed": serializers.BooleanField(),
         },
     ),

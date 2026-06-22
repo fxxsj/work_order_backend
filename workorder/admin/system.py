@@ -28,7 +28,12 @@ from ..models import (
 class UserProfileAdmin(admin.ModelAdmin):
     """用户扩展信息管理"""
 
-    list_display = ["user", "get_departments_display", "notification_preference_count", "created_at"]
+    list_display = [
+        "user",
+        "get_departments_display",
+        "notification_preference_count",
+        "created_at",
+    ]
     list_filter = ["departments", "created_at"]
     search_fields = [
         "user__username",
@@ -42,7 +47,13 @@ class UserProfileAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ("基本信息", {"fields": ("user", "departments")}),
-        ("通知偏好", {"fields": ("notification_preferences",), "classes": ("collapse",)}),
+        (
+            "通知偏好",
+            {
+                "fields": ("notification_preferences",),
+                "classes": ("collapse",),
+            },
+        ),
         (
             "系统信息",
             {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
@@ -140,14 +151,25 @@ class WorkOrderApprovalLogAdmin(admin.ModelAdmin):
         "has_rejection_reason",
     ]
     list_filter = ["approval_status", "approved_at", "approved_by"]
-    search_fields = ["work_order__order_number", "approval_comment", "rejection_reason"]
+    search_fields = [
+        "work_order__order_number",
+        "approval_comment",
+        "rejection_reason",
+    ]
     readonly_fields = ["created_at", "approved_at"]
     ordering = ["-approved_at", "-created_at"]
 
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("work_order", "approval_status", "approved_by", "approved_at")},
+            {
+                "fields": (
+                    "work_order",
+                    "approval_status",
+                    "approved_by",
+                    "approved_at",
+                )
+            },
         ),
         ("审核内容", {"fields": ("approval_comment", "rejection_reason")}),
         ("系统信息", {"fields": ("created_at",)}),
@@ -160,7 +182,8 @@ class WorkOrderApprovalLogAdmin(admin.ModelAdmin):
         color = colors.get(obj.approval_status, "gray")
         status_display = obj.get_approval_status_display()
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 8px; border-radius: 3px;">{}</span>',
+            '<span style="background-color: {}; color: white; '
+            'padding: 3px 8px; border-radius: 3px;">{}</span>',
             color,
             status_display,
         )
@@ -203,7 +226,10 @@ class TaskAssignmentRuleAdmin(admin.ModelAdmin):
     readonly_fields = ["created_at", "updated_at"]
 
     fieldsets = (
-        ("基本信息", {"fields": ("process", "department", "priority", "is_active")}),
+        (
+            "基本信息",
+            {"fields": ("process", "department", "priority", "is_active")},
+        ),
         (
             "操作员选择策略",
             {
@@ -266,7 +292,14 @@ class NotificationAdmin(admin.ModelAdmin):
         ("内容", {"fields": ("content",)}),
         (
             "关联对象",
-            {"fields": ("work_order", "work_order_process", "task", "purchase_order")},
+            {
+                "fields": (
+                    "work_order",
+                    "work_order_process",
+                    "task",
+                    "purchase_order",
+                )
+            },
         ),
         ("时间信息", {"fields": ("read_at", "expires_at")}),
         ("系统信息", {"fields": ("created_at",), "classes": ("collapse",)}),

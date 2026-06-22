@@ -26,12 +26,25 @@ from .mixins import FixedInlineModelAdminMixin, _patched_check_inlines
 
 ModelAdmin.checks_class._check_inlines = _patched_check_inlines
 
-from .audit import AuditLogAdmin, AuditLogExportAdmin, AuditLogSettingsAdmin
-from .assets import ArtworkAdmin, DieAdmin, EmbossingPlateAdmin, FoilingPlateAdmin
+from .audit import (  # noqa: E402
+    AuditLogAdmin,
+    AuditLogExportAdmin,
+    AuditLogSettingsAdmin,
+)
+from .assets import (  # noqa: E402
+    ArtworkAdmin,
+    DieAdmin,
+    EmbossingPlateAdmin,
+    FoilingPlateAdmin,
+)
 
 # 导入各模块的 Admin 类
-from .base import CustomerAdmin, DepartmentAdmin, ProcessAdmin
-from .core import (
+from .base import (  # noqa: E402
+    CustomerAdmin,
+    DepartmentAdmin,
+    ProcessAdmin,
+)
+from .core import (  # noqa: E402
     ProcessLogAdmin,
     TaskLogAdmin,
     WorkOrderAdmin,
@@ -39,7 +52,7 @@ from .core import (
     WorkOrderProcessAdmin,
     WorkOrderTaskAdmin,
 )
-from .finance import (
+from .finance import (  # noqa: E402
     CostCenterAdmin,
     CostItemAdmin,
     InvoiceAdmin,
@@ -48,7 +61,7 @@ from .finance import (
     ProductionCostAdmin,
     StatementAdmin,
 )
-from .inventory import (
+from .inventory import (  # noqa: E402
     DeliveryItemAdmin,
     DeliveryOrderAdmin,
     ProductStockAdmin,
@@ -56,7 +69,7 @@ from .inventory import (
     StockInAdmin,
     StockOutAdmin,
 )
-from .materials import (
+from .materials import (  # noqa: E402
     MaterialAdmin,
     MaterialStockLogAdmin,
     MaterialSupplierAdmin,
@@ -65,15 +78,18 @@ from .materials import (
     PurchaseReceiveRecordAdmin,
     SupplierAdmin,
 )
-from .products import (
+from .products import (  # noqa: E402
     ProductAdmin,
     ProductGroupAdmin,
     ProductGroupItemAdmin,
     ProductStockLogAdmin,
 )
-from .sales import SalesOrderAdmin, SalesOrderItemAdmin
-from .site import configure_admin_site
-from .system import (
+from .sales import (  # noqa: E402
+    SalesOrderAdmin,
+    SalesOrderItemAdmin,
+)
+from .site import configure_admin_site  # noqa: E402
+from .system import (  # noqa: E402
     NotificationAdmin,
     NotificationTemplateAdmin,
     SystemNotificationSettingsAdmin,

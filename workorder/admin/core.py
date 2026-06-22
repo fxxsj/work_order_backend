@@ -28,7 +28,6 @@ from ..models import (
 )
 from .mixins import FixedInlineModelAdminMixin
 from .utils import (
-    PURCHASE_STATUS_COLORS,
     TASK_STATUS_COLORS,
     WORKORDER_STATUS_COLORS,
     create_priority_badge_method,
@@ -189,7 +188,11 @@ class WorkOrderAdmin(admin.ModelAdmin):
 
     date_hierarchy = "order_date"
 
-    inlines = [WorkOrderProductInline, WorkOrderProcessInline, WorkOrderMaterialInline]
+    inlines = [
+        WorkOrderProductInline,
+        WorkOrderProcessInline,
+        WorkOrderMaterialInline,
+    ]
 
     fieldsets = (
         (
@@ -217,8 +220,16 @@ class WorkOrderAdmin(admin.ModelAdmin):
         (
             "图稿、刀模、烫金版和压凸版",
             {
-                "fields": ("artworks", "dies", "foiling_plates", "embossing_plates"),
-                "description": "关联的图稿（CTP版）、刀模（模切）、烫金版和压凸版，支持多个。根据工序选择自动显示和验证。",
+                "fields": (
+                    "artworks",
+                    "dies",
+                    "foiling_plates",
+                    "embossing_plates",
+                ),
+                "description": (
+                    "关联的图稿（CTP版）、刀模（模切）、烫金版和压凸版，支持多个。"
+                    "根据工序选择自动显示和验证。"
+                ),
             },
         ),
         (
@@ -276,9 +287,11 @@ class WorkOrderAdmin(admin.ModelAdmin):
         percentage = obj.get_progress_percentage()
         color = "#67C23A" if percentage == 100 else "#409EFF"
         return format_html(
-            '<div style="width: 100px; background-color: #f0f0f0; border-radius: 3px;">'
+            '<div style="width: 100px; background-color: #f0f0f0; '
+            'border-radius: 3px;">'
             '<div style="width: {}%; height: 20px; background-color: {}; '
-            'border-radius: 3px; text-align: center; color: white; line-height: 20px;">'
+            'border-radius: 3px; text-align: center; color: white; '
+            'line-height: 20px;">'
             "{}%</div></div>",
             percentage,
             color,
@@ -297,7 +310,8 @@ class WorkOrderAdmin(admin.ModelAdmin):
                 "<p>进度: {}% ({}/{})</p>"
                 '<div style="width: 200px; background-color: #f0f0f0; '
                 'border-radius: 3px; height: 25px;">'
-                '<div style="width: {}%; height: 25px; background-color: #409EFF; '
+                '<div style="width: {}%; height: 25px; '
+                'background-color: #409EFF; '
                 "border-radius: 3px; text-align: center; color: white; "
                 'line-height: 25px;">{}%</div></div></div>',
                 percentage,
@@ -388,7 +402,13 @@ class WorkOrderProcessAdmin(admin.ModelAdmin):
         ("计划时间", {"fields": ("planned_start_time", "planned_end_time")}),
         (
             "实际时间",
-            {"fields": ("actual_start_time", "actual_end_time", "duration_hours")},
+            {
+                "fields": (
+                    "actual_start_time",
+                    "actual_end_time",
+                    "duration_hours",
+                )
+            },
         ),
         ("数量统计", {"fields": ("quantity_completed", "quantity_defective")}),
         ("其他", {"fields": ("notes",)}),
@@ -448,7 +468,11 @@ class WorkOrderMaterialAdmin(admin.ModelAdmin):
         "created_at",
     ]
     list_select_related = ["work_order", "material"]
-    search_fields = ["work_order__order_number", "material__name", "material__code"]
+    search_fields = [
+        "work_order__order_number",
+        "material__name",
+        "material__code",
+    ]
     autocomplete_fields = ["work_order", "material"]
 
     fieldsets = (
@@ -622,12 +646,23 @@ class WorkOrderTaskAdmin(admin.ModelAdmin):
     fieldsets = (
         (
             "基本信息",
-            {"fields": ("work_order_process", "task_type", "work_content", "status")},
+            {
+                "fields": (
+                    "work_order_process",
+                    "task_type",
+                    "work_content",
+                    "status",
+                )
+            },
         ),
         (
             "任务分派",
             {
-                "fields": ("assigned_department", "assigned_operator", "parent_task"),
+                "fields": (
+                    "assigned_department",
+                    "assigned_operator",
+                    "parent_task",
+                ),
                 "description": "任务分派到哪个部门和操作员。如果未分派，任务生成时会根据工序自动分派。",
             },
         ),

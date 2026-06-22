@@ -11,11 +11,10 @@
 
 from django.contrib import admin
 from django.db.models import Count
-from django.utils.html import format_html
 
 from ..models import SalesOrder, SalesOrderItem
 from .mixins import FixedInlineModelAdminMixin
-from .utils import WORKORDER_STATUS_COLORS, create_status_badge_method
+from .utils import create_status_badge_method
 
 # ==================== Inline 类 ====================
 
@@ -65,7 +64,12 @@ class SalesOrderAdmin(admin.ModelAdmin):
         "approved_at",
         "created_at",
     ]
-    list_select_related = ["customer", "submitted_by", "approved_by", "created_by"]
+    list_select_related = [
+        "customer",
+        "submitted_by",
+        "approved_by",
+        "created_by",
+    ]
     search_fields = [
         "order_number",
         "contract_number",
@@ -116,9 +120,18 @@ class SalesOrderAdmin(admin.ModelAdmin):
         ),
         (
             "日期信息",
-            {"fields": ("order_date", "delivery_date", "actual_delivery_date")},
+            {
+                "fields": (
+                    "order_date",
+                    "delivery_date",
+                    "actual_delivery_date",
+                )
+            },
         ),
-        ("付款信息", {"fields": ("deposit_amount", "paid_amount", "payment_date")}),
+        (
+            "付款信息",
+            {"fields": ("deposit_amount", "paid_amount", "payment_date")},
+        ),
         (
             "审核信息",
             {
@@ -133,7 +146,13 @@ class SalesOrderAdmin(admin.ModelAdmin):
         ),
         (
             "联系与收货",
-            {"fields": ("contact_person", "contact_phone", "shipping_address")},
+            {
+                "fields": (
+                    "contact_person",
+                    "contact_phone",
+                    "shipping_address",
+                )
+            },
         ),
         ("其他信息", {"fields": ("notes", "rejection_reason")}),
         (
@@ -215,7 +234,11 @@ class SalesOrderItemAdmin(admin.ModelAdmin):
     ]
     list_filter = ["product", "sales_order", "created_at"]
     list_select_related = ["sales_order", "product"]
-    search_fields = ["sales_order__order_number", "product__name", "product__code"]
+    search_fields = [
+        "sales_order__order_number",
+        "product__name",
+        "product__code",
+    ]
     autocomplete_fields = ["product", "sales_order"]
     readonly_fields = ["created_at", "updated_at", "subtotal"]
     ordering = ["sales_order", "id"]
