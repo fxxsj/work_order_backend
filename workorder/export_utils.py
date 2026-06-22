@@ -12,6 +12,7 @@ except ImportError:
 
 from django.http import HttpResponse
 from django.utils import timezone
+from rest_framework import status
 
 
 def create_excel_response(filename):
@@ -66,7 +67,7 @@ def export_work_orders(queryset, filename=None):
         from django.http import HttpResponse
         return HttpResponse(
             'Excel 导出功能需要安装 openpyxl 库。请运行: pip install openpyxl',
-            status=500,
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content_type='text/plain; charset=utf-8'
         )
     
@@ -157,7 +158,7 @@ def export_tasks(queryset, filename=None):
         from django.http import HttpResponse
         return HttpResponse(
             'Excel 导出功能需要安装 openpyxl 库。请运行: pip install openpyxl',
-            status=500,
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content_type='text/plain; charset=utf-8'
         )
     
@@ -250,7 +251,7 @@ def export_customers(queryset, filename=None):
     if not OPENPYXL_AVAILABLE:
         return HttpResponse(
             'Excel 导出功能需要安装 openpyxl 库。请运行: pip install openpyxl',
-            status=500,
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content_type='text/plain; charset=utf-8'
         )
 
@@ -312,7 +313,7 @@ def export_products(queryset, filename=None):
     if not OPENPYXL_AVAILABLE:
         return HttpResponse(
             'Excel 导出功能需要安装 openpyxl 库。请运行: pip install openpyxl',
-            status=500,
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content_type='text/plain; charset=utf-8'
         )
 

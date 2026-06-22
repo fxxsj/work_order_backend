@@ -37,6 +37,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 from django.db import models
+from rest_framework import status
 
 
 @dataclass
@@ -94,7 +95,7 @@ def export_model(queryset, config: ExportConfig) -> Any:
         from django.http import HttpResponse
         return HttpResponse(
             'Excel 导出功能需要安装 openpyxl 库。请运行: pip install openpyxl',
-            status=500,
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content_type='text/plain; charset=utf-8'
         )
 
