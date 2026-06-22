@@ -35,7 +35,7 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type
+from typing import Any, Callable, Dict, List, Optional, Type
 from django.db import models
 from rest_framework import status
 
@@ -43,6 +43,7 @@ from rest_framework import status
 @dataclass
 class ExportField:
     """导出字段配置"""
+
     header: str  # Excel表头名称
     getter: Callable[[Any], Any]  # 从对象获取值的函数
 
@@ -50,6 +51,7 @@ class ExportField:
 @dataclass
 class ExportConfig:
     """导出配置"""
+
     filename: str  # 文件名前缀
     sheet_title: str  # 工作表标题
     fields: List[ExportField]  # 字段列表
@@ -59,6 +61,7 @@ class ExportConfig:
 @dataclass
 class ImportField:
     """导入字段配置"""
+
     excel_headers: List[str]  # 匹配的Excel表头名称（支持多个别名）
     model_field: str  # 模型字段名
     transformer: Callable[[Any], Any] = lambda x: x  # 值转换函数
@@ -67,12 +70,17 @@ class ImportField:
 @dataclass
 class ImportConfig:
     """导入配置"""
+
     model: Type[models.Model]  # Django模型类
     unique_field: str  # 唯一标识字段（用于upsert）
     field_mappings: List[ImportField]  # 字段映射列表
     update_fields: List[str] = field(default_factory=list)  # 可更新的字段列表
-    create_defaults: Dict[str, Any] = field(default_factory=dict)  # 创建时的默认值
-    pre_save_hook: Optional[Callable[['models.Model', Dict[str, Any]], None]] = None  # 保存前钩子
+    create_defaults: Dict[str, Any] = field(
+        default_factory=dict
+    )  # 创建时的默认值
+    pre_save_hook: Optional[
+        Callable[["models.Model", Dict[str, Any]], None]
+    ] = None  # 保存前钩子
     unique_field_case_insensitive: bool = True  # 唯一字段是否不区分大小写
 
 
@@ -93,16 +101,19 @@ def export_model(queryset, config: ExportConfig) -> Any:
         from openpyxl.utils import get_column_letter
     except ImportError:
         from django.http import HttpResponse
+
         return HttpResponse(
-            'Excel 导出功能需要安装 openpyxl 库。请运行: pip install openpyxl',
+            "Excel 导出功能需要安装 openpyxl 库。请运行: pip install openpyxl",
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content_type='text/plain; charset=utf-8'
+            content_type="text/plain; charset=utf-8",
         )
 
     from django.utils import timezone
     from .export_utils import create_excel_response
 
-    filename = f'{config.filename}_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    filename = (
+        f'{config.filename}_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
 
     wb = Workbook()
     ws = wb.active
@@ -113,22 +124,24 @@ def export_model(queryset, config: ExportConfig) -> Any:
     # 样式函数
     def style_header(cell):
         cell.font = Font(bold=True, color="FFFFFF", size=11)
-        cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        cell.fill = PatternFill(
+            start_color="366092", end_color="366092", fill_type="solid"
+        )
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = Border(
-            left=Side(style='thin'),
-            right=Side(style='thin'),
-            top=Side(style='thin'),
-            bottom=Side(style='thin')
+            left=Side(style="thin"),
+            right=Side(style="thin"),
+            top=Side(style="thin"),
+            bottom=Side(style="thin"),
         )
 
     def style_data(cell):
         cell.alignment = Alignment(horizontal="left", vertical="center")
         cell.border = Border(
-            left=Side(style='thin'),
-            right=Side(style='thin'),
-            top=Side(style='thin'),
-            bottom=Side(style='thin')
+            left=Side(style="thin"),
+            right=Side(style="thin"),
+            top=Side(style="thin"),
+            bottom=Side(style="thin"),
         )
 
     # 写入表头
@@ -138,17 +151,21 @@ def export_model(queryset, config: ExportConfig) -> Any:
 
     # 写入数据
     for row_num, obj in enumerate(queryset, 2):
-        for col_num, field in enumerate(config.fields, 1):
-            value = field.getter(obj)
+        for col_num, export_field in enumerate(config.fields, 1):
+            value = export_field.getter(obj)
             if value is None:
-                value = ''
-            elif hasattr(value, 'strftime'):
-                value = value.strftime('%Y-%m-%d %H:%M:%S')
-            elif hasattr(value, 'username'):
+                value = ""
+            elif hasattr(value, "strftime"):
+                value = value.strftime("%Y-%m-%d %H:%M:%S")
+            elif hasattr(value, "username"):
                 value = value.username
-            elif hasattr(value, 'name'):
+            elif hasattr(value, "name"):
                 value = value.name
-            ws.cell(row=row_num, column=col_num, value=str(value) if value is not None else '')
+            ws.cell(
+                row=row_num,
+                column=col_num,
+                value=str(value) if value is not None else "",
+            )
             style_data(ws.cell(row=row_num, column=col_num))
 
     # 调整列宽
@@ -157,7 +174,7 @@ def export_model(queryset, config: ExportConfig) -> Any:
             ws.column_dimensions[get_column_letter(col_num)].width = width
 
     # 冻结首行
-    ws.freeze_panes = 'A2'
+    ws.freeze_panes = "A2"
 
     # 创建响应
     response = create_excel_response(filename)
@@ -175,15 +192,18 @@ def import_model(file, config: ImportConfig, user=None) -> Dict[str, Any]:
         user: 当前用户（用于审计）
 
     Returns:
-        dict: 包含 success_count, created_count, updated_count, error_count, errors 的字典
+        dict: 包含 success_count, created_count, updated_count,
+            error_count, errors 的字典
     """
     try:
         from openpyxl import load_workbook, Workbook
     except ImportError:
         return {
-            'success_count': 0,
-            'error_count': 1,
-            'errors': ['Excel 导入功能需要安装 openpyxl 库。请运行: pip install openpyxl']
+            "success_count": 0,
+            "error_count": 1,
+            "errors": [
+                "Excel 导入功能需要安装 openpyxl 库。请运行: pip install openpyxl"
+            ],
         }
 
     try:
@@ -193,9 +213,9 @@ def import_model(file, config: ImportConfig, user=None) -> Dict[str, Any]:
         file_content = file.read()
         if not file_content:
             return {
-                'success_count': 0,
-                'error_count': 1,
-                'errors': ['文件内容为空']
+                "success_count": 0,
+                "error_count": 1,
+                "errors": ["文件内容为空"],
             }
 
         try:
@@ -206,24 +226,24 @@ def import_model(file, config: ImportConfig, user=None) -> Dict[str, Any]:
         ws = wb.active
         if ws is None:
             return {
-                'success_count': 0,
-                'error_count': 1,
-                'errors': ['Excel 文件格式不正确，无法读取工作表']
+                "success_count": 0,
+                "error_count": 1,
+                "errors": ["Excel 文件格式不正确，无法读取工作表"],
             }
 
         if ws.max_row < 1:
             return {
-                'success_count': 0,
-                'error_count': 1,
-                'errors': ['Excel 文件为空或格式不正确']
+                "success_count": 0,
+                "error_count": 1,
+                "errors": ["Excel 文件为空或格式不正确"],
             }
 
         first_row = ws[1]
         if first_row is None:
             return {
-                'success_count': 0,
-                'error_count': 1,
-                'errors': ['Excel 文件无法读取第一行']
+                "success_count": 0,
+                "error_count": 1,
+                "errors": ["Excel 文件无法读取第一行"],
             }
 
         headers = [cell.value for cell in first_row]
@@ -234,20 +254,24 @@ def import_model(file, config: ImportConfig, user=None) -> Dict[str, Any]:
             if not h:
                 continue
             h_lower = str(h).strip().lower()
-            for field in config.field_mappings:
-                if h_lower in [alt.lower() for alt in field.excel_headers]:
-                    col_map[field.model_field] = idx
+            for import_field in config.field_mappings:
+                if h_lower in [
+                    alt.lower() for alt in import_field.excel_headers
+                ]:
+                    col_map[import_field.model_field] = idx
                     break
 
         # 检查必填字段
         required_fields = {config.unique_field}
-        for field in config.field_mappings:
-            if field.model_field not in col_map:
-                if field.model_field in required_fields:
+        for import_field in config.field_mappings:
+            if import_field.model_field not in col_map:
+                if import_field.model_field in required_fields:
                     return {
-                        'success_count': 0,
-                        'error_count': 1,
-                        'errors': [f'未找到必填字段: {field.excel_headers[0]}']
+                        "success_count": 0,
+                        "error_count": 1,
+                        "errors": [
+                            f"未找到必填字段: {import_field.excel_headers[0]}"
+                        ],
                     }
 
         created_count = 0
@@ -266,40 +290,59 @@ def import_model(file, config: ImportConfig, user=None) -> Dict[str, Any]:
                 unique_value = None
 
                 # 提取各字段值
-                for field in config.field_mappings:
-                    col_idx = col_map.get(field.model_field)
+                for import_field in config.field_mappings:
+                    col_idx = col_map.get(import_field.model_field)
                     if col_idx and col_idx <= len(row):
                         raw_val = row[col_idx - 1]
                         if raw_val is not None:
                             try:
-                                data[field.model_field] = field.transformer(raw_val)
+                                transformer = import_field.transformer
+                                data[import_field.model_field] = transformer(
+                                    raw_val
+                                )
                             except Exception:
-                                data[field.model_field] = field.transformer(str(raw_val))
+                                transformer = import_field.transformer
+                                data[import_field.model_field] = transformer(
+                                    str(raw_val)
+                                )
                         else:
-                            data[field.model_field] = None
+                            data[import_field.model_field] = None
 
                     # 获取唯一字段值
-                    if field.model_field == config.unique_field:
+                    if import_field.model_field == config.unique_field:
                         raw_val = row[col_idx - 1] if col_idx else None
                         if raw_val is not None:
                             unique_value = str(raw_val).strip()
 
                 # 验证唯一字段
                 if not unique_value:
-                    errors.append(f'第{row_num}行: {config.unique_field}不能为空')
+                    errors.append(
+                        f"第{row_num}行: {config.unique_field}不能为空"
+                    )
                     error_count += 1
                     continue
 
                 # 检查批次内重复
-                unique_key = unique_value.lower() if config.unique_field_case_insensitive else unique_value
+                unique_key = (
+                    unique_value.lower()
+                    if config.unique_field_case_insensitive
+                    else unique_value
+                )
                 if unique_key in imported_keys:
-                    errors.append(f'第{row_num}行: {config.unique_field} "{unique_value}" 在本次导入中已出现，将跳过')
+                    errors.append(
+                        f"第{row_num}行: {config.unique_field} "
+                        f'"{unique_value}" 在本次导入中已出现，将跳过'
+                    )
                     error_count += 1
                     continue
                 imported_keys.add(unique_key)
 
                 # 查询现有记录
-                filter_kwargs = {f'{config.unique_field}__iexact': unique_value} if config.unique_field_case_insensitive else {config.unique_field: unique_value}
+                filter_kwargs = (
+                    {f"{config.unique_field}__iexact": unique_value}
+                    if config.unique_field_case_insensitive
+                    else {config.unique_field: unique_value}
+                )
                 existing = config.model.objects.filter(**filter_kwargs).first()
 
                 if existing:
@@ -314,40 +357,48 @@ def import_model(file, config: ImportConfig, user=None) -> Dict[str, Any]:
                 else:
                     # 创建新记录
                     create_data = {}
-                    for field_name, default_val in config.create_defaults.items():
+                    for (
+                        field_name,
+                        default_val,
+                    ) in config.create_defaults.items():
                         if callable(default_val):
                             create_data[field_name] = default_val(user)
                         else:
                             create_data[field_name] = default_val
-                    for field in config.field_mappings:
-                        if field.model_field in data and data[field.model_field] is not None:
-                            create_data[field.model_field] = data[field.model_field]
+                    for import_field in config.field_mappings:
+                        if (
+                            import_field.model_field in data
+                            and data[import_field.model_field] is not None
+                        ):
+                            create_data[import_field.model_field] = data[
+                                import_field.model_field
+                            ]
                     if config.pre_save_hook:
                         config.pre_save_hook(None, create_data)
                     config.model.objects.create(**create_data)
                     created_count += 1
 
             except Exception as e:
-                errors.append(f'第{row_num}行: {str(e)}')
+                errors.append(f"第{row_num}行: {str(e)}")
                 error_count += 1
 
         return {
-            'success_count': created_count + updated_count,
-            'created_count': created_count,
-            'updated_count': updated_count,
-            'error_count': error_count,
-            'errors': errors[:50]
+            "success_count": created_count + updated_count,
+            "created_count": created_count,
+            "updated_count": updated_count,
+            "error_count": error_count,
+            "errors": errors[:50],
         }
 
     except InvalidFileException as e:
         return {
-            'success_count': 0,
-            'error_count': 1,
-            'errors': [f'无效的 Excel 文件: {str(e)}']
+            "success_count": 0,
+            "error_count": 1,
+            "errors": [f"无效的 Excel 文件: {str(e)}"],
         }
     except Exception as e:
         return {
-            'success_count': 0,
-            'error_count': 1,
-            'errors': [f'文件读取失败: {str(e)}']
+            "success_count": 0,
+            "error_count": 1,
+            "errors": [f"文件读取失败: {str(e)}"],
         }
