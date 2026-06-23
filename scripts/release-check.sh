@@ -37,7 +37,7 @@ fi
 
 echo ""
 echo -e "${BLUE}[backend/release-check] 运行核心流程测试...${NC}"
-if pytest workorder/tests/test_api.py workorder/tests/test_work_order_flow_service.py -q --tb=short; then
+if pytest workorder/tests/test_api.py workorder/tests/test_work_order_flow_service.py workorder/tests/smoke -q --tb=short; then
     echo -e "${GREEN}✓ 核心流程测试通过${NC}"
 else
     echo -e "${RED}✗ 核心流程测试失败${NC}"
