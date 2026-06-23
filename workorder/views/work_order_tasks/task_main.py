@@ -27,7 +27,10 @@ from workorder.models.core import WorkOrderTask
 from workorder.permission_utils import PermissionCache
 from workorder.permissions import WorkOrderTaskPermission
 from workorder.permissions.permission_utils import is_manager_user
-from workorder.serializers.core import TaskAssignmentSerializer, WorkOrderTaskSerializer
+from workorder.serializers.core import (
+    TaskAssignmentSerializer,
+    WorkOrderTaskSerializer,
+)
 from workorder.schema import standard_error_response, standard_success_response
 from workorder.services.task_assignment import TaskAssignmentService
 
@@ -60,7 +63,13 @@ logger = logging.getLogger(__name__)
                 name="status",
                 type=OpenApiTypes.STR,
                 description="按任务状态筛选",
-                enum=["draft", "pending", "in_progress", "completed", "cancelled"],
+                enum=[
+                    "draft",
+                    "pending",
+                    "in_progress",
+                    "completed",
+                    "cancelled",
+                ],
                 required=False,
             ),
             OpenApiParameter(
@@ -78,7 +87,9 @@ logger = logging.getLogger(__name__)
         ],
         responses={
             status.HTTP_200_OK: OpenApiResponse(
-                response=standard_success_response("WorkOrderTaskListResponse"),
+                response=standard_success_response(
+                    "WorkOrderTaskListResponse"
+                ),
                 description="任务列表",
                 examples=[
                     OpenApiExample(
@@ -163,7 +174,9 @@ logger = logging.getLogger(__name__)
                 ],
             ),
             status.HTTP_404_NOT_FOUND: OpenApiResponse(
-                response=standard_error_response("WorkOrderTaskNotFoundResponse"),
+                response=standard_error_response(
+                    "WorkOrderTaskNotFoundResponse"
+                ),
                 description="任务不存在",
             ),
         },
@@ -174,11 +187,15 @@ logger = logging.getLogger(__name__)
         description="删除指定的任务。只有草稿状态的任务可以被删除。",
         responses={
             status.HTTP_200_OK: OpenApiResponse(
-                response=standard_success_response("WorkOrderTaskDeleteResponse"),
+                response=standard_success_response(
+                    "WorkOrderTaskDeleteResponse"
+                ),
                 description="删除成功",
             ),
             status.HTTP_400_BAD_REQUEST: OpenApiResponse(
-                response=standard_error_response("WorkOrderTaskDeleteErrorResponse"),
+                response=standard_error_response(
+                    "WorkOrderTaskDeleteErrorResponse"
+                ),
                 description="无法删除该任务",
             ),
         },
@@ -194,7 +211,8 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
     permission_classes = [WorkOrderTaskPermission]
     serializer_class = WorkOrderTaskSerializer
     # 优化查询：使用 select_related 和 prefetch_related 避免 N+1 查询
-    # Query optimization: select_related reduces N+1 queries for ForeignKey lookups
+    # Query optimization: select_related reduces N+1 queries
+    # for ForeignKey lookups
     # Expected: 1 query for tasks list instead of 1+N queries
     queryset = (
         WorkOrderTask.objects.select_related(
@@ -278,7 +296,9 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         return error_response
 
     def _wrap_response(self, response):
-        wrapped = APIResponse.success(data=response.data, code=response.status_code)
+        wrapped = APIResponse.success(
+            data=response.data, code=response.status_code
+        )
         for key, value in response.headers.items():
             wrapped.headers[key] = value
         return wrapped
@@ -306,7 +326,9 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         response = super().destroy(request, *args, **kwargs)
         if response.status_code == status.HTTP_204_NO_CONTENT:
-            return APIResponse.success(message='删除成功', data=None, code=status.HTTP_204_NO_CONTENT)
+            return APIResponse.success(
+                message="删除成功", data=None, code=status.HTTP_204_NO_CONTENT
+            )
         return self._wrap_response(response)
 
     def get_queryset(self):
@@ -353,8 +375,12 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             ).filter(active_status)
         elif todo_filter == "due_soon":
             queryset = queryset.filter(
-                work_order_process__work_order__delivery_date__gte=today,
-                work_order_process__work_order__delivery_date__lte=due_soon_end,
+                **{
+                    "work_order_process__work_order__"
+                    "delivery_date__gte": today,
+                    "work_order_process__work_order__"
+                    "delivery_date__lte": due_soon_end,
+                }
             ).filter(active_status)
         elif todo_filter == "unassigned":
             queryset = queryset.filter(assigned_operator__isnull=True).filter(
@@ -369,20 +395,21 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         queryset = self.filter_queryset(self.get_queryset())
         today = timezone.localdate()
         due_soon_end = today + timedelta(days=2)
+        date_path = "work_order_process__work_order__delivery_date"
         summary = queryset.aggregate(
             total_count=Count("id"),
             overdue_count=Count(
                 "id",
-                filter=Q(work_order_process__work_order__delivery_date__lt=today)
+                filter=Q(**{f"{date_path}__lt": today})
                 & ~Q(status__in=["completed", "cancelled"]),
             ),
             due_soon_count=Count(
                 "id",
-                filter=Q(work_order_process__work_order__delivery_date__gte=today)
-                & Q(
-                    work_order_process__work_order__delivery_date__lte=due_soon_end
-                )
-                & ~Q(status__in=["completed", "cancelled"]),
+                filter=(
+                    Q(**{f"{date_path}__gte": today})
+                    & Q(**{f"{date_path}__lte": due_soon_end})
+                    & ~Q(status__in=["completed", "cancelled"])
+                ),
             ),
             unassigned_count=Count(
                 "id",
@@ -391,8 +418,14 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             ),
             completed_count=Count("id", filter=Q(status="completed")),
         )
-        by_status = queryset.values("status").annotate(count=Count("id")).order_by("status")
-        return APIResponse.success(data={"summary": summary, "by_status": list(by_status)})
+        by_status = (
+            queryset.values("status")
+            .annotate(count=Count("id"))
+            .order_by("status")
+        )
+        return APIResponse.success(
+            data={"summary": summary, "by_status": list(by_status)}
+        )
 
     def perform_update(self, serializer):
         """
@@ -438,7 +471,11 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         serializer = TaskAssignmentSerializer(data=request.data)
 
         if not serializer.is_valid():
-            return APIResponse.error('请求参数错误', code=status.HTTP_400_BAD_REQUEST, errors=serializer.errors)
+            return APIResponse.error(
+                "请求参数错误",
+                code=status.HTTP_400_BAD_REQUEST,
+                errors=serializer.errors,
+            )
 
         try:
             result = TaskAssignmentService.assign_to_operator(
@@ -495,7 +532,9 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             )
 
         try:
-            operators = TaskAssignmentService.get_department_operators(department_id)
+            operators = TaskAssignmentService.get_department_operators(
+                department_id
+            )
             return APIResponse.success(data=operators)
         except Department.DoesNotExist:
             return APIResponse.error(
@@ -523,7 +562,9 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             )
 
         try:
-            departments = TaskAssignmentService.get_process_departments(int(process_id))
+            departments = TaskAssignmentService.get_process_departments(
+                int(process_id)
+            )
             return APIResponse.success(data=departments)
         except Process.DoesNotExist:
             return APIResponse.error(
@@ -610,13 +651,19 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             if page is not None:
                 serializer = self.get_serializer(page, many=True)
                 paginated = self.get_paginated_response(
-                    {"claimable_count": len(claimable_ids), "results": serializer.data}
+                    {
+                        "claimable_count": len(claimable_ids),
+                        "results": serializer.data,
+                    }
                 )
                 return APIResponse.success(data=paginated.data)
 
             serializer = self.get_serializer(queryset, many=True)
             return APIResponse.success(
-                data={"claimable_count": len(claimable_ids), "results": serializer.data}
+                data={
+                    "claimable_count": len(claimable_ids),
+                    "results": serializer.data,
+                }
             )
 
         except Exception as e:
@@ -644,7 +691,9 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
 
         user = request.user
         my_limit = self._get_operator_center_limit("my_limit", 100)
-        claimable_limit = self._get_operator_center_limit("claimable_limit", 50)
+        claimable_limit = self._get_operator_center_limit(
+            "claimable_limit", 50
+        )
 
         # Get user's department scope
         department_scope = PermissionCache.get_user_department_scope(user)
@@ -670,12 +719,20 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             )
 
         # Get my assigned tasks
-        my_tasks_filtered_qs = self.get_queryset().filter(assigned_operator=user)
+        my_tasks_filtered_qs = self.get_queryset().filter(
+            assigned_operator=user
+        )
         my_tasks_filtered_qs = self.filter_queryset(my_tasks_filtered_qs)
         my_total_count = my_tasks_filtered_qs.count()
-        my_pending_count = my_tasks_filtered_qs.filter(status="pending").count()
-        my_in_progress_count = my_tasks_filtered_qs.filter(status="in_progress").count()
-        my_completed_count = my_tasks_filtered_qs.filter(status="completed").count()
+        my_pending_count = my_tasks_filtered_qs.filter(
+            status="pending"
+        ).count()
+        my_in_progress_count = my_tasks_filtered_qs.filter(
+            status="in_progress"
+        ).count()
+        my_completed_count = my_tasks_filtered_qs.filter(
+            status="completed"
+        ).count()
         my_tasks_qs = my_tasks_filtered_qs.select_related(
             "assigned_department",
             "work_order_process",
@@ -684,15 +741,20 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
         )[:my_limit]
 
         # Get claimable tasks (unassigned in user's departments). Do not use
-        # get_queryset() here: for operators it filters to assigned_operator=user,
-        # which would hide every unassigned claimable task.
-        claimable_ids = TaskAssignmentService.get_claimable_tasks_for_user(user)
+        # get_queryset() here: for operators it filters to
+        # assigned_operator=user, which would hide every unassigned
+        # claimable task.
+        claimable_ids = TaskAssignmentService.get_claimable_tasks_for_user(
+            user
+        )
         claimable_tasks_filtered_qs = self.queryset.filter(
             id__in=claimable_ids,
             assigned_operator__isnull=True,
             status="pending",
         ).order_by("-created_at")
-        claimable_tasks_filtered_qs = self.filter_queryset(claimable_tasks_filtered_qs)
+        claimable_tasks_filtered_qs = self.filter_queryset(
+            claimable_tasks_filtered_qs
+        )
         claimable_total_count = claimable_tasks_filtered_qs.count()
         claimable_tasks_qs = claimable_tasks_filtered_qs.select_related(
             "assigned_department",
@@ -703,7 +765,9 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
 
         # Serialize
         my_serializer = self.get_serializer(my_tasks_qs, many=True)
-        claimable_serializer = self.get_serializer(claimable_tasks_qs, many=True)
+        claimable_serializer = self.get_serializer(
+            claimable_tasks_qs, many=True
+        )
 
         # Calculate summary
         summary = {
@@ -714,7 +778,8 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             "claimable_count": claimable_total_count,
         }
 
-        return APIResponse.success(data={
+        return APIResponse.success(
+            data={
                 "my_tasks": my_serializer.data,
                 "claimable_tasks": claimable_serializer.data,
                 "summary": summary,
@@ -726,9 +791,11 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
                     "claimable_count": claimable_total_count,
                     "claimable_returned": len(claimable_serializer.data),
                     "claimable_limit": claimable_limit,
-                    "claimable_has_more": claimable_total_count > claimable_limit,
+                    "claimable_has_more": claimable_total_count
+                    > claimable_limit,
                 },
-            })
+            }
+        )
 
     def _get_operator_center_limit(self, param_name, default, max_value=None):
         if max_value is None:

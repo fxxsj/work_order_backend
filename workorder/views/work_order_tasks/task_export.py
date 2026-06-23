@@ -55,7 +55,7 @@ class TaskExportMixin:
 
         # 获取导出参数
         task_ids = request.data.get("task_ids", [])
-        filters = request.data.get("filters", {})
+        request.data.get("filters", {})
         columns = request.data.get(
             "columns",
             [
@@ -119,7 +119,9 @@ class TaskExportMixin:
         # 设置列标题
         header_style = Font(bold=True, color=EXCEL_THEME["header_font_color"])
         header_fill = PatternFill(
-            start_color=EXCEL_THEME["header_fill"], end_color=EXCEL_THEME["header_fill"], fill_type="solid"
+            start_color=EXCEL_THEME["header_fill"],
+            end_color=EXCEL_THEME["header_fill"],
+            fill_type="solid",
         )
         header_alignment = Alignment(horizontal="center", vertical="center")
         border = Border(
@@ -130,14 +132,18 @@ class TaskExportMixin:
         )
 
         for col_idx, col_key in enumerate(columns, 1):
-            col_config = column_config.get(col_key, {"title": col_key, "width": 15})
+            col_config = column_config.get(
+                col_key, {"title": col_key, "width": 15}
+            )
             cell = ws.cell(row=1, column=col_idx)
             cell.value = col_config["title"]
             cell.font = header_style
             cell.fill = header_fill
             cell.alignment = header_alignment
             cell.border = border
-            ws.column_dimensions[get_column_letter(col_idx)].width = col_config["width"]
+            ws.column_dimensions[get_column_letter(col_idx)].width = (
+                col_config["width"]
+            )
 
         # 填充数据
         status_display_map = dict(WorkOrderTask.STATUS_CHOICES)
@@ -164,15 +170,21 @@ class TaskExportMixin:
                 if columns[col_idx - 1] == "status":
                     if task.status == "completed":
                         cell.fill = PatternFill(
-                            start_color=EXCEL_THEME["completed_fill"], end_color=EXCEL_THEME["completed_fill"], fill_type="solid"
+                            start_color=EXCEL_THEME["completed_fill"],
+                            end_color=EXCEL_THEME["completed_fill"],
+                            fill_type="solid",
                         )
                     elif task.status == "cancelled":
                         cell.fill = PatternFill(
-                            start_color=EXCEL_THEME["cancelled_fill"], end_color=EXCEL_THEME["cancelled_fill"], fill_type="solid"
+                            start_color=EXCEL_THEME["cancelled_fill"],
+                            end_color=EXCEL_THEME["cancelled_fill"],
+                            fill_type="solid",
                         )
                     elif task.status == "draft":
                         cell.fill = PatternFill(
-                            start_color=EXCEL_THEME["draft_fill"], end_color=EXCEL_THEME["draft_fill"], fill_type="solid"
+                            start_color=EXCEL_THEME["draft_fill"],
+                            end_color=EXCEL_THEME["draft_fill"],
+                            fill_type="solid",
                         )
 
             row_idx += 1
@@ -189,7 +201,10 @@ class TaskExportMixin:
 
         # 创建响应
         response = HttpResponse(
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            content_type=(
+                "application/vnd.openxmlformats-"
+                "officedocument.spreadsheetml.sheet"
+            )
         )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
 
@@ -207,14 +222,18 @@ class TaskExportMixin:
                 value = task.id
             elif col_key == "work_order_number":
                 value = (
-                    getattr(task.work_order_process.work_order, "order_number", "")
-                    if task.work_order_process and task.work_order_process.work_order
+                    getattr(
+                        task.work_order_process.work_order, "order_number", ""
+                    )
+                    if task.work_order_process
+                    and task.work_order_process.work_order
                     else ""
                 )
             elif col_key == "process_name":
                 value = (
                     str(task.work_order_process.process)
-                    if task.work_order_process and task.work_order_process.process
+                    if task.work_order_process
+                    and task.work_order_process.process
                     else ""
                 )
             elif col_key == "task_type":
@@ -227,10 +246,16 @@ class TaskExportMixin:
                 value = task.work_content or ""
             elif col_key == "assigned_department":
                 value = (
-                    str(task.assigned_department) if task.assigned_department else ""
+                    str(task.assigned_department)
+                    if task.assigned_department
+                    else ""
                 )
             elif col_key == "assigned_operator":
-                value = str(task.assigned_operator) if task.assigned_operator else ""
+                value = (
+                    str(task.assigned_operator)
+                    if task.assigned_operator
+                    else ""
+                )
             elif col_key == "production_quantity":
                 value = task.production_quantity or 0
             elif col_key == "quantity_completed":
@@ -240,7 +265,9 @@ class TaskExportMixin:
             elif col_key == "progress":
                 if task.production_quantity and task.production_quantity > 0:
                     value = round(
-                        (task.quantity_completed or 0) / task.production_quantity * 100,
+                        (task.quantity_completed or 0)
+                        / task.production_quantity
+                        * 100,
                         1,
                     )
                 else:
@@ -252,7 +279,11 @@ class TaskExportMixin:
                     else ""
                 )
             elif col_key == "status":
-                value = status_map.get(task.status, task.status) if task.status else ""
+                value = (
+                    status_map.get(task.status, task.status)
+                    if task.status
+                    else ""
+                )
             elif col_key == "created_at":
                 value = (
                     task.created_at.strftime("%Y-%m-%d %H:%M")

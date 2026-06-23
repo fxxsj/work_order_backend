@@ -9,12 +9,10 @@ import logging
 from datetime import timedelta
 
 from django.core.cache import cache
-from django.db.models import Avg, Count, F, Sum
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
-from rest_framework.permissions import IsAuthenticated
 from workorder.response import APIResponse
 from workorder.docs.work_order_tasks_stats import (
     task_assignment_history_docs,
@@ -27,7 +25,9 @@ from workorder.export_utils import export_tasks
 from workorder.models import WorkOrderTask
 from workorder.permission_utils import PermissionCache
 from workorder.permissions.permission_utils import is_manager_user
-from workorder.services.collaboration_stats_service import CollaborationStatsService
+from workorder.services.collaboration_stats_service import (
+    CollaborationStatsService,
+)
 from workorder.services.task_log_service import TaskLogService
 from workorder.throttling import ExportRateThrottle
 
@@ -46,20 +46,26 @@ class TaskStatsMixin:
     COLLAB_STATS_CACHE_PREFIX = "collab_stats"
     CACHE_TIMEOUT = 300  # 5 minutes
 
-    def _get_collaboration_stats_cache_key(self, start_date, end_date, department_id):
+    def _get_collaboration_stats_cache_key(
+        self, start_date, end_date, department_id
+    ):
         """Generate cache key for collaboration stats"""
         # Create a hash of parameters for cache key
         params = f"{start_date or ''}:{end_date or ''}:{department_id or ''}"
         params_hash = hashlib.md5(params.encode()).hexdigest()[:8]  # nosec
         return f"{self.COLLAB_STATS_CACHE_PREFIX}:{params_hash}"
 
-    @action(detail=False, methods=["get"], throttle_classes=[ExportRateThrottle])
+    @action(
+        detail=False, methods=["get"], throttle_classes=[ExportRateThrottle]
+    )
     @task_export_docs
     def export(self, request):
         """导出任务列表到 Excel（P1 优化：添加速率限制）"""
         # 权限检查：需要查看权限
         if not request.user.has_perm("workorder.view_workorder"):
-            return APIResponse.error("您没有权限导出任务数据", code=status.HTTP_403_FORBIDDEN)
+            return APIResponse.error(
+                "您没有权限导出任务数据", code=status.HTTP_403_FORBIDDEN
+            )
 
         # 获取过滤后的查询集（使用 get_queryset 确保权限过滤）
         queryset = self.filter_queryset(self.get_queryset())
@@ -129,29 +135,41 @@ class TaskStatsMixin:
         - Recent task activity
         """
         from django.contrib.auth.models import User
-        from django.db.models import Case, Count, F, IntegerField, Q, When
+        from django.db.models import Count, F, Q
 
         # 权限检查：只有主管（有 change_workorder 权限的用户）可以访问
         if not request.user.has_perm("workorder.change_workorder"):
-            return APIResponse.error("您没有权限查看部门工作负载统计", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "您没有权限查看部门工作负载统计",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
 
         # 获取部门ID参数
         department_id = request.query_params.get("department_id")
 
-        user_department_scope = PermissionCache.get_user_department_scope(request.user)
+        user_department_scope = PermissionCache.get_user_department_scope(
+            request.user
+        )
 
         # 如果没有指定部门，使用用户所属的第一个部门
         if not department_id:
-            user_departments = PermissionCache.get_user_departments(request.user)
+            user_departments = PermissionCache.get_user_departments(
+                request.user
+            )
             if user_departments:
                 department_id = user_departments[0]
             else:
-                return APIResponse.error("未指定部门且用户不属于任何部门", code=status.HTTP_400_BAD_REQUEST)
+                return APIResponse.error(
+                    "未指定部门且用户不属于任何部门",
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
 
         try:
             department_id = int(department_id)
         except (ValueError, TypeError):
-            return APIResponse.error("部门ID格式无效", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "部门ID格式无效", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 获取部门信息
         try:
@@ -159,18 +177,26 @@ class TaskStatsMixin:
 
             department = Department.objects.get(id=department_id)
         except Department.DoesNotExist:
-            return APIResponse.error("部门不存在", code=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error(
+                "部门不存在", code=status.HTTP_404_NOT_FOUND
+            )
 
         if not request.user.is_superuser and not is_manager_user(request.user):
             if department.id not in user_department_scope:
-                return APIResponse.error("您没有权限查看该部门工作负载统计", code=status.HTTP_403_FORBIDDEN)
+                return APIResponse.error(
+                    "您没有权限查看该部门工作负载统计",
+                    code=status.HTTP_403_FORBIDDEN,
+                )
 
         department_scope = [department.id] + [
             descendant.id for descendant in department.get_descendants()
         ]
 
         # Check cache first
-        cache_key = f"{self.DEPT_WORKLOAD_CACHE_PREFIX}:{department_id}:{','.join(map(str, sorted(department_scope)))}"
+        cache_key = (
+            f"{self.DEPT_WORKLOAD_CACHE_PREFIX}:{department_id}:"
+            f"{','.join(map(str, sorted(department_scope)))}"
+        )
         cached_data = cache.get(cache_key)
 
         if cached_data is not None:
@@ -181,14 +207,19 @@ class TaskStatsMixin:
 
         # 获取部门的所有任务（使用 select_related 优化查询）
         tasks = (
-            WorkOrderTask.objects.filter(assigned_department_id__in=department_scope)
+            WorkOrderTask.objects.filter(
+                assigned_department_id__in=department_scope
+            )
             .select_related(
-                "assigned_operator", "assigned_department", "work_order_process"
+                "assigned_operator",
+                "assigned_department",
+                "work_order_process",
             )
             .prefetch_related("logs")
         )
 
-        # Query optimization: Use aggregate for status counts instead of multiple filter().count()
+        # Query optimization: Use aggregate for status counts instead of
+        # multiple filter().count()
         status_counts = tasks.aggregate(
             total_tasks=Count("id"),
             pending_tasks=Count("id", filter=Q(status="pending")),
@@ -205,21 +236,20 @@ class TaskStatsMixin:
 
         today = timezone.now().date()
         due_soon_end = today + timedelta(days=2)
+        date_path = "work_order_process__work_order__delivery_date"
         execution_risk = tasks.aggregate(
             overdue_tasks=Count(
                 "id",
-                filter=Q(
-                    work_order_process__work_order__delivery_date__lt=today
-                )
+                filter=Q(**{f"{date_path}__lt": today})
                 & ~Q(status__in=["completed", "cancelled"]),
             ),
             due_soon_tasks=Count(
                 "id",
-                filter=Q(
-                    work_order_process__work_order__delivery_date__gte=today,
-                    work_order_process__work_order__delivery_date__lte=due_soon_end,
-                )
-                & ~Q(status__in=["completed", "cancelled"]),
+                filter=(
+                    Q(**{f"{date_path}__gte": today})
+                    & Q(**{f"{date_path}__lte": due_soon_end})
+                    & ~Q(status__in=["completed", "cancelled"])
+                ),
             ),
             unassigned_tasks=Count(
                 "id",
@@ -237,23 +267,28 @@ class TaskStatsMixin:
         # 按操作员分组统计
         operators_data = (
             User.objects.filter(
-                assigned_tasks__assigned_department_id__in=department_scope, is_active=True
+                assigned_tasks__assigned_department_id__in=department_scope,
+                is_active=True,
             )
             .exclude(is_superuser=True)
             .annotate(
                 operator_id=F("id"),
                 operator_name=F("username"),
                 pending_count=Count(
-                    "assigned_tasks", filter=Q(assigned_tasks__status="pending")
+                    "assigned_tasks",
+                    filter=Q(assigned_tasks__status="pending"),
                 ),
                 in_progress_count=Count(
-                    "assigned_tasks", filter=Q(assigned_tasks__status="in_progress")
+                    "assigned_tasks",
+                    filter=Q(assigned_tasks__status="in_progress"),
                 ),
                 completed_count=Count(
-                    "assigned_tasks", filter=Q(assigned_tasks__status="completed")
+                    "assigned_tasks",
+                    filter=Q(assigned_tasks__status="completed"),
                 ),
                 cancelled_count=Count(
-                    "assigned_tasks", filter=Q(assigned_tasks__status="cancelled")
+                    "assigned_tasks",
+                    filter=Q(assigned_tasks__status="cancelled"),
                 ),
                 total_count=Count("assigned_tasks"),
             )
@@ -281,16 +316,23 @@ class TaskStatsMixin:
         # 按总任务数降序排序
         operators_list.sort(key=lambda x: x["total_count"], reverse=True)
 
-        # Query optimization: Use aggregate for priority distribution instead of multiple filter().count()
+        # Query optimization: Use aggregate for priority distribution
+        # instead of multiple filter().count()
         priority_data = tasks.aggregate(
             urgent=Count(
-                "id", filter=Q(work_order_process__work_order__priority="urgent")
+                "id",
+                filter=Q(work_order_process__work_order__priority="urgent"),
             ),
-            high=Count("id", filter=Q(work_order_process__work_order__priority="high")),
+            high=Count(
+                "id", filter=Q(work_order_process__work_order__priority="high")
+            ),
             normal=Count(
-                "id", filter=Q(work_order_process__work_order__priority="normal")
+                "id",
+                filter=Q(work_order_process__work_order__priority="normal"),
             ),
-            low=Count("id", filter=Q(work_order_process__work_order__priority="low")),
+            low=Count(
+                "id", filter=Q(work_order_process__work_order__priority="low")
+            ),
         )
         priority_distribution = {
             "urgent": priority_data["urgent"] or 0,
@@ -321,6 +363,8 @@ class TaskStatsMixin:
 
         # Cache the result
         cache.set(cache_key, response_data, self.CACHE_TIMEOUT)
-        logger.info(f"Cached department workload data for department {department_id}")
+        logger.info(
+            f"Cached department workload data for department {department_id}"
+        )
 
         return APIResponse.success(data=response_data)

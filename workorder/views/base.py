@@ -72,9 +72,9 @@ class CustomerViewSet(BaseViewSet):
 
         # 如果是业务员，只返回自己负责的客户
         if is_sales_user(self.request.user):
-            return queryset.filter(salesperson=self.request.user).select_related(
-                "salesperson"
-            )
+            return queryset.filter(
+                salesperson=self.request.user
+            ).select_related("salesperson")
 
         # 如果有查看客户权限，返回所有客户（只读）
         if self.request.user.has_perm("workorder.view_customer"):
@@ -173,7 +173,7 @@ class CustomerViewSet(BaseViewSet):
     @action(detail=False, methods=["post"])
     def import_customers(self, request):
         """导入客户 Excel"""
-        file = request.FILES.get('file')
+        file = request.FILES.get("file")
         if not file:
             return APIResponse.error(
                 "未上传文件",
@@ -181,16 +181,19 @@ class CustomerViewSet(BaseViewSet):
             )
         config = get_customer_import_config(Customer)
         result = import_model(file, config, request.user)
-        if result['success_count'] == 0 and result['error_count'] > 0:
+        if result["success_count"] == 0 and result["error_count"] > 0:
             return APIResponse.error(
                 f"导入失败: {result['errors'][0] if result['errors'] else '未知错误'}",
                 code=status.HTTP_400_BAD_REQUEST,
                 data=result,
             )
-        created = result.get('created_count', 0)
-        updated = result.get('updated_count', 0)
+        created = result.get("created_count", 0)
+        updated = result.get("updated_count", 0)
         return APIResponse.success(
-            message=f"导入完成: 新增 {created} 条, 更新 {updated} 条, 失败 {result['error_count']} 条",
+            message=(
+                f"导入完成: 新增 {created} 条, 更新 {updated} 条, "
+                f"失败 {result['error_count']} 条"
+            ),
             data=result,
         )
 
@@ -434,7 +437,9 @@ class ProcessViewSet(BaseViewSet):
 
         # 保护内置工序
         if is_active is False:
-            builtin_count = Process.objects.filter(id__in=ids, is_builtin=True).count()
+            builtin_count = Process.objects.filter(
+                id__in=ids, is_builtin=True
+            ).count()
 
             if builtin_count > 0:
                 return APIResponse.error(
@@ -443,6 +448,8 @@ class ProcessViewSet(BaseViewSet):
                 )
 
         # 批量更新
-        updated = Process.objects.filter(id__in=ids).update(is_active=is_active)
+        updated = Process.objects.filter(id__in=ids).update(
+            is_active=is_active
+        )
 
         return APIResponse.success(data={"updated_count": updated})

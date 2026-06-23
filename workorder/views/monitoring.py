@@ -4,7 +4,7 @@
 提供性能监控、业务指标、系统健康检查等API
 """
 
-from rest_framework import status, viewsets
+from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 
@@ -12,7 +12,6 @@ from ..response import APIResponse
 from workorder.docs.monitoring import (
     alert_settings_docs,
     alerts_docs,
-    dashboard_docs,
     error_logs_docs,
     execution_times_docs,
     health_check_docs,
@@ -54,13 +53,17 @@ class PerformanceMonitoringViewSet(viewsets.GenericViewSet):
         slow_queries = monitoring_service.performance_monitor.metrics.get(
             "slow_queries", []
         )
-        return APIResponse.success(data=slow_queries, message="慢查询列表获取成功")
+        return APIResponse.success(
+            data=slow_queries, message="慢查询列表获取成功"
+        )
 
     @action(detail=False, methods=["get"])
     @error_logs_docs
     def error_logs(self, request):
         """获取错误日志"""
-        errors = monitoring_service.performance_monitor.metrics.get("errors", [])
+        errors = monitoring_service.performance_monitor.metrics.get(
+            "errors", []
+        )
         return APIResponse.success(data=errors, message="错误日志获取成功")
 
     @action(detail=False, methods=["get"])
@@ -70,8 +73,12 @@ class PerformanceMonitoringViewSet(viewsets.GenericViewSet):
         execution_times = monitoring_service.performance_monitor.metrics.get(
             "execution_times", []
         )
-        endpoint_list = MonitoringStatsService.get_execution_time_stats(execution_times)
-        return APIResponse.success(data=endpoint_list, message="执行时间统计获取成功")
+        endpoint_list = MonitoringStatsService.get_execution_time_stats(
+            execution_times
+        )
+        return APIResponse.success(
+            data=endpoint_list, message="执行时间统计获取成功"
+        )
 
 
 class BusinessMetricsViewSet(viewsets.GenericViewSet):
@@ -85,7 +92,9 @@ class BusinessMetricsViewSet(viewsets.GenericViewSet):
         """获取施工单业务指标"""
         time_range = request.query_params.get("time_range", "24h")
         metrics = BusinessMetrics.get_workorder_metrics(time_range)
-        return APIResponse.success(data=metrics, message="施工单业务指标获取成功")
+        return APIResponse.success(
+            data=metrics, message="施工单业务指标获取成功"
+        )
 
     @action(detail=False, methods=["get"])
     @task_metrics_docs
@@ -93,7 +102,9 @@ class BusinessMetricsViewSet(viewsets.GenericViewSet):
         """获取任务业务指标"""
         time_range = request.query_params.get("time_range", "24h")
         metrics = BusinessMetrics.get_task_metrics(time_range)
-        return APIResponse.success(data=metrics, message="任务业务指标获取成功")
+        return APIResponse.success(
+            data=metrics, message="任务业务指标获取成功"
+        )
 
     @action(detail=False, methods=["get"], permission_classes=[IsAdminUser])
     @user_performance_docs
@@ -191,7 +202,9 @@ class DashboardMonitoringViewSet(viewsets.GenericViewSet):
     def overview(self, request):
         """获取监控概览"""
         dashboard_data = monitoring_service.get_dashboard_metrics()
-        return APIResponse.success(data=dashboard_data, message="监控概览获取成功")
+        return APIResponse.success(
+            data=dashboard_data, message="监控概览获取成功"
+        )
 
     @action(detail=False, methods=["get"])
     @alerts_docs

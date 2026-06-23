@@ -13,7 +13,6 @@
 
 from .task_actions import TaskActionsMixin
 from .task_bulk import TaskBulkMixin
-from .task_export import TaskExportMixin
 
 # 导入各个模块
 from .task_main import BaseWorkOrderTaskViewSet
@@ -40,10 +39,9 @@ class WorkOrderTaskViewSet(
     - TaskStatsMixin: 统计查询和导出功能
 
     MRO (Method Resolution Order):
-    WorkOrderTaskViewSet -> TaskStatsMixin -> TaskBulkMixin -> TaskActionsMixin -> BaseWorkOrderTaskViewSet -> TaskExportMixin
+    WorkOrderTaskViewSet -> TaskStatsMixin -> TaskBulkMixin
+    -> TaskActionsMixin -> BaseWorkOrderTaskViewSet -> TaskExportMixin
     """
-
-    pass
 
 
 __all__ = ["WorkOrderTaskViewSet"]

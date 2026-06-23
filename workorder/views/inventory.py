@@ -15,9 +15,12 @@ from datetime import timedelta
 from django.db.models import Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, status, viewsets
+from rest_framework import filters, viewsets
 from rest_framework.decorators import action
-from workorder.permission_utils import PermissionUtils, apply_data_scope, apply_department_scope
+from workorder.permission_utils import (
+    apply_data_scope,
+    apply_department_scope,
+)
 from workorder.response import APIResponse
 from workorder.docs.inventory import (
     delivery_item_docs,
@@ -314,7 +317,9 @@ class StockInViewSet(viewsets.ModelViewSet):
         stock_in = self.get_object()
         StockInService.submit(stock_in=stock_in, user=request.user)
         serializer = self.get_serializer(stock_in)
-        return APIResponse.success(data=serializer.data, message="入库单提交成功")
+        return APIResponse.success(
+            data=serializer.data, message="入库单提交成功"
+        )
 
     @action(detail=True, methods=["post"])
     @stock_in_confirm_docs
@@ -324,7 +329,9 @@ class StockInViewSet(viewsets.ModelViewSet):
         stock_in = self.get_object()
         StockInService.confirm(stock_in=stock_in, user=request.user)
         serializer = self.get_serializer(stock_in)
-        return APIResponse.success(data=serializer.data, message="入库单确认成功")
+        return APIResponse.success(
+            data=serializer.data, message="入库单确认成功"
+        )
 
     @action(detail=False, methods=["get"])
     @stock_in_summary_docs
@@ -407,7 +414,9 @@ class StockOutViewSet(viewsets.ModelViewSet):
         stock_out = self.get_object()
         StockOutService.submit(stock_out=stock_out, user=request.user)
         serializer = self.get_serializer(stock_out)
-        return APIResponse.success(data=serializer.data, message="出库单提交成功")
+        return APIResponse.success(
+            data=serializer.data, message="出库单提交成功"
+        )
 
     @action(detail=True, methods=["post"])
     @stock_out_confirm_docs
@@ -417,7 +426,9 @@ class StockOutViewSet(viewsets.ModelViewSet):
         stock_out = self.get_object()
         StockOutService.confirm(stock_out=stock_out, user=request.user)
         serializer = self.get_serializer(stock_out)
-        return APIResponse.success(data=serializer.data, message="出库单确认成功")
+        return APIResponse.success(
+            data=serializer.data, message="出库单确认成功"
+        )
 
     @action(detail=False, methods=["get"])
     @stock_out_summary_docs
@@ -452,7 +463,9 @@ class DeliveryOrderViewSet(viewsets.ModelViewSet):
     """送货单视图集"""
 
     queryset = (
-        DeliveryOrder.objects.select_related("customer", "sales_order", "created_by")
+        DeliveryOrder.objects.select_related(
+            "customer", "sales_order", "created_by"
+        )
         .prefetch_related("items__product")
         .all()
     )
@@ -692,7 +705,9 @@ class QualityInspectionViewSet(viewsets.ModelViewSet):
 
         todo_filter = (self.request.query_params.get("todo") or "").strip()
         if todo_filter == "exception_followup":
-            queryset = queryset.filter(result__in=["failed", "conditional"]).filter(
+            queryset = queryset.filter(
+                result__in=["failed", "conditional"]
+            ).filter(
                 Q(disposition="") | Q(disposition__isnull=True),
                 Q(disposition_notes="") | Q(disposition_notes__isnull=True),
             )

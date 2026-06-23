@@ -12,7 +12,7 @@ from workorder.docs.work_order_tasks_bulk import (
     batch_update_quantity_docs,
 )
 
-from workorder.models.core import TaskLog, WorkOrderTask
+from workorder.models.core import WorkOrderTask
 from workorder.models.system import Notification
 
 
@@ -28,7 +28,7 @@ class TaskBulkMixin:
     def batch_update_quantity(self, request):
         """批量更新任务数量"""
         """批量更新任务完成数量
-        
+
         请求参数：
         - task_ids: 任务ID列表（必填）
         - quantity_increment: 每个任务的增量数量（可以是列表，对应每个任务；也可以是单个值，应用到所有任务）
@@ -43,15 +43,21 @@ class TaskBulkMixin:
         notes = request.data.get("notes", "")
 
         if not task_ids:
-            return APIResponse.error("请提供任务ID列表", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "请提供任务ID列表", code=status.HTTP_400_BAD_REQUEST
+            )
 
         if quantity_increment is None:
-            return APIResponse.error("请提供完成数量增量", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "请提供完成数量增量", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 获取任务
         tasks = WorkOrderTask.objects.filter(id__in=task_ids)
         if tasks.count() != len(task_ids):
-            return APIResponse.error("部分任务不存在", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "部分任务不存在", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 检查权限：操作员只能更新自己分派的任务
         user = request.user
@@ -78,7 +84,10 @@ class TaskBulkMixin:
         # 处理数量增量（支持列表或单个值）
         if isinstance(quantity_increment, list):
             if len(quantity_increment) != len(task_ids):
-                return APIResponse.error("数量增量列表长度必须与任务ID列表长度相同", code=status.HTTP_400_BAD_REQUEST)
+                return APIResponse.error(
+                    "数量增量列表长度必须与任务ID列表长度相同",
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
             increments = quantity_increment
         else:
             increments = [quantity_increment] * len(task_ids)
@@ -86,7 +95,10 @@ class TaskBulkMixin:
         # 处理不良品数量
         if isinstance(quantity_defective, list):
             if len(quantity_defective) != len(task_ids):
-                return APIResponse.error("不良品数量列表长度必须与任务ID列表长度相同", code=status.HTTP_400_BAD_REQUEST)
+                return APIResponse.error(
+                    "不良品数量列表长度必须与任务ID列表长度相同",
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
             defectives = quantity_defective
         else:
             defectives = [quantity_defective] * len(task_ids)
@@ -98,8 +110,13 @@ class TaskBulkMixin:
         for task, increment, defective in zip(tasks, increments, defectives):
             try:
                 # 并发控制：检查版本号
-                expected_version = request.data.get("versions", {}).get(str(task.id))
-                if expected_version is not None and task.version != expected_version:
+                expected_version = request.data.get("versions", {}).get(
+                    str(task.id)
+                )
+                if (
+                    expected_version is not None
+                    and task.version != expected_version
+                ):
                     failed_tasks.append(
                         {
                             "task_id": task.id,
@@ -115,7 +132,10 @@ class TaskBulkMixin:
                 # 验证数量
                 if new_quantity_completed < 0:
                     failed_tasks.append(
-                        {"task_id": task.id, "error": "更新后完成数量不能小于0"}
+                        {
+                            "task_id": task.id,
+                            "error": "更新后完成数量不能小于0",
+                        }
                     )
                     continue
 
@@ -126,7 +146,10 @@ class TaskBulkMixin:
                     failed_tasks.append(
                         {
                             "task_id": task.id,
-                            "error": f"更新后完成数量（{new_quantity_completed}）不能超过生产数量（{task.production_quantity}）",
+                            "error": (
+                                f"更新后完成数量（{new_quantity_completed}）"
+                                f"不能超过生产数量（{task.production_quantity}）"
+                            ),
                         }
                     )
                     continue
@@ -134,7 +157,9 @@ class TaskBulkMixin:
                 # 更新任务
                 task.quantity_completed = new_quantity_completed
                 if defective:
-                    task.quantity_defective = (task.quantity_defective or 0) + defective
+                    task.quantity_defective = (
+                        task.quantity_defective or 0
+                    ) + defective
 
                 if notes:
                     task.production_requirements = notes
@@ -161,8 +186,11 @@ class TaskBulkMixin:
                 TaskLog.objects.create(
                     task=task,
                     log_type="update_quantity",
-                    content=f"批量更新完成数量：{quantity_before} → {new_quantity_completed}，本次完成：{increment}，不良品：{defective}"
-                    + (f"，备注：{notes}" if notes else ""),
+                    content=(
+                        f"批量更新完成数量：{quantity_before} → "
+                        f"{new_quantity_completed}，本次完成：{increment}，"
+                        f"不良品：{defective}"
+                    ) + (f"，备注：{notes}" if notes else ""),
                     quantity_before=quantity_before,
                     quantity_after=new_quantity_completed,
                     quantity_increment=increment,
@@ -179,13 +207,19 @@ class TaskBulkMixin:
             except Exception as e:
                 failed_tasks.append({"task_id": task.id, "error": str(e)})
 
-        return APIResponse.error("请提供任务ID列表", code=status.HTTP_400_BAD_REQUEST, data={
-                "message": f"成功更新 {len(updated_tasks)} 个任务，失败 {len(failed_tasks)} 个",
+        return APIResponse.error(
+            "请提供任务ID列表",
+            code=status.HTTP_400_BAD_REQUEST,
+            data={
+                "message": (
+                    f"成功更新 {len(updated_tasks)} 个任务，"
+                    f"失败 {len(failed_tasks)} 个"
+                ),
                 "updated_count": len(updated_tasks),
                 "failed_count": len(failed_tasks),
                 "updated_task_ids": updated_tasks,
                 "failed_tasks": failed_tasks,
-            }
+            },
         )
 
     def batch_complete(self, request):
@@ -203,12 +237,16 @@ class TaskBulkMixin:
         notes = request.data.get("notes", "")
 
         if not task_ids:
-            return APIResponse.error("请提供任务ID列表", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "请提供任务ID列表", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 获取任务
         tasks = WorkOrderTask.objects.filter(id__in=task_ids)
         if tasks.count() != len(task_ids):
-            return APIResponse.error("部分任务不存在", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "部分任务不存在", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 检查权限
         user = request.user
@@ -239,7 +277,9 @@ class TaskBulkMixin:
             try:
                 # 检查任务状态
                 if task.status == "completed":
-                    failed_tasks.append({"task_id": task.id, "error": "任务已经完成"})
+                    failed_tasks.append(
+                        {"task_id": task.id, "error": "任务已经完成"}
+                    )
                     continue
 
                 if task.status == "cancelled":
@@ -266,7 +306,10 @@ class TaskBulkMixin:
                 task.save()
 
                 # 记录操作日志
-                log_content = f"批量强制完成任务，完成数量：{quantity_before} → {task.quantity_completed}，状态：{status_before} → completed"
+                log_content = (
+                    f"批量强制完成任务，完成数量：{quantity_before} → "
+                    f"{task.quantity_completed}，状态：{status_before} → completed"
+                )
                 if completion_reason:
                     log_content += f"，完成理由：{completion_reason}"
                 if notes:
@@ -292,13 +335,19 @@ class TaskBulkMixin:
             except Exception as e:
                 failed_tasks.append({"task_id": task.id, "error": str(e)})
 
-        return APIResponse.error("请提供任务ID列表", code=status.HTTP_400_BAD_REQUEST, data={
-                "message": f"成功完成 {len(completed_tasks)} 个任务，失败 {len(failed_tasks)} 个",
+        return APIResponse.error(
+            "请提供任务ID列表",
+            code=status.HTTP_400_BAD_REQUEST,
+            data={
+                "message": (
+                    f"成功完成 {len(completed_tasks)} 个任务，"
+                    f"失败 {len(failed_tasks)} 个"
+                ),
                 "completed_count": len(completed_tasks),
                 "failed_count": len(failed_tasks),
                 "completed_task_ids": completed_tasks,
                 "failed_tasks": failed_tasks,
-            }
+            },
         )
 
     def batch_cancel(self, request):
@@ -312,19 +361,27 @@ class TaskBulkMixin:
         from workorder.models.core import TaskLog
 
         task_ids = request.data.get("task_ids", [])
-        cancellation_reason = request.data.get("cancellation_reason", "").strip()
+        cancellation_reason = request.data.get(
+            "cancellation_reason", ""
+        ).strip()
         notes = request.data.get("notes", "")
 
         if not task_ids:
-            return APIResponse.error("请提供任务ID列表", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "请提供任务ID列表", code=status.HTTP_400_BAD_REQUEST
+            )
 
         if not cancellation_reason:
-            return APIResponse.error("请填写取消原因", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "请填写取消原因", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 获取任务
         tasks = WorkOrderTask.objects.filter(id__in=task_ids)
         if tasks.count() != len(task_ids):
-            return APIResponse.error("部分任务不存在", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "部分任务不存在", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 检查权限
         user = request.user
@@ -355,7 +412,9 @@ class TaskBulkMixin:
             try:
                 # 检查任务状态
                 if task.status == "cancelled":
-                    failed_tasks.append({"task_id": task.id, "error": "任务已经取消"})
+                    failed_tasks.append(
+                        {"task_id": task.id, "error": "任务已经取消"}
+                    )
                     continue
 
                 if task.status == "completed":
@@ -366,7 +425,7 @@ class TaskBulkMixin:
 
                 # 记录取消前的状态
                 status_before = task.status
-                quantity_before = task.quantity_completed
+                task.quantity_completed
 
                 # 取消任务
                 task.status = "cancelled"
@@ -401,7 +460,9 @@ class TaskBulkMixin:
                         template_key="task_cancelled",
                         template_variables={
                             "task_name": task.work_content,
-                            "workorder_number": task.work_order_process.work_order.order_number,
+                            "workorder_number": (
+                                task.work_order_process.work_order.order_number
+                            ),
                             "cancellation_reason": cancellation_reason,
                         },
                     )
@@ -411,13 +472,19 @@ class TaskBulkMixin:
             except Exception as e:
                 failed_tasks.append({"task_id": task.id, "error": str(e)})
 
-        return APIResponse.error("请提供任务ID列表", code=status.HTTP_400_BAD_REQUEST, data={
-                "message": f"成功取消 {len(cancelled_tasks)} 个任务，失败 {len(failed_tasks)} 个",
+        return APIResponse.error(
+            "请提供任务ID列表",
+            code=status.HTTP_400_BAD_REQUEST,
+            data={
+                "message": (
+                    f"成功取消 {len(cancelled_tasks)} 个任务，"
+                    f"失败 {len(failed_tasks)} 个"
+                ),
                 "cancelled_count": len(cancelled_tasks),
                 "failed_count": len(failed_tasks),
                 "cancelled_task_ids": cancelled_tasks,
                 "failed_tasks": failed_tasks,
-            }
+            },
         )
 
     def batch_assign(self, request):
@@ -441,12 +508,16 @@ class TaskBulkMixin:
         notes = request.data.get("notes", "")
 
         if not task_ids:
-            return APIResponse.error("请提供任务ID列表", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "请提供任务ID列表", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 获取任务
         tasks = WorkOrderTask.objects.filter(id__in=task_ids)
         if tasks.count() != len(task_ids):
-            return APIResponse.error("部分任务不存在", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "部分任务不存在", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 验证部门和操作员
         department = None
@@ -454,14 +525,18 @@ class TaskBulkMixin:
             try:
                 department = Department.objects.get(id=department_id)
             except Department.DoesNotExist:
-                return APIResponse.error("部门不存在", code=status.HTTP_404_NOT_FOUND)
+                return APIResponse.error(
+                    "部门不存在", code=status.HTTP_404_NOT_FOUND
+                )
 
         operator = None
         if operator_id:
             try:
                 operator = User.objects.get(id=operator_id)
             except User.DoesNotExist:
-                return APIResponse.error("操作员不存在", code=status.HTTP_404_NOT_FOUND)
+                return APIResponse.error(
+                    "操作员不存在", code=status.HTTP_404_NOT_FOUND
+                )
 
         # 批量分派任务
         assigned_tasks = []
@@ -477,15 +552,21 @@ class TaskBulkMixin:
                 # 更新分派部门
                 if department_id is not None:
                     if department:
+                        old_department_name = (
+                            old_department.name if old_department else "未分配"
+                        )
                         if task.assigned_department != department:
                             changes.append(
-                                f'部门：{old_department.name if old_department else "未分配"} → {department.name}'
+                                f"部门：{old_department_name} → {department.name}"
                             )
                             task.assigned_department = department
                     else:
+                        old_department_name = (
+                            old_department.name if old_department else "未分配"
+                        )
                         if task.assigned_department:
                             changes.append(
-                                f'部门：{old_department.name if old_department else "未分配"} → 未分配'
+                                f"部门：{old_department_name} → 未分配"
                             )
                             task.assigned_department = None
 
@@ -493,24 +574,32 @@ class TaskBulkMixin:
                 if operator_id is not None:
                     if operator:
                         old_operator_name = (
-                            f"{old_operator.first_name}{old_operator.last_name}"
+                            f"{old_operator.first_name}"
+                            f"{old_operator.last_name}"
                             if old_operator
                             else "未分配"
                         )
-                        new_operator_name = f"{operator.first_name}{operator.last_name}"
+                        new_operator_name = (
+                            f"{operator.first_name}"
+                            f"{operator.last_name}"
+                        )
                         if task.assigned_operator != operator:
                             changes.append(
-                                f"操作员：{old_operator_name} → {new_operator_name}"
+                                f"操作员：{old_operator_name} → "
+                                f"{new_operator_name}"
                             )
                             task.assigned_operator = operator
                     else:
                         if task.assigned_operator:
                             old_operator_name = (
-                                f"{old_operator.first_name}{old_operator.last_name}"
+                                f"{old_operator.first_name}"
+                                f"{old_operator.last_name}"
                                 if old_operator
                                 else "未分配"
                             )
-                            changes.append(f"操作员：{old_operator_name} → 未分配")
+                            changes.append(
+                                f"操作员：{old_operator_name} → 未分配"
+                            )
                             task.assigned_operator = None
 
                 # 如果有变更，保存并记录日志
@@ -545,8 +634,15 @@ class TaskBulkMixin:
                             template_key="task_assigned",
                             template_variables={
                                 "task_name": task.work_content,
-                                "workorder_number": task.work_order_process.work_order.order_number,
-                                "assigned_by": request.user.username if request.user else "系统",
+                                "workorder_number": (
+                                    task.work_order_process
+                                    .work_order.order_number
+                                ),
+                                "assigned_by": (
+                                    request.user.username
+                                    if request.user
+                                    else "系统"
+                                ),
                             },
                         )
 
@@ -555,13 +651,19 @@ class TaskBulkMixin:
             except Exception as e:
                 failed_tasks.append({"task_id": task.id, "error": str(e)})
 
-        return APIResponse.error("请提供任务ID列表", code=status.HTTP_400_BAD_REQUEST, data={
-                "message": f"成功分派 {len(assigned_tasks)} 个任务，失败 {len(failed_tasks)} 个",
+        return APIResponse.error(
+            "请提供任务ID列表",
+            code=status.HTTP_400_BAD_REQUEST,
+            data={
+                "message": (
+                    f"成功分派 {len(assigned_tasks)} 个任务，"
+                    f"失败 {len(failed_tasks)} 个"
+                ),
                 "assigned_count": len(assigned_tasks),
                 "failed_count": len(failed_tasks),
                 "assigned_task_ids": assigned_tasks,
                 "failed_tasks": failed_tasks,
-            }
+            },
         )
 
     @action(detail=False, methods=["post"], url_path="batch-delete")
@@ -577,18 +679,21 @@ class TaskBulkMixin:
         - 施工单创建人可以删除任务
         - 超级管理员可以删除任务
         """
-        from workorder.models.core import TaskLog
 
         task_ids = request.data.get("task_ids", [])
-        reason = request.data.get("reason", "批量删除")
+        request.data.get("reason", "批量删除")
 
         if not task_ids:
-            return APIResponse.error("请提供任务ID列表", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "请提供任务ID列表", code=status.HTTP_400_BAD_REQUEST
+            )
 
         # 获取任务
         tasks = WorkOrderTask.objects.filter(id__in=task_ids)
         if tasks.count() != len(task_ids):
-            return APIResponse.error("部分任务不存在", code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                "部分任务不存在", code=status.HTTP_400_BAD_REQUEST
+            )
 
         user = request.user
         deleted_tasks = []
@@ -619,13 +724,19 @@ class TaskBulkMixin:
                 # 记录删除日志（使用 TaskLog 如果有外键关联问题则跳过）
                 # 由于任务已删除，无法创建关联日志，改为在响应中记录
 
-                deleted_tasks.append({"task_id": task_id, "work_content": work_content})
+                deleted_tasks.append(
+                    {"task_id": task_id, "work_content": work_content}
+                )
 
             except Exception as e:
                 failed_tasks.append({"task_id": task.id, "error": str(e)})
 
-        return APIResponse.success(data={
-                "message": f"成功删除 {len(deleted_tasks)} 个任务，失败 {len(failed_tasks)} 个",
+        return APIResponse.success(
+            data={
+                "message": (
+                    f"成功删除 {len(deleted_tasks)} 个任务，"
+                    f"失败 {len(failed_tasks)} 个"
+                ),
                 "deleted_count": len(deleted_tasks),
                 "failed_count": len(failed_tasks),
                 "deleted_tasks": deleted_tasks,

@@ -96,7 +96,11 @@ class ImageAssetActionsMixin:
             or not self.image_parent_field
         ):
             raise RuntimeError("图片上传配置不完整")
-        return self.image_model, self.image_serializer_class, self.image_parent_field
+        return (
+            self.image_model,
+            self.image_serializer_class,
+            self.image_parent_field,
+        )
 
     @action(detail=True, methods=["get"])
     def images(self, request, pk=None):
@@ -134,7 +138,9 @@ class ImageAssetActionsMixin:
             code=status.HTTP_201_CREATED,
         )
 
-    @action(detail=True, methods=["delete"], url_path=r"images/(?P<image_id>\d+)")
+    @action(
+        detail=True, methods=["delete"], url_path=r"images/(?P<image_id>\d+)"
+    )
     @handle_service_error
     def delete_image(self, request, pk=None, image_id=None):
         """删除资产的指定图片"""
@@ -149,7 +155,9 @@ class ImageAssetActionsMixin:
 
 
 @artwork_docs
-class ArtworkViewSet(PlateMakingConfirmMixin, ImageAssetActionsMixin, BaseViewSet):
+class ArtworkViewSet(
+    PlateMakingConfirmMixin, ImageAssetActionsMixin, BaseViewSet
+):
     """图稿视图集"""
 
     confirm_fk_field = "artwork"
@@ -161,7 +169,12 @@ class ArtworkViewSet(PlateMakingConfirmMixin, ImageAssetActionsMixin, BaseViewSe
     queryset = Artwork.objects.all()
     serializer_class = ArtworkSerializer
     permission_classes = [WorkOrderSupportingDataPermission]
-    filterset_fields = ["base_code", "version", "confirmed", "products__product"]
+    filterset_fields = [
+        "base_code",
+        "version",
+        "confirmed",
+        "products__product",
+    ]
     search_fields = ["base_code", "name", "imposition_size", "notes"]
     ordering_fields = [
         "created_at",
@@ -191,13 +204,19 @@ class ArtworkViewSet(PlateMakingConfirmMixin, ImageAssetActionsMixin, BaseViewSe
         original_artwork = self.get_object()
         new_artwork = ArtworkVersionService.create_version(original_artwork)
         serializer = self.get_serializer(new_artwork)
-        return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
+        return APIResponse.success(
+            data=serializer.data, code=status.HTTP_201_CREATED
+        )
 
     def get_queryset(self):
         """优化查询性能：预加载关联数据"""
         queryset = super().get_queryset()
         return queryset.prefetch_related(
-            "products__product", "dies", "foiling_plates", "embossing_plates", "images"
+            "products__product",
+            "dies",
+            "foiling_plates",
+            "embossing_plates",
+            "images",
         ).select_related("confirmed_by")
 
 
@@ -233,9 +252,9 @@ class DieViewSet(PlateMakingConfirmMixin, ImageAssetActionsMixin, BaseViewSet):
     def get_queryset(self):
         """优化查询性能：预加载关联数据"""
         queryset = super().get_queryset()
-        return queryset.prefetch_related("products__product", "images").select_related(
-            "confirmed_by"
-        )
+        return queryset.prefetch_related(
+            "products__product", "images"
+        ).select_related("confirmed_by")
 
 
 @foiling_plate_docs
@@ -274,9 +293,9 @@ class FoilingPlateViewSet(
     def get_queryset(self):
         """优化查询性能：预加载关联数据"""
         queryset = super().get_queryset()
-        return queryset.prefetch_related("products__product", "images").select_related(
-            "confirmed_by"
-        )
+        return queryset.prefetch_related(
+            "products__product", "images"
+        ).select_related("confirmed_by")
 
 
 @embossing_plate_docs
@@ -304,9 +323,9 @@ class EmbossingPlateViewSet(
     def get_queryset(self):
         """优化查询性能：预加载关联数据"""
         queryset = super().get_queryset()
-        return queryset.prefetch_related("products__product", "images").select_related(
-            "confirmed_by"
-        )
+        return queryset.prefetch_related(
+            "products__product", "images"
+        ).select_related("confirmed_by")
 
 
 @artwork_product_docs

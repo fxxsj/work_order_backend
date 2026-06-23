@@ -11,7 +11,6 @@ from workorder.response import APIResponse
 from ..models.core import WorkOrder
 from ..policies.work_order_flow_policy import WorkOrderFlowPolicy
 from ..services.work_order_flow_service import WorkOrderFlowService
-from ..services.service_errors import ServiceError
 from ..serializers.core import WorkOrderDetailSerializer
 from ._decorators import handle_flow_errors
 
@@ -62,8 +61,12 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
                 additional_data={
                     "artwork_ids": request.data.get("artwork_ids", []),
                     "die_ids": request.data.get("die_ids", []),
-                    "foiling_plate_ids": request.data.get("foiling_plate_ids", []),
-                    "embossing_plate_ids": request.data.get("embossing_plate_ids", []),
+                    "foiling_plate_ids": request.data.get(
+                        "foiling_plate_ids", []
+                    ),
+                    "embossing_plate_ids": request.data.get(
+                        "embossing_plate_ids", []
+                    ),
                 },
             )
         )
@@ -166,8 +169,12 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
 
         serializer = WorkOrderDetailSerializer(updated_work_order)
         data = dict(serializer.data)
-        task_generation = getattr(updated_work_order, "_task_generation_result", None)
-        procurement_summary = getattr(updated_work_order, "_procurement_summary", None)
+        task_generation = getattr(
+            updated_work_order, "_task_generation_result", None
+        )
+        procurement_summary = getattr(
+            updated_work_order, "_procurement_summary", None
+        )
         if task_generation is not None:
             data["task_generation"] = {
                 key: value
@@ -265,4 +272,6 @@ class WorkOrderFlowViewSet(viewsets.GenericViewSet):
             user=request.user,
         )
         serializer = WorkOrderDetailSerializer(updated_work_order)
-        return APIResponse.success(data=serializer.data, message="已标记为紧急施工单")
+        return APIResponse.success(
+            data=serializer.data, message="已标记为紧急施工单"
+        )

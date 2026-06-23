@@ -4,9 +4,8 @@
 包含客户订单的视图集。
 """
 
-from django.db.models import Count, Q
+from django.db.models import Count
 from django_filters import CharFilter, DateFromToRangeFilter, FilterSet
-from rest_framework import status
 from rest_framework.decorators import action
 from workorder.response import APIResponse
 from workorder.permission_utils import PermissionUtils
@@ -37,7 +36,9 @@ from .mixins import ApprovalTimelineMixin
 
 
 class SalesOrderFilterSet(FilterSet):
-    customer_name = CharFilter(field_name="customer__name", lookup_expr="icontains")
+    customer_name = CharFilter(
+        field_name="customer__name", lookup_expr="icontains"
+    )
     order_date = DateFromToRangeFilter()
     delivery_date = DateFromToRangeFilter()
     actual_delivery_date = DateFromToRangeFilter()
@@ -107,7 +108,9 @@ class SalesOrderViewSet(ApprovalTimelineMixin, BaseViewSet):
     def summary(self, request):
         """客户订单汇总"""
         queryset = self.filter_queryset(self.get_queryset())
-        return APIResponse.success(data=SalesOrderService.get_summary(queryset))
+        return APIResponse.success(
+            data=SalesOrderService.get_summary(queryset)
+        )
 
     @action(detail=True, methods=["post"])
     @sales_order_submit_docs
@@ -215,7 +218,9 @@ class SalesOrderItemViewSet(BaseViewSet):
 
     def get_queryset(self):
         """优化查询"""
-        queryset = super().get_queryset().select_related("sales_order", "product")
+        queryset = (
+            super().get_queryset().select_related("sales_order", "product")
+        )
         if not self.request.user.is_authenticated:
             return queryset.none()
         if self.request.user.is_superuser or PermissionUtils.is_finance_user(

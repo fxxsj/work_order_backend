@@ -2,14 +2,8 @@
 WorkOrderMaterial 视图集
 """
 
-"""
-核心业务视图集
-
-包含施工单、工序、任务、产品、物料、日志等核心业务视图集。
-"""
-
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, status, viewsets
+from rest_framework import viewsets
 from rest_framework.decorators import action
 from workorder.response import APIResponse
 from workorder.docs.work_orders_items import work_order_material_docs

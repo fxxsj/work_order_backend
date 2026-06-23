@@ -6,7 +6,7 @@
 """
 
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, viewsets, status
+from rest_framework import filters, viewsets
 from workorder.response import APIResponse
 
 from ..permissions import SuperuserFriendlyModelPermissions
@@ -20,7 +20,9 @@ class _ResponseMixin:
     """
 
     def _wrap_response(self, response):
-        wrapped = APIResponse.success(data=response.data, code=response.status_code)
+        wrapped = APIResponse.success(
+            data=response.data, code=response.status_code
+        )
         for key, value in response.headers.items():
             wrapped.headers[key] = value
         return wrapped
@@ -41,7 +43,8 @@ class BaseViewSet(_ResponseMixin, viewsets.ModelViewSet):
     提供标准的配置和功能，所有需要完整 CRUD 操作的视图集应继承此类。
 
     特性:
-        - 标准的 filter_backends (DjangoFilterBackend, SearchFilter, OrderingFilter)
+        - 标准的 filter_backends (DjangoFilterBackend, SearchFilter,
+            OrderingFilter)
         - 标准的权限控制 (SuperuserFriendlyModelPermissions)
         - 自动的查询优化 (select_related)
 

@@ -2,57 +2,21 @@
 WorkOrderProcess 视图集
 """
 
-"""
-核心业务视图集
-
-包含施工单、工序、任务、产品、物料、日志等核心业务视图集。
-"""
-
-from decimal import Decimal
-
-from django.db import models
-from django.db.models import Avg, Count, F, Max, Q, Sum
-from django.utils import timezone
-from django_filters import CharFilter, FilterSet, NumberFilter
-from rest_framework import status
 from rest_framework.decorators import action
 from workorder.response import APIResponse
 
-from ..export_utils import export_tasks, export_work_orders
-from ..models.assets import Artwork, Die
-from ..models.base import Customer, Department, Process
 from ..models.core import (
-    ProcessLog,
-    WorkOrder,
-    WorkOrderMaterial,
     WorkOrderProcess,
-    WorkOrderProduct,
-    WorkOrderTask,
 )
-from ..models.materials import Material
-from ..models.products import Product, ProductMaterial
 from ..permissions import (
-    SuperuserFriendlyModelPermissions,
-    WorkOrderDataPermission,
-    WorkOrderMaterialPermission,
     WorkOrderProcessPermission,
-    WorkOrderTaskPermission,
 )
-from ..serializers.base import ProcessSerializer
 from ..serializers.core import (
-    ProcessLogSerializer,
-    WorkOrderCreateUpdateSerializer,
-    WorkOrderDetailSerializer,
-    WorkOrderListSerializer,
-    WorkOrderMaterialSerializer,
     WorkOrderProcessSerializer,
     WorkOrderProcessUpdateSerializer,
-    WorkOrderProductSerializer,
-    WorkOrderTaskSerializer,
 )
 
 # P1 优化: 导入自定义速率限制
-from ..throttling import ApprovalRateThrottle, CreateRateThrottle, ExportRateThrottle
 from ..services.work_order_process_service import WorkOrderProcessService
 from ._decorators import handle_service_error
 from .base_viewsets import BaseViewSet
@@ -76,8 +40,18 @@ class WorkOrderProcessViewSet(BaseViewSet):
         WorkOrderProcessPermission
     ]  # 使用自定义权限：如果有编辑施工单权限，就可以编辑其工序
     serializer_class = WorkOrderProcessSerializer
-    filterset_fields = ["work_order", "process", "status", "operator", "department"]
-    search_fields = ["work_order__order_number", "process__name", "department__name"]
+    filterset_fields = [
+        "work_order",
+        "process",
+        "status",
+        "operator",
+        "department",
+    ]
+    search_fields = [
+        "work_order__order_number",
+        "process__name",
+        "department__name",
+    ]
     ordering_fields = ["sequence", "actual_start_time", "created_at"]
     ordering = ["work_order", "sequence"]
 
@@ -175,7 +149,9 @@ class WorkOrderProcessViewSet(BaseViewSet):
         operator_id = request.data.get("assigned_operator")
         reason = request.data.get("reason", "")
         notes = request.data.get("notes", "")
-        update_process_department = request.data.get("update_process_department", False)
+        update_process_department = request.data.get(
+            "update_process_department", False
+        )
         result = WorkOrderProcessService.reassign_tasks(
             work_order_process=work_order_process,
             user=request.user,
@@ -186,7 +162,8 @@ class WorkOrderProcessViewSet(BaseViewSet):
             update_process_department=update_process_department,
         )
         serializer = self.get_serializer(work_order_process)
-        return APIResponse.success(data={
+        return APIResponse.success(
+            data={
                 **serializer.data,
                 "message": f"成功调整 {result['updated_tasks_count']} 个任务的分派",
                 "updated_tasks_count": result["updated_tasks_count"],

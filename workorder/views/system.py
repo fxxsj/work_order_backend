@@ -7,7 +7,7 @@
 from django.db.models import Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, status, viewsets
+from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from workorder.response import APIResponse
 from workorder.docs.system import (
@@ -22,7 +22,10 @@ from workorder.docs.system import (
 )
 
 from ..models.system import Notification, TaskAssignmentRule
-from ..serializers.system import NotificationSerializer, TaskAssignmentRuleSerializer
+from ..serializers.system import (
+    NotificationSerializer,
+    TaskAssignmentRuleSerializer,
+)
 from .base_viewsets import BaseViewSet
 
 
@@ -30,7 +33,9 @@ from .base_viewsets import BaseViewSet
 class NotificationViewSet(viewsets.ModelViewSet):
     """通知视图集"""
 
-    queryset = Notification.objects.all()  # 默认 queryset，会被 get_queryset() 覆盖
+    queryset = (
+        Notification.objects.all()
+    )  # 默认 queryset，会被 get_queryset() 覆盖
     serializer_class = NotificationSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = [
@@ -89,7 +94,9 @@ class NotificationViewSet(viewsets.ModelViewSet):
 class TaskAssignmentRuleViewSet(BaseViewSet):
     """任务分派规则视图集"""
 
-    queryset = TaskAssignmentRule.objects.select_related("process", "department").all()
+    queryset = TaskAssignmentRule.objects.select_related(
+        "process", "department"
+    ).all()
     serializer_class = TaskAssignmentRuleSerializer
     filterset_fields = ["process", "department", "is_active"]
     search_fields = [
@@ -119,7 +126,9 @@ class TaskAssignmentRuleViewSet(BaseViewSet):
         return APIResponse.success(
             data={
                 "preview": preview_data,
-                "global_enabled": AutoDispatchService.is_global_dispatch_enabled(),
+                "global_enabled": (
+                    AutoDispatchService.is_global_dispatch_enabled()
+                ),
                 "generated_at": timezone.now().isoformat(),
             }
         )

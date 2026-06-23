@@ -16,13 +16,14 @@ from workorder.response import APIResponse
 from workorder.schema import standard_error_response, standard_success_response
 from workorder.services.service_errors import ServiceError
 from workorder.policies.task_policy import (
-    ensure_assets_confirmed,
-    ensure_material_cut_ready,
     ensure_task_version,
     ensure_user_can_modify_task,
 )
 
-from workorder.serializers.core import TaskAssignmentSerializer, WorkOrderTaskSerializer
+from workorder.serializers.core import (
+    TaskAssignmentSerializer,
+    WorkOrderTaskSerializer,
+)
 from workorder.services.task_assignment import TaskAssignmentService
 from workorder.services.task_action_service import TaskActionService
 
@@ -108,11 +109,15 @@ class TaskActionsMixin:
                 ],
             ),
             status.HTTP_400_BAD_REQUEST: OpenApiResponse(
-                response=standard_error_response("TaskUpdateQuantityBadRequest"),
+                response=standard_error_response(
+                    "TaskUpdateQuantityBadRequest"
+                ),
                 description="请求无效或业务规则验证失败",
             ),
             status.HTTP_403_FORBIDDEN: OpenApiResponse(
-                response=standard_error_response("TaskUpdateQuantityForbidden"),
+                response=standard_error_response(
+                    "TaskUpdateQuantityForbidden"
+                ),
                 description="权限不足",
             ),
             status.HTTP_409_CONFLICT: OpenApiResponse(
@@ -304,8 +309,12 @@ class TaskActionsMixin:
         try:
             result = TaskActionService.assign_task(
                 task=task,
-                assigned_department=serializer.validated_data.get("assigned_department"),
-                assigned_operator=serializer.validated_data.get("assigned_operator"),
+                assigned_department=serializer.validated_data.get(
+                    "assigned_department"
+                ),
+                assigned_operator=serializer.validated_data.get(
+                    "assigned_operator"
+                ),
                 notes=serializer.validated_data.get("notes", ""),
                 reason=serializer.validated_data.get("reason", ""),
                 user=request.user,
@@ -349,7 +358,9 @@ class TaskActionsMixin:
     def cancel(self, request, pk=None):
         """取消任务"""
         task = self.get_object()
-        cancellation_reason = request.data.get("cancellation_reason", "").strip()
+        cancellation_reason = request.data.get(
+            "cancellation_reason", ""
+        ).strip()
         notes = request.data.get("notes", "")
 
         try:

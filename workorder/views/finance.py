@@ -13,11 +13,11 @@
 
 from decimal import Decimal
 
-from django.db.models import DecimalField, Q, Sum, Value
+from django.db.models import DecimalField, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, status, viewsets
+from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from workorder.permission_utils import PermissionUtils, apply_data_scope
 from workorder.permissions import SuperuserFriendlyModelPermissions
@@ -278,7 +278,9 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
         cost = self.get_object()
         ProductionCostService.calculate_material(cost)
         serializer = self.get_serializer(cost)
-        return APIResponse.success(data=serializer.data, message="材料成本计算成功")
+        return APIResponse.success(
+            data=serializer.data, message="材料成本计算成功"
+        )
 
     @action(detail=True, methods=["post"])
     @production_cost_total_docs
@@ -288,14 +290,18 @@ class ProductionCostViewSet(viewsets.ModelViewSet):
         cost = self.get_object()
         ProductionCostService.calculate_total(cost)
         serializer = self.get_serializer(cost)
-        return APIResponse.success(data=serializer.data, message="总成本计算成功")
+        return APIResponse.success(
+            data=serializer.data, message="总成本计算成功"
+        )
 
     @action(detail=False, methods=["get"])
     @production_cost_stats_docs
     def stats(self, request):
         """成本统计"""
         period = request.query_params.get("period")
-        data = ProductionCostService.get_stats(self.get_queryset(), period=period)
+        data = ProductionCostService.get_stats(
+            self.get_queryset(), period=period
+        )
         return APIResponse.success(data=data)
 
 
@@ -364,7 +370,7 @@ class InvoiceViewSet(ApprovalTimelineMixin, viewsets.ModelViewSet):
         invoice_status = self.request.query_params.get("status")
         if invoice_status:
             queryset = queryset.filter(status=invoice_status)
-            
+
         approval_status = self.request.query_params.get("approval_status")
         if approval_status:
             queryset = queryset.filter(approval_status=approval_status)
@@ -417,7 +423,9 @@ class InvoiceViewSet(ApprovalTimelineMixin, viewsets.ModelViewSet):
             auto_approve=request.data.get("auto_approve", False),
         )
         serializer = self.get_serializer(invoice)
-        return APIResponse.success(data=serializer.data, message="发票提交成功")
+        return APIResponse.success(
+            data=serializer.data, message="发票提交成功"
+        )
 
     @action(detail=True, methods=["post"])
     @invoice_approve_docs
@@ -432,7 +440,9 @@ class InvoiceViewSet(ApprovalTimelineMixin, viewsets.ModelViewSet):
             approval_comment=request.data.get("approval_comment", ""),
         )
         serializer = self.get_serializer(invoice)
-        return APIResponse.success(data=serializer.data, message="发票审核成功")
+        return APIResponse.success(
+            data=serializer.data, message="发票审核成功"
+        )
 
     @action(detail=False, methods=["get"])
     @invoice_summary_docs
@@ -478,12 +488,14 @@ class PaymentViewSet(viewsets.ModelViewSet):
         """创建收款记录后回写订单付款状态"""
         payment = serializer.save(recorded_by=self.request.user)
         from workorder.services.payment_service import PaymentService
+
         PaymentService.apply_payment(payment=payment, user=self.request.user)
 
     def perform_update(self, serializer):
         """更新收款记录后回写订单付款状态"""
         payment = serializer.save()
         from workorder.services.payment_service import PaymentService
+
         PaymentService.apply_payment(payment=payment, user=self.request.user)
 
     def perform_destroy(self, instance):
@@ -516,7 +528,9 @@ class PaymentViewSet(viewsets.ModelViewSet):
         if todo_filter == "pending_writeoff":
             queryset = queryset.filter(remaining_amount__gt=0)
         elif todo_filter == "missing_invoice_link":
-            queryset = queryset.filter(invoice__isnull=True, sales_order__isnull=False)
+            queryset = queryset.filter(
+                invoice__isnull=True, sales_order__isnull=False
+            )
 
         # 按收款方式过滤
         payment_method = self.request.query_params.get("payment_method")
@@ -585,9 +599,13 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
         todo_filter = (self.request.query_params.get("todo") or "").strip()
         today = timezone.localdate()
         if todo_filter == "overdue":
-            queryset = queryset.filter(plan_date__lt=today).exclude(status="completed")
+            queryset = queryset.filter(plan_date__lt=today).exclude(
+                status="completed"
+            )
         elif todo_filter == "due_today":
-            queryset = queryset.filter(plan_date=today).exclude(status="completed")
+            queryset = queryset.filter(plan_date=today).exclude(
+                status="completed"
+            )
 
         # 按日期范围过滤
         start_date = self.request.query_params.get("start_date")
@@ -615,7 +633,9 @@ class PaymentPlanViewSet(viewsets.ModelViewSet):
         plan.update_status()
 
         serializer = self.get_serializer(plan)
-        return APIResponse.success(data=serializer.data, message="状态更新成功")
+        return APIResponse.success(
+            data=serializer.data, message="状态更新成功"
+        )
 
     @action(detail=False, methods=["get"])
     def summary(self, request):
@@ -728,7 +748,9 @@ class StatementViewSet(viewsets.ModelViewSet):
             or request.data.get("confirmation_notes"),
         )
         serializer = self.get_serializer(statement)
-        return APIResponse.success(data=serializer.data, message="对账单确认成功")
+        return APIResponse.success(
+            data=serializer.data, message="对账单确认成功"
+        )
 
     @action(detail=False, methods=["get"])
     def summary(self, request):
@@ -753,7 +775,11 @@ class SupplierPaymentViewSet(viewsets.ModelViewSet):
     """供应商付款视图集"""
 
     queryset = SupplierPayment.objects.select_related(
-        "purchase_order", "supplier", "created_by", "submitted_by", "approved_by"
+        "purchase_order",
+        "supplier",
+        "created_by",
+        "submitted_by",
+        "approved_by",
     ).all()
     serializer_class = SupplierPaymentSerializer
     permission_classes = [SuperuserFriendlyModelPermissions]
@@ -776,7 +802,9 @@ class SupplierPaymentViewSet(viewsets.ModelViewSet):
         """提交付款审核"""
         payment = self.get_object()
         SupplierPaymentService.submit(payment=payment, user=request.user)
-        return APIResponse.success(data=SupplierPaymentSerializer(payment).data)
+        return APIResponse.success(
+            data=SupplierPaymentSerializer(payment).data
+        )
 
     @action(detail=True, methods=["post"])
     @handle_service_error
@@ -784,7 +812,9 @@ class SupplierPaymentViewSet(viewsets.ModelViewSet):
         """审核通过付款"""
         payment = self.get_object()
         SupplierPaymentService.approve(payment=payment, user=request.user)
-        return APIResponse.success(data=SupplierPaymentSerializer(payment).data)
+        return APIResponse.success(
+            data=SupplierPaymentSerializer(payment).data
+        )
 
     @action(detail=True, methods=["post"])
     @handle_service_error
@@ -796,4 +826,6 @@ class SupplierPaymentViewSet(viewsets.ModelViewSet):
             user=request.user,
             approval_comment=request.data.get("approval_comment", ""),
         )
-        return APIResponse.success(data=SupplierPaymentSerializer(payment).data)
+        return APIResponse.success(
+            data=SupplierPaymentSerializer(payment).data
+        )

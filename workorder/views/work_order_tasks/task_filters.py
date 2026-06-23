@@ -4,7 +4,13 @@
 """
 
 from django.db.models import Q
-from django_filters import BooleanFilter, CharFilter, DateFilter, FilterSet, NumberFilter
+from django_filters import (
+    BooleanFilter,
+    CharFilter,
+    DateFilter,
+    FilterSet,
+    NumberFilter,
+)
 
 from workorder.models.core import WorkOrderTask
 
@@ -41,7 +47,9 @@ class WorkOrderTaskFilterSet(FilterSet):
     work_order_number = CharFilter(method="filter_work_order_number")
 
     # 自定义筛选：按任务内容模糊搜索（与 search_fields 配合）
-    work_content = CharFilter(field_name="work_content", lookup_expr="icontains")
+    work_content = CharFilter(
+        field_name="work_content", lookup_expr="icontains"
+    )
 
     # 自定义筛选：按部门名称搜索
     department_name = CharFilter(
@@ -52,7 +60,9 @@ class WorkOrderTaskFilterSet(FilterSet):
     operator_name = CharFilter(method="filter_operator_name")
 
     # 关联筛选：按施工单优先级筛选
-    priority = CharFilter(field_name="work_order_process__work_order__priority")
+    priority = CharFilter(
+        field_name="work_order_process__work_order__priority"
+    )
     customer_name = CharFilter(
         field_name="work_order_process__work_order__customer__name",
         lookup_expr="icontains",
@@ -65,8 +75,12 @@ class WorkOrderTaskFilterSet(FilterSet):
         field_name="work_order_process__work_order__delivery_date",
         lookup_expr="lte",
     )
-    created_at_after = DateFilter(field_name="created_at", lookup_expr="date__gte")
-    created_at_before = DateFilter(field_name="created_at", lookup_expr="date__lte")
+    created_at_after = DateFilter(
+        field_name="created_at", lookup_expr="date__gte"
+    )
+    created_at_before = DateFilter(
+        field_name="created_at", lookup_expr="date__lte"
+    )
     production_quantity_min = NumberFilter(
         field_name="production_quantity", lookup_expr="gte"
     )

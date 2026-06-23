@@ -53,7 +53,9 @@ class WorkOrderLifecycleMixin:
             work_order=work_order, process_id=process_id, sequence=sequence
         )
         serializer = WorkOrderProcessSerializer(work_order_process)
-        return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
+        return APIResponse.success(
+            data=serializer.data, code=status.HTTP_201_CREATED
+        )
 
     @action(detail=True, methods=["post"])
     @work_order_add_material_docs
@@ -67,7 +69,9 @@ class WorkOrderLifecycleMixin:
             work_order=work_order, material_id=material_id, notes=notes
         )
         serializer = WorkOrderMaterialSerializer(work_order_material)
-        return APIResponse.success(data=serializer.data, code=status.HTTP_201_CREATED)
+        return APIResponse.success(
+            data=serializer.data, code=status.HTTP_201_CREATED
+        )
 
     @action(detail=True, methods=["post"])
     @work_order_update_status_docs
@@ -131,10 +135,11 @@ class WorkOrderReportingMixin:
     @work_order_statistics_docs
     def statistics(self, request):
         """统计数据（增强版：包含任务统计和生产效率分析）"""
-        from django.db.models import Count, Q
 
         queryset = self.filter_queryset(self.get_queryset())
-        data = WorkOrderStatisticsService.get_dashboard_stats(queryset, request.user)
+        data = WorkOrderStatisticsService.get_dashboard_stats(
+            queryset, request.user
+        )
         return APIResponse.success(data=data)
 
     @action(detail=False, methods=["get"])
@@ -150,12 +155,18 @@ class WorkOrderReportingMixin:
             in_progress_count=Count("id", filter=Q(status="in_progress")),
             completed_count=Count("id", filter=Q(status="completed")),
             cancelled_count=Count("id", filter=Q(status="cancelled")),
-            pending_approval_count=Count("id", filter=Q(approval_status="submitted")),
+            pending_approval_count=Count(
+                "id", filter=Q(approval_status="submitted")
+            ),
             approved_count=Count("id", filter=Q(approval_status="approved")),
-            rejected_approval_count=Count("id", filter=Q(approval_status="rejected")),
+            rejected_approval_count=Count(
+                "id", filter=Q(approval_status="rejected")
+            ),
         )
         status_stats = (
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
+            queryset.values("status")
+            .annotate(count=Count("id"))
+            .order_by("status")
         )
         approval_stats = (
             queryset.values("approval_status")
@@ -170,7 +181,9 @@ class WorkOrderReportingMixin:
             }
         )
 
-    @action(detail=False, methods=["get"], throttle_classes=[ExportRateThrottle])
+    @action(
+        detail=False, methods=["get"], throttle_classes=[ExportRateThrottle]
+    )
     @work_order_export_docs
     def export(self, request):
         """导出施工单列表到 Excel（P1 优化：添加速率限制）"""
@@ -196,7 +209,9 @@ class WorkOrderSalesMixin:
     @handle_service_error
     def sales_order_candidates(self, request):
         """返回可关联到施工单的客户订单候选及其可用产品。"""
-        exclude_work_order_id = request.query_params.get("exclude_work_order_id")
+        exclude_work_order_id = request.query_params.get(
+            "exclude_work_order_id"
+        )
         candidates = SalesOrderCandidateService.get_candidates(
             exclude_work_order_id, request.user
         )
@@ -218,7 +233,9 @@ class WorkOrderSyncMixin:
                 "process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST
             )
 
-        old_process_ids = list(work_order.order_processes.values_list("id", flat=True))
+        old_process_ids = list(
+            work_order.order_processes.values_list("id", flat=True)
+        )
 
         if work_order.approval_status == "approved":
             return APIResponse.error(
@@ -242,7 +259,9 @@ class WorkOrderSyncMixin:
                 "process_ids 必须是列表", code=status.HTTP_400_BAD_REQUEST
             )
 
-        old_process_ids = list(work_order.order_processes.values_list("id", flat=True))
+        old_process_ids = list(
+            work_order.order_processes.values_list("id", flat=True)
+        )
 
         if work_order.approval_status == "approved":
             return APIResponse.error(

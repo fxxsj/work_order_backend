@@ -10,7 +10,13 @@ Date: 2026-03-04
 import logging
 from datetime import datetime, timedelta
 from django.utils import timezone
-from django_filters import CharFilter, DateFilter, DateTimeFilter, FilterSet, NumberFilter
+from django_filters import (
+    CharFilter,
+    DateFilter,
+    DateTimeFilter,
+    FilterSet,
+    NumberFilter,
+)
 from rest_framework import status
 from workorder.response import APIResponse
 from rest_framework.decorators import action
@@ -31,38 +37,44 @@ logger = logging.getLogger(__name__)
 class AuditLogFilterSet(FilterSet):
     """审计日志过滤器。"""
 
-    action_type = CharFilter(field_name='action_type')
-    user = NumberFilter(field_name='user')
-    user_id = NumberFilter(field_name='user')
-    username = CharFilter(field_name='username', lookup_expr='icontains')
-    model = CharFilter(field_name='content_type__model')
-    content_type = NumberFilter(field_name='content_type')
-    object_id = CharFilter(field_name='object_id')
-    ip_address = CharFilter(field_name='ip_address')
-    request_method = CharFilter(field_name='request_method')
-    request_path = CharFilter(field_name='request_path', lookup_expr='icontains')
-    start_date = DateFilter(field_name='created_at', lookup_expr='date__gte')
-    end_date = DateFilter(field_name='created_at', lookup_expr='date__lte')
-    created_at_after = DateTimeFilter(field_name='created_at', lookup_expr='gte')
-    created_at_before = DateTimeFilter(field_name='created_at', lookup_expr='lte')
+    action_type = CharFilter(field_name="action_type")
+    user = NumberFilter(field_name="user")
+    user_id = NumberFilter(field_name="user")
+    username = CharFilter(field_name="username", lookup_expr="icontains")
+    model = CharFilter(field_name="content_type__model")
+    content_type = NumberFilter(field_name="content_type")
+    object_id = CharFilter(field_name="object_id")
+    ip_address = CharFilter(field_name="ip_address")
+    request_method = CharFilter(field_name="request_method")
+    request_path = CharFilter(
+        field_name="request_path", lookup_expr="icontains"
+    )
+    start_date = DateFilter(field_name="created_at", lookup_expr="date__gte")
+    end_date = DateFilter(field_name="created_at", lookup_expr="date__lte")
+    created_at_after = DateTimeFilter(
+        field_name="created_at", lookup_expr="gte"
+    )
+    created_at_before = DateTimeFilter(
+        field_name="created_at", lookup_expr="lte"
+    )
 
     class Meta:
         model = AuditLog
         fields = [
-            'action_type',
-            'user',
-            'user_id',
-            'username',
-            'model',
-            'content_type',
-            'object_id',
-            'ip_address',
-            'request_method',
-            'request_path',
-            'start_date',
-            'end_date',
-            'created_at_after',
-            'created_at_before',
+            "action_type",
+            "user",
+            "user_id",
+            "username",
+            "model",
+            "content_type",
+            "object_id",
+            "ip_address",
+            "request_method",
+            "request_path",
+            "start_date",
+            "end_date",
+            "created_at_after",
+            "created_at_before",
         ]
 
 
@@ -83,27 +95,27 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
     serializer_class = None
     filterset_class = AuditLogFilterSet
     search_fields = [
-        'object_repr',
-        'object_id',
-        'username',
-        'ip_address',
-        'request_method',
-        'request_path',
-        'content_type__model',
+        "object_repr",
+        "object_id",
+        "username",
+        "ip_address",
+        "request_method",
+        "request_path",
+        "content_type__model",
     ]
     ordering_fields = [
-        'created_at',
-        'action_type',
-        'username',
-        'content_type__model',
-        'object_id',
-        'ip_address',
-        'request_method',
+        "created_at",
+        "action_type",
+        "username",
+        "content_type__model",
+        "object_id",
+        "ip_address",
+        "request_method",
     ]
-    ordering = ['-created_at']
+    ordering = ["-created_at"]
 
     def get_serializer_class(self):
-        if self.action == 'list':
+        if self.action == "list":
             return AuditLogListSerializer
         return AuditLogSerializer
 
@@ -114,11 +126,11 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
         queryset = super().get_queryset()
 
         # 自动优化查询
-        queryset = queryset.select_related('user', 'content_type')
+        queryset = queryset.select_related("user", "content_type")
 
         return queryset
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def by_user(self, request):
         """
         按用户查询审计日志
@@ -128,9 +140,11 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
         - start_date: 开始日期（可选）
         - end_date: 结束日期（可选）
         """
-        user_id = request.query_params.get('user_id')
+        user_id = request.query_params.get("user_id")
         if not user_id:
-            return APIResponse.error(message='缺少 user_id 参数', code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                message="缺少 user_id 参数", code=status.HTTP_400_BAD_REQUEST
+            )
 
         queryset = self.get_queryset().filter(user_id=user_id)
 
@@ -138,13 +152,14 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
         page = self.paginate_queryset(queryset)
         if page is not None:
             from ..serializers.audit import AuditLogSerializer
+
             serializer = AuditLogSerializer(page, many=True)
             return self.get_paginated_response(serializer.data)
 
         serializer = self.get_serializer(queryset, many=True)
         return APIResponse.success(data=serializer.data)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def by_object(self, request):
         """
         按对象查询审计日志
@@ -153,11 +168,13 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
         - model: 模型名称（如 workorder）
         - object_id: 对象ID（必填）
         """
-        model = request.query_params.get('model')
-        object_id = request.query_params.get('object_id')
+        model = request.query_params.get("model")
+        object_id = request.query_params.get("object_id")
 
         if not object_id:
-            return APIResponse.error(message='缺少 object_id 参数', code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                message="缺少 object_id 参数", code=status.HTTP_400_BAD_REQUEST
+            )
 
         queryset = self.get_queryset().filter(object_id=object_id)
 
@@ -168,13 +185,14 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
         page = self.paginate_queryset(queryset)
         if page is not None:
             from ..serializers.audit import AuditLogSerializer
+
             serializer = AuditLogSerializer(page, many=True)
             return self.get_paginated_response(serializer.data)
 
         serializer = self.get_serializer(queryset, many=True)
         return APIResponse.success(data=serializer.data)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def statistics(self, request):
         """
         审计日志统计
@@ -198,7 +216,9 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
 
         # 按用户统计（前10）
         user_stats = {}
-        for user_id, username in queryset.values_list('user__id', 'username').distinct()[:10]:
+        for user_id, username in queryset.values_list(
+            "user__id", "username"
+        ).distinct()[:10]:
             if user_id:
                 count = queryset.filter(user_id=user_id).count()
                 user_stats[username] = count
@@ -212,14 +232,16 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
             date = log.created_at.date().isoformat()
             date_stats[date] = date_stats.get(date, 0) + 1
 
-        return APIResponse.success(data={
-                'total_count': total_count,
-                'action_type_stats': action_type_stats,
-                'user_stats': user_stats,
-                'date_stats': date_stats,
-            })
+        return APIResponse.success(
+            data={
+                "total_count": total_count,
+                "action_type_stats": action_type_stats,
+                "user_stats": user_stats,
+                "date_stats": date_stats,
+            }
+        )
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=["post"])
     def export(self, request):
         """
         导出审计日志
@@ -239,12 +261,17 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
         """
         from ..services.audit_export_service import AuditExportService
 
-        if not request.user.has_perm('workorder.add_auditlogexport') and not request.user.is_superuser:
-            return APIResponse.error(message='无导出权限', code=status.HTTP_403_FORBIDDEN)
+        if (
+            not request.user.has_perm("workorder.add_auditlogexport")
+            and not request.user.is_superuser
+        ):
+            return APIResponse.error(
+                message="无导出权限", code=status.HTTP_403_FORBIDDEN
+            )
 
-        start_date = request.data.get('start_date')
-        end_date = request.data.get('end_date')
-        filters = request.data.get('filters', {})
+        start_date = request.data.get("start_date")
+        end_date = request.data.get("end_date")
+        filters = request.data.get("filters", {})
 
         # 创建导出任务
         export_service = AuditExportService()
@@ -252,16 +279,19 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
             user=request.user,
             start_date=start_date,
             end_date=end_date,
-            filters=filters
+            filters=filters,
         )
         export_service.perform_export(str(export.id))
 
-        return APIResponse.success(data={
-                'export_id': str(export.id),
-                'status': export.status,
-            }, message='导出任务已创建')
+        return APIResponse.success(
+            data={
+                "export_id": str(export.id),
+                "status": export.status,
+            },
+            message="导出任务已创建",
+        )
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def diff(self, request, pk=None):
         """
         查看变更详情
@@ -270,45 +300,67 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
         """
         audit_log = self.get_object()
 
-        if audit_log.action_type not in [AuditLog.ACTION_UPDATE, AuditLog.ACTION_CREATE, AuditLog.ACTION_DELETE]:
-            return APIResponse.error(message='只有创建、更新、删除操作有变更详情', code=status.HTTP_400_BAD_REQUEST)
+        if audit_log.action_type not in [
+            AuditLog.ACTION_UPDATE,
+            AuditLog.ACTION_CREATE,
+            AuditLog.ACTION_DELETE,
+        ]:
+            return APIResponse.error(
+                message="只有创建、更新、删除操作有变更详情",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
 
-        return APIResponse.success(data={
-                'id': str(audit_log.id),
-                'action_type': audit_log.action_type,
-                'object_repr': audit_log.object_repr,
-                'changed_fields': audit_log.changed_fields,
-                'changes': mask_sensitive_data(audit_log.changes),
-                'user': audit_log.username,
-                'created_at': audit_log.created_at.isoformat(),
-            })
+        return APIResponse.success(
+            data={
+                "id": str(audit_log.id),
+                "action_type": audit_log.action_type,
+                "object_repr": audit_log.object_repr,
+                "changed_fields": audit_log.changed_fields,
+                "changes": mask_sensitive_data(audit_log.changes),
+                "user": audit_log.username,
+                "created_at": audit_log.created_at.isoformat(),
+            }
+        )
 
-    @action(detail=False, methods=['get'], url_path='exports')
+    @action(detail=False, methods=["get"], url_path="exports")
     def export_list(self, request):
-        if not request.user.has_perm('workorder.view_auditlogexport') and not request.user.is_superuser:
-            return APIResponse.error(message='无查看导出记录权限', code=status.HTTP_403_FORBIDDEN)
+        if (
+            not request.user.has_perm("workorder.view_auditlogexport")
+            and not request.user.is_superuser
+        ):
+            return APIResponse.error(
+                message="无查看导出记录权限", code=status.HTTP_403_FORBIDDEN
+            )
 
-        queryset = AuditLogExport.objects.all().select_related('user').order_by('-created_at')
+        queryset = (
+            AuditLogExport.objects.all()
+            .select_related("user")
+            .order_by("-created_at")
+        )
 
-        status_filter = request.query_params.get('status')
+        status_filter = request.query_params.get("status")
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
-        user_id = request.query_params.get('user_id')
+        user_id = request.query_params.get("user_id")
         if user_id:
             queryset = queryset.filter(user_id=user_id)
 
-        start_date = request.query_params.get('start_date')
-        end_date = request.query_params.get('end_date')
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
         if start_date:
             try:
-                start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                start_date = datetime.fromisoformat(
+                    start_date.replace("Z", "+00:00")
+                )
                 queryset = queryset.filter(created_at__gte=start_date)
             except ValueError:
                 pass
         if end_date:
             try:
-                end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                end_date = datetime.fromisoformat(
+                    end_date.replace("Z", "+00:00")
+                )
                 queryset = queryset.filter(created_at__lte=end_date)
             except ValueError:
                 pass
@@ -321,31 +373,55 @@ class AuditLogViewSet(ReadOnlyBaseViewSet):
         serializer = AuditLogExportSerializer(queryset, many=True)
         return APIResponse.success(data=serializer.data)
 
-    @action(detail=False, methods=['get'], url_path=r'exports/(?P<export_id>[^/.]+)/download')
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path=r"exports/(?P<export_id>[^/.]+)/download",
+    )
     def export_download(self, request, export_id=None):
-        if not request.user.has_perm('workorder.view_auditlogexport') and not request.user.is_superuser:
-            return APIResponse.error(message='无下载导出文件权限', code=status.HTTP_403_FORBIDDEN)
+        if (
+            not request.user.has_perm("workorder.view_auditlogexport")
+            and not request.user.is_superuser
+        ):
+            return APIResponse.error(
+                message="无下载导出文件权限", code=status.HTTP_403_FORBIDDEN
+            )
 
         try:
             export = AuditLogExport.objects.get(id=export_id)
         except AuditLogExport.DoesNotExist:
-            return APIResponse.error(message='导出记录不存在', code=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error(
+                message="导出记录不存在", code=status.HTTP_404_NOT_FOUND
+            )
 
-        if export.status != AuditLogExport.STATUS_COMPLETED or not export.file_path:
-            return APIResponse.error(message='导出文件尚未就绪', code=status.HTTP_400_BAD_REQUEST)
+        if (
+            export.status != AuditLogExport.STATUS_COMPLETED
+            or not export.file_path
+        ):
+            return APIResponse.error(
+                message="导出文件尚未就绪", code=status.HTTP_400_BAD_REQUEST
+            )
 
         import os
         from django.conf import settings
 
-        export_dir = getattr(settings, 'AUDIT_LOG_EXPORT_DIR', '/tmp/audit_logs')
+        export_dir = getattr(
+            settings, "AUDIT_LOG_EXPORT_DIR", "/tmp/audit_logs"
+        )
         export_dir = os.path.abspath(export_dir)
         file_path = os.path.abspath(export.file_path)
 
         if not file_path.startswith(export_dir + os.sep):
-            return APIResponse.error(message='非法文件路径', code=status.HTTP_400_BAD_REQUEST)
+            return APIResponse.error(
+                message="非法文件路径", code=status.HTTP_400_BAD_REQUEST
+            )
 
         if not os.path.exists(file_path):
-            return APIResponse.error(message='导出文件不存在', code=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error(
+                message="导出文件不存在", code=status.HTTP_404_NOT_FOUND
+            )
 
         filename = os.path.basename(file_path)
-        return FileResponse(open(file_path, 'rb'), as_attachment=True, filename=filename)
+        return FileResponse(
+            open(file_path, "rb"), as_attachment=True, filename=filename
+        )

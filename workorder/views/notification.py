@@ -4,7 +4,11 @@
 提供通知管理、WebSocket连接、通知设置等功能
 """
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
 from django_filters import rest_framework as django_filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
@@ -49,18 +53,24 @@ class NotificationSerializer:
         return {
             "id": notification.id,
             "notification_type": notification.notification_type,
-            "notification_type_display": notification.get_notification_type_display(),
+            "notification_type_display": (
+                notification.get_notification_type_display()
+            ),
             "priority": notification.priority,
             "priority_display": notification.get_priority_display(),
             "title": notification.title,
             "content": notification.content,
             "is_read": notification.is_read,
             "read_at": (
-                notification.read_at.isoformat() if notification.read_at else None
+                notification.read_at.isoformat()
+                if notification.read_at
+                else None
             ),
             "created_at": notification.created_at.isoformat(),
             "expires_at": (
-                notification.expires_at.isoformat() if notification.expires_at else None
+                notification.expires_at.isoformat()
+                if notification.expires_at
+                else None
             ),
             "work_order_id": notification.work_order_id,
             "work_order_process_id": notification.work_order_process_id,
@@ -92,15 +102,15 @@ class SystemNotificationAdminSerializer:
             "unread_count": row["recipient_count"] - (row["read_count"] or 0),
             "is_sent": bool(row["sent_count"] or 0),
             "created_at": row["created_at"].isoformat(),
-            "expires_at": row["expires_at"].isoformat() if row["expires_at"] else None,
+            "expires_at": (
+                row["expires_at"].isoformat() if row["expires_at"] else None
+            ),
             "data": data,
         }
 
 
 class EmptySerializer(serializers.Serializer):
     """用于 OpenAPI 生成的空序列化器"""
-
-    pass
 
 
 class IsSystemNotificationAdmin(permissions.BasePermission):
@@ -128,14 +138,20 @@ class NotificationFilterSet(django_filters.FilterSet):
     """用户通知列表筛选。"""
 
     is_read = django_filters.BooleanFilter(field_name="is_read")
-    notification_type = django_filters.CharFilter(field_name="notification_type")
+    notification_type = django_filters.CharFilter(
+        field_name="notification_type"
+    )
     priority = django_filters.CharFilter(field_name="priority")
     work_order = django_filters.NumberFilter(field_name="work_order_id")
     work_order_id = django_filters.NumberFilter(field_name="work_order_id")
     task = django_filters.NumberFilter(field_name="task_id")
     task_id = django_filters.NumberFilter(field_name="task_id")
-    purchase_order = django_filters.NumberFilter(field_name="purchase_order_id")
-    purchase_order_id = django_filters.NumberFilter(field_name="purchase_order_id")
+    purchase_order = django_filters.NumberFilter(
+        field_name="purchase_order_id"
+    )
+    purchase_order_id = django_filters.NumberFilter(
+        field_name="purchase_order_id"
+    )
     start_date = django_filters.DateFilter(
         field_name="created_at",
         lookup_expr="date__gte",
@@ -228,11 +244,16 @@ class NotificationViewSet(viewsets.GenericViewSet):
 
         page = self.paginate_queryset(notifications)
         if page is not None:
-            data = [NotificationSerializer.serialize_notification(n) for n in page]
+            data = [
+                NotificationSerializer.serialize_notification(n) for n in page
+            ]
             paginated = self.get_paginated_response(data)
             return APIResponse.success(data=paginated.data)
 
-        data = [NotificationSerializer.serialize_notification(n) for n in notifications]
+        data = [
+            NotificationSerializer.serialize_notification(n)
+            for n in notifications
+        ]
         return APIResponse.success(data=data)
 
     @action(detail=True, methods=["post"])
@@ -241,11 +262,15 @@ class NotificationViewSet(viewsets.GenericViewSet):
         summary="标记通知为已读",
         responses={
             status.HTTP_200_OK: OpenApiResponse(
-                response=standard_success_response("NotificationMarkReadActionResponse"),
+                response=standard_success_response(
+                    "NotificationMarkReadActionResponse"
+                ),
                 description="标记成功",
             ),
             status.HTTP_404_NOT_FOUND: OpenApiResponse(
-                response=standard_error_response("NotificationMarkReadNotFound"),
+                response=standard_error_response(
+                    "NotificationMarkReadNotFound"
+                ),
                 description="通知不存在",
             ),
         },
@@ -257,12 +282,18 @@ class NotificationViewSet(viewsets.GenericViewSet):
             NotificationService.mark_read(notification)
             return APIResponse.success(
                 data={
-                    "notification": NotificationSerializer.serialize_notification(notification),
+                    "notification": (
+                        NotificationSerializer.serialize_notification(
+                            notification
+                        )
+                    ),
                 },
                 message="通知已标记为已读",
             )
         except Notification.DoesNotExist:
-            return APIResponse.error("通知不存在", code=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error(
+                "通知不存在", code=status.HTTP_404_NOT_FOUND
+            )
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
@@ -272,7 +303,9 @@ class NotificationViewSet(viewsets.GenericViewSet):
         summary="标记所有通知为已读",
         responses={
             status.HTTP_200_OK: OpenApiResponse(
-                response=standard_success_response("NotificationMarkAllReadResponse"),
+                response=standard_success_response(
+                    "NotificationMarkAllReadResponse"
+                ),
                 description="批量标记成功",
             )
         },
@@ -292,11 +325,15 @@ class NotificationViewSet(viewsets.GenericViewSet):
         summary="删除通知",
         responses={
             status.HTTP_200_OK: OpenApiResponse(
-                response=standard_success_response("NotificationDeleteResponse"),
+                response=standard_success_response(
+                    "NotificationDeleteResponse"
+                ),
                 description="删除成功",
             ),
             status.HTTP_404_NOT_FOUND: OpenApiResponse(
-                response=standard_error_response("NotificationDeleteNotFoundResponse"),
+                response=standard_error_response(
+                    "NotificationDeleteNotFoundResponse"
+                ),
                 description="通知不存在",
             ),
         },
@@ -308,7 +345,9 @@ class NotificationViewSet(viewsets.GenericViewSet):
             NotificationService.delete(notification)
             return APIResponse.success(message="通知已删除")
         except Notification.DoesNotExist:
-            return APIResponse.error("通知不存在", code=status.HTTP_404_NOT_FOUND)
+            return APIResponse.error(
+                "通知不存在", code=status.HTTP_404_NOT_FOUND
+            )
         except ServiceError as exc:
             return APIResponse.error(exc.message, code=exc.code, data=exc.data)
 
@@ -318,7 +357,9 @@ class NotificationViewSet(viewsets.GenericViewSet):
         summary="删除所有已读通知",
         responses={
             status.HTTP_200_OK: OpenApiResponse(
-                response=standard_success_response("NotificationDeleteAllReadResponse"),
+                response=standard_success_response(
+                    "NotificationDeleteAllReadResponse"
+                ),
                 description="删除成功",
             )
         },
@@ -327,7 +368,9 @@ class NotificationViewSet(viewsets.GenericViewSet):
     def delete_all_read(self, request):
         """删除所有已读通知"""
         count = NotificationService.delete_all_read(self.get_queryset())
-        return APIResponse.success(data={"count": count}, message=f"已删除 {count} 条已读通知")
+        return APIResponse.success(
+            data={"count": count}, message=f"已删除 {count} 条已读通知"
+        )
 
     @action(detail=False, methods=["get"])
     @extend_schema(
@@ -335,7 +378,9 @@ class NotificationViewSet(viewsets.GenericViewSet):
         summary="获取未读通知数量",
         responses={
             status.HTTP_200_OK: OpenApiResponse(
-                response=standard_success_response("NotificationUnreadCountResponse"),
+                response=standard_success_response(
+                    "NotificationUnreadCountResponse"
+                ),
                 description="未读数量",
             )
         },
@@ -352,7 +397,9 @@ class NotificationViewSet(viewsets.GenericViewSet):
         summary="获取通知统计",
         responses={
             status.HTTP_200_OK: OpenApiResponse(
-                response=standard_success_response("NotificationStatisticsResponse"),
+                response=standard_success_response(
+                    "NotificationStatisticsResponse"
+                ),
                 description="通知统计",
             )
         },
@@ -370,7 +417,9 @@ class NotificationViewSet(viewsets.GenericViewSet):
         summary="获取 WebSocket 连接票据",
         responses={
             status.HTTP_200_OK: OpenApiResponse(
-                response=standard_success_response("NotificationWsTicketResponse"),
+                response=standard_success_response(
+                    "NotificationWsTicketResponse"
+                ),
                 description="连接票据",
             )
         },
@@ -383,7 +432,9 @@ class NotificationViewSet(viewsets.GenericViewSet):
 
 
 @system_notification_docs
-class SystemNotificationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+class SystemNotificationViewSet(
+    mixins.ListModelMixin, viewsets.GenericViewSet
+):
     """系统通知管理视图集"""
 
     permission_classes = [IsSystemNotificationAdmin]
@@ -429,7 +480,9 @@ class SystemNotificationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         return queryset
 
     def _get_announcement_queryset(self):
-        return self.get_queryset().filter(data__kind__in=["announcement", "urgent_alert"])
+        return self.get_queryset().filter(
+            data__kind__in=["announcement", "urgent_alert"]
+        )
 
     def _get_batch_queryset(self, batch_id):
         return Notification.objects.filter(
@@ -455,11 +508,17 @@ class SystemNotificationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
 
         page = self.paginate_queryset(rows)
         if page is not None:
-            data = [SystemNotificationAdminSerializer.serialize_row(row) for row in page]
+            data = [
+                SystemNotificationAdminSerializer.serialize_row(row)
+                for row in page
+            ]
             paginated = self.get_paginated_response(data)
             return APIResponse.success(data=paginated.data)
 
-        data = [SystemNotificationAdminSerializer.serialize_row(row) for row in rows]
+        data = [
+            SystemNotificationAdminSerializer.serialize_row(row)
+            for row in rows
+        ]
         return APIResponse.success(data=data)
 
     @action(detail=False, methods=["post"])
@@ -510,7 +569,9 @@ class SystemNotificationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     @handle_service_error
     def notification_settings(self, request):
         """获取通知设置"""
-        return APIResponse.success(data=SystemNotificationService.get_settings())
+        return APIResponse.success(
+            data=SystemNotificationService.get_settings()
+        )
 
     @action(detail=False, methods=["post"])
     @handle_service_error
@@ -523,7 +584,9 @@ class SystemNotificationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     def system_status(self, request):
         """获取通知系统状态"""
         try:
-            return APIResponse.success(data=SystemNotificationService.system_status())
+            return APIResponse.success(
+                data=SystemNotificationService.system_status()
+            )
         except ServiceError as exc:
             return APIResponse.error(
                 exc.message,
@@ -575,7 +638,9 @@ class NotificationTemplateViewSet(viewsets.GenericViewSet):
     @handle_service_error
     def get_templates(self, request):
         """获取通知模板"""
-        return APIResponse.success(data=NotificationTemplateService.get_templates())
+        return APIResponse.success(
+            data=NotificationTemplateService.get_templates()
+        )
 
     @action(detail=False, methods=["post"])
     @handle_service_error
