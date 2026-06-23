@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+OVERALL_STATUS=0
+
+echo -e "${BLUE}[backend/style-check] 代码风格检查 (flake8)...${NC}"
+if [ ! -f "venv/bin/activate" ]; then
+    echo -e "${RED}✗ Python 虚拟环境不存在，请先运行: bash scripts/setup.sh${NC}"
+    exit 1
+fi
+source venv/bin/activate
+
+if command -v flake8 &> /dev/null; then
+    if flake8 workorder; then
+        echo -e "${GREEN}✓ flake8 通过${NC}"
+    else
+        echo -e "${RED}✗ flake8 发现问题${NC}"
+        OVERALL_STATUS=1
+    fi
+else
+    echo -e "${YELLOW}! flake8 未安装，跳过 (pip install flake8)${NC}"
+fi
+
+exit $OVERALL_STATUS
