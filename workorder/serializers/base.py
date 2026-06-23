@@ -136,6 +136,12 @@ class CustomerSerializer(serializers.ModelSerializer):
         """验证邮箱格式（Django EmailField 已有基础验证，这里可添加额外规则）"""
         return value
 
+    def validate_default_tax_rate(self, value):
+        """验证默认税率范围"""
+        if value is not None and (value < 0 or value > 100):
+            raise serializers.ValidationError("默认税率必须在 0-100 之间")
+        return value
+
 
 class DepartmentSerializer(serializers.ModelSerializer):
     """部门序列化器

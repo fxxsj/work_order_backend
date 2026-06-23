@@ -141,6 +141,13 @@ class Customer(AuditMixin, TimeStampedModel, models.Model):
         verbose_name="业务员",
         help_text="负责该客户的业务员",
     )
+    default_tax_rate = models.DecimalField(
+        "默认税率",
+        max_digits=5,
+        decimal_places=2,
+        default=13,
+        help_text="用于客户订单默认税率，如13表示13%",
+    )
     notes = models.TextField("备注", blank=True)
 
     class Meta:
