@@ -41,7 +41,7 @@ class AuditExportService:
             start_date=start_date,
             end_date=end_date,
             filters=filters or {},
-            status=AuditLogExport.STATUS_PENDING
+            status=AuditLogExport.STATUS_PENDING,
         )
 
         return export
@@ -68,7 +68,10 @@ class AuditExportService:
             export_id: 导出任务ID
         """
         export = AuditLogExport.objects.get(id=export_id)
-        if export.status not in [AuditLogExport.STATUS_PENDING, AuditLogExport.STATUS_FAILED]:
+        if export.status not in [
+            AuditLogExport.STATUS_PENDING,
+            AuditLogExport.STATUS_FAILED,
+        ]:
             return
         export.status = AuditLogExport.STATUS_PROCESSING
         export.save()
@@ -85,52 +88,63 @@ class AuditExportService:
 
             # 应用过滤条件
             filters = export.filters
-            if filters.get('action_type'):
-                queryset = queryset.filter(action_type=filters['action_type'])
-            if filters.get('user_id'):
-                queryset = queryset.filter(user_id=filters['user_id'])
-            if filters.get('model'):
-                queryset = queryset.filter(content_type__model=filters['model'])
+            if filters.get("action_type"):
+                queryset = queryset.filter(action_type=filters["action_type"])
+            if filters.get("user_id"):
+                queryset = queryset.filter(user_id=filters["user_id"])
+            if filters.get("model"):
+                queryset = queryset.filter(
+                    content_type__model=filters["model"]
+                )
 
             # 统计
             export.record_count = queryset.count()
 
             # 生成文件路径
-            filename = f"audit_log_{export.id}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            export_dir = getattr(settings, 'AUDIT_LOG_EXPORT_DIR', '/tmp/audit_logs')
+            filename = (
+                f"audit_log_{export.id}_"
+                f"{timezone.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            )
+            export_dir = getattr(
+                settings, "AUDIT_LOG_EXPORT_DIR", "/tmp/audit_logs"
+            )
             os.makedirs(export_dir, exist_ok=True)
             file_path = os.path.join(export_dir, filename)
 
             # 导出为CSV
-            with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
+            with open(file_path, "w", newline="", encoding="utf-8") as csvfile:
                 writer = csv.writer(csvfile)
 
                 # 写入表头
-                writer.writerow([
-                    'ID',
-                    '操作类型',
-                    '用户',
-                    '对象类型',
-                    '对象ID',
-                    '对象表示',
-                    '变更字段',
-                    'IP地址',
-                    '创建时间',
-                ])
+                writer.writerow(
+                    [
+                        "ID",
+                        "操作类型",
+                        "用户",
+                        "对象类型",
+                        "对象ID",
+                        "对象表示",
+                        "变更字段",
+                        "IP地址",
+                        "创建时间",
+                    ]
+                )
 
                 # 写入数据
                 for log in queryset:
-                    writer.writerow([
-                        str(log.id),
-                        log.get_action_type_display(),
-                        log.username,
-                        log.content_type.model if log.content_type else '',
-                        log.object_id,
-                        log.object_repr,
-                        ','.join(log.changed_fields),
-                        log.ip_address or '',
-                        log.created_at.isoformat(),
-                    ])
+                    writer.writerow(
+                        [
+                            str(log.id),
+                            log.get_action_type_display(),
+                            log.username,
+                            log.content_type.model if log.content_type else "",
+                            log.object_id,
+                            log.object_repr,
+                            ",".join(log.changed_fields),
+                            log.ip_address or "",
+                            log.created_at.isoformat(),
+                        ]
+                    )
 
             # 获取文件大小
             export.file_size = os.path.getsize(file_path)
@@ -139,7 +153,9 @@ class AuditExportService:
             export.completed_at = timezone.now()
             export.save()
 
-            logger.info(f"审计日志导出完成: {export_id}, 记录数: {export.record_count}")
+            logger.info(
+                f"审计日志导出完成: {export_id}, 记录数: {export.record_count}"
+            )
 
         except Exception as exc:
             export.status = AuditLogExport.STATUS_FAILED
@@ -147,17 +163,17 @@ class AuditExportService:
             export.completed_at = timezone.now()
             export.save()
 
-            logger.error(f"审计日志导出失败: {export_id}, 错误: {exc}", exc_info=True)
+            logger.error(
+                f"审计日志导出失败: {export_id}, 错误: {exc}", exc_info=True
+            )
 
     def process_pending_exports(self, limit=10):
         """
         处理待导出的任务
         """
-        pending_exports = (
-            AuditLogExport.objects
-            .filter(status=AuditLogExport.STATUS_PENDING)
-            .order_by('created_at')[:limit]
-        )
+        pending_exports = AuditLogExport.objects.filter(
+            status=AuditLogExport.STATUS_PENDING
+        ).order_by("created_at")[:limit]
 
         for export in pending_exports:
             self.perform_export(export.id)

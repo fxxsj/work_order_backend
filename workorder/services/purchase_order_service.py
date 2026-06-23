@@ -1,7 +1,6 @@
 """采购单业务服务"""
 
 from django.db import transaction
-from django.utils import timezone
 from rest_framework import status
 
 from workorder.constants.status import MaterialPurchaseStatus
@@ -30,7 +29,8 @@ class PurchaseOrderService:
         """
         if order.status != "ordered":
             raise ServiceError(
-                "只有已下单状态的采购单可以收货", code=status.HTTP_400_BAD_REQUEST
+                "只有已下单状态的采购单可以收货",
+                code=status.HTTP_400_BAD_REQUEST,
             )
 
         created_records = []
@@ -40,7 +40,9 @@ class PurchaseOrderService:
             for item_data in items_data:
                 item_id = item_data.get("item_id")
                 received_quantity = item_data.get("received_quantity")
-                delivery_note_number = item_data.get("delivery_note_number", "")
+                delivery_note_number = item_data.get(
+                    "delivery_note_number", ""
+                )
                 notes = item_data.get("notes", "")
 
                 item = order.items.filter(id=item_id).first()
@@ -49,7 +51,8 @@ class PurchaseOrderService:
                     continue
 
                 existing_received = sum(
-                    r.received_quantity or 0 for r in item.receive_records.all()
+                    r.received_quantity or 0
+                    for r in item.receive_records.all()
                 )
                 remaining = item.quantity - existing_received
 
@@ -86,7 +89,8 @@ class PurchaseOrderService:
         按物料默认供应商自动分组，每组生成一个采购单。
 
         Returns:
-            dict: 包含 created_orders、created_item_count、skipped_items、blocked_items
+            dict: 包含 created_orders、created_item_count、
+                skipped_items、blocked_items
 
         Raises:
             ServiceError: 参数缺失或业务规则不满足时抛出
@@ -171,7 +175,10 @@ class PurchaseOrderService:
         for wom in wo_materials:
             supplier = wom.material.default_supplier
             if supplier.id not in supplier_groups:
-                supplier_groups[supplier.id] = {"supplier": supplier, "items": []}
+                supplier_groups[supplier.id] = {
+                    "supplier": supplier,
+                    "items": [],
+                }
             supplier_groups[supplier.id]["items"].append(wom)
 
         quantity_overrides = {}

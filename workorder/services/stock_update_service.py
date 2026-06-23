@@ -9,7 +9,11 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 
-from workorder.constants.status import MaterialPurchaseStatus, TaskStatus, TaskType
+from workorder.constants.status import (
+    MaterialPurchaseStatus,
+    TaskStatus,
+    TaskType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +83,7 @@ class StockUpdateService:
             stock_updates = []
             for product_id, quantity in product_quantities.items():
                 if product_id not in product_map:
-                    logger.warning(
-                        f"产品ID {product_id} 不存在，跳过库存更新"
-                    )
+                    logger.warning(f"产品ID {product_id} 不存在，跳过库存更新")
                     continue
 
                 product = product_map[product_id]
@@ -150,8 +152,6 @@ class StockUpdateService:
         - 批量锁定物料记录，避免并发冲突
         - 记录详细的库存变更日志
         """
-        from workorder.models import WorkOrderTask
-        from workorder.models.core import WorkOrderMaterial
         from workorder.models.materials import Material, MaterialStockLog
 
         with transaction.atomic():
@@ -187,8 +187,13 @@ class StockUpdateService:
                         needs_update = False
 
                         # 状态不是 CUT 时更新状态
-                        if work_order_material.purchase_status != MaterialPurchaseStatus.CUT:
-                            work_order_material.purchase_status = MaterialPurchaseStatus.CUT
+                        if (
+                            work_order_material.purchase_status
+                            != MaterialPurchaseStatus.CUT
+                        ):
+                            work_order_material.purchase_status = (
+                                MaterialPurchaseStatus.CUT
+                            )
                             needs_update = True
 
                         # cut_date 为空时始终写入，避免被其他路径跳过

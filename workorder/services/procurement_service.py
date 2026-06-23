@@ -36,7 +36,10 @@ class ProcurementService:
                         "material_name": "...",
                         "material_code": "...",
                         "material_unit": "...",
-                        "work_orders": [{"id": 1, "order_number": "WO...", "quantity": 100}],
+                        "work_orders": [
+                            {"id": 1, "order_number": "WO...",
+                             "quantity": 100}
+                        ],
                         "total_required": 100,
                         "total_ordered": 80,
                         "total_received": 0,
@@ -50,6 +53,7 @@ class ProcurementService:
             }
         """
         from workorder.models.core import WorkOrderMaterial
+
         # 查询所有活跃施工单的物料
         wo_materials = (
             WorkOrderMaterial.objects.filter(
@@ -77,10 +81,14 @@ class ProcurementService:
                     "total_received": 0,
                     "lead_time_days": mat.lead_time_days or 7,
                     "default_supplier_id": (
-                        mat.default_supplier.id if mat.default_supplier else None
+                        mat.default_supplier.id
+                        if mat.default_supplier
+                        else None
                     ),
                     "default_supplier_name": (
-                        mat.default_supplier.name if mat.default_supplier else None
+                        mat.default_supplier.name
+                        if mat.default_supplier
+                        else None
                     ),
                 }
 
@@ -90,8 +98,12 @@ class ProcurementService:
 
             # 累计 work_order 信息（含需求量）
             existing_wo = next(
-                (w for w in item["work_orders"] if w["id"] == wom.work_order_id),
-                None
+                (
+                    w
+                    for w in item["work_orders"]
+                    if w["id"] == wom.work_order_id
+                ),
+                None,
             )
             if existing_wo:
                 existing_wo["quantity"] += qty
@@ -120,13 +132,18 @@ class ProcurementService:
 
         # 计算汇总统计
         pending_count = sum(
-            1 for v in material_map.values() if v["total_ordered"] == 0 and v["total_received"] == 0
+            1
+            for v in material_map.values()
+            if v["total_ordered"] == 0 and v["total_received"] == 0
         )
         ordered_count = sum(
-            1 for v in material_map.values()
+            1
+            for v in material_map.values()
             if v["total_ordered"] > 0 and v["total_received"] == 0
         )
-        received_count = sum(1 for v in material_map.values() if v["total_received"] > 0)
+        received_count = sum(
+            1 for v in material_map.values() if v["total_received"] > 0
+        )
 
         # 确定每个物料的聚合状态
         for item in material_map.values():
@@ -181,17 +198,14 @@ class ProcurementService:
         warnings: List[Dict[str, Any]] = []
 
         # 仅查 pending 和 ordered 状态的物料
-        wo_materials = (
-            WorkOrderMaterial.objects.filter(
-                purchase_status__in=[
-                    MaterialPurchaseStatus.PENDING,
-                    MaterialPurchaseStatus.ORDERED,
-                ],
-                work_order__approval_status="approved",
-                work_order__status__in=["pending", "in_progress"],
-            )
-            .select_related("material__default_supplier", "work_order")
-        )
+        wo_materials = WorkOrderMaterial.objects.filter(
+            purchase_status__in=[
+                MaterialPurchaseStatus.PENDING,
+                MaterialPurchaseStatus.ORDERED,
+            ],
+            work_order__approval_status="approved",
+            work_order__status__in=["pending", "in_progress"],
+        ).select_related("material__default_supplier", "work_order")
 
         for wom in wo_materials:
             delivery_date = wom.work_order.delivery_date
@@ -207,7 +221,9 @@ class ProcurementService:
             else:
                 # 已下单但未到货，以 ordered_date 为起点
                 if wom.purchase_date:
-                    estimated_arrival = wom.purchase_date + timedelta(days=lead_time)
+                    estimated_arrival = wom.purchase_date + timedelta(
+                        days=lead_time
+                    )
                 else:
                     estimated_arrival = today + timedelta(days=lead_time)
 

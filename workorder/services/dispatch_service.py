@@ -6,8 +6,9 @@
 - LoadBalancingService: 提供基于负载的部门选择
 - AutoDispatchService: 提供基于优先级规则的自动分派
 """
+
 from typing import Dict, List, Optional
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.core.cache import cache
 from collections import defaultdict
 import random
@@ -46,15 +47,18 @@ class DispatchPreviewService:
         from ..models.base import Process
 
         # 获取所有活跃工序
-        processes = Process.objects.filter(is_active=True).order_by('code')
+        processes = Process.objects.filter(is_active=True).order_by("code")
         preview_data = []
 
         for process in processes:
             # 获取该工序的所有活跃规则（按优先级降序）
-            rules = TaskAssignmentRule.objects.filter(
-                process=process,
-                is_active=True
-            ).select_related('department').order_by('-priority')
+            rules = (
+                TaskAssignmentRule.objects.filter(
+                    process=process, is_active=True
+                )
+                .select_related("department")
+                .order_by("-priority")
+            )
 
             if not rules.exists():
                 continue
@@ -64,15 +68,20 @@ class DispatchPreviewService:
 
             # 使用聚合查询批量计算所有部门的负载
             dept_ids = [r.department_id for r in rules]
-            dept_loads = WorkOrderTask.objects.filter(
-                assigned_department_id__in=dept_ids,
-                status__in=['pending', 'in_progress']
-            ).values('assigned_department_id').annotate(
-                load=Count('id')
+            dept_loads = (
+                WorkOrderTask.objects.filter(
+                    assigned_department_id__in=dept_ids,
+                    status__in=["pending", "in_progress"],
+                )
+                .values("assigned_department_id")
+                .annotate(load=Count("id"))
             )
 
             # 转换为字典：department_id -> load
-            load_dict = {item['assigned_department_id']: item['load'] for item in dept_loads}
+            load_dict = {
+                item["assigned_department_id"]: item["load"]
+                for item in dept_loads
+            }
 
             # 获取目标部门的负载
             target_load = load_dict.get(top_rule.department_id, 0)
@@ -80,27 +89,35 @@ class DispatchPreviewService:
             # 构建所有部门列表
             all_departments = []
             for rule in rules:
-                all_departments.append({
-                    'department_id': rule.department.id,
-                    'department_name': rule.department.name,
-                    'priority': rule.priority,
-                    'load': load_dict.get(rule.department_id, 0),
-                    'is_active': rule.is_active,
-                    'operator_selection_strategy': rule.operator_selection_strategy
-                })
+                all_departments.append(
+                    {
+                        "department_id": rule.department.id,
+                        "department_name": rule.department.name,
+                        "priority": rule.priority,
+                        "load": load_dict.get(rule.department_id, 0),
+                        "is_active": rule.is_active,
+                        "operator_selection_strategy": (
+                            rule.operator_selection_strategy
+                        ),
+                    }
+                )
 
-            preview_data.append({
-                'process_id': process.id,
-                'process_name': process.name,
-                'process_code': process.code,
-                'target_department_id': top_rule.department.id,
-                'target_department_name': top_rule.department.name,
-                'current_load': target_load,
-                'priority': top_rule.priority,
-                'is_active': top_rule.is_active,
-                'operator_selection_strategy': top_rule.operator_selection_strategy,
-                'all_departments': all_departments
-            })
+            preview_data.append(
+                {
+                    "process_id": process.id,
+                    "process_name": process.name,
+                    "process_code": process.code,
+                    "target_department_id": top_rule.department.id,
+                    "target_department_name": top_rule.department.name,
+                    "current_load": target_load,
+                    "priority": top_rule.priority,
+                    "is_active": top_rule.is_active,
+                    "operator_selection_strategy": (
+                        top_rule.operator_selection_strategy
+                    ),
+                    "all_departments": all_departments,
+                }
+            )
 
         return preview_data
 
@@ -128,26 +145,27 @@ class DispatchPreviewService:
         try:
             process = Process.objects.get(id=process_id)
         except Process.DoesNotExist:
-            return {'error': f'工序ID {process_id} 不存在'}
+            return {"error": f"工序ID {process_id} 不存在"}
 
         # 获取该工序的所有活跃规则，按优先级降序排列
-        rules = TaskAssignmentRule.objects.filter(
-            process=process,
-            is_active=True
-        ).select_related('department').order_by('-priority')
+        rules = (
+            TaskAssignmentRule.objects.filter(process=process, is_active=True)
+            .select_related("department")
+            .order_by("-priority")
+        )
 
         if not rules.exists():
             return {
-                'error': f'工序"{process.name}"没有配置活跃的分派规则',
-                'process_id': process_id,
-                'process_name': process.name
+                "error": f'工序"{process.name}"没有配置活跃的分派规则',
+                "process_id": process_id,
+                "process_name": process.name,
             }
 
         # 返回优先级最高的规则
         top_rule = rules.first()
         dept_load = WorkOrderTask.objects.filter(
             assigned_department=top_rule.department,
-            status__in=['pending', 'in_progress']
+            status__in=["pending", "in_progress"],
         ).count()
 
         # 收集所有规则信息
@@ -155,27 +173,29 @@ class DispatchPreviewService:
         for rule in rules:
             rule_load = WorkOrderTask.objects.filter(
                 assigned_department=rule.department,
-                status__in=['pending', 'in_progress']
+                status__in=["pending", "in_progress"],
             ).count()
-            all_rules.append({
-                'department_id': rule.department.id,
-                'department_name': rule.department.name,
-                'priority': rule.priority,
-                'current_load': rule_load,
-                'is_active': rule.is_active,
-                'selection_strategy': rule.operator_selection_strategy
-            })
+            all_rules.append(
+                {
+                    "department_id": rule.department.id,
+                    "department_name": rule.department.name,
+                    "priority": rule.priority,
+                    "current_load": rule_load,
+                    "is_active": rule.is_active,
+                    "selection_strategy": rule.operator_selection_strategy,
+                }
+            )
 
         return {
-            'process_id': process.id,
-            'process_name': process.name,
-            'process_code': process.code,
-            'target_department_id': top_rule.department.id,
-            'target_department_name': top_rule.department.name,
-            'priority': top_rule.priority,
-            'current_load': dept_load,
-            'selection_strategy': top_rule.operator_selection_strategy,
-            'all_rules': all_rules
+            "process_id": process.id,
+            "process_name": process.name,
+            "process_code": process.code,
+            "target_department_id": top_rule.department.id,
+            "target_department_name": top_rule.department.name,
+            "priority": top_rule.priority,
+            "current_load": dept_load,
+            "selection_strategy": top_rule.operator_selection_strategy,
+            "all_rules": all_rules,
         }
 
 
@@ -199,7 +219,7 @@ class LoadBalancingService:
         """
         return WorkOrderTask.objects.filter(
             assigned_department=department,
-            status__in=['pending', 'in_progress']
+            status__in=["pending", "in_progress"],
         ).count()
 
     @staticmethod
@@ -216,10 +236,11 @@ class LoadBalancingService:
             Department: 选中的部门对象，如果没有规则则返回 None
         """
         # 获取所有活跃规则，按优先级降序排列
-        rules = TaskAssignmentRule.objects.filter(
-            process=process,
-            is_active=True
-        ).select_related('department').order_by('-priority')
+        rules = (
+            TaskAssignmentRule.objects.filter(process=process, is_active=True)
+            .select_related("department")
+            .order_by("-priority")
+        )
 
         if not rules.exists():
             return None
@@ -240,15 +261,15 @@ class LoadBalancingService:
         # 多个部门在相同优先级，按负载选择
         dept_loads = []
         for rule in highest_group:
-            load = LoadBalancingService.calculate_department_load(rule.department)
-            dept_loads.append({
-                'department': rule.department,
-                'load': load,
-                'rule': rule
-            })
+            load = LoadBalancingService.calculate_department_load(
+                rule.department
+            )
+            dept_loads.append(
+                {"department": rule.department, "load": load, "rule": rule}
+            )
 
         # 按负载升序排序，选择负载最少的
-        dept_loads.sort(key=lambda x: x['load'])
+        dept_loads.sort(key=lambda x: x["load"])
         selected = dept_loads[0]
 
         logger.info(
@@ -257,10 +278,12 @@ class LoadBalancingService:
             f"选择 {selected['department'].name}（负载：{selected['load']}）"
         )
 
-        return selected['department']
+        return selected["department"]
 
     @staticmethod
-    def select_department_by_strategy(process, strategy='least_tasks') -> Optional[Department]:
+    def select_department_by_strategy(
+        process, strategy="least_tasks"
+    ) -> Optional[Department]:
         """根据指定策略选择部门
 
         Args:
@@ -275,10 +298,11 @@ class LoadBalancingService:
             Department: 选中的部门对象，如果没有规则则返回 None
         """
         # 获取所有活跃规则，按优先级降序排列
-        rules = TaskAssignmentRule.objects.filter(
-            process=process,
-            is_active=True
-        ).select_related('department').order_by('-priority')
+        rules = (
+            TaskAssignmentRule.objects.filter(process=process, is_active=True)
+            .select_related("department")
+            .order_by("-priority")
+        )
 
         if not rules.exists():
             return None
@@ -297,9 +321,9 @@ class LoadBalancingService:
             return highest_group[0].department
 
         # 多个部门在相同优先级，根据策略选择
-        if strategy == 'least_tasks':
+        if strategy == "least_tasks":
             return LoadBalancingService.select_department_by_load(process)
-        elif strategy == 'random':
+        elif strategy == "random":
             selected_rule = random.choice(highest_group)
             logger.info(
                 f"随机选择：工序 {process.name}，"
@@ -307,9 +331,9 @@ class LoadBalancingService:
                 f"{selected_rule.department.name}"
             )
             return selected_rule.department
-        elif strategy == 'round_robin':
+        elif strategy == "round_robin":
             # 轮询选择 - 使用缓存跟踪上一次的选择
-            cache_key = f'dispatch_rr_{process.id}'
+            cache_key = f"dispatch_rr_{process.id}"
             last_index = cache.get(cache_key, 0)
             selected_index = (last_index + 1) % len(highest_group)
             cache.set(cache_key, selected_index, timeout=None)
@@ -321,7 +345,7 @@ class LoadBalancingService:
                 f"选择 {selected.department.name}"
             )
             return selected.department
-        elif strategy == 'first_available':
+        elif strategy == "first_available":
             # 第一个可用（优先级排序的第一个）
             return highest_group[0].department
         else:
@@ -340,23 +364,26 @@ class LoadBalancingService:
         """
         # 获取该工序的所有规则
         rules = TaskAssignmentRule.objects.filter(
-            process=process,
-            is_active=True
-        ).values_list('department_id', flat=True)
+            process=process, is_active=True
+        ).values_list("department_id", flat=True)
 
         if not rules:
             return {}
 
         # 使用聚合查询统计每个部门的负载
-        dept_loads = WorkOrderTask.objects.filter(
-            assigned_department_id__in=list(rules),
-            status__in=['pending', 'in_progress']
-        ).values('assigned_department_id').annotate(
-            load=Count('id')
+        dept_loads = (
+            WorkOrderTask.objects.filter(
+                assigned_department_id__in=list(rules),
+                status__in=["pending", "in_progress"],
+            )
+            .values("assigned_department_id")
+            .annotate(load=Count("id"))
         )
 
         # 转换为字典
-        load_dict = {item['assigned_department_id']: item['load'] for item in dept_loads}
+        load_dict = {
+            item["assigned_department_id"]: item["load"] for item in dept_loads
+        }
 
         # 确保所有部门都有负载计数（至少为0）
         for dept_id in rules:
@@ -379,7 +406,7 @@ class AutoDispatchService:
         Returns:
             bool: True 表示已启用，False 表示未启用（默认）
         """
-        return cache.get('dispatch_global_enabled', False)
+        return cache.get("dispatch_global_enabled", False)
 
     @staticmethod
     def set_global_dispatch_enabled(enabled: bool) -> bool:
@@ -391,11 +418,13 @@ class AutoDispatchService:
         Returns:
             bool: 新的状态
         """
-        cache.set('dispatch_global_enabled', enabled, timeout=None)
+        cache.set("dispatch_global_enabled", enabled, timeout=None)
         return enabled
 
     @staticmethod
-    def dispatch_task(task, process=None, strategy='least_tasks') -> Optional[Department]:
+    def dispatch_task(
+        task, process=None, strategy="least_tasks"
+    ) -> Optional[Department]:
         """根据优先级规则自动分派任务到部门
 
         分派逻辑：
@@ -429,10 +458,11 @@ class AutoDispatchService:
             return None
 
         # 查询该工序的活跃分派规则，按优先级降序排列
-        rules = TaskAssignmentRule.objects.filter(
-            process=process,
-            is_active=True
-        ).select_related('department').order_by('-priority')
+        rules = (
+            TaskAssignmentRule.objects.filter(process=process, is_active=True)
+            .select_related("department")
+            .order_by("-priority")
+        )
 
         if not rules.exists():
             # 没有配置规则，返回 None（调用方使用兜底逻辑）
@@ -440,8 +470,7 @@ class AutoDispatchService:
 
         # 获取工序的可用部门列表
         available_departments = Department.objects.filter(
-            processes=process,
-            is_active=True
+            processes=process, is_active=True
         )
 
         if not available_departments.exists():
@@ -484,7 +513,9 @@ class AutoDispatchService:
         )
 
         # 使用 LoadBalancingService 根据策略选择部门
-        return LoadBalancingService.select_department_by_strategy(process, strategy)
+        return LoadBalancingService.select_department_by_strategy(
+            process, strategy
+        )
 
     @staticmethod
     def get_highest_priority_department(process) -> Optional[Department]:
@@ -496,10 +527,12 @@ class AutoDispatchService:
         Returns:
             Department: 优先级最高的部门，如果没有规则则返回 None
         """
-        rule = TaskAssignmentRule.objects.filter(
-            process=process,
-            is_active=True
-        ).select_related('department').order_by('-priority').first()
+        rule = (
+            TaskAssignmentRule.objects.filter(process=process, is_active=True)
+            .select_related("department")
+            .order_by("-priority")
+            .first()
+        )
 
         if rule:
             return rule.department
@@ -519,7 +552,5 @@ class AutoDispatchService:
         from ..models.base import Department
 
         return Department.objects.filter(
-            id=department.id,
-            processes=process,
-            is_active=True
+            id=department.id, processes=process, is_active=True
         ).exists()

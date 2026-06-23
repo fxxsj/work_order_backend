@@ -11,14 +11,28 @@ from datetime import timedelta
 
 from collections import defaultdict
 
-from django.db.models import Avg, Count, ExpressionWrapper, F, OuterRef, Q, Subquery, Sum
+from django.db.models import (
+    Avg,
+    Count,
+    ExpressionWrapper,
+    F,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+)
 from django.db.models.fields import DurationField
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import status
 
 from ..permissions.permission_utils import is_sales_user
-from ..models.core import WorkOrder, WorkOrderProcess, WorkOrderProduct, WorkOrderTask
+from ..models.core import (
+    WorkOrder,
+    WorkOrderProcess,
+    WorkOrderProduct,
+    WorkOrderTask,
+)
 from ..models.sales import SalesOrder, SalesOrderItem
 from ..queries import scope_sales_orders
 from .service_errors import ServiceError
@@ -43,9 +57,17 @@ class WorkOrderStatisticsService:
 
         # 状态统计：确保所有状态都有数据，即使数量为0
         status_stats = list(
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
+            queryset.values("status")
+            .annotate(count=Count("id"))
+            .order_by("status")
         )
-        all_statuses = ["pending", "in_progress", "paused", "completed", "cancelled"]
+        all_statuses = [
+            "pending",
+            "in_progress",
+            "paused",
+            "completed",
+            "cancelled",
+        ]
         status_dict = {item["status"]: item["count"] for item in status_stats}
         status_statistics = [
             {"status": status, "count": status_dict.get(status, 0)}
@@ -54,10 +76,14 @@ class WorkOrderStatisticsService:
 
         # 优先级统计：确保所有优先级都有数据，即使数量为0
         priority_stats = list(
-            queryset.values("priority").annotate(count=Count("id")).order_by("priority")
+            queryset.values("priority")
+            .annotate(count=Count("id"))
+            .order_by("priority")
         )
         all_priorities = ["low", "normal", "high", "urgent"]
-        priority_dict = {item["priority"]: item["count"] for item in priority_stats}
+        priority_dict = {
+            item["priority"]: item["count"] for item in priority_stats
+        }
         priority_statistics = [
             {"priority": priority, "count": priority_dict.get(priority, 0)}
             for priority in all_priorities
@@ -84,10 +110,19 @@ class WorkOrderStatisticsService:
 
         # 任务状态统计
         task_status_stats = list(
-            all_tasks.values("status").annotate(count=Count("id")).order_by("status")
+            all_tasks.values("status")
+            .annotate(count=Count("id"))
+            .order_by("status")
         )
-        all_task_statuses = ["pending", "in_progress", "completed", "cancelled"]
-        task_status_dict = {item["status"]: item["count"] for item in task_status_stats}
+        all_task_statuses = [
+            "pending",
+            "in_progress",
+            "completed",
+            "cancelled",
+        ]
+        task_status_dict = {
+            item["status"]: item["count"] for item in task_status_stats
+        }
         task_status_statistics = [
             {"status": status, "count": task_status_dict.get(status, 0)}
             for status in all_task_statuses
@@ -109,7 +144,8 @@ class WorkOrderStatisticsService:
             all_tasks.filter(assigned_department__isnull=False)
             .values("assigned_department__name")
             .annotate(
-                count=Count("id"), completed=Count("id", filter=Q(status="completed"))
+                count=Count("id"),
+                completed=Count("id", filter=Q(status="completed")),
             )
             .order_by("-count")
         )
@@ -128,7 +164,9 @@ class WorkOrderStatisticsService:
         ]
 
         # 工序完成率统计
-        all_processes = WorkOrderProcess.objects.filter(work_order__in=queryset)
+        all_processes = WorkOrderProcess.objects.filter(
+            work_order__in=queryset
+        )
         process_total = all_processes.count()
         process_completed = all_processes.filter(status="completed").count()
         process_completion_rate = (
@@ -153,7 +191,9 @@ class WorkOrderStatisticsService:
             ).aggregate(avg_duration=Avg("duration"))
             avg_duration = result.get("avg_duration")
             if avg_duration:
-                avg_completion_time = round(avg_duration.total_seconds() / 3600, 2)
+                avg_completion_time = round(
+                    avg_duration.total_seconds() / 3600, 2
+                )
 
         # 任务完成率统计
         task_completed = all_tasks.filter(status="completed").count()
@@ -172,7 +212,9 @@ class WorkOrderStatisticsService:
             total=Sum("quantity_defective", default=0)
         )["total"]
         defective_rate = (
-            round(total_defective_quantity / total_production_quantity * 100, 2)
+            round(
+                total_defective_quantity / total_production_quantity * 100, 2
+            )
             if total_production_quantity > 0
             else 0
         )
@@ -181,7 +223,8 @@ class WorkOrderStatisticsService:
         customer_stats = list(
             queryset.values("customer__name")
             .annotate(
-                count=Count("id"), completed=Count("id", filter=Q(status="completed"))
+                count=Count("id"),
+                completed=Count("id", filter=Q(status="completed")),
             )
             .order_by("-count")[:10]
         )
@@ -204,7 +247,8 @@ class WorkOrderStatisticsService:
             WorkOrderProduct.objects.filter(work_order__in=queryset)
             .values("product__name", "product__code")
             .annotate(
-                count=Count("work_order", distinct=True), total_quantity=Sum("quantity")
+                count=Count("work_order", distinct=True),
+                total_quantity=Sum("quantity"),
             )
             .order_by("-count")[:10]
         )
@@ -288,7 +332,8 @@ class SalesOrderCandidateService:
         sales_order_queryset = scope_sales_orders(
             SalesOrder.objects.select_related("customer"), user
         ).filter(
-            Q(status__in=["approved", "in_production"]) | Q(pk=include_sales_order_id)
+            Q(status__in=["approved", "in_production"])
+            | Q(pk=include_sales_order_id)
         )
 
         sales_order_ids = list(
@@ -303,9 +348,9 @@ class SalesOrderCandidateService:
         allocated_subquery = (
             WorkOrderProduct.objects.filter(sales_order_item_id=OuterRef("pk"))
             .exclude(
-                work_order_id=excluded_work_order_id
-                if excluded_work_order_id
-                else None
+                work_order_id=(
+                    excluded_work_order_id if excluded_work_order_id else None
+                )
             )
             .values("sales_order_item_id")
             .annotate(total=Sum("quantity", default=0))
@@ -328,8 +373,12 @@ class SalesOrderCandidateService:
                 {
                     "sales_order_item_id": item.id,
                     "product_id": item.product_id,
-                    "product_name": item.product.name if item.product_id else "",
-                    "product_code": item.product.code if item.product_id else "",
+                    "product_name": (
+                        item.product.name if item.product_id else ""
+                    ),
+                    "product_code": (
+                        item.product.code if item.product_id else ""
+                    ),
                     "quantity": item.quantity,
                     "allocated_quantity": item.allocated_quantity,
                     "remaining_quantity": item.remaining_qty,
@@ -342,8 +391,13 @@ class SalesOrderCandidateService:
             id__in=set(products_by_sales_order.keys())
             | ({include_sales_order_id} if include_sales_order_id else set())
         ):
-            available_products = products_by_sales_order.get(sales_order.id, [])
-            if not available_products and sales_order.id != include_sales_order_id:
+            available_products = products_by_sales_order.get(
+                sales_order.id, []
+            )
+            if (
+                not available_products
+                and sales_order.id != include_sales_order_id
+            ):
                 continue
 
             candidates.append(

@@ -65,12 +65,9 @@ class PaymentService:
             pk=sales_order.pk
         )
 
-        total_paid = (
-            sales_order.payments.aggregate(
-                total=Sum("applied_amount")
-            )["total"]
-            or Decimal("0")
-        )
+        total_paid = sales_order.payments.aggregate(
+            total=Sum("applied_amount")
+        )["total"] or Decimal("0")
 
         old_status = sales_order.payment_status
 
@@ -109,15 +106,11 @@ class PaymentService:
         if not plans:
             return
 
-        total_payments = (
-            sales_order.payments.aggregate(
-                total=Sum("applied_amount")
-            )["total"]
-            or Decimal("0")
-        )
+        total_payments = sales_order.payments.aggregate(
+            total=Sum("applied_amount")
+        )["total"] or Decimal("0")
 
         remaining = total_payments
-        plans_to_update = []
 
         for plan in plans:
             if remaining <= 0:
@@ -144,21 +137,23 @@ class PaymentService:
             applied_amount=Sum("applied_amount"),
             remaining_amount=Sum("remaining_amount"),
             missing_invoice_link_count=Count(
-                "id", filter=Q(invoice__isnull=True) & Q(sales_order__isnull=False)
+                "id",
+                filter=Q(invoice__isnull=True) & Q(sales_order__isnull=False),
             ),
         )
 
         summary["total_amount"] = summary["total_amount"] or Decimal("0")
         summary["applied_amount"] = summary["applied_amount"] or Decimal("0")
-        summary["remaining_amount"] = summary["remaining_amount"] or Decimal("0")
-
-        summary["pending_writeoff_count"] = queryset.filter(remaining_amount__gt=0).count()
-        summary["pending_writeoff_amount"] = (
-            queryset.filter(remaining_amount__gt=0).aggregate(total=Sum("remaining_amount"))[
-                "total"
-            ]
-            or Decimal("0")
+        summary["remaining_amount"] = summary["remaining_amount"] or Decimal(
+            "0"
         )
+
+        summary["pending_writeoff_count"] = queryset.filter(
+            remaining_amount__gt=0
+        ).count()
+        summary["pending_writeoff_amount"] = queryset.filter(
+            remaining_amount__gt=0
+        ).aggregate(total=Sum("remaining_amount"))["total"] or Decimal("0")
 
         method_stats = (
             queryset.values("payment_method")

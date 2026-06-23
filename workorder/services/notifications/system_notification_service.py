@@ -86,14 +86,20 @@ class SystemNotificationService:
         if not title:
             raise ServiceError("缺少 title", code=status.HTTP_400_BAD_REQUEST)
         if not content:
-            raise ServiceError("缺少 content", code=status.HTTP_400_BAD_REQUEST)
+            raise ServiceError(
+                "缺少 content", code=status.HTTP_400_BAD_REQUEST
+            )
         if priority not in dict(Notification.PRIORITY_CHOICES):
-            raise ServiceError("priority 不合法", code=status.HTTP_400_BAD_REQUEST)
+            raise ServiceError(
+                "priority 不合法", code=status.HTTP_400_BAD_REQUEST
+            )
 
         recipients = SystemNotificationService._build_recipients(
             recipient_ids, only_staff
         )
-        recipient_ids_for_policy = list(recipients.values_list("id", flat=True))
+        recipient_ids_for_policy = list(
+            recipients.values_list("id", flat=True)
+        )
 
         now = timezone.now()
         batch_id = secrets.token_urlsafe(12)
@@ -143,12 +149,16 @@ class SystemNotificationService:
         if not title:
             raise ServiceError("缺少 title", code=status.HTTP_400_BAD_REQUEST)
         if not content:
-            raise ServiceError("缺少 content", code=status.HTTP_400_BAD_REQUEST)
+            raise ServiceError(
+                "缺少 content", code=status.HTTP_400_BAD_REQUEST
+            )
 
         recipients = SystemNotificationService._build_recipients(
             recipient_ids, only_staff
         )
-        recipient_ids_for_policy = list(recipients.values_list("id", flat=True))
+        recipient_ids_for_policy = list(
+            recipients.values_list("id", flat=True)
+        )
         batch_id = secrets.token_urlsafe(12)
 
         notifications = [
@@ -193,7 +203,9 @@ class SystemNotificationService:
             "email_enabled": settings.email_enabled,
             "sms_enabled": settings.sms_enabled,
             "email_threshold": settings.email_threshold,
-            "notification_retention_days": settings.notification_retention_days,
+            "notification_retention_days": (
+                settings.notification_retention_days
+            ),
             "auto_cleanup_enabled": settings.auto_cleanup_enabled,
             "max_notifications_per_user": settings.max_notifications_per_user,
         }
@@ -215,7 +227,8 @@ class SystemNotificationService:
 
         threshold = payload.get("email_threshold", settings.email_threshold)
         valid_thresholds = {
-            choice[0] for choice in SystemNotificationSettings.EMAIL_THRESHOLD_CHOICES
+            choice[0]
+            for choice in SystemNotificationSettings.EMAIL_THRESHOLD_CHOICES
         }
         if threshold not in valid_thresholds:
             raise ServiceError(
@@ -254,7 +267,9 @@ class SystemNotificationService:
         settings.email_enabled = bool(
             payload.get("email_enabled", settings.email_enabled)
         )
-        settings.sms_enabled = bool(payload.get("sms_enabled", settings.sms_enabled))
+        settings.sms_enabled = bool(
+            payload.get("sms_enabled", settings.sms_enabled)
+        )
         settings.email_threshold = threshold
         settings.notification_retention_days = retention_days
         settings.auto_cleanup_enabled = bool(
@@ -285,7 +300,9 @@ class SystemNotificationService:
                 },
             ) from e
 
-        unsent_notifications = Notification.objects.filter(is_sent=False).count()
+        unsent_notifications = Notification.objects.filter(
+            is_sent=False
+        ).count()
         recent_notifications = Notification.objects.filter(
             created_at__gte=timezone.now() - timedelta(hours=24)
         ).count()

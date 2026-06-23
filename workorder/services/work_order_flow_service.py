@@ -63,13 +63,18 @@ class WorkOrderFlowService:
     # ========== 状态转换规则 ==========
     ALLOWED_STATUS_TRANSITIONS = {
         WorkOrderApprovalStatus.DRAFT: [WorkOrderApprovalStatus.SUBMITTED],
-        WorkOrderApprovalStatus.SUBMITTED: [WorkOrderApprovalStatus.APPROVED, WorkOrderApprovalStatus.REJECTED],
+        WorkOrderApprovalStatus.SUBMITTED: [
+            WorkOrderApprovalStatus.APPROVED,
+            WorkOrderApprovalStatus.REJECTED,
+        ],
         WorkOrderApprovalStatus.REJECTED: [WorkOrderApprovalStatus.SUBMITTED],
         WorkOrderApprovalStatus.APPROVED: [WorkOrderApprovalStatus.SUBMITTED],
     }
 
     @staticmethod
-    def _validate_status_transition(current_status: str, new_status: str) -> None:
+    def _validate_status_transition(
+        current_status: str, new_status: str
+    ) -> None:
         """
         验证状态转换是否合法
 
@@ -80,8 +85,10 @@ class WorkOrderFlowService:
         Raises:
             ServiceError: 状态转换不合法时抛出
         """
-        allowed_transitions = WorkOrderFlowService.ALLOWED_STATUS_TRANSITIONS.get(
-            current_status, []
+        allowed_transitions = (
+            WorkOrderFlowService.ALLOWED_STATUS_TRANSITIONS.get(
+                current_status, []
+            )
         )
         if new_status not in allowed_transitions:
             raise ServiceError(
@@ -103,7 +110,8 @@ class WorkOrderFlowService:
         )
         if not (can_review_by_role or can_review_by_perm):
             raise ServiceError(
-                "只有业务员或主管可以审核施工单", code=status.HTTP_403_FORBIDDEN
+                "只有业务员或主管可以审核施工单",
+                code=status.HTTP_403_FORBIDDEN,
             )
 
         if (
@@ -121,7 +129,9 @@ class WorkOrderFlowService:
         try:
             return queryset.get(**filters)
         except queryset.model.DoesNotExist as exc:
-            raise ServiceError(message, code=status.HTTP_404_NOT_FOUND) from exc
+            raise ServiceError(
+                message, code=status.HTTP_404_NOT_FOUND
+            ) from exc
 
     @staticmethod
     def _audit(
@@ -215,21 +225,29 @@ class WorkOrderFlowService:
             id=sales_order_id,
         )
 
-        if sales_order.status not in [SalesOrderStatus.APPROVED, SalesOrderStatus.IN_PRODUCTION]:
+        if sales_order.status not in [
+            SalesOrderStatus.APPROVED,
+            SalesOrderStatus.IN_PRODUCTION,
+        ]:
             raise ServiceError(
                 f"只有已审核或生产中的客户订单才能创建施工单，当前状态：{sales_order.status}",
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        production_items = WorkOrderFlowService._build_selected_production_items(
-            sales_order,
-            selected_items=selected_items,
+        production_items = (
+            WorkOrderFlowService._build_selected_production_items(
+                sales_order,
+                selected_items=selected_items,
+            )
         )
         if not production_items:
-            production_items = WorkOrderFlowService._build_production_items(sales_order)
+            production_items = WorkOrderFlowService._build_production_items(
+                sales_order
+            )
         if not production_items:
             raise ServiceError(
-                "客户订单库存充足，无需生成施工单", code=status.HTTP_400_BAD_REQUEST
+                "客户订单库存充足，无需生成施工单",
+                code=status.HTTP_400_BAD_REQUEST,
             )
 
         if production_quantity is not None:
@@ -269,7 +287,9 @@ class WorkOrderFlowService:
             approval_status=WorkOrderApprovalStatus.DRAFT,  # 草稿，提交后才进入待审核
         )
 
-        logger.info(f"从客户订单 {sales_order.order_number} 创建施工单 {order_number}")
+        logger.info(
+            f"从客户订单 {sales_order.order_number} 创建施工单 {order_number}"
+        )
 
         # 4. 复制客户订单产品
         WorkOrderFlowService._copy_sales_order_products(
@@ -420,7 +440,9 @@ class WorkOrderFlowService:
         )
 
         if not reason.strip():
-            raise ServiceError("请输入紧急原因", code=status.HTTP_400_BAD_REQUEST)
+            raise ServiceError(
+                "请输入紧急原因", code=status.HTTP_400_BAD_REQUEST
+            )
 
         work_order.priority = "urgent"
         work_order.urgency_reason = reason
@@ -562,12 +584,15 @@ class WorkOrderFlowService:
         # 1. 生成正式任务并自动分派
         from workorder.services.task_generation import TaskGenerationService
 
-        task_result = TaskGenerationService.generate_tasks_and_dispatch(work_order)
-        procurement_summary = WorkOrderFlowService._get_procurement_need_summary(
+        task_result = TaskGenerationService.generate_tasks_and_dispatch(
             work_order
         )
+        procurement_summary = (
+            WorkOrderFlowService._get_procurement_need_summary(work_order)
+        )
         logger.info(
-            f"施工单 {work_order.order_number} 生成了 {task_result['created_count']} 个任务，"
+            f"施工单 {work_order.order_number} 生成了 "
+            f"{task_result['created_count']} 个任务，"
             f"分派了 {task_result['dispatched_count']} 个"
         )
 
@@ -684,7 +709,8 @@ class WorkOrderFlowService:
             work_order_process__work_order=work_order
         ).count()
         completed_tasks = WorkOrderTask.objects.filter(
-            work_order_process__work_order=work_order, status=TaskStatus.COMPLETED
+            work_order_process__work_order=work_order,
+            status=TaskStatus.COMPLETED,
         ).count()
 
         if total_tasks == completed_tasks and total_tasks > 0:
@@ -751,12 +777,15 @@ class WorkOrderFlowService:
         ).filter(purchase_status=MaterialPurchaseStatus.PENDING)
         pending_count = pending_materials.count()
         missing_supplier_count = sum(
-            1 for item in pending_materials if not item.material.default_supplier_id
+            1
+            for item in pending_materials
+            if not item.material.default_supplier_id
         )
         return {
             "pending_material_count": pending_count,
             "missing_supplier_count": missing_supplier_count,
-            "can_create_purchase_orders": pending_count > 0 and missing_supplier_count == 0,
+            "can_create_purchase_orders": pending_count > 0
+            and missing_supplier_count == 0,
         }
 
     @staticmethod
@@ -767,7 +796,9 @@ class WorkOrderFlowService:
     ) -> None:
         """复制客户订单产品到施工单。"""
         if production_items is None:
-            production_items = WorkOrderFlowService._build_production_items(sales_order)
+            production_items = WorkOrderFlowService._build_production_items(
+                sales_order
+            )
 
         created_count = 0
         for item in production_items:
@@ -797,9 +828,9 @@ class WorkOrderFlowService:
 
         sales_items = {
             item.id: item
-            for item in SalesOrderItem.objects.select_related("product").filter(
-                sales_order=sales_order
-            )
+            for item in SalesOrderItem.objects.select_related(
+                "product"
+            ).filter(sales_order=sales_order)
         }
         allocated_quantities = {
             item["sales_order_item_id"]: item["total_quantity"] or 0
@@ -815,7 +846,8 @@ class WorkOrderFlowService:
         for index, item in enumerate(selected_items, start=1):
             if not isinstance(item, dict):
                 raise ServiceError(
-                    f"第 {index} 个施工单产品配置无效", code=status.HTTP_400_BAD_REQUEST
+                    f"第 {index} 个施工单产品配置无效",
+                    code=status.HTTP_400_BAD_REQUEST,
                 )
 
             sales_order_item_id = item.get("sales_order_item_id")
@@ -846,7 +878,8 @@ class WorkOrderFlowService:
                 )
             if produce_quantity > remaining_quantity:
                 raise ServiceError(
-                    f"{sales_item.product.name} 的生产数量不能超过剩余可开数量 {remaining_quantity}",
+                    f"{sales_item.product.name} 的生产数量不能超过"
+                    f"剩余可开数量 {remaining_quantity}",
                     code=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -886,12 +919,16 @@ class WorkOrderFlowService:
             .annotate(total_quantity=Sum("quantity"))
         }
 
-        product_ids = {item.product_id for item in sales_items if item.product_id}
+        product_ids = {
+            item.product_id for item in sales_items if item.product_id
+        }
 
         stock_totals = (
             ProductStock.objects.filter(product_id__in=product_ids)
             .values("product_id")
-            .annotate(available_quantity=Sum(F("quantity") - F("reserved_quantity")))
+            .annotate(
+                available_quantity=Sum(F("quantity") - F("reserved_quantity"))
+            )
         )
         available_map = {}
         for item in stock_totals:
@@ -903,7 +940,8 @@ class WorkOrderFlowService:
         production_items = []
         for item in sales_items:
             unallocated_quantity = max(
-                int(item.quantity) - int(allocated_quantities.get(item.id, 0) or 0),
+                int(item.quantity)
+                - int(allocated_quantities.get(item.id, 0) or 0),
                 0,
             )
             if unallocated_quantity <= 0:
@@ -936,7 +974,10 @@ class WorkOrderFlowService:
             default_processes = product_item.product.default_processes.all()
             for process in default_processes:
                 if process.id not in process_config_map:
-                    process_config_map[process.id] = (process, product_item.product)
+                    process_config_map[process.id] = (
+                        process,
+                        product_item.product,
+                    )
 
         # 批量创建工序（含快照数据）
         work_order_processes = []
@@ -955,7 +996,9 @@ class WorkOrderFlowService:
                 "department_id": None,
                 "department_name": None,
                 "is_parallel": getattr(process, "is_parallel", False),
-                "requires_artwork": getattr(process, "requires_artwork", False),
+                "requires_artwork": getattr(
+                    process, "requires_artwork", False
+                ),
                 "source_product_id": product.id,
                 "source_product_name": product.name,
                 "source_product_code": product.code,
@@ -974,7 +1017,8 @@ class WorkOrderFlowService:
 
         WorkOrderProcess.objects.bulk_create(work_order_processes)
         logger.info(
-            f"为施工单 {work_order.order_number} 自动生成了 {len(work_order_processes)} 个工序（含版本快照）"
+            f"为施工单 {work_order.order_number} 自动生成了 "
+            f"{len(work_order_processes)} 个工序（含版本快照）"
         )
 
     @staticmethod
@@ -1000,7 +1044,9 @@ class WorkOrderFlowService:
         logger.info(f"为施工单 {work_order.order_number} 自动生成了物料清单")
 
     @staticmethod
-    def _link_assets(work_order: WorkOrder, additional_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _link_assets(
+        work_order: WorkOrder, additional_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         关联资产（图稿、刀模等）。
 
@@ -1011,19 +1057,30 @@ class WorkOrderFlowService:
         Returns:
             Dict[str, Any]: 资产关联结果，包含 auto_linked（自动关联的资产）和 missing（缺失提醒）
         """
-        from workorder.models.assets import ArtworkProduct, DieProduct, FoilingPlateProduct, EmbossingPlateProduct
+        from workorder.models.assets import (
+            ArtworkProduct,
+            DieProduct,
+            FoilingPlateProduct,
+            EmbossingPlateProduct,
+        )
 
         result = {"auto_linked": {}, "missing": []}
-        product_ids = list(work_order.products.values_list("product_id", flat=True))
+        product_ids = list(
+            work_order.products.values_list("product_id", flat=True)
+        )
 
         # 图稿
         if "artwork_ids" in additional_data:
             work_order.artworks.set(additional_data["artwork_ids"])
         else:
-            auto_artworks = ArtworkProduct.objects.filter(
-                product_id__in=product_ids,
-                artwork__confirmed=True,
-            ).values_list("artwork_id", flat=True).distinct()
+            auto_artworks = (
+                ArtworkProduct.objects.filter(
+                    product_id__in=product_ids,
+                    artwork__confirmed=True,
+                )
+                .values_list("artwork_id", flat=True)
+                .distinct()
+            )
             if auto_artworks:
                 work_order.artworks.set(auto_artworks)
                 result["auto_linked"]["artworks"] = list(auto_artworks)
@@ -1032,10 +1089,14 @@ class WorkOrderFlowService:
         if "die_ids" in additional_data:
             work_order.dies.set(additional_data["die_ids"])
         else:
-            auto_dies = DieProduct.objects.filter(
-                product_id__in=product_ids,
-                die__confirmed=True,
-            ).values_list("die_id", flat=True).distinct()
+            auto_dies = (
+                DieProduct.objects.filter(
+                    product_id__in=product_ids,
+                    die__confirmed=True,
+                )
+                .values_list("die_id", flat=True)
+                .distinct()
+            )
             if auto_dies:
                 work_order.dies.set(auto_dies)
                 result["auto_linked"]["dies"] = list(auto_dies)
@@ -1044,22 +1105,32 @@ class WorkOrderFlowService:
         if "foiling_plate_ids" in additional_data:
             work_order.foiling_plates.set(additional_data["foiling_plate_ids"])
         else:
-            auto_fp = FoilingPlateProduct.objects.filter(
-                product_id__in=product_ids,
-                foiling_plate__confirmed=True,
-            ).values_list("foiling_plate_id", flat=True).distinct()
+            auto_fp = (
+                FoilingPlateProduct.objects.filter(
+                    product_id__in=product_ids,
+                    foiling_plate__confirmed=True,
+                )
+                .values_list("foiling_plate_id", flat=True)
+                .distinct()
+            )
             if auto_fp:
                 work_order.foiling_plates.set(auto_fp)
                 result["auto_linked"]["foiling_plates"] = list(auto_fp)
 
         # 压凸版
         if "embossing_plate_ids" in additional_data:
-            work_order.embossing_plates.set(additional_data["embossing_plate_ids"])
+            work_order.embossing_plates.set(
+                additional_data["embossing_plate_ids"]
+            )
         else:
-            auto_ep = EmbossingPlateProduct.objects.filter(
-                product_id__in=product_ids,
-                embossing_plate__confirmed=True,
-            ).values_list("embossing_plate_id", flat=True).distinct()
+            auto_ep = (
+                EmbossingPlateProduct.objects.filter(
+                    product_id__in=product_ids,
+                    embossing_plate__confirmed=True,
+                )
+                .values_list("embossing_plate_id", flat=True)
+                .distinct()
+            )
             if auto_ep:
                 work_order.embossing_plates.set(auto_ep)
                 result["auto_linked"]["embossing_plates"] = list(auto_ep)

@@ -44,7 +44,9 @@ class InvoiceService:
         from workorder.models import Invoice
 
         service = ApprovalService(Invoice)
-        invoice = service.submit_for_approval(invoice, user, auto_approve=auto_approve)
+        invoice = service.submit_for_approval(
+            invoice, user, auto_approve=auto_approve
+        )
         if invoice.status == "draft":
             invoice.status = "issued"
         invoice.save(update_fields=["status"])
@@ -103,7 +105,9 @@ class InvoiceService:
                 filter=Q(status__in=actionable_statuses)
                 & (Q(attachment="") | Q(attachment__isnull=True)),
             ),
-            pending_receipt_count=Count("id", filter=Q(status__in=["issued", "sent"])),
+            pending_receipt_count=Count(
+                "id", filter=Q(status__in=["issued", "sent"])
+            ),
         )
 
         summary["total_amount"] = summary["total_amount"] or Decimal("0")
@@ -111,16 +115,24 @@ class InvoiceService:
         summary["pending_payment_count"] = pending_payment_queryset.count()
 
         pending_payment_amount = Decimal("0")
-        for _, total_amount, received_amount in pending_payment_queryset.values_list(
+        for (
+            _,
+            total_amount,
+            received_amount,
+        ) in pending_payment_queryset.values_list(
             "id", "total_amount", "received_payment_amount"
         ):
-            gap = (total_amount or Decimal("0")) - (received_amount or Decimal("0"))
+            gap = (total_amount or Decimal("0")) - (
+                received_amount or Decimal("0")
+            )
             if gap > 0:
                 pending_payment_amount += gap
         summary["pending_payment_amount"] = pending_payment_amount
 
         status_stats = (
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
+            queryset.values("status")
+            .annotate(count=Count("id"))
+            .order_by("status")
         )
 
         return {"summary": summary, "by_status": list(status_stats)}
@@ -213,7 +225,9 @@ class PaymentPlanService:
         summary["remaining_amount"] = remaining_amount
         summary["overdue_amount"] = overdue_amount
         by_status = (
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
+            queryset.values("status")
+            .annotate(count=Count("id"))
+            .order_by("status")
         )
         return {"summary": summary, "by_status": list(by_status)}
 
@@ -247,7 +261,9 @@ class StatementService:
         """对账单汇总。"""
         summary = queryset.aggregate(
             total_count=Count("id"),
-            pending_confirm_count=Count("id", filter=Q(status__in=["draft", "sent"])),
+            pending_confirm_count=Count(
+                "id", filter=Q(status__in=["draft", "sent"])
+            ),
             disputed_count=Count("id", filter=Q(status="disputed")),
             confirmed_count=Count("id", filter=Q(status="confirmed")),
             total_debit=Sum("total_debit"),
@@ -258,7 +274,9 @@ class StatementService:
         summary["total_credit"] = summary["total_credit"] or Decimal("0")
         summary["closing_balance"] = summary["closing_balance"] or Decimal("0")
         by_status = (
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
+            queryset.values("status")
+            .annotate(count=Count("id"))
+            .order_by("status")
         )
         return {"summary": summary, "by_status": list(by_status)}
 
@@ -318,14 +336,18 @@ class StatementService:
                 .exclude(status__in=["draft", "rejected", "cancelled"])
                 .only("total_amount")
             )
-            total_debit = orders.aggregate(total=Sum("total_amount"))["total"] or 0
+            total_debit = (
+                orders.aggregate(total=Sum("total_amount"))["total"] or 0
+            )
 
             payments = Payment.objects.filter(
                 customer_id=customer_id,
                 payment_date__gte=start_date,
                 payment_date__lte=end_date,
             ).only("amount")
-            total_credit = payments.aggregate(total=Sum("amount"))["total"] or 0
+            total_credit = (
+                payments.aggregate(total=Sum("amount"))["total"] or 0
+            )
 
         elif supplier_id:
             statement_type = "supplier"
@@ -354,7 +376,8 @@ class StatementService:
                 .only("total_amount")
             )
             total_debit = (
-                purchase_orders.aggregate(total=Sum("total_amount"))["total"] or 0
+                purchase_orders.aggregate(total=Sum("total_amount"))["total"]
+                or 0
             )
 
             # NOTE: 当前系统未建模“供应商付款”记录，本期贷方暂不计算。

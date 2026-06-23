@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.db.models import (
-    Avg,
     Count,
     DurationField,
     ExpressionWrapper,
@@ -51,7 +50,9 @@ class CollaborationStatsService:
         cached_data = cache.get(cache_key)
 
         if cached_data is not None:
-            logger.info(f"Cache HIT for collaboration stats (key: {cache_key})")
+            logger.info(
+                f"Cache HIT for collaboration stats (key: {cache_key})"
+            )
             return cached_data
 
         logger.info(f"Cache MISS for collaboration stats (key: {cache_key})")
@@ -66,9 +67,9 @@ class CollaborationStatsService:
                 pass
         if end_date:
             try:
-                end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(
-                    days=1
-                )
+                end_date_obj = datetime.strptime(
+                    end_date, "%Y-%m-%d"
+                ) + timedelta(days=1)
                 time_filter &= Q(logs__created_at__lt=end_date_obj)
             except ValueError:
                 pass
@@ -144,7 +145,9 @@ class CollaborationStatsService:
             )
 
             # Get completion rate
-            completion_rate = round((completed / total * 100), 2) if total > 0 else 0
+            completion_rate = (
+                round((completed / total * 100), 2) if total > 0 else 0
+            )
 
             operator_ids.append(op_data["operator_id"])
             stats_list.append(
@@ -152,14 +155,16 @@ class CollaborationStatsService:
                     "operator_id": op_data["operator_id"],
                     "operator_username": op_data["operator_username"],
                     "operator_name": op_data["operator_username"],
-                    "departments": [],  # Departments loaded separately if needed
+                    "departments": [],  # Departments loaded separately
                     "total_tasks": total,
                     "completed_tasks": completed,
                     "in_progress_tasks": op_data["in_progress_tasks"] or 0,
                     "pending_tasks": op_data["pending_tasks"] or 0,
                     "total_completed_quantity": completed_qty,
                     "total_defective_quantity": defective_qty,
-                    "total_production_quantity": op_data["total_production_quantity"]
+                    "total_production_quantity": op_data[
+                        "total_production_quantity"
+                    ]
                     or 0,
                     "defective_rate": defective_rate,
                     "completion_rate": completion_rate,
@@ -209,7 +214,9 @@ class CollaborationStatsService:
             dept_map = {}
             for op in operators_with_depts:
                 if hasattr(op, "profile"):
-                    dept_names = [dept.name for dept in op.profile.departments.all()]
+                    dept_names = [
+                        dept.name for dept in op.profile.departments.all()
+                    ]
                     dept_map[op.id] = dept_names
                 else:
                     dept_map[op.id] = []
@@ -226,15 +233,22 @@ class CollaborationStatsService:
                 total_operators=Count("id", distinct=True),
                 total_tasks=Count("assigned_tasks"),
                 total_completed_tasks=Count(
-                    "assigned_tasks", filter=Q(assigned_tasks__status="completed")
+                    "assigned_tasks",
+                    filter=Q(assigned_tasks__status="completed"),
                 ),
-                total_completed_quantity=Sum("assigned_tasks__quantity_completed"),
-                total_defective_quantity=Sum("assigned_tasks__quantity_defective"),
+                total_completed_quantity=Sum(
+                    "assigned_tasks__quantity_completed"
+                ),
+                total_defective_quantity=Sum(
+                    "assigned_tasks__quantity_defective"
+                ),
             )
         )
 
         # 按完成数量排序（降序）
-        stats_list.sort(key=lambda x: x["total_completed_quantity"], reverse=True)
+        stats_list.sort(
+            key=lambda x: x["total_completed_quantity"], reverse=True
+        )
 
         # Calculate overall defective rate
         total_completed_qty = summary_data["total_completed_quantity"] or 0
@@ -250,7 +264,8 @@ class CollaborationStatsService:
             "summary": {
                 "total_operators": summary_data["total_operators"],
                 "total_tasks": summary_data["total_tasks"] or 0,
-                "total_completed_tasks": summary_data["total_completed_tasks"] or 0,
+                "total_completed_tasks": summary_data["total_completed_tasks"]
+                or 0,
                 "total_completed_quantity": total_completed_qty,
                 "total_defective_quantity": total_defective_qty,
                 "overall_defective_rate": overall_defective_rate,

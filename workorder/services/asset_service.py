@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
@@ -104,14 +104,19 @@ class AssetImageService:
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        suffix = Path(getattr(image_file, "name", "")).suffix.lower().lstrip(".")
+        suffix = (
+            Path(getattr(image_file, "name", "")).suffix.lower().lstrip(".")
+        )
         if suffix not in AssetImageService.allowed_image_extensions:
             raise ServiceError(
                 "仅支持 JPG、PNG、WebP、GIF 图片",
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        if getattr(image_file, "size", 0) > AssetImageService.max_image_size_bytes:
+        if (
+            getattr(image_file, "size", 0)
+            > AssetImageService.max_image_size_bytes
+        ):
             raise ServiceError(
                 "图片不能超过 10MB",
                 code=status.HTTP_400_BAD_REQUEST,
@@ -127,7 +132,9 @@ class AssetImageService:
         )
 
     @staticmethod
-    def delete_image(image_model, parent_field: str, asset_pk, image_id) -> None:
+    def delete_image(
+        image_model, parent_field: str, asset_pk, image_id
+    ) -> None:
         """删除资产下的指定图片。
 
         Raises:
@@ -176,8 +183,12 @@ class ArtworkVersionService:
             )
 
             new_artwork.dies.set(original_artwork.dies.all())
-            new_artwork.foiling_plates.set(original_artwork.foiling_plates.all())
-            new_artwork.embossing_plates.set(original_artwork.embossing_plates.all())
+            new_artwork.foiling_plates.set(
+                original_artwork.foiling_plates.all()
+            )
+            new_artwork.embossing_plates.set(
+                original_artwork.embossing_plates.all()
+            )
 
             for ap in original_artwork.products.all():
                 ArtworkProduct.objects.create(

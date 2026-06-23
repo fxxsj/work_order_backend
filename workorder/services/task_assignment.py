@@ -4,6 +4,7 @@
 提供任务分配的核心业务逻辑：
 - TaskAssignmentService: 主管分配任务给操作员
 """
+
 from typing import Optional, Dict, Any
 from django.db import transaction
 from django.utils import timezone
@@ -30,7 +31,9 @@ class TaskAssignmentService:
     DEFAULT_MAX_TASKS_PER_OPERATOR = 10
 
     @staticmethod
-    def validate_operator_task_capacity(operator, max_tasks: int = None) -> bool:
+    def validate_operator_task_capacity(
+        operator, max_tasks: int = None
+    ) -> bool:
         """验证操作员任务容量
 
         检查操作员当前活跃任务数是否已达上限。
@@ -50,8 +53,7 @@ class TaskAssignmentService:
 
         # 统计操作员当前活跃任务数（状态为 in_progress 的任务）
         active_task_count = WorkOrderTask.objects.filter(
-            assigned_operator=operator,
-            status='in_progress'
+            assigned_operator=operator, status="in_progress"
         ).count()
 
         if active_task_count >= max_tasks:
@@ -93,9 +95,11 @@ class TaskAssignmentService:
 
         # 检查是否是任务所属部门的主管
         if task.assigned_department:
-            if PermissionCache.is_department_in_user_scope(user, task.assigned_department.id):
+            if PermissionCache.is_department_in_user_scope(
+                user, task.assigned_department.id
+            ):
                 # 检查是否有 change_workorder 权限（主管权限）
-                if user.has_perm('workorder.change_workorder'):
+                if user.has_perm("workorder.change_workorder"):
                     return True
 
         raise ServiceError(
@@ -104,7 +108,9 @@ class TaskAssignmentService:
         )
 
     @staticmethod
-    def validate_operator_in_department(operator, department: Department) -> bool:
+    def validate_operator_in_department(
+        operator, department: Department
+    ) -> bool:
         """验证操作员是否属于指定部门
 
         Args:
@@ -118,7 +124,10 @@ class TaskAssignmentService:
             ServiceError: 不属于部门时抛出（code=status.HTTP_422_UNPROCESSABLE_ENTITY）
         """
         if not operator or not operator.is_active:
-            raise ServiceError("指定的操作员不存在或未激活", code=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            raise ServiceError(
+                "指定的操作员不存在或未激活",
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
 
         if not PermissionCache.is_user_in_department(operator, department.id):
             raise ServiceError(
@@ -146,13 +155,13 @@ class TaskAssignmentService:
         Raises:
             ServiceError: 不可分配时抛出（code=status.HTTP_422_UNPROCESSABLE_ENTITY）
         """
-        if task.status == 'completed':
+        if task.status == "completed":
             raise ServiceError(
                 "已完成的任务不能重新分配",
                 code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
-        if task.status == 'cancelled':
+        if task.status == "cancelled":
             raise ServiceError(
                 "已取消的任务不能分配",
                 code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -169,8 +178,12 @@ class TaskAssignmentService:
 
     @staticmethod
     @transaction.atomic
-    def assign_to_operator(task_id: int, operator_id: int, assigned_by,
-                          notes: Optional[str] = None) -> Dict[str, Any]:
+    def assign_to_operator(
+        task_id: int,
+        operator_id: int,
+        assigned_by,
+        notes: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """将任务分配给指定操作员
 
         执行步骤：
@@ -192,7 +205,8 @@ class TaskAssignmentService:
             Dict: 包含更新后任务信息的字典
 
         Raises:
-            ServiceError: 权限不足（code=status.HTTP_403_FORBIDDEN）、业务规则不满足（code=status.HTTP_422_UNPROCESSABLE_ENTITY）
+            ServiceError: 权限不足（code=status.HTTP_403_FORBIDDEN）、
+                业务规则不满足（code=status.HTTP_422_UNPROCESSABLE_ENTITY）
             WorkOrderTask.DoesNotExist: 任务不存在
         """
         from django.contrib.auth.models import User
@@ -201,13 +215,19 @@ class TaskAssignmentService:
         try:
             task = WorkOrderTask.objects.select_for_update().get(id=task_id)
         except WorkOrderTask.DoesNotExist:
-            raise ServiceError(f"任务ID {task_id} 不存在", code=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            raise ServiceError(
+                f"任务ID {task_id} 不存在",
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
 
         # 加载操作员
         try:
             operator = User.objects.get(id=operator_id)
         except User.DoesNotExist:
-            raise ServiceError(f"操作员ID {operator_id} 不存在", code=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            raise ServiceError(
+                f"操作员ID {operator_id} 不存在",
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
 
         # 验证分配权限
         TaskAssignmentService.validate_supervisor_permission(assigned_by, task)
@@ -216,14 +236,24 @@ class TaskAssignmentService:
         TaskAssignmentService.validate_operator_task_capacity(operator)
 
         # 验证操作员属于任务部门
-        old_department_name = task.assigned_department.name if task.assigned_department else "未分配"
-        if not PermissionCache.is_user_in_department(operator, task.assigned_department.id):
+        old_department_name = (
+            task.assigned_department.name
+            if task.assigned_department
+            else "未分配"
+        )
+        if not PermissionCache.is_user_in_department(
+            operator, task.assigned_department.id
+        ):
             # 操作员不属于当前部门，检查是否可以自动调整
-            operator_departments = PermissionCache.get_user_departments(operator)
+            operator_departments = PermissionCache.get_user_departments(
+                operator
+            )
             process = task.work_order_process.process
             if len(operator_departments) == 1:
                 # 操作员只属于一个部门，检查该部门是否是该工序的合法分派部门
-                new_department = Department.objects.get(id=operator_departments[0])
+                new_department = Department.objects.get(
+                    id=operator_departments[0]
+                )
                 # 检查该部门是否负责该工序（通过 department.processes M2M 关系）
                 if not new_department.processes.filter(id=process.id).exists():
                     # 如果该部门未配置为该工序的分派部门，报错
@@ -234,39 +264,48 @@ class TaskAssignmentService:
                     )
                 logger.info(
                     f"任务 {task_id} 部门已自动从 {old_department_name} "
-                    f"调整为 {new_department.name}（操作员 {operator.username} 所在部门）"
+                    f"调整为 {new_department.name}"
+                    f"（操作员 {operator.username} 所在部门）"
                 )
                 task.assigned_department = new_department
             elif len(operator_departments) > 1:
                 # 操作员属于多个部门，检查是否有任何一个部门负责该工序
                 valid_departments = Department.objects.filter(
-                    id__in=operator_departments,
-                    processes__id=process.id
+                    id__in=operator_departments, processes__id=process.id
                 ).distinct()
                 if valid_departments.count() == 1:
                     # 只有一个部门负责该工序，自动切换
                     new_department = valid_departments.first()
                     logger.info(
                         f"任务 {task_id} 部门已自动从 {old_department_name} "
-                        f"调整为 {new_department.name}（操作员 {operator.username} 所在部门）"
+                        f"调整为 {new_department.name}"
+                        f"（操作员 {operator.username} 所在部门）"
                     )
                     task.assigned_department = new_department
                 elif valid_departments.count() > 1:
                     # 有多个部门负责该工序，需要手动选择
-                    department_names = "、".join([d.name for d in valid_departments])
+                    department_names = "、".join(
+                        [d.name for d in valid_departments]
+                    )
                     raise ServiceError(
-                        f"操作员 {operator.username} 所属的 {department_names} 等部门都负责工序 "
-                        f"{task.work_order_process.process.name}，请先手动选择部门后再分配",
+                        f"操作员 {operator.username} 所属的 {department_names} "
+                        f"等部门都负责工序 "
+                        f"{task.work_order_process.process.name}，"
+                        f"请先手动选择部门后再分配",
                         code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     )
                 else:
                     # 没有一个部门负责该工序
                     operator_department_names = "、".join(
-                        Department.objects.filter(id__in=operator_departments).values_list('name', flat=True)
+                        Department.objects.filter(
+                            id__in=operator_departments
+                        ).values_list("name", flat=True)
                     )
                     raise ServiceError(
-                        f"操作员 {operator.username} 所属的部门（{operator_department_names}）"
-                        f"都不负责工序 {task.work_order_process.process.name}，无法分配",
+                        f"操作员 {operator.username} 所属的部门"
+                        f"（{operator_department_names}）"
+                        f"都不负责工序 "
+                        f"{task.work_order_process.process.name}，无法分配",
                         code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     )
             else:
@@ -281,7 +320,13 @@ class TaskAssignmentService:
 
         # 执行分配
         task.assigned_operator = operator
-        task.save(update_fields=['assigned_department', 'assigned_operator', 'updated_at'])
+        task.save(
+            update_fields=[
+                "assigned_department",
+                "assigned_operator",
+                "updated_at",
+            ]
+        )
 
         # 记录任务日志
         TaskLog.objects.create(
@@ -294,21 +339,27 @@ class TaskAssignmentService:
         )
 
         # 创建任务分配通知
-        work_order = task.work_order_process.work_order if task.work_order_process else None
+        work_order = (
+            task.work_order_process.work_order
+            if task.work_order_process
+            else None
+        )
         Notification.create_notification(
             recipient=operator,
-            notification_type='task_assigned',
-            title='新任务分配',
-            content=f'您有新的任务：{task.work_content}',
-            priority='normal',
+            notification_type="task_assigned",
+            title="新任务分配",
+            content=f"您有新的任务：{task.work_content}",
+            priority="normal",
             work_order=work_order,
             work_order_process=task.work_order_process,
             task=task,
-            template_key='task_assigned',
+            template_key="task_assigned",
             template_variables={
-                'task_name': task.work_content,
-                'workorder_number': work_order.order_number if work_order else 'N/A',
-                'assigned_by': assigned_by.username,
+                "task_name": task.work_content,
+                "workorder_number": (
+                    work_order.order_number if work_order else "N/A"
+                ),
+                "assigned_by": assigned_by.username,
             },
         )
 
@@ -318,24 +369,29 @@ class TaskAssignmentService:
         )
 
         return {
-            'task_id': task.id,
-            'assigned_department': {
-                'id': task.assigned_department.id,
-                'name': task.assigned_department.name,
+            "task_id": task.id,
+            "assigned_department": {
+                "id": task.assigned_department.id,
+                "name": task.assigned_department.name,
             },
-            'department_adjusted': old_department_name != task.assigned_department.name,
-            'previous_department': old_department_name if old_department_name != task.assigned_department.name else None,
-            'assigned_operator': {
-                'id': operator.id,
-                'username': operator.username,
-                'first_name': operator.first_name,
-                'last_name': operator.last_name
+            "department_adjusted": old_department_name
+            != task.assigned_department.name,
+            "previous_department": (
+                old_department_name
+                if old_department_name != task.assigned_department.name
+                else None
+            ),
+            "assigned_operator": {
+                "id": operator.id,
+                "username": operator.username,
+                "first_name": operator.first_name,
+                "last_name": operator.last_name,
             },
-            'assigned_by': {
-                'id': assigned_by.id,
-                'username': assigned_by.username
+            "assigned_by": {
+                "id": assigned_by.id,
+                "username": assigned_by.username,
             },
-            'assigned_at': timezone.now().isoformat()
+            "assigned_at": timezone.now().isoformat(),
         }
 
     @staticmethod
@@ -351,12 +407,13 @@ class TaskAssignmentService:
         from django.contrib.auth.models import User
 
         department = Department.objects.get(id=department_id)
-        users = User.objects.filter(
-            profile__departments=department,
-            is_active=True
-        ).exclude(
-            is_superuser=True
-        ).values('id', 'username', 'first_name', 'last_name')
+        users = (
+            User.objects.filter(
+                profile__departments=department, is_active=True
+            )
+            .exclude(is_superuser=True)
+            .values("id", "username", "first_name", "last_name")
+        )
 
         return list(users)
 
@@ -370,19 +427,22 @@ class TaskAssignmentService:
         Returns:
             list: 部门列表，每个包含 id, name, code, process_ids
         """
-        departments = Department.objects.filter(
-            processes__id=process_id,
-            is_active=True
-        ).order_by('sort_order', 'name').prefetch_related('processes')
+        departments = (
+            Department.objects.filter(processes__id=process_id, is_active=True)
+            .order_by("sort_order", "name")
+            .prefetch_related("processes")
+        )
 
         result = []
         for dept in departments:
-            result.append({
-                'id': dept.id,
-                'name': dept.name,
-                'code': dept.code,
-                'process_ids': [p.id for p in dept.processes.all()],
-            })
+            result.append(
+                {
+                    "id": dept.id,
+                    "name": dept.name,
+                    "code": dept.code,
+                    "process_ids": [p.id for p in dept.processes.all()],
+                }
+            )
         return result
 
     @staticmethod
@@ -400,29 +460,37 @@ class TaskAssignmentService:
         """
         # 超级管理员可以分配所有任务
         if user.is_superuser:
-            return list(WorkOrderTask.objects.filter(
-                assigned_department_id=department_id,
-                status__in=['pending', 'in_progress']
-            ).values_list('id', flat=True))
+            return list(
+                WorkOrderTask.objects.filter(
+                    assigned_department_id=department_id,
+                    status__in=["pending", "in_progress"],
+                ).values_list("id", flat=True)
+            )
 
         # 部门主管可以分配本部门任务
         if PermissionCache.is_department_in_user_scope(user, department_id):
-            if user.has_perm('workorder.change_workorder'):
-                return list(WorkOrderTask.objects.filter(
-                    assigned_department_id=department_id,
-                    status__in=['pending', 'in_progress']
-                ).values_list('id', flat=True))
+            if user.has_perm("workorder.change_workorder"):
+                return list(
+                    WorkOrderTask.objects.filter(
+                        assigned_department_id=department_id,
+                        status__in=["pending", "in_progress"],
+                    ).values_list("id", flat=True)
+                )
 
         # 施工单创建人可以分配自己施工单的任务
-        return list(WorkOrderTask.objects.filter(
-            assigned_department_id=department_id,
-            status__in=['pending', 'in_progress'],
-            work_order_process__work_order__created_by=user
-        ).values_list('id', flat=True))
+        return list(
+            WorkOrderTask.objects.filter(
+                assigned_department_id=department_id,
+                status__in=["pending", "in_progress"],
+                work_order_process__work_order__created_by=user,
+            ).values_list("id", flat=True)
+        )
 
     @staticmethod
     @transaction.atomic
-    def claim_task(task_id: int, operator, notes: Optional[str] = None) -> Dict[str, Any]:
+    def claim_task(
+        task_id: int, operator, notes: Optional[str] = None
+    ) -> Dict[str, Any]:
         """操作员认领任务
 
         允许操作员认领未分配的任务。使用 select_for_update 实现乐观锁，
@@ -444,14 +512,19 @@ class TaskAssignmentService:
             Dict: 包含更新后任务信息的字典
 
         Raises:
-            ServiceError: 业务规则不满足（code=status.HTTP_422_UNPROCESSABLE_ENTITY 或 code=status.HTTP_409_CONFLICT）
+            ServiceError: 业务规则不满足
+                （code=status.HTTP_422_UNPROCESSABLE_ENTITY
+                或 code=status.HTTP_409_CONFLICT）
             WorkOrderTask.DoesNotExist: 任务不存在
         """
         # 使用 select_for_update 行锁，防止并发认领
         try:
             task = WorkOrderTask.objects.select_for_update().get(id=task_id)
         except WorkOrderTask.DoesNotExist:
-            raise ServiceError(f"任务ID {task_id} 不存在", code=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            raise ServiceError(
+                f"任务ID {task_id} 不存在",
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
 
         # 验证操作员属于任务部门
         if not task.assigned_department:
@@ -460,7 +533,9 @@ class TaskAssignmentService:
                 code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
-        if not PermissionCache.is_user_in_department(operator, task.assigned_department.id):
+        if not PermissionCache.is_user_in_department(
+            operator, task.assigned_department.id
+        ):
             raise ServiceError(
                 f"您不属于部门 {task.assigned_department.name}，无法认领该任务",
                 code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -468,9 +543,12 @@ class TaskAssignmentService:
 
         # 验证部门是否负责该工序（与分配逻辑一致）
         process = task.work_order_process.process
-        if not task.assigned_department.processes.filter(id=process.id).exists():
+        if not task.assigned_department.processes.filter(
+            id=process.id
+        ).exists():
             raise ServiceError(
-                f"部门 {task.assigned_department.name} 不负责工序 {process.name}，无法认领该任务",
+                f"部门 {task.assigned_department.name} 不负责工序 "
+                f"{process.name}，无法认领该任务",
                 code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
@@ -478,13 +556,13 @@ class TaskAssignmentService:
         TaskAssignmentService.validate_operator_task_capacity(operator)
 
         # 验证任务可认领性
-        if task.status == 'completed':
+        if task.status == "completed":
             raise ServiceError(
                 "已完成的任务不能认领",
                 code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
-        if task.status == 'cancelled':
+        if task.status == "cancelled":
             raise ServiceError(
                 "已取消的任务不能认领",
                 code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -495,15 +573,15 @@ class TaskAssignmentService:
             # 如果是被自己认领的，允许更新
             if task.assigned_operator.id == operator.id:
                 return {
-                    'task_id': task.id,
-                    'assigned_operator': {
-                        'id': operator.id,
-                        'username': operator.username,
-                        'first_name': operator.first_name,
-                        'last_name': operator.last_name
+                    "task_id": task.id,
+                    "assigned_operator": {
+                        "id": operator.id,
+                        "username": operator.username,
+                        "first_name": operator.first_name,
+                        "last_name": operator.last_name,
                     },
-                    'already_claimed': True,
-                    'message': '您已经认领了该任务'
+                    "already_claimed": True,
+                    "message": "您已经认领了该任务",
                 }
 
             # 被其他人认领 - 使用特定的冲突错误
@@ -511,14 +589,14 @@ class TaskAssignmentService:
                 f"该任务已被 {task.assigned_operator.username} 认领，无法重复认领",
                 code=status.HTTP_409_CONFLICT,
                 data={
-                    'current_owner': task.assigned_operator.username,
-                    'task_id': task.id,
+                    "current_owner": task.assigned_operator.username,
+                    "task_id": task.id,
                 },
             )
 
         # 执行认领
         task.assigned_operator = operator
-        task.save(update_fields=['assigned_operator', 'updated_at'])
+        task.save(update_fields=["assigned_operator", "updated_at"])
 
         # 记录任务日志
         TaskLog.objects.create(
@@ -531,38 +609,42 @@ class TaskAssignmentService:
         )
 
         # 创建任务认领通知
-        work_order = task.work_order_process.work_order if task.work_order_process else None
+        work_order = (
+            task.work_order_process.work_order
+            if task.work_order_process
+            else None
+        )
         Notification.create_notification(
             recipient=operator,
-            notification_type='task_assigned',
-            title='新任务分配',
-            content=f'您有新的任务：{task.work_content}',
-            priority='normal',
+            notification_type="task_assigned",
+            title="新任务分配",
+            content=f"您有新的任务：{task.work_content}",
+            priority="normal",
             work_order=work_order,
             work_order_process=task.work_order_process,
             task=task,
-            template_key='task_assigned',
+            template_key="task_assigned",
             template_variables={
-                'task_name': task.work_content,
-                'workorder_number': work_order.order_number if work_order else 'N/A',
-                'assigned_by': operator.username,
+                "task_name": task.work_content,
+                "workorder_number": (
+                    work_order.order_number if work_order else "N/A"
+                ),
+                "assigned_by": operator.username,
             },
         )
 
-        logger.info(
-            f"任务认领：用户 {operator.username} 认领了任务 {task_id}"
-        )
+        logger.info(f"任务认领：用户 {operator.username} 认领了任务 {task_id}")
 
         return {
-            'task_id': task.id,
-            'assigned_operator': {
-                'id': operator.id,
-                'username': operator.username,
-                'first_name': operator.first_name,
-                'last_name': operator.last_name
+            "task_id": task.id,
+            "assigned_operator": {
+                "id": operator.id,
+                "username": operator.username,
+                "first_name": operator.first_name,
+                "last_name": operator.last_name,
             },
-            'already_claimed': False,
-            'message': '任务认领成功'
+            "already_claimed": False,
+            "message": "任务认领成功",
         }
 
     @staticmethod
@@ -590,8 +672,8 @@ class TaskAssignmentService:
         claimable_tasks = WorkOrderTask.objects.filter(
             assigned_department_id__in=user_departments,
             assigned_operator__isnull=True,
-            status='pending'
-        ).values_list('id', flat=True)
+            status="pending",
+        ).values_list("id", flat=True)
 
         return list(claimable_tasks)
 
@@ -608,25 +690,25 @@ class TaskAssignmentService:
         if isinstance(error, ServiceError):
             if error.code == status.HTTP_409_CONFLICT:
                 return {
-                    'can_retry': True,
-                    'suggestion': '刷新页面后重试',
-                    'current_owner': (error.data or {}).get('current_owner'),
-                    'action_text': '刷新页面'
+                    "can_retry": True,
+                    "suggestion": "刷新页面后重试",
+                    "current_owner": (error.data or {}).get("current_owner"),
+                    "action_text": "刷新页面",
                 }
             if error.code == status.HTTP_403_FORBIDDEN:
                 return {
-                    'can_retry': False,
-                    'suggestion': '您没有权限执行此操作',
-                    'action_text': '联系管理员'
+                    "can_retry": False,
+                    "suggestion": "您没有权限执行此操作",
+                    "action_text": "联系管理员",
                 }
             return {
-                'can_retry': False,
-                'suggestion': str(error),
-                'action_text': '确定'
+                "can_retry": False,
+                "suggestion": str(error),
+                "action_text": "确定",
             }
 
         return {
-            'can_retry': False,
-            'suggestion': '操作失败，请稍后重试',
-            'action_text': '重试'
+            "can_retry": False,
+            "suggestion": "操作失败，请稍后重试",
+            "action_text": "重试",
         }

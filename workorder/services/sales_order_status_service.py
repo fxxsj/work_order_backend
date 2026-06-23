@@ -14,8 +14,16 @@ class SalesOrderStatusService:
     """根据施工单和发货进度同步客户订单状态。"""
 
     TERMINAL_STATUSES = {SalesOrderStatus.CANCELLED}
-    WORKFLOW_STATUSES = {SalesOrderStatus.APPROVED, SalesOrderStatus.IN_PRODUCTION, SalesOrderStatus.COMPLETED}
-    UNFINISHED_WORK_ORDER_STATUSES = {WorkOrderStatus.PENDING, WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.PAUSED}
+    WORKFLOW_STATUSES = {
+        SalesOrderStatus.APPROVED,
+        SalesOrderStatus.IN_PRODUCTION,
+        SalesOrderStatus.COMPLETED,
+    }
+    UNFINISHED_WORK_ORDER_STATUSES = {
+        WorkOrderStatus.PENDING,
+        WorkOrderStatus.IN_PROGRESS,
+        WorkOrderStatus.PAUSED,
+    }
 
     @staticmethod
     def get_work_orders_queryset(sales_order: SalesOrder):
@@ -38,22 +46,32 @@ class SalesOrderStatusService:
     @staticmethod
     def has_unfinished_work_orders(sales_order: SalesOrder) -> bool:
         """是否存在未完成的关联施工单。"""
-        return SalesOrderStatusService.get_work_orders_queryset(sales_order).filter(
-            status__in=SalesOrderStatusService.UNFINISHED_WORK_ORDER_STATUSES
-        ).exists()
+        return (
+            SalesOrderStatusService.get_work_orders_queryset(sales_order)
+            .filter(
+                status__in=(
+                    SalesOrderStatusService.UNFINISHED_WORK_ORDER_STATUSES
+                )
+            )
+            .exists()
+        )
 
     @staticmethod
     def sync_status_for_work_order(work_order) -> list[str]:
         """同步某个施工单关联的所有客户订单状态。"""
         statuses = []
-        for sales_order in SalesOrderStatusService.get_sales_orders_for_work_order(
+        for (
+            sales_order
+        ) in SalesOrderStatusService.get_sales_orders_for_work_order(
             work_order
         ):
             statuses.append(SalesOrderStatusService.sync_status(sales_order))
         return statuses
 
     @staticmethod
-    def sync_status_for_sales_orders(sales_orders: Iterable[SalesOrder]) -> list[str]:
+    def sync_status_for_sales_orders(
+        sales_orders: Iterable[SalesOrder],
+    ) -> list[str]:
         """批量同步客户订单状态。"""
         statuses = []
         for sales_order in sales_orders:
@@ -74,9 +92,11 @@ class SalesOrderStatusService:
         if current_status not in SalesOrderStatusService.WORKFLOW_STATUSES:
             return current_status
 
-        all_delivered = SalesOrderStatusService.all_items_delivered(sales_order)
-        unfinished_work_orders = SalesOrderStatusService.has_unfinished_work_orders(
+        all_delivered = SalesOrderStatusService.all_items_delivered(
             sales_order
+        )
+        unfinished_work_orders = (
+            SalesOrderStatusService.has_unfinished_work_orders(sales_order)
         )
 
         update_fields = []
@@ -87,7 +107,10 @@ class SalesOrderStatusService:
             if sales_order.actual_delivery_date is None:
                 sales_order.actual_delivery_date = timezone.now().date()
                 update_fields.append("actual_delivery_date")
-            if not preserve_manual_completion and sales_order.completion_reason:
+            if (
+                not preserve_manual_completion
+                and sales_order.completion_reason
+            ):
                 sales_order.completion_reason = ""
                 update_fields.append("completion_reason")
         elif (

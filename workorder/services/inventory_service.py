@@ -32,11 +32,11 @@ from workorder.models import (
     StockOut,
 )
 from workorder.serializers.inventory import (
-    DeliveryOrderSerializer,
-    ProductStockSerializer,
     upsert_delivery_exception_resolution,
 )
-from workorder.services.sales_order_status_service import SalesOrderStatusService
+from workorder.services.sales_order_status_service import (
+    SalesOrderStatusService,
+)
 
 from .service_errors import ServiceError
 
@@ -67,14 +67,11 @@ class ProductStockService:
     def get_expiring_soon(queryset, days: int = 30):
         """返回即将过期（默认30天内）且仍在库的库存记录。"""
         threshold_date = timezone.now().date() + timedelta(days=days)
-        return (
-            queryset.filter(
-                expiry_date__lte=threshold_date,
-                expiry_date__gt=timezone.now().date(),
-                status="in_stock",
-            )
-            .select_related("product")
-        )
+        return queryset.filter(
+            expiry_date__lte=threshold_date,
+            expiry_date__gt=timezone.now().date(),
+            status="in_stock",
+        ).select_related("product")
 
     @staticmethod
     def get_summary(queryset) -> dict:
@@ -101,7 +98,9 @@ class ProductStockService:
             "low_stock_count": low_stock_count,
             "expired_count": expired_count,
             "reserved_count": queryset.filter(status="reserved").count(),
-            "quality_check_count": queryset.filter(status="quality_check").count(),
+            "quality_check_count": queryset.filter(
+                status="quality_check"
+            ).count(),
         }
 
     @staticmethod
@@ -109,7 +108,8 @@ class ProductStockService:
         """调整库存数量。
 
         Returns:
-            {"old_quantity": float, "new_quantity": float, "stock": ProductStock}
+            {"old_quantity": float, "new_quantity": float,
+             "stock": ProductStock}
         """
         old_quantity = stock.quantity
 
@@ -170,9 +170,13 @@ class StockInService:
             )
 
         work_order = stock_in.work_order
-        related_purchase_orders = work_order.purchase_orders.exclude(status="cancelled")
+        related_purchase_orders = work_order.purchase_orders.exclude(
+            status="cancelled"
+        )
         if related_purchase_orders.exists():
-            has_approved_po = related_purchase_orders.filter(status="approved").exists()
+            has_approved_po = related_purchase_orders.filter(
+                status="approved"
+            ).exists()
             if not has_approved_po:
                 raise ServiceError(
                     "关联的采购单尚未审核通过，无法确认入库",
@@ -213,7 +217,9 @@ class StockInService:
             completed_count=Count("id", filter=Q(status="completed")),
         )
         status_stats = (
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
+            queryset.values("status")
+            .annotate(count=Count("id"))
+            .order_by("status")
         )
         return {"summary": summary, "by_status": list(status_stats)}
 
@@ -318,7 +324,9 @@ class StockOutService:
 
                 if item.sales_order_item:
                     item.sales_order_item.delivered_quantity += item.quantity
-                    item.sales_order_item.save(update_fields=["delivered_quantity"])
+                    item.sales_order_item.save(
+                        update_fields=["delivered_quantity"]
+                    )
 
             stock_out.status = "completed"
             stock_out.confirmed_by = user
@@ -346,7 +354,9 @@ class StockOutService:
             completed_count=Count("id", filter=Q(status="completed")),
         )
         status_stats = (
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
+            queryset.values("status")
+            .annotate(count=Count("id"))
+            .order_by("status")
         )
         return {"summary": summary, "by_status": list(status_stats)}
 
@@ -410,9 +420,7 @@ class DeliveryOrderService:
                         or 0
                     )
 
-                    message = (
-                        f"产品 {item.product.name} 可发货库存不足，缺少 {remaining}"
-                    )
+                    message = f"产品 {item.product.name} 可发货库存不足，缺少 {remaining}"
                     if pending_stock > 0:
                         message += f"（另有 {pending_stock} 待检中）"
                     if unqualified_stock > 0:
@@ -443,7 +451,9 @@ class DeliveryOrderService:
                 delivery_order.tracking_number = tracking_number
             delivery_order.save()
 
-            DeliveryOrderService._sync_sales_order_status(delivery_order.sales_order)
+            DeliveryOrderService._sync_sales_order_status(
+                delivery_order.sales_order
+            )
 
         return {"delivery_order": delivery_order, "stock_out": stock_out}
 
@@ -470,7 +480,9 @@ class DeliveryOrderService:
         return delivery_order
 
     @staticmethod
-    def reject(delivery_order: DeliveryOrder, reject_reason: str) -> DeliveryOrder:
+    def reject(
+        delivery_order: DeliveryOrder, reject_reason: str
+    ) -> DeliveryOrder:
         """拒收送货单并回退库存。"""
         if delivery_order.status not in ["shipped", "in_transit"]:
             raise ServiceError(
@@ -501,7 +513,9 @@ class DeliveryOrderService:
                     ProductStock.objects.create(
                         product=item.product,
                         quantity=item.quantity,
-                        batch_no=f"REJECT-{delivery_order.order_number}-{item.id}",
+                        batch_no=(
+                            f"REJECT-{delivery_order.order_number}-{item.id}"
+                        ),
                         status="in_stock",
                         notes=f"拒收回退: {delivery_order.order_number}",
                     )
@@ -575,7 +589,10 @@ class DeliveryOrderService:
                     receiver_name=delivery_order.receiver_name,
                     receiver_phone=delivery_order.receiver_phone,
                     delivery_address=delivery_order.delivery_address,
-                    notes=f"拒收补发（原送货单：{delivery_order.order_number}）\n{resolution_notes}",
+                    notes=(
+                        f"拒收补发（原送货单：{delivery_order.order_number}）"
+                        f"\n{resolution_notes}"
+                    ),
                 )
                 for item in delivery_order.items.all():
                     DeliveryItem.objects.create(
@@ -593,24 +610,31 @@ class DeliveryOrderService:
                 from workorder.services.work_order_flow_service import (
                     WorkOrderFlowService,
                 )
-                from workorder.models.core import WorkOrder
 
                 sales_order = delivery_order.sales_order
                 if sales_order:
                     try:
-                        rework_work_order = WorkOrderFlowService.create_from_sales_order(
-                            sales_order_id=sales_order.id,
-                            production_quantity=None,
-                            delivery_date=sales_order.delivery_date,
-                            priority="urgent",
-                            notes=f"返工施工单（原送货单拒收：{delivery_order.order_number}）\n{resolution_notes}",
-                            created_by=user,
-                            additional_data={},
+                        rework_work_order = (
+                            WorkOrderFlowService.create_from_sales_order(
+                                sales_order_id=sales_order.id,
+                                production_quantity=None,
+                                delivery_date=sales_order.delivery_date,
+                                priority="urgent",
+                                notes=(
+                                    f"返工施工单（原送货单拒收："
+                                    f"{delivery_order.order_number}）"
+                                    f"\n{resolution_notes}"
+                                ),
+                                created_by=user,
+                                additional_data={},
+                            )
                         )
-                        result_extra["rework_work_order_id"] = rework_work_order.id
-                        result_extra[
-                            "rework_work_order_number"
-                        ] = rework_work_order.order_number
+                        result_extra["rework_work_order_id"] = (
+                            rework_work_order.id
+                        )
+                        result_extra["rework_work_order_number"] = (
+                            rework_work_order.order_number
+                        )
                     except Exception as e:
                         logger.warning(f"自动创建返工施工单失败: {e}")
 
@@ -619,7 +643,8 @@ class DeliveryOrderService:
                 if sales_order and sales_order.status != "cancelled":
                     sales_order.status = "cancelled"
                     sales_order.completion_reason = (
-                        f"送货单拒收后终止（{delivery_order.order_number}）\n{resolution_notes}"
+                        f"送货单拒收后终止（{delivery_order.order_number}）"
+                        f"\n{resolution_notes}"
                     )
                     sales_order.save(
                         update_fields=["status", "completion_reason"]
@@ -656,7 +681,9 @@ class DeliveryOrderService:
         )
 
         status_stats = (
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
+            queryset.values("status")
+            .annotate(count=Count("id"))
+            .order_by("status")
         )
 
         return {"summary": summary, "by_status": list(status_stats)}
@@ -714,12 +741,16 @@ class QualityInspectionService:
                 "id",
                 filter=Q(result__in=["failed", "conditional"])
                 & (Q(disposition="") | Q(disposition__isnull=True))
-                & (Q(disposition_notes="") | Q(disposition_notes__isnull=True)),
+                & (
+                    Q(disposition_notes="") | Q(disposition_notes__isnull=True)
+                ),
             ),
         )
 
         result_stats = (
-            queryset.values("result").annotate(count=Count("id")).order_by("result")
+            queryset.values("result")
+            .annotate(count=Count("id"))
+            .order_by("result")
         )
         type_stats = (
             queryset.values("inspection_type")

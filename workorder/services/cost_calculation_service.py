@@ -52,8 +52,9 @@ class CostCalculationService:
         # 汇总总成本
         cost.calculate_total_cost()
 
+        action = "新建" if created else "更新"
         logger.info(
-            f"施工单 {work_order.order_number} 成本核算草稿已{'新建' if created else '更新'}: "
+            f"施工单 {work_order.order_number} 成本核算草稿已{action}: "
             f"material={cost.material_cost}, labor={cost.labor_cost}, "
             f"equipment={cost.equipment_cost}, total={cost.total_cost}"
         )

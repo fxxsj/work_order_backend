@@ -67,14 +67,9 @@ class SupplierPaymentService:
             pk=purchase_order.pk
         )
 
-        total_paid = (
-            purchase_order.supplier_payments.filter(
-                status="approved"
-            ).aggregate(
-                total=Sum("applied_amount")
-            )["total"]
-            or Decimal("0")
-        )
+        total_paid = purchase_order.supplier_payments.filter(
+            status="approved"
+        ).aggregate(total=Sum("applied_amount"))["total"] or Decimal("0")
 
         purchase_order.paid_amount = total_paid
 
@@ -85,9 +80,7 @@ class SupplierPaymentService:
         else:
             purchase_order.payment_status = "unpaid"
 
-        purchase_order.save(
-            update_fields=["paid_amount", "payment_status"]
-        )
+        purchase_order.save(update_fields=["paid_amount", "payment_status"])
 
     @staticmethod
     def submit(payment, user):
@@ -130,6 +123,11 @@ class SupplierPaymentService:
         payment.approved_at = timezone.now()
         payment.approval_comment = approval_comment
         payment.save(
-            update_fields=["status", "approved_by", "approved_at", "approval_comment"]
+            update_fields=[
+                "status",
+                "approved_by",
+                "approved_at",
+                "approval_comment",
+            ]
         )
         return payment

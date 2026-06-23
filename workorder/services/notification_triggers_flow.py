@@ -95,20 +95,26 @@ class NotificationTriggers:
             work_order=work_order,
             template_variables={
                 "workorder_number": work_order.order_number,
-                "customer": work_order.customer.name if work_order.customer else "",
+                "customer": (
+                    work_order.customer.name if work_order.customer else ""
+                ),
                 "total_amount": f"{work_order.total_amount:.2f}",
             },
             realtime_data={
                 "workorder_id": work_order.id,
                 "workorder_number": work_order.order_number,
-                "customer": work_order.customer.name if work_order.customer else "",
+                "customer": (
+                    work_order.customer.name if work_order.customer else ""
+                ),
                 "total_amount": float(work_order.total_amount),
                 "priority": work_order.priority,
             },
             realtime_priority=NotificationPriority.NORMAL,
         )
 
-        logger.info(f"已通知 {recipient.username}：施工单 {work_order.order_number} 已创建")
+        logger.info(
+            f"已通知 {recipient.username}：施工单 {work_order.order_number} 已创建"
+        )
 
     @staticmethod
     def notify_approval_requested(
@@ -116,7 +122,10 @@ class NotificationTriggers:
         recipient: User,
         comment: str = "",
     ) -> None:
-        content = f"施工单 {work_order.order_number} 待审核，客户：{work_order.customer.name}，"
+        content = (
+            f"施工单 {work_order.order_number} 待审核，"
+            f"客户：{work_order.customer.name}，"
+        )
         content += f"金额：¥{work_order.total_amount:.2f}"
         if comment:
             content += f"\n提交备注：{comment}"
@@ -132,14 +141,18 @@ class NotificationTriggers:
             work_order=work_order,
             template_variables={
                 "workorder_number": work_order.order_number,
-                "customer": work_order.customer.name if work_order.customer else "",
+                "customer": (
+                    work_order.customer.name if work_order.customer else ""
+                ),
                 "total_amount": f"{work_order.total_amount:.2f}",
                 "comment": comment,
             },
             realtime_data={
                 "workorder_id": work_order.id,
                 "workorder_number": work_order.order_number,
-                "customer": work_order.customer.name if work_order.customer else "",
+                "customer": (
+                    work_order.customer.name if work_order.customer else ""
+                ),
                 "total_amount": float(work_order.total_amount),
                 "priority": work_order.priority,
                 "comment": comment,
@@ -147,7 +160,9 @@ class NotificationTriggers:
             realtime_priority=NotificationPriority.HIGH,
         )
 
-        logger.info(f"已通知业务员 {recipient.username}：施工单 {work_order.order_number} 待审核")
+        logger.info(
+            f"已通知业务员 {recipient.username}：施工单 {work_order.order_number} 待审核"
+        )
 
     @staticmethod
     def notify_approval_passed(
@@ -180,6 +195,9 @@ class NotificationTriggers:
         for operator_id in dispatch_result.get("notified_operators", []):
             try:
                 operator = User.objects.get(id=operator_id)
+                operator_task_count = dispatch_result[
+                    "operator_tasks"
+                ].get(operator_id, 0)
                 NotificationTriggers._create_notification(
                     recipient=operator,
                     notification_type="task_assigned",
@@ -189,7 +207,9 @@ class NotificationTriggers:
                     work_order=work_order,
                     template_key="task_assigned",
                     template_variables={
-                        "task_name": f"{dispatch_result['operator_tasks'].get(operator_id, 0)} 个新任务",
+                        "task_name": (
+                            f"{operator_task_count} 个新任务"
+                        ),
                         "workorder_number": work_order.order_number,
                         "assigned_by": "系统",
                     },
@@ -197,7 +217,9 @@ class NotificationTriggers:
             except User.DoesNotExist:
                 logger.warning(f"用户 ID {operator_id} 不存在，跳过通知")
 
-        logger.info(f"已通知相关人员：施工单 {work_order.order_number} 已审核通过")
+        logger.info(
+            f"已通知相关人员：施工单 {work_order.order_number} 已审核通过"
+        )
 
     @staticmethod
     def notify_approval_rejected(
@@ -226,7 +248,9 @@ class NotificationTriggers:
             realtime_priority=NotificationPriority.HIGH,
         )
 
-        logger.info(f"已通知 {recipient.username}：施工单 {work_order.order_number} 审核被拒绝")
+        logger.info(
+            f"已通知 {recipient.username}：施工单 {work_order.order_number} 审核被拒绝"
+        )
 
     @staticmethod
     def notify_workorder_completed(work_order: WorkOrder) -> None:
@@ -242,14 +266,21 @@ class NotificationTriggers:
             work_order=work_order,
             template_variables={
                 "workorder_number": work_order.order_number,
-                "customer": work_order.customer.name if work_order.customer else "",
+                "customer": (
+                    work_order.customer.name if work_order.customer else ""
+                ),
             },
             realtime_data={
                 "workorder_id": work_order.id,
                 "workorder_number": work_order.order_number,
-                "customer": work_order.customer.name if work_order.customer else "",
+                "customer": (
+                    work_order.customer.name if work_order.customer else ""
+                ),
             },
             realtime_priority=NotificationPriority.NORMAL,
         )
 
-        logger.info(f"已通知 {work_order.created_by.username}：施工单 {work_order.order_number} 已完成")
+        logger.info(
+            f"已通知 {work_order.created_by.username}："
+            f"施工单 {work_order.order_number} 已完成"
+        )

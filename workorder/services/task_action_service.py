@@ -63,7 +63,10 @@ class TaskActionService:
             and new_quantity_completed > task.production_quantity
         ):
             raise ServiceError(
-                f"更新后完成数量（{new_quantity_completed}）不能超过生产数量（{task.production_quantity}）",
+                (
+                    f"更新后完成数量（{new_quantity_completed}）"
+                    f"不能超过生产数量（{task.production_quantity}）"
+                ),
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -71,7 +74,9 @@ class TaskActionService:
 
         task.quantity_completed = new_quantity_completed
         if quantity_defective is not None:
-            task.quantity_defective = (task.quantity_defective or 0) + quantity_defective
+            task.quantity_defective = (
+                task.quantity_defective or 0
+            ) + quantity_defective
         if notes:
             task.production_requirements = notes
         if work_hours is not None:
@@ -104,21 +109,31 @@ class TaskActionService:
         task.save()
 
         # 包装任务库存调整
-        stock_increment = new_quantity_completed - (task.stock_accounted_quantity or 0)
+        stock_increment = new_quantity_completed - (
+            task.stock_accounted_quantity or 0
+        )
         if stock_increment != 0 and task.product:
             try:
                 if stock_increment > 0:
                     task.product.add_stock(
                         quantity=stock_increment,
                         user=None,
-                        reason=f"施工单{work_order.order_number}包装任务数量编辑，入库{stock_increment}{task.product.unit}",
+                        reason=(
+                            f"施工单{work_order.order_number}"
+                            f"包装任务数量编辑，"
+                            f"入库{stock_increment}{task.product.unit}"
+                        ),
                     )
                 else:
                     try:
                         task.product.reduce_stock(
                             quantity=abs(stock_increment),
                             user=None,
-                            reason=f"施工单{work_order.order_number}包装任务数量编辑，出库{abs(stock_increment)}{task.product.unit}",
+                            reason=(
+                                f"施工单{work_order.order_number}"
+                                f"包装任务数量编辑，"
+                                f"出库{abs(stock_increment)}{task.product.unit}"
+                            ),
                         )
                     except ValueError as e:
                         logger.warning(f"库存不足警告：{e}")
@@ -132,7 +147,12 @@ class TaskActionService:
         TaskLog.objects.create(
             task=task,
             log_type="update_quantity",
-            content=f"更新完成数量：{quantity_before} → {new_quantity_completed}，本次完成：{quantity_increment}，不良品：{defective_increment}，状态：{status_before} → {task.status}"
+            content=(
+                f"更新完成数量：{quantity_before} → {new_quantity_completed}，"
+                f"本次完成：{quantity_increment}，"
+                f"不良品：{defective_increment}，"
+                f"状态：{status_before} → {task.status}"
+            )
             + (f"，备注：{notes}" if notes else ""),
             quantity_before=quantity_before,
             quantity_after=new_quantity_completed,
@@ -186,7 +206,11 @@ class TaskActionService:
         quantity_increment = task.quantity_completed - quantity_before
         defective_increment = quantity_defective if quantity_defective else 0
 
-        log_content = f"强制完成任务，完成数量：{quantity_before} → {task.quantity_completed}，不良品：{defective_increment}，状态：{status_before} → completed"
+        log_content = (
+            f"强制完成任务，完成数量：{quantity_before} → {task.quantity_completed}，"
+            f"不良品：{defective_increment}，"
+            f"状态：{status_before} → completed"
+        )
         if quantity_increment != 0:
             log_content += f"，本次完成：{quantity_increment}"
         if completion_reason:
@@ -208,7 +232,9 @@ class TaskActionService:
             operator=user,
         )
 
-        notification_service.notify_task_completed(task=task, completed_by=user)
+        notification_service.notify_task_completed(
+            task=task, completed_by=user
+        )
 
         if task.is_subtask() and task.parent_task:
             task.parent_task.update_from_subtasks()
@@ -221,14 +247,16 @@ class TaskActionService:
         """拆分任务为多个子任务。
 
         Returns:
-            dict: {"parent_task": task, "created_subtasks": [...], "total_split_quantity": int}
+            dict: {"parent_task": task, "created_subtasks": [...],
+                   "total_split_quantity": int}
 
         Raises:
             ServiceError: 业务规则不满足时抛出
         """
         if task.subtasks.exists():
             raise ServiceError(
-                "该任务已经拆分，无法再次拆分", code=status.HTTP_400_BAD_REQUEST
+                "该任务已经拆分，无法再次拆分",
+                code=status.HTTP_400_BAD_REQUEST,
             )
         if task.status == "completed":
             raise ServiceError(
@@ -240,10 +268,15 @@ class TaskActionService:
                 "至少需要拆分为2个子任务", code=status.HTTP_400_BAD_REQUEST
             )
 
-        total_split_quantity = sum(s.get("production_quantity", 0) for s in splits)
+        total_split_quantity = sum(
+            s.get("production_quantity", 0) for s in splits
+        )
         if total_split_quantity > task.production_quantity:
             raise ServiceError(
-                f"子任务数量总和（{total_split_quantity}）不能超过父任务数量（{task.production_quantity}）",
+                (
+                    f"子任务数量总和（{total_split_quantity}）"
+                    f"不能超过父任务数量（{task.production_quantity}）"
+                ),
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -289,7 +322,10 @@ class TaskActionService:
         TaskLog.objects.create(
             task=task,
             log_type="status_change",
-            content=f"任务已拆分为{len(created_subtasks)}个子任务，子任务数量总和：{total_split_quantity}",
+            content=(
+                f"任务已拆分为{len(created_subtasks)}个子任务，"
+                f"子任务数量总和：{total_split_quantity}"
+            ),
             operator=user,
         )
 
@@ -298,6 +334,7 @@ class TaskActionService:
             "created_subtasks": created_subtasks,
             "total_split_quantity": total_split_quantity,
         }
+
     @staticmethod
     def assign_task(
         *,
@@ -335,7 +372,10 @@ class TaskActionService:
                     id=task.work_order_process.process.id
                 ).exists():
                     raise ServiceError(
-                        f"部门 {department.name} 不负责工序 {task.work_order_process.process.name}，无法分配",
+                        (
+                            f"部门 {department.name} 不负责工序 "
+                            f"{task.work_order_process.process.name}，无法分配"
+                        ),
                         code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     )
 
@@ -359,12 +399,20 @@ class TaskActionService:
                     ]
                 )
 
-                old_department_name = old_department.name if old_department else "未分配"
-                new_department_name = department.name if department else "未分配"
-                log_content = (
-                    f"调整任务分派部门：{old_department_name} → {new_department_name}"
+                old_department_name = (
+                    old_department.name if old_department else "未分配"
                 )
-                if old_operator and task.assigned_operator_id != old_operator.id:
+                new_department_name = (
+                    department.name if department else "未分配"
+                )
+                log_content = (
+                    f"调整任务分派部门："
+                    f"{old_department_name} → {new_department_name}"
+                )
+                if (
+                    old_operator
+                    and task.assigned_operator_id != old_operator.id
+                ):
                     old_operator_name = (
                         f"{old_operator.first_name}{old_operator.last_name}"
                         or old_operator.username
@@ -425,7 +473,11 @@ class TaskActionService:
             )
 
         work_order_process = task.work_order_process
-        if work_order_process.tasks.count() == 1 and work_order_process.status != "pending":
+        work_order = work_order_process.work_order
+        if (
+            work_order_process.tasks.count() == 1
+            and work_order_process.status != "pending"
+        ):
             raise ServiceError(
                 "该任务是工序的唯一任务，取消后工序无法完成。请先处理工序状态",
                 code=status.HTTP_400_BAD_REQUEST,
@@ -461,7 +513,7 @@ class TaskActionService:
                 template_key="task_cancelled",
                 template_variables={
                     "task_name": task.work_content,
-                    "workorder_number": work_order_process.work_order.order_number,
+                    "workorder_number": work_order.order_number,
                     "cancellation_reason": cancellation_reason,
                 },
             )

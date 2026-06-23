@@ -11,10 +11,6 @@ from django.utils import timezone
 from rest_framework import status
 
 from ..models.sales import SalesOrder
-from ..serializers.sales import (
-    SalesOrderDetailSerializer,
-    SalesOrderListSerializer,
-)
 from ..services.approval_service import ApprovalService
 from ..services.sales_order_status_service import SalesOrderStatusService
 from ..services.service_errors import ServiceError
@@ -39,12 +35,16 @@ class SalesOrderService:
             cancelled_count=Count("id", filter=Q(status="cancelled")),
         )
         status_stats = (
-            queryset.values("status").annotate(count=Count("id")).order_by("status")
+            queryset.values("status")
+            .annotate(count=Count("id"))
+            .order_by("status")
         )
         return {"summary": summary, "by_status": list(status_stats)}
 
     @staticmethod
-    def submit_for_approval(*, sales_order: SalesOrder, user, auto_approve: bool = False):
+    def submit_for_approval(
+        *, sales_order: SalesOrder, user, auto_approve: bool = False
+    ):
         """提交客户订单审核。"""
         if sales_order.approval_status not in ["draft", "rejected"]:
             raise ServiceError(
@@ -73,7 +73,8 @@ class SalesOrderService:
         """审核通过客户订单。"""
         if sales_order.approval_status != "submitted":
             raise ServiceError(
-                "只有已提交状态的订单才能审核", code=status.HTTP_400_BAD_REQUEST
+                "只有已提交状态的订单才能审核",
+                code=status.HTTP_400_BAD_REQUEST,
             )
 
         errors = sales_order.validate_before_approval()
@@ -91,11 +92,14 @@ class SalesOrderService:
         return sales_order
 
     @staticmethod
-    def reject(*, sales_order: SalesOrder, user, reason: str = "", comment: str = ""):
+    def reject(
+        *, sales_order: SalesOrder, user, reason: str = "", comment: str = ""
+    ):
         """拒绝客户订单。"""
         if sales_order.approval_status != "submitted":
             raise ServiceError(
-                "只有已提交状态的订单才能拒绝", code=status.HTTP_400_BAD_REQUEST
+                "只有已提交状态的订单才能拒绝",
+                code=status.HTTP_400_BAD_REQUEST,
             )
 
         if not reason:
@@ -141,7 +145,9 @@ class SalesOrderService:
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        all_delivered = SalesOrderStatusService.all_items_delivered(sales_order)
+        all_delivered = SalesOrderStatusService.all_items_delivered(
+            sales_order
+        )
         completion_reason = str(completion_reason).strip()
         if not all_delivered and not completion_reason:
             raise ServiceError(
@@ -150,7 +156,9 @@ class SalesOrderService:
             )
 
         sales_order.status = "completed"
-        sales_order.completion_reason = "" if all_delivered else completion_reason
+        sales_order.completion_reason = (
+            "" if all_delivered else completion_reason
+        )
         update_fields = ["status", "completion_reason"]
         if all_delivered and sales_order.actual_delivery_date is None:
             sales_order.actual_delivery_date = timezone.now().date()

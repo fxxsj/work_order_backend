@@ -30,13 +30,19 @@ class UserNotificationSettingsService:
 
         profile, _ = UserProfile.objects.get_or_create(user=user)
         if not profile.notification_preferences:
-            profile.notification_preferences = default_user_notification_preferences()
-            profile.save(update_fields=["notification_preferences", "updated_at"])
+            profile.notification_preferences = (
+                default_user_notification_preferences()
+            )
+            profile.save(
+                update_fields=["notification_preferences", "updated_at"]
+            )
         return profile
 
     @staticmethod
     def _serialize_preferences(profile) -> Dict[str, Any]:
-        from workorder.models.system import default_user_notification_preferences
+        from workorder.models.system import (
+            default_user_notification_preferences,
+        )
 
         prefs = default_user_notification_preferences()
         prefs.update(profile.notification_preferences or {})
@@ -60,14 +66,17 @@ class UserNotificationSettingsService:
     @staticmethod
     def update_settings(user, payload: Dict[str, Any]) -> Dict[str, Any]:
         """更新用户通知设置。"""
-        from workorder.models.system import default_user_notification_preferences
+        from workorder.models.system import (
+            default_user_notification_preferences,
+        )
 
         profile = UserNotificationSettingsService._get_profile(user)
         current = default_user_notification_preferences()
         current.update(profile.notification_preferences or {})
 
         urgency_threshold = (
-            payload.get("urgency_threshold", current["urgency_threshold"]) or "normal"
+            payload.get("urgency_threshold", current["urgency_threshold"])
+            or "normal"
         ).strip()
         if urgency_threshold not in {"low", "normal", "high", "urgent"}:
             raise ServiceError(
@@ -76,38 +85,53 @@ class UserNotificationSettingsService:
             )
 
         quiet_start = (
-            payload.get("quiet_hours_start", current["quiet_hours_start"]) or "22:00"
+            payload.get("quiet_hours_start", current["quiet_hours_start"])
+            or "22:00"
         ).strip()
         quiet_end = (
-            payload.get("quiet_hours_end", current["quiet_hours_end"]) or "08:00"
+            payload.get("quiet_hours_end", current["quiet_hours_end"])
+            or "08:00"
         ).strip()
-        UserNotificationSettingsService._validate_time_text(quiet_start, "quiet_hours_start")
-        UserNotificationSettingsService._validate_time_text(quiet_end, "quiet_hours_end")
+        UserNotificationSettingsService._validate_time_text(
+            quiet_start, "quiet_hours_start"
+        )
+        UserNotificationSettingsService._validate_time_text(
+            quiet_end, "quiet_hours_end"
+        )
 
         settings_data = {
             "email_notifications": bool(
-                payload.get("email_notifications", current["email_notifications"])
+                payload.get(
+                    "email_notifications", current["email_notifications"]
+                )
             ),
             "websocket_notifications": bool(
                 payload.get(
-                    "websocket_notifications", current["websocket_notifications"]
+                    "websocket_notifications",
+                    current["websocket_notifications"],
                 )
             ),
             "task_assignments": bool(
                 payload.get("task_assignments", current["task_assignments"])
             ),
             "process_completions": bool(
-                payload.get("process_completions", current["process_completions"])
+                payload.get(
+                    "process_completions", current["process_completions"]
+                )
             ),
             "deadline_warnings": bool(
                 payload.get("deadline_warnings", current["deadline_warnings"])
             ),
             "system_announcements": bool(
-                payload.get("system_announcements", current["system_announcements"])
+                payload.get(
+                    "system_announcements", current["system_announcements"]
+                )
             ),
             "urgency_threshold": urgency_threshold,
             "quiet_hours_enabled": bool(
-                payload.get("quiet_hours_enabled", current["quiet_hours_enabled"])
+                payload.get(
+                    "quiet_hours_enabled", current["quiet_hours_enabled"]
+                )
             ),
             "quiet_hours_start": quiet_start,
             "quiet_hours_end": quiet_end,

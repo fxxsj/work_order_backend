@@ -56,9 +56,9 @@ class TaskLogService:
 
         if end_date:
             try:
-                end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(
-                    days=1
-                )
+                end_date_obj = datetime.strptime(
+                    end_date, "%Y-%m-%d"
+                ) + timedelta(days=1)
                 query &= Q(created_at__lt=end_date_obj)
             except ValueError:
                 pass
@@ -114,7 +114,9 @@ class TaskLogService:
                     log_data["work_order_info"] = {
                         "id": wo.id,
                         "order_number": wo.order_number,
-                        "customer_name": wo.customer.name if wo.customer else None,
+                        "customer_name": (
+                            wo.customer.name if wo.customer else None
+                        ),
                     }
             # 添加操作员名称
             if log.operator:

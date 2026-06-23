@@ -42,19 +42,19 @@ def update_cutting_tasks_on_material_cut(material_instance) -> None:
         return
 
     with transaction.atomic():
-        cutting_tasks = (
-            WorkOrderTask.objects.select_for_update()
-            .filter(
-                task_type=TaskType.CUTTING,
-                material=material_instance.material,
-                work_order_process__work_order=material_instance.work_order,
-                auto_calculate_quantity=True,
-                status__in=[TaskStatus.PENDING, TaskStatus.IN_PROGRESS],
-            )
+        cutting_tasks = WorkOrderTask.objects.select_for_update().filter(
+            task_type=TaskType.CUTTING,
+            material=material_instance.material,
+            work_order_process__work_order=material_instance.work_order,
+            auto_calculate_quantity=True,
+            status__in=[TaskStatus.PENDING, TaskStatus.IN_PROGRESS],
         )
         for task in cutting_tasks:
             task.quantity_completed = quantity
-            if task.production_quantity and quantity >= task.production_quantity:
+            if (
+                task.production_quantity
+                and quantity >= task.production_quantity
+            ):
                 task.status = TaskStatus.COMPLETED
             elif task.status == TaskStatus.PENDING:
                 task.status = TaskStatus.IN_PROGRESS
@@ -75,7 +75,11 @@ def complete_plate_tasks(
 
     只处理从"未确认"变为"已确认"的情况，由调用方确保前提条件。
     """
-    filters = {"task_type": TaskType.PLATE_MAKING, "auto_calculate_quantity": True, "status__in": [TaskStatus.PENDING, TaskStatus.IN_PROGRESS]}
+    filters = {
+        "task_type": TaskType.PLATE_MAKING,
+        "auto_calculate_quantity": True,
+        "status__in": [TaskStatus.PENDING, TaskStatus.IN_PROGRESS],
+    }
     # 只填充非 None 的参数
     if artwork is not None:
         filters["artwork"] = artwork
@@ -87,7 +91,9 @@ def complete_plate_tasks(
         filters["embossing_plate"] = embossing_plate
 
     with transaction.atomic():
-        plate_tasks = WorkOrderTask.objects.select_for_update().filter(**filters)
+        plate_tasks = WorkOrderTask.objects.select_for_update().filter(
+            **filters
+        )
         for task in plate_tasks:
             if task.quantity_completed < 1:
                 task.quantity_completed = 1

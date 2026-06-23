@@ -52,10 +52,14 @@ class NotificationTemplateService:
         from workorder.models.system import NotificationTemplate
 
         if not template_name:
-            raise ServiceError("缺少 template_name", code=status.HTTP_400_BAD_REQUEST)
+            raise ServiceError(
+                "缺少 template_name", code=status.HTTP_400_BAD_REQUEST
+            )
 
         NotificationTemplate.seed_defaults()
-        template = NotificationTemplate.objects.filter(key=template_name).first()
+        template = NotificationTemplate.objects.filter(
+            key=template_name
+        ).first()
         if template is None:
             raise ServiceError("模板不存在", code=status.HTTP_404_NOT_FOUND)
 
@@ -89,7 +93,9 @@ class NotificationTemplateService:
         }
 
     @staticmethod
-    def preview_template(template_name: str, variables: Dict[str, Any]) -> Dict[str, Any]:
+    def preview_template(
+        template_name: str, variables: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """渲染模板预览。"""
         from workorder.models.system import NotificationTemplate
 

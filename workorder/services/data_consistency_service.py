@@ -7,7 +7,7 @@
 
 import logging
 from decimal import Decimal
-from typing import Dict, List, Any
+from typing import Dict, Any
 
 from django.db.models import Sum
 
@@ -26,7 +26,8 @@ class DataConsistencyService:
             Dict: {
                 "summary": {"total_issues": int, "critical_issues": int},
                 "checks": [
-                    {"name": str, "status": "ok|warning|error", "issues": [...]}
+                    {"name": str, "status": "ok|warning|error",
+                     "issues": [...]}
                 ]
             }
         """
@@ -39,7 +40,10 @@ class DataConsistencyService:
 
         total_issues = sum(len(c["issues"]) for c in checks)
         critical_issues = sum(
-            1 for c in checks for i in c["issues"] if i.get("severity") == "critical"
+            1
+            for c in checks
+            for i in c["issues"]
+            if i.get("severity") == "critical"
         )
 
         return {
@@ -60,12 +64,9 @@ class DataConsistencyService:
         products = Product.objects.all()
 
         for product in products:
-            batch_total = (
-                ProductStock.objects.filter(product=product, status="in_stock").aggregate(
-                    total=Sum("quantity")
-                )["total"]
-                or Decimal("0")
-            )
+            batch_total = ProductStock.objects.filter(
+                product=product, status="in_stock"
+            ).aggregate(total=Sum("quantity"))["total"] or Decimal("0")
             if product.stock_quantity != batch_total:
                 issues.append(
                     {
@@ -73,9 +74,13 @@ class DataConsistencyService:
                         "type": "inventory_mismatch",
                         "product_id": product.id,
                         "product_name": product.name,
-                        "product_stock_quantity": float(product.stock_quantity),
+                        "product_stock_quantity": float(
+                            product.stock_quantity
+                        ),
                         "batch_total": float(batch_total),
-                        "difference": float(product.stock_quantity - batch_total),
+                        "difference": float(
+                            product.stock_quantity - batch_total
+                        ),
                         "suggestion": "请核对入库和发货记录，使用库存调整功能修正",
                     }
                 )
@@ -95,7 +100,9 @@ class DataConsistencyService:
         work_orders = WorkOrder.objects.filter(status="completed")
 
         for wo in work_orders:
-            tasks = WorkOrderTask.objects.filter(work_order_process__work_order=wo)
+            tasks = WorkOrderTask.objects.filter(
+                work_order_process__work_order=wo
+            )
             if not tasks.exists():
                 continue
 
@@ -129,10 +136,9 @@ class DataConsistencyService:
         sales_orders = SalesOrder.objects.all()
 
         for so in sales_orders:
-            total_applied = (
-                so.payments.aggregate(total=Sum("applied_amount"))["total"]
-                or Decimal("0")
-            )
+            total_applied = so.payments.aggregate(total=Sum("applied_amount"))[
+                "total"
+            ] or Decimal("0")
             if so.paid_amount != total_applied:
                 issues.append(
                     {
@@ -143,7 +149,9 @@ class DataConsistencyService:
                         "paid_amount": float(so.paid_amount),
                         "total_applied": float(total_applied),
                         "difference": float(so.paid_amount - total_applied),
-                        "suggestion": "请运行 PaymentService.apply_payment() 重新计算",
+                        "suggestion": (
+                            "请运行 PaymentService.apply_payment() 重新计算"
+                        ),
                     }
                 )
 

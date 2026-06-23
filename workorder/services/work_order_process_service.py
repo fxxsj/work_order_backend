@@ -11,7 +11,11 @@ from typing import Any, Dict, List, Optional
 from django.utils import timezone
 from rest_framework import status
 
-from workorder.constants.status import ProcessStatus, TaskStatus, WorkOrderStatus
+from workorder.constants.status import (
+    ProcessStatus,
+    TaskStatus,
+    WorkOrderStatus,
+)
 from ..models.core import ProcessLog, TaskLog, WorkOrderProcess
 from ..models.base import Department
 from .service_errors import ServiceError
@@ -87,7 +91,11 @@ class WorkOrderProcessService:
                 ProcessLog.objects.create(
                     work_order_process=process,
                     log_type="complete",
-                    content=f"自动完成工序（所有任务已完成），完成数量：{process.quantity_completed}，不良品数量：{process.quantity_defective}",
+                    content=(
+                        f"自动完成工序（所有任务已完成），"
+                        f"完成数量：{process.quantity_completed}，"
+                        f"不良品数量：{process.quantity_defective}"
+                    ),
                     operator=user,
                 )
                 return process
@@ -129,7 +137,10 @@ class WorkOrderProcessService:
         process.actual_end_time = timezone.now()
         process.save()
 
-        log_content = f"完成工序，完成数量：{quantity_completed}，不良品数量：{quantity_defective}"
+        log_content = (
+            f"完成工序，完成数量：{quantity_completed}，"
+            f"不良品数量：{quantity_defective}"
+        )
         if force_complete:
             log_content += f"（强制完成，原因：{force_reason}）"
 
@@ -142,9 +153,15 @@ class WorkOrderProcessService:
 
         work_order = process.work_order
         all_processes_completed = (
-            work_order.order_processes.exclude(status=ProcessStatus.COMPLETED).count() == 0
+            work_order.order_processes.exclude(
+                status=ProcessStatus.COMPLETED
+            ).count()
+            == 0
         )
-        if all_processes_completed and work_order.status != WorkOrderStatus.COMPLETED:
+        if (
+            all_processes_completed
+            and work_order.status != WorkOrderStatus.COMPLETED
+        ):
             work_order.status = WorkOrderStatus.COMPLETED
             work_order.save()
 
@@ -178,13 +195,19 @@ class WorkOrderProcessService:
             try:
                 if not process.can_start():
                     failed_processes.append(
-                        {"process_id": process.id, "error": "该工序不能开始，请先完成前置工序"}
+                        {
+                            "process_id": process.id,
+                            "error": "该工序不能开始，请先完成前置工序",
+                        }
                     )
                     continue
 
                 if process.status != ProcessStatus.PENDING:
                     failed_processes.append(
-                        {"process_id": process.id, "error": "该工序已经开始或完成，不能重新开始"}
+                        {
+                            "process_id": process.id,
+                            "error": "该工序已经开始或完成，不能重新开始",
+                        }
                     )
                     continue
 
@@ -207,10 +230,15 @@ class WorkOrderProcessService:
 
                 started_processes.append(process.id)
             except Exception as exc:
-                failed_processes.append({"process_id": process.id, "error": str(exc)})
+                failed_processes.append(
+                    {"process_id": process.id, "error": str(exc)}
+                )
 
         return {
-            "message": f"成功开始 {len(started_processes)} 个工序，失败 {len(failed_processes)} 个",
+            "message": (
+                f"成功开始 {len(started_processes)} 个工序，"
+                f"失败 {len(failed_processes)} 个"
+            ),
             "started_count": len(started_processes),
             "failed_count": len(failed_processes),
             "started_process_ids": started_processes,
@@ -292,12 +320,16 @@ class WorkOrderProcessService:
                 changes: List[str] = []
                 if department_id is not None:
                     old_dept_name = old_dept.name if old_dept else "未分配"
-                    new_dept_name = new_department.name if new_department else "未分配"
+                    new_dept_name = (
+                        new_department.name if new_department else "未分配"
+                    )
                     changes.append(f"部门：{old_dept_name} → {new_dept_name}")
 
                 if operator_id is not None:
                     old_op_name = (
-                        f"{old_op.first_name}{old_op.last_name}" if old_op else "未分配"
+                        f"{old_op.first_name}{old_op.last_name}"
+                        if old_op
+                        else "未分配"
                     )
                     new_op_name = (
                         f"{new_operator.first_name}{new_operator.last_name}"
@@ -306,7 +338,9 @@ class WorkOrderProcessService:
                     )
                     changes.append(f"操作员：{old_op_name} → {new_op_name}")
 
-                log_content = f'批量调整任务分派：{", ".join(changes)}，原因：{reason}'
+                log_content = (
+                    f'批量调整任务分派：{", ".join(changes)}，原因：{reason}'
+                )
                 if notes:
                     log_content += f"，备注：{notes}"
 

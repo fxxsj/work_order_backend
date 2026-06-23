@@ -47,9 +47,9 @@ class WorkOrderService:
         ).first()
         if existing_process:
             max_sequence = (
-                WorkOrderProcess.objects.filter(work_order=work_order).aggregate(
-                    Max("sequence")
-                )["sequence__max"]
+                WorkOrderProcess.objects.filter(
+                    work_order=work_order
+                ).aggregate(Max("sequence"))["sequence__max"]
                 or 0
             )
             sequence = max_sequence + 1
@@ -92,8 +92,14 @@ class WorkOrderService:
     # 生产状态转换规则（completed 只能由系统自动设置）
     ALLOWED_STATUS_TRANSITIONS = {
         WorkOrderStatus.PENDING: [WorkOrderStatus.IN_PROGRESS],
-        WorkOrderStatus.IN_PROGRESS: [WorkOrderStatus.PAUSED, WorkOrderStatus.CANCELLED],
-        WorkOrderStatus.PAUSED: [WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.CANCELLED],
+        WorkOrderStatus.IN_PROGRESS: [
+            WorkOrderStatus.PAUSED,
+            WorkOrderStatus.CANCELLED,
+        ],
+        WorkOrderStatus.PAUSED: [
+            WorkOrderStatus.IN_PROGRESS,
+            WorkOrderStatus.CANCELLED,
+        ],
         WorkOrderStatus.COMPLETED: [],
         WorkOrderStatus.CANCELLED: [],
     }
@@ -107,7 +113,9 @@ class WorkOrderService:
             )
 
         # 校验转换合法性
-        allowed = WorkOrderService.ALLOWED_STATUS_TRANSITIONS.get(work_order.status, [])
+        allowed = WorkOrderService.ALLOWED_STATUS_TRANSITIONS.get(
+            work_order.status, []
+        )
         if new_status not in allowed:
             raise ServiceError(
                 f"不允许的状态转换：{work_order.status} → {new_status}",
@@ -115,7 +123,10 @@ class WorkOrderService:
             )
 
         # pending → in_progress 仅审批通过后允许
-        if new_status == WorkOrderStatus.IN_PROGRESS and work_order.approval_status != WorkOrderApprovalStatus.APPROVED:
+        if (
+            new_status == WorkOrderStatus.IN_PROGRESS
+            and work_order.approval_status != WorkOrderApprovalStatus.APPROVED
+        ):
             raise ServiceError(
                 "施工单未审核通过，无法开始生产",
                 code=status.HTTP_400_BAD_REQUEST,
@@ -134,7 +145,10 @@ class WorkOrderService:
         approval_comment: str = "",
         rejection_reason: str = "",
     ) -> WorkOrder:
-        if approval_status not in [WorkOrderApprovalStatus.APPROVED, WorkOrderApprovalStatus.REJECTED]:
+        if approval_status not in [
+            WorkOrderApprovalStatus.APPROVED,
+            WorkOrderApprovalStatus.REJECTED,
+        ]:
             raise ServiceError(
                 "审核状态无效，必须是 approved 或 rejected",
                 code=status.HTTP_400_BAD_REQUEST,
@@ -153,15 +167,16 @@ class WorkOrderService:
             )
 
         if work_order.approval_status != WorkOrderApprovalStatus.SUBMITTED:
-            message = (
-                '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。'
-            )
+            message = '只有待审核的施工单可以审核。如需重新审核，请先使用"请求重新审核"功能。'
             raise ServiceError(
                 message,
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        if approval_status == WorkOrderApprovalStatus.REJECTED and not rejection_reason:
+        if (
+            approval_status == WorkOrderApprovalStatus.REJECTED
+            and not rejection_reason
+        ):
             raise ServiceError(
                 "审核拒绝时，必须填写拒绝原因",
                 code=status.HTTP_400_BAD_REQUEST,
@@ -188,7 +203,10 @@ class WorkOrderService:
         work_order.approved_at = timezone.now()
         work_order.approval_comment = approval_comment
 
-        if approval_status == WorkOrderApprovalStatus.APPROVED and work_order.status == WorkOrderStatus.PENDING:
+        if (
+            approval_status == WorkOrderApprovalStatus.APPROVED
+            and work_order.status == WorkOrderStatus.PENDING
+        ):
             work_order.status = WorkOrderStatus.IN_PROGRESS
 
         work_order.save()

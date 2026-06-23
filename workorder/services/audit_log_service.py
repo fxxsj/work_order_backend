@@ -20,7 +20,10 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models.fields.files import FieldFile
 
 from ..models.audit import AuditLog, AuditLogSettings, AuditMixin
-from ..middleware.audit_log import get_current_request, get_client_ip as middleware_get_client_ip
+from ..middleware.audit_log import (
+    get_current_request,
+    get_client_ip as middleware_get_client_ip,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,16 +38,14 @@ def get_request_context():
     request = get_current_request()
     if request:
         return {
-            'user': getattr(request, 'user', None),
-            'ip_address': middleware_get_client_ip(request),
-            'user_agent': request.META.get('HTTP_USER_AGENT', ''),
-            'request_method': request.method,
-            'request_path': request.path,
+            "user": getattr(request, "user", None),
+            "ip_address": middleware_get_client_ip(request),
+            "user_agent": request.META.get("HTTP_USER_AGENT", ""),
+            "request_method": request.method,
+            "request_path": request.path,
         }
 
     return {}
-
-
 
 
 def capture_changes(instance, created=False):
@@ -63,17 +64,19 @@ def capture_changes(instance, created=False):
     # 检查是否在审计模型列表中
     model_label = instance._meta.label_lower
     audited_models = {
-        str(item).lower()
-        for item in (settings.audited_models or [])
+        str(item).lower() for item in (settings.audited_models or [])
     }
     if audited_models:
-        if model_label not in audited_models and instance._meta.label.lower() not in audited_models:
+        if (
+            model_label not in audited_models
+            and instance._meta.label.lower() not in audited_models
+        ):
             return
 
     try:
         # 获取请求上下文
         context = get_request_context()
-        user = context.get('user')
+        user = context.get("user")
 
         # 获取 Content Type
         content_type = ContentType.objects.get_for_model(instance)
@@ -85,11 +88,11 @@ def capture_changes(instance, created=False):
         # 确定操作类型
         if created:
             action_type = AuditLog.ACTION_CREATE
-            changes = {'new': model_to_dict(instance, settings=settings)}
-            changed_fields = list(changes['new'].keys())
+            changes = {"new": model_to_dict(instance, settings=settings)}
+            changed_fields = list(changes["new"].keys())
         else:
             action_type = AuditLog.ACTION_UPDATE
-            old_data = getattr(instance, '_audit_old_data', None)
+            old_data = getattr(instance, "_audit_old_data", None)
             changes, changed_fields = get_model_changes(
                 instance,
                 settings=settings,
@@ -109,10 +112,10 @@ def capture_changes(instance, created=False):
             object_repr=object_repr,
             changes=changes,
             changed_fields=changed_fields,
-            ip_address=context.get('ip_address'),
-            user_agent=context.get('user_agent') or '',
-            request_method=context.get('request_method') or '',
-            request_path=context.get('request_path') or '',
+            ip_address=context.get("ip_address"),
+            user_agent=context.get("user_agent") or "",
+            request_method=context.get("request_method") or "",
+            request_path=context.get("request_path") or "",
         )
 
         logger.info(f"审计日志已创建: {audit_log}")
@@ -134,7 +137,7 @@ def model_to_dict(instance, settings=None):
     from django.forms.models import model_to_dict as django_model_to_dict
 
     # 排除不需要审计的字段
-    excluded_fields = {'last_login', 'updated_at', 'created_at'}
+    excluded_fields = {"last_login", "updated_at", "created_at"}
     if settings:
         excluded_fields.update(settings.excluded_fields or [])
     data = django_model_to_dict(instance, exclude=list(excluded_fields))
@@ -143,7 +146,9 @@ def model_to_dict(instance, settings=None):
     for field in instance._meta.many_to_many:
         if field.name not in excluded_fields:
             try:
-                data[field.name] = list(getattr(instance, field.name).values_list('pk', flat=True))
+                data[field.name] = list(
+                    getattr(instance, field.name).values_list("pk", flat=True)
+                )
             except Exception:
                 pass
 
@@ -161,7 +166,7 @@ def normalize_for_json(value):
     if isinstance(value, uuid.UUID):
         return str(value)
     if isinstance(value, FieldFile):
-        return value.name or ''
+        return value.name or ""
     if isinstance(value, dict):
         return {key: normalize_for_json(val) for key, val in value.items()}
     if isinstance(value, (list, tuple, set)):
@@ -191,13 +196,13 @@ def get_model_changes(instance, settings=None, old_data=None):
 
     # 找出变更的字段
     changed_fields = []
-    changes = {'old': {}, 'new': {}}
+    changes = {"old": {}, "new": {}}
 
     for field in old_data.keys():
         if old_data[field] != new_data[field]:
             changed_fields.append(field)
-            changes['old'][field] = old_data[field]
-            changes['new'][field] = new_data[field]
+            changes["old"][field] = old_data[field]
+            changes["new"][field] = new_data[field]
 
     return changes, changed_fields
 
@@ -219,8 +224,8 @@ def audit_log_save(sender, instance, created, **kwargs):
     capture_changes(instance, created=created)
 
     # 清理缓存的旧数据，避免长生命周期对象持有
-    if hasattr(instance, '_audit_old_data'):
-        delattr(instance, '_audit_old_data')
+    if hasattr(instance, "_audit_old_data"):
+        delattr(instance, "_audit_old_data")
 
 
 def audit_log_pre_save(sender, instance, **kwargs):
@@ -249,11 +254,13 @@ def audit_log_pre_save(sender, instance, **kwargs):
     # 检查是否在审计模型列表中
     model_label = instance._meta.label_lower
     audited_models = {
-        str(item).lower()
-        for item in (settings.audited_models or [])
+        str(item).lower() for item in (settings.audited_models or [])
     }
     if audited_models:
-        if model_label not in audited_models and instance._meta.label.lower() not in audited_models:
+        if (
+            model_label not in audited_models
+            and instance._meta.label.lower() not in audited_models
+        ):
             return
 
     try:
@@ -285,17 +292,19 @@ def audit_log_delete(sender, instance, **kwargs):
     # 检查是否在审计模型列表中
     model_label = instance._meta.label_lower
     audited_models = {
-        str(item).lower()
-        for item in (settings.audited_models or [])
+        str(item).lower() for item in (settings.audited_models or [])
     }
     if audited_models:
-        if model_label not in audited_models and instance._meta.label.lower() not in audited_models:
+        if (
+            model_label not in audited_models
+            and instance._meta.label.lower() not in audited_models
+        ):
             return
 
     try:
         # 获取请求上下文
         context = get_request_context()
-        user = context.get('user')
+        user = context.get("user")
 
         # 获取 Content Type
         content_type = ContentType.objects.get_for_model(instance)
@@ -305,7 +314,7 @@ def audit_log_delete(sender, instance, **kwargs):
         object_repr = get_object_repr(instance)
 
         # 记录删除前的数据
-        changes = {'old': model_to_dict(instance, settings=settings)}
+        changes = {"old": model_to_dict(instance, settings=settings)}
 
         # 创建审计日志
         audit_log = AuditLog.objects.create(
@@ -315,11 +324,11 @@ def audit_log_delete(sender, instance, **kwargs):
             object_id=object_id,
             object_repr=object_repr,
             changes=changes,
-            changed_fields=list(changes['old'].keys()),
-            ip_address=context.get('ip_address'),
-            user_agent=context.get('user_agent') or '',
-            request_method=context.get('request_method') or '',
-            request_path=context.get('request_path') or '',
+            changed_fields=list(changes["old"].keys()),
+            ip_address=context.get("ip_address"),
+            user_agent=context.get("user_agent") or "",
+            request_method=context.get("request_method") or "",
+            request_path=context.get("request_path") or "",
         )
 
         logger.info(f"删除审计日志已创建: {audit_log}")
@@ -347,6 +356,6 @@ def get_object_repr(instance):
     """
     获取对象的审计显示内容
     """
-    if hasattr(instance, 'get_audit_log_repr'):
+    if hasattr(instance, "get_audit_log_repr"):
         return instance.get_audit_log_repr()
     return str(instance)
