@@ -93,7 +93,9 @@ class MainFlowSmokeTest(TestCase):
             created_by=self.salesperson,
         )
         self.assertEqual(work_order.status, WorkOrderStatus.PENDING)
-        self.assertEqual(work_order.approval_status, WorkOrderApprovalStatus.DRAFT)
+        self.assertEqual(
+            work_order.approval_status, WorkOrderApprovalStatus.DRAFT
+        )
 
         # 2. 提交审核
         work_order = WorkOrderFlowService.submit_for_approval(
@@ -110,7 +112,9 @@ class MainFlowSmokeTest(TestCase):
             approved_by=self.approver,
             comment="审核通过",
         )
-        self.assertEqual(work_order.approval_status, WorkOrderApprovalStatus.APPROVED)
+        self.assertEqual(
+            work_order.approval_status, WorkOrderApprovalStatus.APPROVED
+        )
         self.assertEqual(work_order.status, WorkOrderStatus.IN_PROGRESS)
 
         tasks = WorkOrderTask.objects.filter(
