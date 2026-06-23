@@ -2,6 +2,7 @@
 确认开料接口自动化测试
 覆盖状态限制和开料后任务完成
 """
+
 from decimal import Decimal
 
 import pytest
@@ -11,10 +12,19 @@ from datetime import timedelta
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from workorder.models.core import WorkOrder, WorkOrderProcess, WorkOrderTask, WorkOrderMaterial
+from workorder.models.core import (
+    WorkOrder,
+    WorkOrderProcess,
+    WorkOrderTask,
+    WorkOrderMaterial,
+)
 from workorder.models.materials import Material
 from workorder.models.base import Customer, Process
-from workorder.constants.status import MaterialPurchaseStatus, TaskStatus, TaskType
+from workorder.constants.status import (
+    MaterialPurchaseStatus,
+    TaskStatus,
+    TaskType,
+)
 
 
 @pytest.fixture
@@ -30,13 +40,18 @@ def api_client_with_user(db):
         client = APIClient()
         client.force_authenticate(user=user)
         return client, user
+
     return _make
 
 
 @pytest.fixture
 def cutting_work_order(db):
-    customer = Customer.objects.create(name="测试客户", contact_person="张", phone="138")
-    user = User.objects.create_user(username="cutting_test_user", password="test")
+    customer = Customer.objects.create(
+        name="测试客户", contact_person="张", phone="138"
+    )
+    user = User.objects.create_user(
+        username="cutting_test_user", password="test"
+    )
     work_order = WorkOrder.objects.create(
         customer=customer,
         order_number="WO20260607001",
@@ -51,7 +66,9 @@ def cutting_work_order(db):
 @pytest.fixture
 def cutting_material(db, cutting_work_order):
     work_order, user = cutting_work_order
-    material = Material.objects.create(name="灰板纸", code="MAT001", need_cutting=True)
+    material = Material.objects.create(
+        name="灰板纸", code="MAT001", need_cutting=True
+    )
     wom = WorkOrderMaterial.objects.create(
         work_order=work_order,
         material=material,
@@ -66,11 +83,15 @@ def cutting_material(db, cutting_work_order):
 class TestConfirmCutting:
     """测试确认开料接口"""
 
-    def test_pending_status_rejected(self, api_client_with_user, cutting_work_order):
+    def test_pending_status_rejected(
+        self, api_client_with_user, cutting_work_order
+    ):
         """pending 状态不能确认开料"""
         client, user = api_client_with_user(is_superuser=True)
         work_order, _ = cutting_work_order
-        material = Material.objects.create(name="纸", code="P001", need_cutting=True)
+        material = Material.objects.create(
+            name="纸", code="P001", need_cutting=True
+        )
         wom = WorkOrderMaterial.objects.create(
             work_order=work_order,
             material=material,
@@ -78,16 +99,22 @@ class TestConfirmCutting:
             purchase_status=MaterialPurchaseStatus.PENDING,
         )
 
-        response = client.post(f"/api/v1/workorder-materials/{wom.id}/confirm_cutting/")
+        response = client.post(
+            f"/api/v1/workorder-materials/{wom.id}/confirm_cutting/"
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         wom.refresh_from_db()
         assert wom.purchase_status == MaterialPurchaseStatus.PENDING
 
-    def test_ordered_status_rejected(self, api_client_with_user, cutting_work_order):
+    def test_ordered_status_rejected(
+        self, api_client_with_user, cutting_work_order
+    ):
         """ordered 状态不能确认开料"""
         client, user = api_client_with_user(is_superuser=True)
         work_order, _ = cutting_work_order
-        material = Material.objects.create(name="纸", code="P002", need_cutting=True)
+        material = Material.objects.create(
+            name="纸", code="P002", need_cutting=True
+        )
         wom = WorkOrderMaterial.objects.create(
             work_order=work_order,
             material=material,
@@ -95,12 +122,16 @@ class TestConfirmCutting:
             purchase_status=MaterialPurchaseStatus.ORDERED,
         )
 
-        response = client.post(f"/api/v1/workorder-materials/{wom.id}/confirm_cutting/")
+        response = client.post(
+            f"/api/v1/workorder-materials/{wom.id}/confirm_cutting/"
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         wom.refresh_from_db()
         assert wom.purchase_status == MaterialPurchaseStatus.ORDERED
 
-    def test_received_status_allowed(self, api_client_with_user, cutting_material):
+    def test_received_status_allowed(
+        self, api_client_with_user, cutting_material
+    ):
         """received 状态可以确认开料，结构化字段正确写入"""
         client, user = api_client_with_user(is_superuser=True)
         wom, work_order, _ = cutting_material
@@ -121,7 +152,9 @@ class TestConfirmCutting:
         assert "100" in wom.notes
         assert user.username in wom.notes
 
-    def test_cut_triggers_cutting_task_completion(self, api_client_with_user, cutting_material):
+    def test_cut_triggers_cutting_task_completion(
+        self, api_client_with_user, cutting_material
+    ):
         """确认开料后触发关联开料任务完成"""
         client, user = api_client_with_user(is_superuser=True)
         wom, work_order, _ = cutting_material
@@ -143,7 +176,9 @@ class TestConfirmCutting:
             auto_calculate_quantity=True,
         )
 
-        response = client.post(f"/api/v1/workorder-materials/{wom.id}/confirm_cutting/")
+        response = client.post(
+            f"/api/v1/workorder-materials/{wom.id}/confirm_cutting/"
+        )
         assert response.status_code == status.HTTP_200_OK
 
         task.refresh_from_db()
@@ -156,5 +191,7 @@ class TestConfirmCutting:
         wom.purchase_status = MaterialPurchaseStatus.CUT
         wom.save()
 
-        response = client.post(f"/api/v1/workorder-materials/{wom.id}/confirm_cutting/")
+        response = client.post(
+            f"/api/v1/workorder-materials/{wom.id}/confirm_cutting/"
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST

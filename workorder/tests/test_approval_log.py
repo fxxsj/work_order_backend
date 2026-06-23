@@ -2,7 +2,7 @@
 通用审批日志测试
 覆盖 ApprovalService._log_approval 写入 AuditLog
 """
-from decimal import Decimal
+
 
 import pytest
 from django.utils import timezone
@@ -18,9 +18,21 @@ from workorder.services.approval_service import ApprovalService
 @pytest.fixture
 def approval_sales_order(db):
     """创建待审核的客户订单"""
-    customer = Customer.objects.create(name="审批测试客户", contact_person="张", phone="138")
-    user = User.objects.create_user(username="approval_creator", password="test", is_staff=True, is_superuser=True)
-    approver = User.objects.create_user(username="approval_approver", password="test", is_staff=True, is_superuser=True)
+    customer = Customer.objects.create(
+        name="审批测试客户", contact_person="张", phone="138"
+    )
+    user = User.objects.create_user(
+        username="approval_creator",
+        password="test",
+        is_staff=True,
+        is_superuser=True,
+    )
+    approver = User.objects.create_user(
+        username="approval_approver",
+        password="test",
+        is_staff=True,
+        is_superuser=True,
+    )
     sales_order = SalesOrder.objects.create(
         customer=customer,
         order_date=timezone.now().date(),

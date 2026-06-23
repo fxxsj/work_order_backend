@@ -3,7 +3,6 @@
 import pytest
 from django.contrib.auth.models import Group
 from rest_framework import status
-from rest_framework.test import APIClient
 from workorder.constants.role_codes import SALES
 from workorder.tests.factories import (
     WorkOrderFactory,
@@ -24,12 +23,14 @@ def make_salesperson(user, customer):
         customer.salesperson = user
         customer.save(update_fields=["salesperson"])
 
+
 def make_supervisor(user):
     from workorder.constants.role_codes import SUPERVISOR
     from django.contrib.auth.models import Group, Permission
+
     group, _ = Group.objects.get_or_create(name=SUPERVISOR)
     user.groups.add(group)
-    perm = Permission.objects.filter(codename='approve_workorder').first()
+    perm = Permission.objects.filter(codename="approve_workorder").first()
     if perm:
         user.user_permissions.add(perm)
 
@@ -52,8 +53,12 @@ class TestAutoDispatchWorkflow:
         process = ProcessFactory(name="Offset Printing")
 
         # Configure dispatch rules
-        TaskAssignmentRule.objects.create(process=process, department=dept1, priority=1)
-        TaskAssignmentRule.objects.create(process=process, department=dept2, priority=2)
+        TaskAssignmentRule.objects.create(
+            process=process, department=dept1, priority=1
+        )
+        TaskAssignmentRule.objects.create(
+            process=process, department=dept2, priority=2
+        )
 
         # Create workorder
         supervisor = UserFactory(username="supervisor", departments=[dept1])
@@ -80,7 +85,9 @@ class TestAutoDispatchWorkflow:
         assert response.status_code == status.HTTP_200_OK
 
         # Verify tasks are created
-        tasks = WorkOrderTask.objects.filter(work_order_process__work_order=workorder)
+        tasks = WorkOrderTask.objects.filter(
+            work_order_process__work_order=workorder
+        )
         assert tasks.count() == 4
 
         # Note: Auto-dispatch may or may not be enabled
@@ -219,12 +226,15 @@ class TestAutoDispatchWorkflow:
             process=process, department=dept2, priority=2, is_active=False
         )
 
-        user = UserFactory(username="user", add_permissions=["view_taskassignmentrule"])
+        user = UserFactory(
+            username="user", add_permissions=["view_taskassignmentrule"]
+        )
         api_client.force_authenticate(user=user)
 
         # Query rules
         response = api_client.get(
-            "/api/v1/task-assignment-rules/", {"process": process.id, "is_active": True}
+            "/api/v1/task-assignment-rules/",
+            {"process": process.id, "is_active": True},
         )
 
         assert response.status_code == status.HTTP_200_OK

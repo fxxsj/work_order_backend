@@ -12,9 +12,16 @@ class APIResponse:
     """统一的 API 响应格式"""
 
     @staticmethod
-    def success(data: Any = None, message: str = '操作成功', code: int = 200) -> Response:
+    def success(
+        data: Any = None, message: str = "操作成功", code: int = 200
+    ) -> Response:
         """成功响应"""
-        if isinstance(data, dict) and "message" in data and "data" in data and message == "操作成功":
+        if (
+            isinstance(data, dict)
+            and "message" in data
+            and "data" in data
+            and message == "操作成功"
+        ):
             message = data.get("message") or message
             data = data.get("data")
         return Response(

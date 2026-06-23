@@ -67,7 +67,9 @@ class Command(BaseCommand):
             app_label="workorder",
             model__in=STALE_PERMISSION_MODELS,
         )
-        Permission.objects.filter(content_type__in=stale_content_types).delete()
+        Permission.objects.filter(
+            content_type__in=stale_content_types
+        ).delete()
         stale_content_types.delete()
 
         self.stdout.write(self.style.SUCCESS("业务角色组已同步:"))

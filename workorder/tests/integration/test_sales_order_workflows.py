@@ -8,10 +8,16 @@ from rest_framework import status
 
 from workorder.models.inventory import DeliveryOrder
 from workorder.models.sales import SalesOrder, SalesOrderItem
-from workorder.tests.factories import CustomerFactory, ProductFactory, UserFactory
+from workorder.tests.factories import (
+    CustomerFactory,
+    ProductFactory,
+    UserFactory,
+)
 
 
-def _sales_order_payload(*, customer_id: int, product_id: int, status: str = "pending") -> dict:
+def _sales_order_payload(
+    *, customer_id: int, product_id: int, status: str = "pending"
+) -> dict:
     today = timezone.now().date()
     return {
         "customer": customer_id,
@@ -50,7 +56,9 @@ class TestSalesOrderWorkflow:
         # 合法选项，为清晰起见改为 "pending"
         response = api_client.post(
             "/api/v1/sales-orders/",
-            _sales_order_payload(customer_id=customer.id, product_id=product.id),
+            _sales_order_payload(
+                customer_id=customer.id, product_id=product.id
+            ),
             format="json",
         )
 
@@ -76,7 +84,9 @@ class TestSalesOrderWorkflow:
         assert updated["status"] == "pending"
         assert updated["payment_status"] == "unpaid"
 
-    def test_delivery_order_can_be_created_from_approved_sales_order(self, api_client):
+    def test_delivery_order_can_be_created_from_approved_sales_order(
+        self, api_client
+    ):
         user = UserFactory(is_superuser=True)
         customer = CustomerFactory()
         product = ProductFactory()
@@ -121,7 +131,9 @@ class TestSalesOrderWorkflow:
         assert response.status_code == status.HTTP_201_CREATED
         assert DeliveryOrder.objects.filter(sales_order=sales_order).exists()
 
-    def test_manual_complete_requires_reason_for_partial_delivery(self, api_client):
+    def test_manual_complete_requires_reason_for_partial_delivery(
+        self, api_client
+    ):
         user = UserFactory(is_superuser=True)
         customer = CustomerFactory()
         product = ProductFactory()

@@ -22,15 +22,20 @@ class Command(BaseCommand):
 
         with transaction.atomic():
             if clear:
-                preset_processes = Process.objects.filter(code__in=PRESET_PROCESS_CODES)
+                preset_processes = Process.objects.filter(
+                    code__in=PRESET_PROCESS_CODES
+                )
                 deleted_count = TaskAssignmentRule.objects.filter(
                     process__in=preset_processes
                 ).delete()[0]
                 self.stdout.write(f"已删除 {deleted_count} 条预设工序分派规则")
 
-            process_map = {process.code: process for process in Process.objects.all()}
+            process_map = {
+                process.code: process for process in Process.objects.all()
+            }
             department_map = {
-                department.code: department for department in Department.objects.all()
+                department.code: department
+                for department in Department.objects.all()
             }
 
             created_count = 0
@@ -80,6 +85,8 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 "任务分派规则同步完成: "
-                f"创建 {created_count} 条，更新 {updated_count} 条，跳过 {skipped_count} 条"
+                f"创建 {created_count} 条，"
+                f"更新 {updated_count} 条，"
+                f"跳过 {skipped_count} 条"
             )
         )

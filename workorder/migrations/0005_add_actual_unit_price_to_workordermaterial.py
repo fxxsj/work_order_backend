@@ -6,13 +6,20 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('workorder', '0004_add_work_hours_to_workordertask'),
+        ("workorder", "0004_add_work_hours_to_workordertask"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='workordermaterial',
-            name='actual_unit_price',
-            field=models.DecimalField(blank=True, decimal_places=2, help_text='采购入库时的实际单价，用于成本核算', max_digits=12, null=True, verbose_name='采购实际单价'),
+            model_name="workordermaterial",
+            name="actual_unit_price",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=2,
+                help_text="采购入库时的实际单价，用于成本核算",
+                max_digits=12,
+                null=True,
+                verbose_name="采购实际单价",
+            ),
         ),
     ]

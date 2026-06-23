@@ -2,6 +2,7 @@
 任务报工 update_quantity 接口测试
 覆盖工时和设备字段的保存
 """
+
 from decimal import Decimal
 
 import pytest
@@ -19,7 +20,9 @@ from workorder.constants.status import TaskStatus
 @pytest.fixture
 def operator_task(db):
     """创建一个已分派给操作员的任务"""
-    customer = Customer.objects.create(name="测试客户", contact_person="张", phone="138")
+    customer = Customer.objects.create(
+        name="测试客户", contact_person="张", phone="138"
+    )
     user = User.objects.create_user(username="task_creator", password="test")
     work_order = WorkOrder.objects.create(
         customer=customer,
@@ -30,9 +33,13 @@ def operator_task(db):
         created_by=user,
     )
     process = Process.objects.create(name="印刷", code="PRT")
-    wop = WorkOrderProcess.objects.create(work_order=work_order, process=process, sequence=10)
+    wop = WorkOrderProcess.objects.create(
+        work_order=work_order, process=process, sequence=10
+    )
     dept = Department.objects.create(name="印刷部", code="PRINT")
-    operator = User.objects.create_user(username="operator", password="test", is_staff=True)
+    operator = User.objects.create_user(
+        username="operator", password="test", is_staff=True
+    )
 
     task = WorkOrderTask.objects.create(
         work_order_process=wop,

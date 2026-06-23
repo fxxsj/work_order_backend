@@ -75,7 +75,8 @@ class CustomerDataPermission(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return PermissionUtils.has_any_permission(
                 request.user,
-                self._customer_read_permissions + self._work_order_read_permissions,
+                self._customer_read_permissions
+                + self._work_order_read_permissions,
             )
 
         if request.method == "POST":
@@ -213,17 +214,14 @@ class WorkOrderAssetPermission(permissions.BasePermission):
 
 class WorkOrderProcessPermission(WorkOrderAssetPermission):
     """工序权限：继承 WorkOrderAssetPermission。"""
-    pass
 
 
 class WorkOrderMaterialPermission(WorkOrderAssetPermission):
     """物料权限：继承 WorkOrderAssetPermission。"""
-    pass
 
 
 class WorkOrderProductPermission(WorkOrderAssetPermission):
     """产品权限：继承 WorkOrderAssetPermission。"""
-    pass
 
 
 class WorkOrderTaskPermission(permissions.BasePermission):
@@ -240,7 +238,13 @@ class WorkOrderTaskPermission(permissions.BasePermission):
     """
 
     # 允许已登录用户访问的操作，不强制要求 view_workorder 模型权限
-    OPERATOR_ACTIONS = {"claimable", "operator_center", "claim", "update_quantity", "complete"}
+    OPERATOR_ACTIONS = {
+        "claimable",
+        "operator_center",
+        "claim",
+        "update_quantity",
+        "complete",
+    }
 
     def has_permission(self, request, view):
         # 检查用户是否已登录
@@ -325,7 +329,9 @@ class WorkOrderTaskPermission(permissions.BasePermission):
             # 检查是否是跨部门操作
             if obj.assigned_department:
                 # P1 优化: 使用缓存检查跨部门操作
-                user_departments = PermissionCache.get_user_department_scope(request.user)
+                user_departments = PermissionCache.get_user_department_scope(
+                    request.user
+                )
                 if obj.assigned_department.id not in user_departments:
                     # 跨部门操作，需要特殊权限（这里允许有 change_workorder 权限的用户）
                     return True
@@ -388,7 +394,9 @@ class WorkOrderDataPermission(permissions.BasePermission):
             # 生产主管可以查看本部门有任务的施工单
             if request.user.has_perm("workorder.change_workorder"):
                 # 检查是否有本部门的任务
-                user_department_ids = PermissionCache.get_user_department_scope(request.user)
+                user_department_ids = (
+                    PermissionCache.get_user_department_scope(request.user)
+                )
                 if user_department_ids:
                     from workorder.models import WorkOrderTask
 

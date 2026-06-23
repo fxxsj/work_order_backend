@@ -16,8 +16,10 @@ class StandardJSONRenderer(JSONRenderer):
         if renderer_context is None:
             return super().render(data, accepted_media_type, renderer_context)
 
-        response = renderer_context.get('response')
-        status_code = getattr(response, 'status_code', 200)
+        response = renderer_context.get("response")
+        status_code = getattr(response, "status_code", 200)
 
-        payload = standardize_renderer_payload(data=data, status_code=status_code)
+        payload = standardize_renderer_payload(
+            data=data, status_code=status_code
+        )
         return super().render(payload, accepted_media_type, renderer_context)

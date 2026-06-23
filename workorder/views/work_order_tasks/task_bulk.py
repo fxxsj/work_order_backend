@@ -190,7 +190,8 @@ class TaskBulkMixin:
                         f"批量更新完成数量：{quantity_before} → "
                         f"{new_quantity_completed}，本次完成：{increment}，"
                         f"不良品：{defective}"
-                    ) + (f"，备注：{notes}" if notes else ""),
+                    )
+                    + (f"，备注：{notes}" if notes else ""),
                     quantity_before=quantity_before,
                     quantity_after=new_quantity_completed,
                     quantity_increment=increment,
@@ -580,8 +581,7 @@ class TaskBulkMixin:
                             else "未分配"
                         )
                         new_operator_name = (
-                            f"{operator.first_name}"
-                            f"{operator.last_name}"
+                            f"{operator.first_name}" f"{operator.last_name}"
                         )
                         if task.assigned_operator != operator:
                             changes.append(
@@ -622,22 +622,20 @@ class TaskBulkMixin:
 
                     # 如果分派了新的操作员，创建通知
                     if operator and task.assigned_operator == operator:
+                        work_order = task.work_order_process.work_order
                         Notification.create_notification(
                             recipient=operator,
                             notification_type="task_assigned",
                             title="新任务分配",
                             content=f"您有新的任务：{task.work_content}",
                             priority="normal",
-                            work_order=task.work_order_process.work_order,
+                            work_order=work_order,
                             work_order_process=task.work_order_process,
                             task=task,
                             template_key="task_assigned",
                             template_variables={
                                 "task_name": task.work_content,
-                                "workorder_number": (
-                                    task.work_order_process
-                                    .work_order.order_number
-                                ),
+                                "workorder_number": work_order.order_number,
                                 "assigned_by": (
                                     request.user.username
                                     if request.user

@@ -6,23 +6,38 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('workorder', '0003_add_quality_status_to_productstock'),
+        ("workorder", "0003_add_quality_status_to_productstock"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='workordertask',
-            name='machine_name',
-            field=models.CharField(blank=True, help_text='使用的生产设备', max_length=100, verbose_name='设备名称'),
+            model_name="workordertask",
+            name="machine_name",
+            field=models.CharField(
+                blank=True,
+                help_text="使用的生产设备",
+                max_length=100,
+                verbose_name="设备名称",
+            ),
         ),
         migrations.AddField(
-            model_name='workordertask',
-            name='operator_count',
-            field=models.IntegerField(default=1, help_text='参与该任务的操作员人数', verbose_name='操作人数'),
+            model_name="workordertask",
+            name="operator_count",
+            field=models.IntegerField(
+                default=1,
+                help_text="参与该任务的操作员人数",
+                verbose_name="操作人数",
+            ),
         ),
         migrations.AddField(
-            model_name='workordertask',
-            name='work_hours',
-            field=models.DecimalField(decimal_places=2, default=0, help_text='完成该任务所花费的工时', max_digits=6, verbose_name='工时(小时)'),
+            model_name="workordertask",
+            name="work_hours",
+            field=models.DecimalField(
+                decimal_places=2,
+                default=0,
+                help_text="完成该任务所花费的工时",
+                max_digits=6,
+                verbose_name="工时(小时)",
+            ),
         ),
     ]

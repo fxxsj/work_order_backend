@@ -21,11 +21,17 @@ from workorder.services.service_errors import ServiceError
 @pytest.fixture
 def sales_order_setup(db):
     """创建客户订单测试数据。"""
-    customer = Customer.objects.create(name="测试客户", contact_person="张", phone="138")
-    user = User.objects.create_user(username="sales_test_user", password="test")
+    customer = Customer.objects.create(
+        name="测试客户", contact_person="张", phone="138"
+    )
+    user = User.objects.create_user(
+        username="sales_test_user", password="test"
+    )
     user.is_superuser = True
     user.save()
-    product = Product.objects.create(name="测试产品", code="TEST001", unit="件")
+    product = Product.objects.create(
+        name="测试产品", code="TEST001", unit="件"
+    )
 
     sales_order = SalesOrder.objects.create(
         customer=customer,
@@ -70,7 +76,9 @@ class TestSalesOrderService:
         sales_order.save()
 
         with pytest.raises(ServiceError) as exc_info:
-            SalesOrderService.submit_for_approval(sales_order=sales_order, user=user)
+            SalesOrderService.submit_for_approval(
+                sales_order=sales_order, user=user
+            )
 
         assert exc_info.value.code == 400
 
@@ -106,7 +114,9 @@ class TestSalesOrderService:
         sales_order.save()
 
         with pytest.raises(ServiceError) as exc_info:
-            SalesOrderService.reject(sales_order=sales_order, user=user, reason="")
+            SalesOrderService.reject(
+                sales_order=sales_order, user=user, reason=""
+            )
 
         assert exc_info.value.code == 400
 
@@ -128,7 +138,9 @@ class TestSalesOrderService:
         assert sales_order.status == "completed"
         assert sales_order.actual_delivery_date is not None
 
-    def test_complete_requires_reason_when_not_all_delivered(self, sales_order_setup):
+    def test_complete_requires_reason_when_not_all_delivered(
+        self, sales_order_setup
+    ):
         """测试未全部发货时人工完结需要原因"""
         sales_order = sales_order_setup["sales_order"]
         sales_order.approval_status = "approved"

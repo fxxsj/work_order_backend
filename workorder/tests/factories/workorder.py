@@ -1,11 +1,14 @@
 """Factory Boy definitions for work order models"""
+
 import factory
 from datetime import date, timedelta
-from django.utils import timezone
-from .base import DepartmentFactory, ProcessFactory
+from .base import ProcessFactory
 from .users import UserFactory
 from workorder.models.core import (
-    WorkOrder, WorkOrderProcess, WorkOrderTask, WorkOrderProduct
+    WorkOrder,
+    WorkOrderProcess,
+    WorkOrderTask,
+    WorkOrderProduct,
 )
 from workorder.models.base import Customer
 from workorder.models.products import Product
@@ -18,8 +21,8 @@ class CustomerFactory(factory.django.DjangoModelFactory):
         model = Customer
 
     name = factory.Sequence(lambda n: f"Customer {n}")
-    contact_person = factory.Faker('name', locale='zh_CN')
-    phone = factory.Faker('phone_number', locale='zh_CN')
+    contact_person = factory.Faker("name", locale="zh_CN")
+    phone = factory.Faker("phone_number", locale="zh_CN")
     email = factory.Sequence(lambda n: f"contact{n}@example.com")
 
 
@@ -50,10 +53,12 @@ class WorkOrderFactory(factory.django.DjangoModelFactory):
     manager = factory.SubFactory(UserFactory)
     production_quantity = 100
     order_date = factory.LazyFunction(lambda: date.today())
-    delivery_date = factory.LazyFunction(lambda: date.today() + timedelta(days=7))
-    priority = 'normal'
-    approval_status = 'submitted'
-    status = 'pending'
+    delivery_date = factory.LazyFunction(
+        lambda: date.today() + timedelta(days=7)
+    )
+    priority = "normal"
+    approval_status = "submitted"
+    status = "pending"
 
     # Post-generation: create processes
     @factory.post_generation
@@ -83,7 +88,7 @@ class WorkOrderProcessFactory(factory.django.DjangoModelFactory):
     work_order = factory.SubFactory(WorkOrderFactory)
     process = factory.SubFactory(ProcessFactory)
     sequence = factory.Sequence(lambda n: (n + 1) * 10)
-    status = 'pending'
+    status = "pending"
 
     # Post-generation: create tasks
     @factory.post_generation
@@ -98,9 +103,8 @@ class WorkOrderProcessFactory(factory.django.DjangoModelFactory):
 
         if isinstance(extracted, int) and extracted > 0:
             for _ in range(extracted):
-                task = WorkOrderTaskFactory(
-                    work_order_process=obj,
-                    status='draft'
+                _ = WorkOrderTaskFactory(
+                    work_order_process=obj, status="draft"
                 )
                 # work_order and process are derived from work_order_process
                 # Don't pass them explicitly
@@ -124,9 +128,9 @@ class WorkOrderTaskFactory(factory.django.DjangoModelFactory):
         model = WorkOrderTask
 
     work_order_process = factory.SubFactory(WorkOrderProcessFactory)
-    work_content = 'Complete task'
-    status = 'draft'
-    task_type = 'general'
+    work_content = "Complete task"
+    status = "draft"
+    task_type = "general"
     production_quantity = 100
     quantity_completed = 0
     quantity_defective = 0

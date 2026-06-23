@@ -2,31 +2,31 @@
 测试配置文件
 定义测试共享配置和工具
 """
-import os
+
 from django.conf import settings
 from django.test.utils import get_runner
 
 # 测试数据库配置
 TEST_DATABASE = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': ':memory:',  # 使用内存数据库加快测试速度
-        'ATOMIC_REQUESTS': True,
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": ":memory:",  # 使用内存数据库加快测试速度
+        "ATOMIC_REQUESTS": True,
     }
 }
 
 # 测试时覆盖的设置
 TEST_SETTINGS_OVERRIDE = {
     # 使用密码哈希器加速测试
-    'PASSWORD_HASHERS': [
-        'django.contrib.auth.hashers.MD5PasswordHasher',
+    "PASSWORD_HASHERS": [
+        "django.contrib.auth.hashers.MD5PasswordHasher",
     ],
     # 禁用调试
-    'DEBUG': False,
+    "DEBUG": False,
     # 测试时禁用日志
-    'LOGGING': {},
+    "LOGGING": {},
     # 测试邮箱后端
-    'EMAIL_BACKEND': 'django.core.mail.backends.locmem.EmailBackend',
+    "EMAIL_BACKEND": "django.core.mail.backends.locmem.EmailBackend",
 }
 
 
@@ -47,7 +47,7 @@ class TestDataFactory:
     """测试数据工厂 - 快速创建测试数据"""
 
     @staticmethod
-    def create_user(username='testuser', password='testpass123', **kwargs):
+    def create_user(username="testuser", password="testpass123", **kwargs):
         """创建测试用户"""
         from django.contrib.auth.models import User
         from django.contrib.contenttypes.models import ContentType
@@ -58,30 +58,27 @@ class TestDataFactory:
         user = User.objects.create_user(
             username=username,
             password=password,
-            email=kwargs.get('email', f'{username}@example.com'),
-            first_name=kwargs.get('first_name', 'Test'),
-            last_name=kwargs.get('last_name', 'User'),
-            is_staff=kwargs.get('is_staff', True),
-            is_superuser=kwargs.get('is_superuser', False),
+            email=kwargs.get("email", f"{username}@example.com"),
+            first_name=kwargs.get("first_name", "Test"),
+            last_name=kwargs.get("last_name", "User"),
+            is_staff=kwargs.get("is_staff", True),
+            is_superuser=kwargs.get("is_superuser", False),
         )
 
         # 如果不是超级用户，添加必要的权限
-        if not user.is_superuser and kwargs.get('add_permissions', True):
+        if not user.is_superuser and kwargs.get("add_permissions", True):
             # 获取 WorkOrder 的内容类型
             try:
                 ct = ContentType.objects.get_for_model(WorkOrder)
                 # 添加查看和修改权限
                 view_perm = Permission.objects.get(
-                    content_type=ct,
-                    codename='view_workorder'
+                    content_type=ct, codename="view_workorder"
                 )
                 change_perm = Permission.objects.get(
-                    content_type=ct,
-                    codename='change_workorder'
+                    content_type=ct, codename="change_workorder"
                 )
                 add_perm = Permission.objects.get(
-                    content_type=ct,
-                    codename='add_workorder'
+                    content_type=ct, codename="add_workorder"
                 )
                 user.user_permissions.add(view_perm, change_perm, add_perm)
             except Exception:
@@ -91,58 +88,64 @@ class TestDataFactory:
         return user
 
     @staticmethod
-    def create_customer(name='测试客户', salesperson=None, **kwargs):
+    def create_customer(name="测试客户", salesperson=None, **kwargs):
         """创建测试客户"""
         from workorder.models.base import Customer
+
         return Customer.objects.create(
             name=name,
-            contact_person=kwargs.get('contact_person', '张三'),
-            phone=kwargs.get('phone', '13800138000'),
-            email=kwargs.get('email', 'customer@example.com'),
+            contact_person=kwargs.get("contact_person", "张三"),
+            phone=kwargs.get("phone", "13800138000"),
+            email=kwargs.get("email", "customer@example.com"),
             salesperson=salesperson,
-            notes=kwargs.get('notes', ''),
+            notes=kwargs.get("notes", ""),
         )
 
     @staticmethod
-    def create_product(name='测试产品', code='TEST001', **kwargs):
+    def create_product(name="测试产品", code="TEST001", **kwargs):
         """创建测试产品"""
         from workorder.models.products import Product
+
         return Product.objects.create(
             name=name,
             code=code,
-            specification=kwargs.get('specification', '100x100mm'),
-            unit=kwargs.get('unit', '件'),
-            unit_price=kwargs.get('unit_price', 10.00),
+            specification=kwargs.get("specification", "100x100mm"),
+            unit=kwargs.get("unit", "件"),
+            unit_price=kwargs.get("unit_price", 10.00),
         )
 
     @staticmethod
-    def create_process(name='测试工序', code='TEST', **kwargs):
+    def create_process(name="测试工序", code="TEST", **kwargs):
         """创建测试工序"""
         from workorder.models.base import Process
+
         return Process.objects.create(
             name=name,
-            code=kwargs.get('code', code),
-            is_builtin=kwargs.get('is_builtin', False),
-            is_parallel=kwargs.get('is_parallel', False),
-            requires_artwork=kwargs.get('requires_artwork', False),
-            artwork_required=kwargs.get('artwork_required', False),
+            code=kwargs.get("code", code),
+            is_builtin=kwargs.get("is_builtin", False),
+            is_parallel=kwargs.get("is_parallel", False),
+            requires_artwork=kwargs.get("requires_artwork", False),
+            artwork_required=kwargs.get("artwork_required", False),
         )
 
     @staticmethod
-    def create_department(name='测试部门', code='DEPT', **kwargs):
+    def create_department(name="测试部门", code="DEPT", **kwargs):
         """创建测试部门"""
         from workorder.models.base import Department
-        parent = kwargs.get('parent', None)
+
+        parent = kwargs.get("parent", None)
         return Department.objects.create(
             name=name,
-            code=code or kwargs.get('code', f'DEPT_{name[:4].upper()}'),
+            code=code or kwargs.get("code", f"DEPT_{name[:4].upper()}"),
             parent=parent,
-            is_active=kwargs.get('is_active', True),
-            sort_order=kwargs.get('sort_order', 0),
+            is_active=kwargs.get("is_active", True),
+            sort_order=kwargs.get("sort_order", 0),
         )
 
     @staticmethod
-    def create_workorder_process(work_order=None, process=None, sequence=None, **kwargs):
+    def create_workorder_process(
+        work_order=None, process=None, sequence=None, **kwargs
+    ):
         """创建测试施工单工序"""
         from workorder.models.core import WorkOrderProcess
         from django.db.models import Max
@@ -154,16 +157,19 @@ class TestDataFactory:
             process = TestDataFactory.create_process()
 
         if sequence is None:
-            current_max = WorkOrderProcess.objects.filter(work_order=work_order).aggregate(
-                max_seq=Max("sequence")
-            )["max_seq"] or 0
+            current_max = (
+                WorkOrderProcess.objects.filter(
+                    work_order=work_order
+                ).aggregate(max_seq=Max("sequence"))["max_seq"]
+                or 0
+            )
             sequence = current_max + 10
 
         return WorkOrderProcess.objects.create(
             work_order=work_order,
             process=process,
             sequence=sequence,
-            status=kwargs.get('status', 'pending'),
+            status=kwargs.get("status", "pending"),
         )
 
     @staticmethod
@@ -177,19 +183,21 @@ class TestDataFactory:
             customer = TestDataFactory.create_customer()
 
         if not creator:
-            creator = TestDataFactory.create_user(username=username or 'testuser')
+            creator = TestDataFactory.create_user(
+                username=username or "testuser"
+            )
 
         tomorrow = timezone.now().date() + timedelta(days=1)
 
         return WorkOrder.objects.create(
             customer=customer,
-            production_quantity=kwargs.get('production_quantity', 100),
-            order_date=kwargs.get('order_date', timezone.now().date()),
-            delivery_date=kwargs.get('delivery_date', tomorrow),
+            production_quantity=kwargs.get("production_quantity", 100),
+            order_date=kwargs.get("order_date", timezone.now().date()),
+            delivery_date=kwargs.get("delivery_date", tomorrow),
             created_by=creator,
             manager=creator,
-            priority=kwargs.get('priority', 'normal'),
-            notes=kwargs.get('notes', ''),
+            priority=kwargs.get("priority", "normal"),
+            notes=kwargs.get("notes", ""),
         )
 
 
@@ -220,19 +228,25 @@ class APITestCaseMixin:
         """POST 请求"""
         if user:
             kwargs.update(self._get_auth_header(user))
-        return self.client.post(url, data, content_type='application/json', **kwargs)
+        return self.client.post(
+            url, data, content_type="application/json", **kwargs
+        )
 
     def api_put(self, url, data=None, user=None, **kwargs):
         """PUT 请求"""
         if user:
             kwargs.update(self._get_auth_header(user))
-        return self.client.put(url, data, content_type='application/json', **kwargs)
+        return self.client.put(
+            url, data, content_type="application/json", **kwargs
+        )
 
     def api_patch(self, url, data=None, user=None, **kwargs):
         """PATCH 请求"""
         if user:
             kwargs.update(self._get_auth_header(user))
-        return self.client.patch(url, data, content_type='application/json', **kwargs)
+        return self.client.patch(
+            url, data, content_type="application/json", **kwargs
+        )
 
     def api_delete(self, url, user=None, **kwargs):
         """DELETE 请求"""
@@ -248,9 +262,9 @@ class APITestCaseMixin:
 
 
 # Pytest fixtures for integration tests
-import pytest
-from django.contrib.auth import get_user_model
-from rest_framework.test import APIClient
+import pytest  # noqa: E402
+from django.contrib.auth import get_user_model  # noqa: E402
+from rest_framework.test import APIClient  # noqa: E402
 
 User = get_user_model()
 
@@ -258,21 +272,23 @@ User = get_user_model()
 @pytest.fixture
 def test_password():
     """Fixture providing a default test password"""
-    return 'test_pass_123'
+    return "test_pass_123"
 
 
 @pytest.fixture
 def auto_login_user(db, client):
     """Fixture that creates a user and logs them in"""
+
     def make_user(**kwargs):
         user = User.objects.create_user(
-            username=kwargs.get('username', 'testuser'),
-            password=kwargs.get('password', 'test_pass_123'),
-            email=kwargs.get('email', 'test@example.com'),
-            is_staff=kwargs.get('is_staff', True),
+            username=kwargs.get("username", "testuser"),
+            password=kwargs.get("password", "test_pass_123"),
+            email=kwargs.get("email", "test@example.com"),
+            is_staff=kwargs.get("is_staff", True),
         )
         client.force_login(user)
         return client, user
+
     return make_user
 
 
@@ -285,14 +301,16 @@ def api_client():
 @pytest.fixture
 def api_client_with_user(db):
     """Fixture providing authenticated API client with user"""
+
     def _create_client(**kwargs):
         user = User.objects.create_user(
-            username=kwargs.get('username', 'testuser'),
-            password=kwargs.get('password', 'test_pass_123'),
-            email=kwargs.get('email', 'test@example.com'),
-            is_staff=kwargs.get('is_staff', True),
+            username=kwargs.get("username", "testuser"),
+            password=kwargs.get("password", "test_pass_123"),
+            email=kwargs.get("email", "test@example.com"),
+            is_staff=kwargs.get("is_staff", True),
         )
         client = APIClient()
         client.force_authenticate(user=user)
         return client, user
+
     return _create_client

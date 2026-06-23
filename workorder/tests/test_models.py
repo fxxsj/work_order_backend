@@ -2,14 +2,17 @@
 施工单核心模型测试
 测试 WorkOrder、WorkOrderProcess、WorkOrderTask 等核心模型的功能
 """
+
 from django.test import TestCase
-from django.contrib.auth.models import User
 from django.utils import timezone
-from datetime import datetime, timedelta
 from .conftest import TestDataFactory
 from ..models import (
-    WorkOrder, WorkOrderProcess, WorkOrderTask, WorkOrderProduct,
-    Customer, Product, Process, Artwork, Department
+    WorkOrder,
+    WorkOrderProcess,
+    WorkOrderTask,
+    WorkOrderProduct,
+    Product,
+    Process,
 )
 from ..services.task_generation import TaskGenerationService
 
@@ -27,15 +30,15 @@ class WorkOrderModelTest(TestCase):
         work_order = WorkOrder.objects.create(
             customer=self.customer,
             production_quantity=100,
-            delivery_date='2026-12-31',
+            delivery_date="2026-12-31",
             created_by=self.user,
-            manager=self.user
+            manager=self.user,
         )
 
         # 验证施工单号格式：yyyymm + 3位序号
         self.assertIsNotNone(work_order.order_number)
-        self.assertRegex(work_order.order_number, r'^\d{9}$')
-        expected_prefix = timezone.localtime().strftime('%Y%m')
+        self.assertRegex(work_order.order_number, r"^\d{9}$")
+        expected_prefix = timezone.localtime().strftime("%Y%m")
         self.assertTrue(work_order.order_number.startswith(expected_prefix))
 
     def test_order_number_unique(self):
@@ -43,16 +46,16 @@ class WorkOrderModelTest(TestCase):
         wo1 = WorkOrder.objects.create(
             customer=self.customer,
             production_quantity=100,
-            delivery_date='2026-12-31',
+            delivery_date="2026-12-31",
             created_by=self.user,
-            manager=self.user
+            manager=self.user,
         )
         wo2 = WorkOrder.objects.create(
             customer=self.customer,
             production_quantity=200,
-            delivery_date='2026-12-31',
+            delivery_date="2026-12-31",
             created_by=self.user,
-            manager=self.user
+            manager=self.user,
         )
 
         # 施工单号应该不同
@@ -63,44 +66,42 @@ class WorkOrderModelTest(TestCase):
         work_order = WorkOrder.objects.create(
             customer=self.customer,
             production_quantity=100,
-            delivery_date='2026-12-31',
+            delivery_date="2026-12-31",
             created_by=self.user,
-            manager=self.user
+            manager=self.user,
         )
-        self.assertEqual(work_order.status, 'pending')
+        self.assertEqual(work_order.status, "pending")
 
     def test_default_approval_status_draft(self):
         """测试默认审核状态为草稿"""
         work_order = WorkOrder.objects.create(
             customer=self.customer,
             production_quantity=100,
-            delivery_date='2026-12-31',
+            delivery_date="2026-12-31",
             created_by=self.user,
-            manager=self.user
+            manager=self.user,
         )
-        self.assertEqual(work_order.approval_status, 'draft')
+        self.assertEqual(work_order.approval_status, "draft")
 
     def test_auto_complete_when_all_processes_completed(self):
         """测试所有工序完成时自动完成施工单"""
         work_order = WorkOrder.objects.create(
             customer=self.customer,
             production_quantity=100,
-            delivery_date='2026-12-31',
+            delivery_date="2026-12-31",
             created_by=self.user,
             manager=self.user,
-            status='in_progress'
+            status="in_progress",
         )
 
         # 创建工序
-        process = Process.objects.create(name='测试工序', code='TEST')
+        process = Process.objects.create(name="测试工序", code="TEST")
         wo_process = WorkOrderProcess.objects.create(
-            work_order=work_order,
-            process=process,
-            sequence=10
+            work_order=work_order, process=process, sequence=10
         )
 
         # 完成工序
-        wo_process.status = 'completed'
+        wo_process.status = "completed"
         wo_process.save()
 
         # 刷新施工单
@@ -108,8 +109,8 @@ class WorkOrderModelTest(TestCase):
 
         # 注意：当前版本未实现自动完成逻辑
         # 施工单保持 in_progress 状态，需要手动完成
-        self.assertEqual(work_order.status, 'in_progress')
-        self.skipTest('Auto-complete logic not yet implemented')
+        self.assertEqual(work_order.status, "in_progress")
+        self.skipTest("Auto-complete logic not yet implemented")
 
 
 class WorkOrderProcessModelTest(TestCase):
@@ -120,26 +121,21 @@ class WorkOrderProcessModelTest(TestCase):
         self.user = TestDataFactory.create_user()
         self.customer = TestDataFactory.create_customer(salesperson=self.user)
         self.work_order = TestDataFactory.create_workorder(
-            customer=self.customer,
-            creator=self.user
+            customer=self.customer, creator=self.user
         )
-        self.process = Process.objects.create(name='测试工序', code='TEST')
+        self.process = Process.objects.create(name="测试工序", code="TEST")
 
     def test_default_status_pending(self):
         """测试默认状态为待开始"""
         wo_process = WorkOrderProcess.objects.create(
-            work_order=self.work_order,
-            process=self.process,
-            sequence=10
+            work_order=self.work_order, process=self.process, sequence=10
         )
-        self.assertEqual(wo_process.status, 'pending')
+        self.assertEqual(wo_process.status, "pending")
 
     def test_generate_tasks(self):
         """测试自动生成任务"""
         wo_process = WorkOrderProcess.objects.create(
-            work_order=self.work_order,
-            process=self.process,
-            sequence=10
+            work_order=self.work_order, process=self.process, sequence=10
         )
 
         # 生成任务
@@ -152,9 +148,7 @@ class WorkOrderProcessModelTest(TestCase):
     def test_can_start_when_pending(self):
         """测试待开始状态可以开始"""
         wo_process = WorkOrderProcess.objects.create(
-            work_order=self.work_order,
-            process=self.process,
-            sequence=10
+            work_order=self.work_order, process=self.process, sequence=10
         )
 
         # 应该可以开始
@@ -166,7 +160,7 @@ class WorkOrderProcessModelTest(TestCase):
             work_order=self.work_order,
             process=self.process,
             sequence=10,
-            status='in_progress'
+            status="in_progress",
         )
 
         # 不应该可以开始
@@ -178,17 +172,17 @@ class WorkOrderProcessModelTest(TestCase):
             work_order=self.work_order,
             process=self.process,
             sequence=10,
-            status='in_progress'
+            status="in_progress",
         )
 
         # 创建任务并完成
-        task = WorkOrderTask.objects.create(
+        _ = WorkOrderTask.objects.create(
             work_order_process=wo_process,
-            task_type='general',
-            work_content='测试任务',
+            task_type="general",
+            work_content="测试任务",
             production_quantity=100,
             quantity_completed=100,
-            status='completed'
+            status="completed",
         )
 
         # 检查并更新状态
@@ -198,7 +192,7 @@ class WorkOrderProcessModelTest(TestCase):
         wo_process.refresh_from_db()
 
         # 应该完成
-        self.assertEqual(wo_process.status, 'completed')
+        self.assertEqual(wo_process.status, "completed")
 
 
 class WorkOrderTaskModelTest(TestCase):
@@ -209,25 +203,22 @@ class WorkOrderTaskModelTest(TestCase):
         self.user = TestDataFactory.create_user()
         self.customer = TestDataFactory.create_customer(salesperson=self.user)
         self.work_order = TestDataFactory.create_workorder(
-            customer=self.customer,
-            creator=self.user
+            customer=self.customer, creator=self.user
         )
-        self.process = Process.objects.create(name='测试工序', code='TEST')
+        self.process = Process.objects.create(name="测试工序", code="TEST")
         self.wo_process = WorkOrderProcess.objects.create(
-            work_order=self.work_order,
-            process=self.process,
-            sequence=10
+            work_order=self.work_order, process=self.process, sequence=10
         )
 
     def test_auto_complete_when_quantity_reached(self):
         """测试达到数量时自动完成"""
         task = WorkOrderTask.objects.create(
             work_order_process=self.wo_process,
-            task_type='general',
-            work_content='测试任务',
+            task_type="general",
+            work_content="测试任务",
             production_quantity=100,
             quantity_completed=0,
-            auto_calculate_quantity=True
+            auto_calculate_quantity=True,
         )
 
         # 更新数量到100
@@ -237,18 +228,18 @@ class WorkOrderTaskModelTest(TestCase):
         task.refresh_from_db()
 
         # 应该自动完成
-        self.assertEqual(task.status, 'completed')
+        self.assertEqual(task.status, "completed")
         self.assertEqual(task.quantity_completed, 100)
 
     def test_incremental_update(self):
         """测试增量更新"""
         task = WorkOrderTask.objects.create(
             work_order_process=self.wo_process,
-            task_type='general',
-            work_content='测试任务',
+            task_type="general",
+            work_content="测试任务",
             production_quantity=100,
             quantity_completed=50,
-            auto_calculate_quantity=True
+            auto_calculate_quantity=True,
         )
 
         # 增量更新30
@@ -264,16 +255,16 @@ class WorkOrderTaskModelTest(TestCase):
         """测试版本控制"""
         task = WorkOrderTask.objects.create(
             work_order_process=self.wo_process,
-            task_type='general',
-            work_content='测试任务',
+            task_type="general",
+            work_content="测试任务",
             production_quantity=100,
             quantity_completed=50,
-            auto_calculate_quantity=True
+            auto_calculate_quantity=True,
         )
         original_version = task.version
 
         # 正常更新会自动增加版本号
-        task.work_content = '更新的任务内容'
+        task.work_content = "更新的任务内容"
         task.save()
 
         # 刷新
@@ -286,11 +277,11 @@ class WorkOrderTaskModelTest(TestCase):
         """测试更新时创建日志"""
         task = WorkOrderTask.objects.create(
             work_order_process=self.wo_process,
-            task_type='general',
-            work_content='测试任务',
+            task_type="general",
+            work_content="测试任务",
             production_quantity=100,
             quantity_completed=50,
-            auto_calculate_quantity=True
+            auto_calculate_quantity=True,
         )
 
         # 更新数量
@@ -315,17 +306,14 @@ class WorkOrderProductModelTest(TestCase):
         self.user = TestDataFactory.create_user()
         self.customer = TestDataFactory.create_customer(salesperson=self.user)
         self.work_order = TestDataFactory.create_workorder(
-            customer=self.customer,
-            creator=self.user
+            customer=self.customer, creator=self.user
         )
         self.product = TestDataFactory.create_product()
 
     def test_create_work_order_product(self):
         """测试创建施工单产品关联"""
         wop = WorkOrderProduct.objects.create(
-            work_order=self.work_order,
-            product=self.product,
-            quantity=50
+            work_order=self.work_order, product=self.product, quantity=50
         )
 
         self.assertEqual(wop.work_order, self.work_order)
@@ -334,18 +322,14 @@ class WorkOrderProductModelTest(TestCase):
 
     def test_multiple_products_for_one_workorder(self):
         """测试一个施工单可以有多个产品"""
-        product1 = Product.objects.create(name='产品1', code='P1')
-        product2 = Product.objects.create(name='产品2', code='P2')
+        product1 = Product.objects.create(name="产品1", code="P1")
+        product2 = Product.objects.create(name="产品2", code="P2")
 
         WorkOrderProduct.objects.create(
-            work_order=self.work_order,
-            product=product1,
-            quantity=50
+            work_order=self.work_order, product=product1, quantity=50
         )
         WorkOrderProduct.objects.create(
-            work_order=self.work_order,
-            product=product2,
-            quantity=30
+            work_order=self.work_order, product=product2, quantity=30
         )
 
         # 应该有两个产品

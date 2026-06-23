@@ -1,6 +1,6 @@
 """角色与部门范围对齐测试。"""
 
-from django.contrib.auth.models import Group, Permission, User
+from django.contrib.auth.models import Group, User
 from django.core.management import call_command
 from django.test import TestCase
 from django.core.cache import cache
@@ -40,7 +40,9 @@ class InitialUserRoleDepartmentTest(TestCase):
             with self.subTest(username=username):
                 user = User.objects.get(username=username)
                 self.assertTrue(
-                    user.profile.departments.filter(code=department_code).exists()
+                    user.profile.departments.filter(
+                        code=department_code
+                    ).exists()
                 )
                 self.assertTrue(user.groups.filter(name=role_code).exists())
 
@@ -74,7 +76,9 @@ class DepartmentScopeTest(TestCase):
         )
         self.printing.processes.add(self.process)
 
-        self.supervisor = TestDataFactory.create_user(username="scope_supervisor")
+        self.supervisor = TestDataFactory.create_user(
+            username="scope_supervisor"
+        )
         self.supervisor.groups.add(Group.objects.get(name="supervisor"))
         profile, _ = UserProfile.objects.get_or_create(user=self.supervisor)
         profile.departments.add(self.production)
@@ -82,7 +86,9 @@ class DepartmentScopeTest(TestCase):
         self.manager = TestDataFactory.create_user(username="scope_manager")
         self.manager.groups.add(Group.objects.get(name="manager"))
 
-        self.work_order = TestDataFactory.create_workorder(creator=self.manager)
+        self.work_order = TestDataFactory.create_workorder(
+            creator=self.manager
+        )
         self.work_order_process = TestDataFactory.create_workorder_process(
             work_order=self.work_order,
             process=self.process,
@@ -126,7 +132,9 @@ class DepartmentScopeTest(TestCase):
         profile, _ = UserProfile.objects.get_or_create(user=operator)
         profile.departments.add(self.production)
 
-        claimable_ids = TaskAssignmentService.get_claimable_tasks_for_user(operator)
+        claimable_ids = TaskAssignmentService.get_claimable_tasks_for_user(
+            operator
+        )
 
         self.assertIn(self.child_task.id, claimable_ids)
         self.assertNotIn(self.other_task.id, claimable_ids)

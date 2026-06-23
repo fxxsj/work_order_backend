@@ -55,7 +55,9 @@ def generate_order_number(
 
                 if last_instance:
                     last_number_str = getattr(last_instance, field_name)
-                    last_sequence = int(last_number_str[len(full_prefix) :])
+                    last_sequence = int(
+                        last_number_str.removeprefix(full_prefix)
+                    )
                     new_sequence = last_sequence + 1
                 else:
                     new_sequence = 1
@@ -66,7 +68,8 @@ def generate_order_number(
             retry_count += 1
             if retry_count >= max_retries:
                 logger.error(
-                    f"生成单号失败(模型={model_class.__name__}, 字段={field_name}), 已重试{max_retries}次: {e}"
+                    f"生成单号失败(模型={model_class.__name__}, 字段={field_name}), "
+                    f"已重试{max_retries}次: {e}"
                 )
                 raise
             logger.warning(

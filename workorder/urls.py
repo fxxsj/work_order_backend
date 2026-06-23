@@ -39,8 +39,10 @@ from .views.materials import (
     SupplierViewSet,
 )
 from .views.notification import (
-    NotificationViewSet, SystemNotificationViewSet,
-    UserNotificationSettingsViewSet, NotificationTemplateViewSet
+    NotificationViewSet,
+    SystemNotificationViewSet,
+    UserNotificationSettingsViewSet,
+    NotificationTemplateViewSet,
 )
 from .views.process_logs import ProcessLogViewSet
 from .views.products import (
@@ -58,78 +60,121 @@ from .views.work_order_products import WorkOrderProductViewSet
 from .views.work_order_tasks import WorkOrderTaskViewSet
 from .views.work_orders import WorkOrderViewSet
 from .auth_views import (
-    LoginView, LogoutView, TokenRefreshViewWithDocs, get_current_user, register_view,
-    get_salespersons, get_users_by_department, change_password, update_profile,
+    LoginView,
+    LogoutView,
+    TokenRefreshViewWithDocs,
+    get_current_user,
+    register_view,
+    get_salespersons,
+    get_users_by_department,
+    change_password,
+    update_profile,
     AdminSessionView,
 )
 
 router = DefaultRouter()
-router.register(r'customers', CustomerViewSet)
-router.register(r'departments', DepartmentViewSet)
-router.register(r'processes', ProcessViewSet)
-router.register(r'products', ProductViewSet)
-router.register(r'product-materials', ProductMaterialViewSet)
-router.register(r'materials', MaterialViewSet)
-router.register(r'suppliers', SupplierViewSet)
-router.register(r'material-suppliers', MaterialSupplierViewSet)
-router.register(r'purchase-orders', PurchaseOrderViewSet)
-router.register(r'purchase-order-items', PurchaseOrderItemViewSet)
-router.register(r'purchase-receive-records', PurchaseReceiveRecordViewSet)
-router.register(r'sales-orders', SalesOrderViewSet)
-router.register(r'sales-order-items', SalesOrderItemViewSet)
-router.register(r'workorders', WorkOrderViewSet)
-router.register(r'workorder-processes', WorkOrderProcessViewSet)
-router.register(r'workorder-products', WorkOrderProductViewSet)
-router.register(r'workorder-materials', WorkOrderMaterialViewSet)
-router.register(r'workorder-tasks', WorkOrderTaskViewSet)
-router.register(r'product-groups', ProductGroupViewSet)
-router.register(r'product-group-items', ProductGroupItemViewSet)
-router.register(r'process-logs', ProcessLogViewSet)
-router.register(r'task-assignment-rules', TaskAssignmentRuleViewSet)
-router.register(r'notifications', NotificationViewSet, basename='notifications')
-router.register(r'workorders-flow', WorkOrderFlowViewSet, basename='workorder-flow')
-router.register(r'artworks', ArtworkViewSet)
-router.register(r'artwork-products', ArtworkProductViewSet)
-router.register(r'dies', DieViewSet)
-router.register(r'die-products', DieProductViewSet)
-router.register(r'foiling-plates', FoilingPlateViewSet)
-router.register(r'foiling-plate-products', FoilingPlateProductViewSet)
-router.register(r'embossing-plates', EmbossingPlateViewSet)
-router.register(r'embossing-plate-products', EmbossingPlateProductViewSet)
-router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
+router.register(r"customers", CustomerViewSet)
+router.register(r"departments", DepartmentViewSet)
+router.register(r"processes", ProcessViewSet)
+router.register(r"products", ProductViewSet)
+router.register(r"product-materials", ProductMaterialViewSet)
+router.register(r"materials", MaterialViewSet)
+router.register(r"suppliers", SupplierViewSet)
+router.register(r"material-suppliers", MaterialSupplierViewSet)
+router.register(r"purchase-orders", PurchaseOrderViewSet)
+router.register(r"purchase-order-items", PurchaseOrderItemViewSet)
+router.register(r"purchase-receive-records", PurchaseReceiveRecordViewSet)
+router.register(r"sales-orders", SalesOrderViewSet)
+router.register(r"sales-order-items", SalesOrderItemViewSet)
+router.register(r"workorders", WorkOrderViewSet)
+router.register(r"workorder-processes", WorkOrderProcessViewSet)
+router.register(r"workorder-products", WorkOrderProductViewSet)
+router.register(r"workorder-materials", WorkOrderMaterialViewSet)
+router.register(r"workorder-tasks", WorkOrderTaskViewSet)
+router.register(r"product-groups", ProductGroupViewSet)
+router.register(r"product-group-items", ProductGroupItemViewSet)
+router.register(r"process-logs", ProcessLogViewSet)
+router.register(r"task-assignment-rules", TaskAssignmentRuleViewSet)
+router.register(
+    r"notifications", NotificationViewSet, basename="notifications"
+)
+router.register(
+    r"workorders-flow", WorkOrderFlowViewSet, basename="workorder-flow"
+)
+router.register(r"artworks", ArtworkViewSet)
+router.register(r"artwork-products", ArtworkProductViewSet)
+router.register(r"dies", DieViewSet)
+router.register(r"die-products", DieProductViewSet)
+router.register(r"foiling-plates", FoilingPlateViewSet)
+router.register(r"foiling-plate-products", FoilingPlateProductViewSet)
+router.register(r"embossing-plates", EmbossingPlateViewSet)
+router.register(r"embossing-plate-products", EmbossingPlateProductViewSet)
+router.register(r"audit-logs", AuditLogViewSet, basename="audit-log")
 
 # 财务路由
-router.register(r'cost-centers', CostCenterViewSet, basename='cost-center')
-router.register(r'cost-items', CostItemViewSet, basename='cost-item')
-router.register(r'production-costs', ProductionCostViewSet, basename='production-cost')
-router.register(r'invoices', InvoiceViewSet, basename='invoice')
-router.register(r'payments', PaymentViewSet, basename='payment')
-router.register(r'payment-plans', PaymentPlanViewSet, basename='payment-plan')
-router.register(r'statements', StatementViewSet, basename='statement')
-router.register(r'supplier-payments', SupplierPaymentViewSet, basename='supplier-payment')
+router.register(r"cost-centers", CostCenterViewSet, basename="cost-center")
+router.register(r"cost-items", CostItemViewSet, basename="cost-item")
+router.register(
+    r"production-costs", ProductionCostViewSet, basename="production-cost"
+)
+router.register(r"invoices", InvoiceViewSet, basename="invoice")
+router.register(r"payments", PaymentViewSet, basename="payment")
+router.register(r"payment-plans", PaymentPlanViewSet, basename="payment-plan")
+router.register(r"statements", StatementViewSet, basename="statement")
+router.register(
+    r"supplier-payments", SupplierPaymentViewSet, basename="supplier-payment"
+)
 
 # 库存路由
-router.register(r'product-stocks', ProductStockViewSet, basename='product-stock')
-router.register(r'stock-ins', StockInViewSet, basename='stock-in')
-router.register(r'stock-outs', StockOutViewSet, basename='stock-out')
-router.register(r'delivery-orders', DeliveryOrderViewSet, basename='delivery-order')
-router.register(r'delivery-items', DeliveryItemViewSet, basename='delivery-item')
-router.register(r'quality-inspections', QualityInspectionViewSet, basename='quality-inspection')
+router.register(
+    r"product-stocks", ProductStockViewSet, basename="product-stock"
+)
+router.register(r"stock-ins", StockInViewSet, basename="stock-in")
+router.register(r"stock-outs", StockOutViewSet, basename="stock-out")
+router.register(
+    r"delivery-orders", DeliveryOrderViewSet, basename="delivery-order"
+)
+router.register(
+    r"delivery-items", DeliveryItemViewSet, basename="delivery-item"
+)
+router.register(
+    r"quality-inspections",
+    QualityInspectionViewSet,
+    basename="quality-inspection",
+)
 
-router.register(r'system-notifications', SystemNotificationViewSet, basename='system-notifications')
-router.register(r'user-notification-settings', UserNotificationSettingsViewSet, basename='user-notification-settings')
-router.register(r'notification-templates', NotificationTemplateViewSet, basename='notification-templates')
+router.register(
+    r"system-notifications",
+    SystemNotificationViewSet,
+    basename="system-notifications",
+)
+router.register(
+    r"user-notification-settings",
+    UserNotificationSettingsViewSet,
+    basename="user-notification-settings",
+)
+router.register(
+    r"notification-templates",
+    NotificationTemplateViewSet,
+    basename="notification-templates",
+)
 
 urlpatterns = [
-    path('', include(router.urls)),
-    path('auth/login/', LoginView.as_view(), name='login'),
-    path('auth/refresh/', TokenRefreshViewWithDocs.as_view(), name='token-refresh'),
-    path('auth/logout/', LogoutView.as_view(), name='logout'),
-    path('auth/admin-session/', AdminSessionView.as_view(), name='admin-session'),
-    path('auth/user/', get_current_user, name='current-user'),
-    path('auth/register/', register_view, name='register'),
-    path('auth/salespersons/', get_salespersons, name='salespersons'),
-    path('auth/users/', get_users_by_department, name='users-by-department'),
-    path('auth/change-password/', change_password, name='change-password'),
-    path('auth/update-profile/', update_profile, name='update-profile'),
+    path("", include(router.urls)),
+    path("auth/login/", LoginView.as_view(), name="login"),
+    path(
+        "auth/refresh/",
+        TokenRefreshViewWithDocs.as_view(),
+        name="token-refresh",
+    ),
+    path("auth/logout/", LogoutView.as_view(), name="logout"),
+    path(
+        "auth/admin-session/", AdminSessionView.as_view(), name="admin-session"
+    ),
+    path("auth/user/", get_current_user, name="current-user"),
+    path("auth/register/", register_view, name="register"),
+    path("auth/salespersons/", get_salespersons, name="salespersons"),
+    path("auth/users/", get_users_by_department, name="users-by-department"),
+    path("auth/change-password/", change_password, name="change-password"),
+    path("auth/update-profile/", update_profile, name="update-profile"),
 ]

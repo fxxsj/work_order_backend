@@ -18,7 +18,9 @@ class Command(BaseCommand):
 
             after_count = Notification.objects.count()
         except (OperationalError, ProgrammingError) as exc:
-            raise CommandError("通知相关数据表不存在，请先执行数据库迁移。") from exc
+            raise CommandError(
+                "通知相关数据表不存在，请先执行数据库迁移。"
+            ) from exc
 
         self.stdout.write(
             self.style.SUCCESS(

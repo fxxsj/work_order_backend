@@ -7,16 +7,16 @@
 3. 超级管理员全部放行
 """
 
-from django.contrib.auth.models import Group, Permission
-from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
 
-from workorder.models import WorkOrder, SalesOrder, Customer, Product, Process, Department
-from workorder.models.system import Notification, NotificationTemplate
-from workorder.permissions.role_matrix import ROLE_PERMISSIONS, ROLE_CUSTOM_PERMISSIONS
+from workorder.permissions.role_matrix import (
+    ROLE_PERMISSIONS,
+    ROLE_CUSTOM_PERMISSIONS,
+)
 from workorder.constants.role_codes import ALL_ROLE_CODES
 
 
@@ -32,6 +32,7 @@ class RoleProfilePermissionTest(TestCase):
     def _get_user_with_role(self, role_code):
         """创建属于指定角色的用户"""
         from django.contrib.auth import get_user_model
+
         User = get_user_model()
         user = User.objects.create_user(
             username=f"test_{role_code}",
@@ -45,6 +46,7 @@ class RoleProfilePermissionTest(TestCase):
 
     def _auth_header(self, user):
         from rest_framework_simplejwt.tokens import RefreshToken
+
         refresh = RefreshToken.for_user(user)
         return {"HTTP_AUTHORIZATION": f"Bearer {refresh.access_token}"}
 
@@ -101,6 +103,7 @@ class RoleProfilePermissionTest(TestCase):
     def test_superuser_can_do_everything(self):
         """超级管理员：所有权限"""
         from django.contrib.auth import get_user_model
+
         User = get_user_model()
         superuser = User.objects.create_superuser(
             username="test_super",
@@ -124,6 +127,7 @@ class WorkOrderFlowActionPermissionTest(TestCase):
 
     def _create_user_with_role(self, role_code):
         from django.contrib.auth import get_user_model
+
         User = get_user_model()
         user = User.objects.create_user(
             username=f"flow_test_{role_code}",
@@ -136,12 +140,15 @@ class WorkOrderFlowActionPermissionTest(TestCase):
 
     def _get_auth_header(self, user):
         from rest_framework_simplejwt.tokens import RefreshToken
+
         refresh = RefreshToken.for_user(user)
         return {"HTTP_AUTHORIZATION": f"Bearer {refresh.access_token}"}
 
     def test_unauthenticated_cannot_access_workorder_flow(self):
         """未认证用户不能访问 workflow endpoint"""
-        response = self.api_client.post("/api/v1/workorders-flow/create_from_sales_order/")
+        response = self.api_client.post(
+            "/api/v1/workorders-flow/create_from_sales_order/"
+        )
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_sales_cannot_create_from_sales_order_without_permission(self):
@@ -164,7 +171,10 @@ class WorkOrderFlowActionPermissionTest(TestCase):
             format="json",
             **self._get_auth_header(user),
         )
-        self.assertIn(response.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_400_BAD_REQUEST])
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_404_NOT_FOUND, status.HTTP_400_BAD_REQUEST],
+        )
 
     def test_operator_cannot_check_completion(self):
         """操作员不能检查完成"""
@@ -197,6 +207,7 @@ class NotificationDataIsolationTest(TestCase):
 
     def _create_user(self, username):
         from django.contrib.auth import get_user_model
+
         User = get_user_model()
         return User.objects.create_user(
             username=username,
@@ -206,12 +217,13 @@ class NotificationDataIsolationTest(TestCase):
 
     def _get_auth_header(self, user):
         from rest_framework_simplejwt.tokens import RefreshToken
+
         refresh = RefreshToken.for_user(user)
         return {"HTTP_AUTHORIZATION": f"Bearer {refresh.access_token}"}
 
     def test_user_cannot_access_other_users_notifications(self):
         """用户 A 不能访问用户 B 的通知设置"""
-        user_a = self._create_user("notif_user_a")
+        _ = self._create_user("notif_user_a")
         user_b = self._create_user("notif_user_b")
 
         response_b = self.api_client.get(
@@ -274,7 +286,14 @@ class PermissionMatrixCompletenessTest(TestCase):
 
     def test_no_delete_permissions_for_regular_roles(self):
         """普通角色（除 admin/manager）不应有 delete 权限（业务减法）"""
-        regular_roles = ["sales", "supervisor", "operator", "finance", "inventory", "quality"]
+        regular_roles = [
+            "sales",
+            "supervisor",
+            "operator",
+            "finance",
+            "inventory",
+            "quality",
+        ]
         for role_code in regular_roles:
             permissions = ROLE_PERMISSIONS.get(role_code, {})
             for model_name, actions in permissions.items():
@@ -297,7 +316,9 @@ class PermissionMatrixCompletenessTest(TestCase):
             text = path.read_text(encoding="utf-8")
             flutter_permissions.update(
                 match.group(0).strip("'\"")
-                for match in re.finditer(r"['\"]workorder\.[a-z_]+?['\"]", text)
+                for match in re.finditer(
+                    r"['\"]workorder\.[a-z_]+?['\"]", text
+                )
             )
 
         covered_permissions = set().union(*ROLE_PERMISSIONS.values())
@@ -310,6 +331,7 @@ class PermissionMatrixCompletenessTest(TestCase):
 
         missing = sorted(flutter_permissions - all_covered)
         self.assertEqual(
-            missing, [],
+            missing,
+            [],
             f"以下 Flutter 权限字符串未被矩阵覆盖: {missing}",
         )

@@ -6,13 +6,17 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('workorder', '0006_add_supplier_payment_and_po_payment_status'),
+        ("workorder", "0006_add_supplier_payment_and_po_payment_status"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='material',
-            name='is_active',
-            field=models.BooleanField(default=True, help_text='停用后不再允许新业务选料', verbose_name='启用'),
+            model_name="material",
+            name="is_active",
+            field=models.BooleanField(
+                default=True,
+                help_text="停用后不再允许新业务选料",
+                verbose_name="启用",
+            ),
         ),
     ]

@@ -55,7 +55,9 @@ class PlateAssetAPITest(APITestCaseMixin, TestCase):
                 },
             ],
         }
-        update_response = self.api_put(f"{url}{obj.id}/", update_payload, user=self.user)
+        update_response = self.api_put(
+            f"{url}{obj.id}/", update_payload, user=self.user
+        )
 
         self.assertEqual(update_response.status_code, 200)
         obj.refresh_from_db()

@@ -4,7 +4,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
-from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
+from drf_spectacular.utils import (
+    OpenApiResponse,
+    extend_schema,
+    inline_serializer,
+)
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User, Group
 from django.conf import settings
@@ -19,8 +23,6 @@ import time
 
 class EmptySerializer(serializers.Serializer):
     """用于 OpenAPI 生成的空序列化器"""
-
-    pass
 
 
 login_request_serializer = inline_serializer(
@@ -151,7 +153,9 @@ def _department_names(user):
 
 def _get_access_token_expires_at():
     """获取 access token 过期时间戳（Unix timestamp）"""
-    access_lifetime = settings.SIMPLE_JWT.get("ACCESS_TOKEN_LIFETIME", timedelta(minutes=5))
+    access_lifetime = settings.SIMPLE_JWT.get(
+        "ACCESS_TOKEN_LIFETIME", timedelta(minutes=5)
+    )
     # 将 timedelta 转换为秒
     expires_in_seconds = int(access_lifetime.total_seconds())
     return int(time.time()) + expires_in_seconds
@@ -162,7 +166,9 @@ def _build_user_data(user):
     group_names = list(user.groups.values_list("name", flat=True))
     role_codes = resolve_role_codes(group_names)
     departments = _department_names(user)
-    permissions = ["*"] if user.is_superuser else list(user.get_all_permissions())
+    permissions = (
+        ["*"] if user.is_superuser else list(user.get_all_permissions())
+    )
     return {
         "id": user.id,
         "username": user.username,
@@ -275,7 +281,9 @@ class AdminSessionView(APIView):
                 "当前用户无管理后台权限", code=status.HTTP_403_FORBIDDEN
             )
 
-        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        login(
+            request, user, backend="django.contrib.auth.backends.ModelBackend"
+        )
         return APIResponse.success(
             data={"admin_url": "/admin/"},
             message="管理后台会话已创建",
@@ -365,7 +373,9 @@ def register_view(request):
     last_name = request.data.get("last_name", "")
 
     if not username or not password:
-        return APIResponse.error("请提供用户名和密码", code=status.HTTP_400_BAD_REQUEST)
+        return APIResponse.error(
+            "请提供用户名和密码", code=status.HTTP_400_BAD_REQUEST
+        )
 
     # 验证用户名格式（允许中文、字母、数字、下划线、连字符）
     if not re.match(r"^[\w\u4e00-\u9fa5-]+$", username):
@@ -375,7 +385,9 @@ def register_view(request):
         )
 
     if User.objects.filter(username=username).exists():
-        return APIResponse.error("用户名已存在", code=status.HTTP_400_BAD_REQUEST)
+        return APIResponse.error(
+            "用户名已存在", code=status.HTTP_400_BAD_REQUEST
+        )
 
     user = User.objects.create_user(
         username=username,
@@ -426,9 +438,9 @@ def get_salespersons(request):
 
         if salesperson_group:
             # 获取属于业务员组的用户
-            salespersons = salesperson_group.user_set.filter(is_active=True).order_by(
-                "username"
-            )
+            salespersons = salesperson_group.user_set.filter(
+                is_active=True
+            ).order_by("username")
         else:
             # 如果业务员组不存在，返回空列表
             salespersons = User.objects.none()
@@ -436,7 +448,9 @@ def get_salespersons(request):
         serializer = UserSerializer(salespersons, many=True)
         return APIResponse.success(data=serializer.data)
     except Exception as e:
-        return APIResponse.error(str(e), code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return APIResponse.error(
+            str(e), code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @extend_schema(
@@ -467,13 +481,17 @@ def get_users_by_department(request):
 
         # 如果指定了部门，则过滤该部门的用户
         if department_id:
-            users = users.filter(profile__departments__id=department_id).distinct()
+            users = users.filter(
+                profile__departments__id=department_id
+            ).distinct()
 
         users = users.order_by("username")
         serializer = UserSerializer(users, many=True)
         return APIResponse.success(data=serializer.data)
     except Exception as e:
-        return APIResponse.error(str(e), code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return APIResponse.error(
+            str(e), code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @extend_schema(
@@ -517,7 +535,9 @@ def change_password(request):
 
     # 验证旧密码是否正确
     if not request.user.check_password(old_password):
-        return APIResponse.error("旧密码错误", code=status.HTTP_400_BAD_REQUEST)
+        return APIResponse.error(
+            "旧密码错误", code=status.HTTP_400_BAD_REQUEST
+        )
 
     # 验证新密码长度
     if len(new_password) < 6:
@@ -532,7 +552,8 @@ def change_password(request):
         return APIResponse.success(message="密码修改成功")
     except Exception as e:
         return APIResponse.error(
-            f"密码修改失败: {str(e)}", code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            f"密码修改失败: {str(e)}",
+            code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
@@ -577,5 +598,6 @@ def update_profile(request):
         )
     except Exception as e:
         return APIResponse.error(
-            f"个人信息更新失败: {str(e)}", code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            f"个人信息更新失败: {str(e)}",
+            code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )

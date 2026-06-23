@@ -72,7 +72,8 @@ def test_all_non_inline_workorder_models_are_registered_in_admin():
         if model._meta.app_label == "workorder"
     }
     all_models = {
-        model.__name__ for model in apps.get_app_config("workorder").get_models()
+        model.__name__
+        for model in apps.get_app_config("workorder").get_models()
     }
 
     assert sorted((all_models - registered_models) - INLINE_ONLY_MODELS) == []
@@ -88,21 +89,33 @@ def test_workorder_admin_field_references_are_valid():
         fieldsets = getattr(model_admin, "fieldsets", None)
         if fieldsets:
             for field_name in flatten_fieldsets(fieldsets):
-                if not _admin_or_model_attr_exists(model_admin, model, field_name):
-                    invalid_refs.append((model.__name__, "fieldsets", field_name))
+                if not _admin_or_model_attr_exists(
+                    model_admin, model, field_name
+                ):
+                    invalid_refs.append(
+                        (model.__name__, "fieldsets", field_name)
+                    )
 
         for field_name in getattr(model_admin, "autocomplete_fields", []):
             if not _relation_path_exists(model, field_name):
-                invalid_refs.append((model.__name__, "autocomplete_fields", field_name))
+                invalid_refs.append(
+                    (model.__name__, "autocomplete_fields", field_name)
+                )
 
-        for field_path in getattr(model_admin, "list_select_related", []) or []:
+        for field_path in (
+            getattr(model_admin, "list_select_related", []) or []
+        ):
             if not _relation_path_exists(model, field_path):
-                invalid_refs.append((model.__name__, "list_select_related", field_path))
+                invalid_refs.append(
+                    (model.__name__, "list_select_related", field_path)
+                )
 
         for field_path in getattr(model_admin, "search_fields", []):
             normalized = field_path.lstrip("^=@")
             if not _field_path_exists(model, normalized):
-                invalid_refs.append((model.__name__, "search_fields", field_path))
+                invalid_refs.append(
+                    (model.__name__, "search_fields", field_path)
+                )
 
         for item in getattr(model_admin, "list_display", []):
             if isinstance(item, str) and not _admin_or_model_attr_exists(

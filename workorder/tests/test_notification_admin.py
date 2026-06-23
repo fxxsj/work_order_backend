@@ -66,7 +66,9 @@ def test_user_notification_settings_persist():
     assert profile.notification_preferences["urgency_threshold"] == "high"
     assert profile.notification_preferences["quiet_hours_start"] == "21:30"
 
-    get_response = client.get("/api/v1/user-notification-settings/get_settings/")
+    get_response = client.get(
+        "/api/v1/user-notification-settings/get_settings/"
+    )
     assert get_response.status_code == status.HTTP_200_OK
     assert get_response.data["data"]["email_notifications"] is False
     assert get_response.data["data"]["quiet_hours_end"] == "07:30"
@@ -154,7 +156,9 @@ def test_cleanup_notifications_command_applies_retention_policy(capsys):
         title="stale",
         content="content",
     )
-    Notification.objects.filter(id=stale.id).update(created_at=timezone.now() - timedelta(days=5))
+    Notification.objects.filter(id=stale.id).update(
+        created_at=timezone.now() - timedelta(days=5)
+    )
     Notification.objects.create(
         recipient=user,
         notification_type="system",
@@ -171,7 +175,11 @@ def test_cleanup_notifications_command_applies_retention_policy(capsys):
     call_command("cleanup_notifications")
     captured = capsys.readouterr()
 
-    remaining_titles = list(Notification.objects.order_by("-created_at").values_list("title", flat=True))
+    remaining_titles = list(
+        Notification.objects.order_by("-created_at").values_list(
+            "title", flat=True
+        )
+    )
     assert remaining_titles == ["drop-overflow"]
     assert "通知清理完成" in captured.out
 
@@ -247,7 +255,9 @@ def test_system_notification_admin_publish_list_and_revoke():
     assert rows[0]["recipient_count"] == 2
     assert rows[0]["priority"] == "high"
 
-    revoke_response = client.delete(f"/api/v1/system-notifications/{batch_id}/revoke/")
+    revoke_response = client.delete(
+        f"/api/v1/system-notifications/{batch_id}/revoke/"
+    )
     assert revoke_response.status_code == status.HTTP_200_OK
     assert revoke_response.data["data"]["count"] == 2
     assert Notification.objects.filter(data__batch_id=batch_id).count() == 0

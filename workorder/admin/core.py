@@ -290,7 +290,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
             '<div style="width: 100px; background-color: #f0f0f0; '
             'border-radius: 3px;">'
             '<div style="width: {}%; height: 20px; background-color: {}; '
-            'border-radius: 3px; text-align: center; color: white; '
+            "border-radius: 3px; text-align: center; color: white; "
             'line-height: 20px;">'
             "{}%</div></div>",
             percentage,
@@ -311,7 +311,7 @@ class WorkOrderAdmin(admin.ModelAdmin):
                 '<div style="width: 200px; background-color: #f0f0f0; '
                 'border-radius: 3px; height: 25px;">'
                 '<div style="width: {}%; height: 25px; '
-                'background-color: #409EFF; '
+                "background-color: #409EFF; "
                 "border-radius: 3px; text-align: center; color: white; "
                 'line-height: 25px;">{}%</div></div></div>',
                 percentage,

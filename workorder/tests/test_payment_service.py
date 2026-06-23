@@ -2,6 +2,7 @@
 PaymentService 自动化测试
 覆盖收款创建/更新/删除后的订单付款状态回写
 """
+
 from decimal import Decimal
 
 import pytest
@@ -80,7 +81,9 @@ def payment_plan(db, sales_order):
 class TestPaymentServiceApplyPayment:
     """测试 PaymentService.apply_payment 回写订单付款状态"""
 
-    def test_create_full_payment_updates_order_to_paid(self, sales_order, user, payment_plan):
+    def test_create_full_payment_updates_order_to_paid(
+        self, sales_order, user, payment_plan
+    ):
         """创建全额收款后，订单付款状态变为 paid"""
         payment = Payment.objects.create(
             sales_order=sales_order,
@@ -98,7 +101,9 @@ class TestPaymentServiceApplyPayment:
         assert sales_order.payment_status == "paid"
         assert sales_order.payment_date is not None
 
-    def test_create_partial_payment_updates_order_to_partial(self, sales_order, user):
+    def test_create_partial_payment_updates_order_to_partial(
+        self, sales_order, user
+    ):
         """创建部分收款后，订单付款状态变为 partial"""
         payment = Payment.objects.create(
             sales_order=sales_order,
@@ -239,7 +244,9 @@ class TestPaymentServiceApplyPayment:
         assert payment_plan.paid_amount == Decimal("2000.00")
         assert payment_plan.status == "partial"
 
-    def test_full_payment_plan_completed(self, sales_order, user, payment_plan):
+    def test_full_payment_plan_completed(
+        self, sales_order, user, payment_plan
+    ):
         """全额收款后收款计划变为 completed"""
         payment = Payment.objects.create(
             sales_order=sales_order,

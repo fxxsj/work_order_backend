@@ -21,12 +21,9 @@ def ensure_user_can_modify_task(user, task, action_label: str) -> None:
     work_order = task.work_order_process.work_order
 
     if task.assigned_department:
-        if (
-            PermissionCache.is_department_in_user_scope(
-                user, task.assigned_department_id
-            )
-            and user.has_perm("workorder.change_workorder")
-        ):
+        if PermissionCache.is_department_in_user_scope(
+            user, task.assigned_department_id
+        ) and user.has_perm("workorder.change_workorder"):
             return
 
     if work_order.created_by == user:
@@ -55,13 +52,21 @@ def ensure_assets_confirmed(task, action_label: str) -> None:
         return
 
     if task.artwork and not task.artwork.confirmed:
-        raise ServiceError(message=f"图稿未确认，无法{action_label}任务", code=400)
+        raise ServiceError(
+            message=f"图稿未确认，无法{action_label}任务", code=400
+        )
     if task.die and not task.die.confirmed:
-        raise ServiceError(message=f"刀模未确认，无法{action_label}任务", code=400)
+        raise ServiceError(
+            message=f"刀模未确认，无法{action_label}任务", code=400
+        )
     if task.foiling_plate and not task.foiling_plate.confirmed:
-        raise ServiceError(message=f"烫金版未确认，无法{action_label}任务", code=400)
+        raise ServiceError(
+            message=f"烫金版未确认，无法{action_label}任务", code=400
+        )
     if task.embossing_plate and not task.embossing_plate.confirmed:
-        raise ServiceError(message=f"压凸版未确认，无法{action_label}任务", code=400)
+        raise ServiceError(
+            message=f"压凸版未确认，无法{action_label}任务", code=400
+        )
 
 
 def ensure_material_cut_ready(
@@ -73,7 +78,9 @@ def ensure_material_cut_ready(
     if task.task_type != "cutting" or not task.material:
         return
 
-    work_order_material = work_order.materials.filter(material=task.material).first()
+    work_order_material = work_order.materials.filter(
+        material=task.material
+    ).first()
     if not work_order_material:
         return
 
@@ -81,4 +88,6 @@ def ensure_material_cut_ready(
 
     if ProcessCodes.requires_material_cut_status(process_code):
         if work_order_material.purchase_status != "cut":
-            raise ServiceError(message=f"物料未开料，无法{action_label}开料任务", code=400)
+            raise ServiceError(
+                message=f"物料未开料，无法{action_label}开料任务", code=400
+            )

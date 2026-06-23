@@ -1,4 +1,5 @@
 """Factory Boy definitions for base models"""
+
 import factory
 from workorder.models.base import Department, Process
 
@@ -8,7 +9,7 @@ class DepartmentFactory(factory.django.DjangoModelFactory):
 
     class Meta:
         model = Department
-        django_get_or_create = ('code',)
+        django_get_or_create = ("code",)
 
     name = factory.Sequence(lambda n: f"Department {n}")
     code = factory.Sequence(lambda n: f"DEPT{n:03d}")
@@ -21,7 +22,7 @@ class ProcessFactory(factory.django.DjangoModelFactory):
 
     class Meta:
         model = Process
-        django_get_or_create = ('code',)
+        django_get_or_create = ("code",)
 
     name = factory.Sequence(lambda n: f"Process {n}")
     code = factory.Sequence(lambda n: f"PROC{n:03d}")
@@ -29,7 +30,7 @@ class ProcessFactory(factory.django.DjangoModelFactory):
     is_active = True
     is_parallel = False
     sort_order = 0
-    task_generation_rule = 'general'
+    task_generation_rule = "general"
     artwork_required = False
     die_required = False
     foiling_plate_required = False

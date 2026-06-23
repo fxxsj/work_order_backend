@@ -201,9 +201,16 @@ ROLE_PERMISSIONS = {
 
 ROLE_CUSTOM_PERMISSIONS = {
     "manager": {
-        "WorkOrder": ["change_approved_workorder", "delete_workorder", "submit_workorder"],
+        "WorkOrder": [
+            "change_approved_workorder",
+            "delete_workorder",
+            "submit_workorder",
+        ],
         "SalesOrder": ["change_approved_salesorder", "submit_salesorder"],
-        "PurchaseOrder": ["change_approved_purchaseorder", "submit_purchaseorder"],
+        "PurchaseOrder": [
+            "change_approved_purchaseorder",
+            "submit_purchaseorder",
+        ],
         "Invoice": ["change_approved_invoice", "submit_invoice"],
     },
     "supervisor": {
@@ -213,10 +220,18 @@ ROLE_CUSTOM_PERMISSIONS = {
         "Invoice": ["approve_invoice", "submit_invoice"],
     },
     "finance": {
-        "Invoice": ["approve_invoice", "change_approved_invoice", "submit_invoice"],
+        "Invoice": [
+            "approve_invoice",
+            "change_approved_invoice",
+            "submit_invoice",
+        ],
     },
     "procurement": {
-        "PurchaseOrder": ["approve_purchaseorder", "change_approved_purchaseorder", "submit_purchaseorder"],
+        "PurchaseOrder": [
+            "approve_purchaseorder",
+            "change_approved_purchaseorder",
+            "submit_purchaseorder",
+        ],
     },
     "sales": {
         "SalesOrder": ["submit_salesorder"],

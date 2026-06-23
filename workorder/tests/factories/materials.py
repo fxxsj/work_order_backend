@@ -1,6 +1,14 @@
 """Factory Boy definitions for material models"""
+
 import factory
-from workorder.models.materials import Material, Supplier, MaterialSupplier, PurchaseOrder, PurchaseOrderItem, PurchaseReceiveRecord
+from workorder.models.materials import (
+    Material,
+    Supplier,
+    MaterialSupplier,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    PurchaseReceiveRecord,
+)
 from workorder.models.core import WorkOrderMaterial
 
 
@@ -55,7 +63,9 @@ class WorkOrderMaterialFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = WorkOrderMaterial
 
-    work_order = factory.SubFactory("workorder.tests.factories.workorder.WorkOrderFactory")
+    work_order = factory.SubFactory(
+        "workorder.tests.factories.workorder.WorkOrderFactory"
+    )
     material = factory.SubFactory(MaterialFactory)
     material_size = "A4"
     material_usage = factory.Sequence(lambda n: f"{n * 100}张")

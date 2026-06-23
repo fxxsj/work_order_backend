@@ -1,4 +1,5 @@
 """Factory Boy definitions for User model"""
+
 import factory
 from django.contrib.auth import get_user_model
 from .base import DepartmentFactory
@@ -11,12 +12,12 @@ class UserFactory(factory.django.DjangoModelFactory):
 
     class Meta:
         model = User
-        django_get_or_create = ('username',)
+        django_get_or_create = ("username",)
 
     username = factory.Sequence(lambda n: f"user_{n}")
     email = factory.LazyAttribute(lambda obj: f"{obj.username}@example.com")
-    first_name = factory.Faker('first_name', locale='zh_CN')
-    last_name = factory.Faker('last_name', locale='zh_CN')
+    first_name = factory.Faker("first_name", locale="zh_CN")
+    last_name = factory.Faker("last_name", locale="zh_CN")
     is_staff = True
     is_active = True
 
@@ -30,11 +31,13 @@ class UserFactory(factory.django.DjangoModelFactory):
         if extracted:
             # If departments provided, add user to them
             from workorder.models import UserProfile
+
             profile, _ = UserProfile.objects.get_or_create(user=self)
             profile.departments.set(extracted)
-        elif kwargs.get('auto_department', True):
+        elif kwargs.get("auto_department", True):
             # Auto-create a department if requested
             from workorder.models import UserProfile
+
             dept = DepartmentFactory()
             profile, _ = UserProfile.objects.get_or_create(user=self)
             profile.departments.add(dept)
@@ -53,7 +56,7 @@ class UserFactory(factory.django.DjangoModelFactory):
         elif isinstance(extracted, str):
             codenames = [extracted]
         else:
-            codenames = ['view_workorder', 'change_workorder']
+            codenames = ["view_workorder", "change_workorder"]
 
         try:
             from django.contrib.auth.models import Permission
@@ -62,17 +65,19 @@ class UserFactory(factory.django.DjangoModelFactory):
 
             for codename in codenames:
                 # Parse codename to extract action and model name
-                # e.g., "view_taskassignmentrule" -> action="view", model="TaskAssignmentRule"
-                parts = codename.split('_', 1)
+                # e.g., "view_taskassignmentrule" -> action="view",
+                # model="TaskAssignmentRule"
+                parts = codename.split("_", 1)
                 if len(parts) != 2:
                     continue
                 action, model_name = parts
 
-                # Convert model_name to proper case (e.g., taskassignmentrule -> TaskAssignmentRule)
+                # Convert model_name to proper case
+                # (e.g., taskassignmentrule -> TaskAssignmentRule)
                 # Try to find the model across all apps
                 model = None
                 for app_config in apps.get_app_configs():
-                    if app_config.label == 'workorder':
+                    if app_config.label == "workorder":
                         try:
                             model = app_config.get_model(model_name)
                             break
@@ -82,12 +87,12 @@ class UserFactory(factory.django.DjangoModelFactory):
                 if model is None:
                     # Fallback to WorkOrder if model not found
                     from workorder.models import WorkOrder
+
                     model = WorkOrder
 
                 content_type = ContentType.objects.get_for_model(model)
                 permission = Permission.objects.filter(
-                    content_type=content_type,
-                    codename=codename
+                    content_type=content_type, codename=codename
                 ).first()
                 if permission:
                     self.user_permissions.add(permission)
@@ -98,11 +103,11 @@ class UserFactory(factory.django.DjangoModelFactory):
     @classmethod
     def _create(cls, model_class, *args, **kwargs):
         """Use create_user for password hashing"""
-        password = kwargs.pop('password', None)
+        password = kwargs.pop("password", None)
         user = model_class(**kwargs)
         if password:
             user.set_password(password)
         else:
-            user.set_password('test_pass_123')
+            user.set_password("test_pass_123")
         user.save()
         return user

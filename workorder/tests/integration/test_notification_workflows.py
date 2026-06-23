@@ -1,9 +1,11 @@
 """Integration tests for notification workflows"""
+
 import pytest
 from rest_framework import status
-from rest_framework.test import APIClient
 from workorder.tests.factories import (
-    WorkOrderFactory, UserFactory, DepartmentFactory, WorkOrderTaskFactory
+    UserFactory,
+    DepartmentFactory,
+    WorkOrderTaskFactory,
 )
 from workorder.models import Notification
 
@@ -20,25 +22,32 @@ class TestNotificationWorkflows:
         THEN: Operator receives a notification
         """
         dept = DepartmentFactory()
-        supervisor = UserFactory(username='supervisor', departments=[dept])
-        operator = UserFactory(username='operator', departments=[dept])
+        supervisor = UserFactory(username="supervisor", departments=[dept])
+        operator = UserFactory(username="operator", departments=[dept])
 
-        task = WorkOrderTaskFactory(status='pending')
+        task = WorkOrderTaskFactory(status="pending")
         task.assigned_department = dept
         task.save()
 
-        initial_notification_count = Notification.objects.filter(recipient=operator).count()
+        initial_notification_count = Notification.objects.filter(
+            recipient=operator
+        ).count()
 
         api_client.force_authenticate(user=supervisor)
-        response = api_client.post(f'/api/v1/workorder-tasks/{task.id}/assign/', {
-            'assigned_operator': operator.id
-        }, format='json')
+        response = api_client.post(
+            f"/api/v1/workorder-tasks/{task.id}/assign/",
+            {"assigned_operator": operator.id},
+            format="json",
+        )
 
         assert response.status_code == status.HTTP_200_OK
 
         # Verify notification was created (if notification system is active)
-        final_notification_count = Notification.objects.filter(recipient=operator).count()
-        # Note: Notifications may or may not be created depending on signal configuration
+        final_notification_count = Notification.objects.filter(
+            recipient=operator
+        ).count()
+        # Note: Notifications may or may not be created depending on signal
+        # configuration
         assert final_notification_count >= initial_notification_count
 
     def test_task_completion_creates_notification(self, api_client):
@@ -48,24 +57,26 @@ class TestNotificationWorkflows:
         THEN: Supervisor receives a notification
         """
         dept = DepartmentFactory()
-        supervisor = UserFactory(username='supervisor', departments=[dept])
-        operator = UserFactory(username='operator', departments=[dept])
+        _ = UserFactory(username="supervisor", departments=[dept])
+        operator = UserFactory(username="operator", departments=[dept])
 
-        task = WorkOrderTaskFactory(status='in_progress')
+        task = WorkOrderTaskFactory(status="in_progress")
         task.assigned_department = dept
         task.assigned_operator = operator
         task.save()
 
         api_client.force_authenticate(user=operator)
-        response = api_client.post(f'/api/v1/workorder-tasks/{task.id}/complete/', {
-            'completion_quantity': task.production_quantity
-        }, format='json')
+        response = api_client.post(
+            f"/api/v1/workorder-tasks/{task.id}/complete/",
+            {"completion_quantity": task.production_quantity},
+            format="json",
+        )
 
         assert response.status_code == status.HTTP_200_OK
 
         # Verify supervisor notification (if notification system is active)
-        notifications = Notification.objects.filter(
-            notification_type='task_completed'
+        _ = Notification.objects.filter(
+            notification_type="task_completed"
         )
         # Note: Notification creation depends on signal configuration
         # Test documents expected behavior
@@ -77,34 +88,34 @@ class TestNotificationWorkflows:
         THEN: Only their notifications are returned
         """
         dept = DepartmentFactory()
-        user1 = UserFactory(username='user1', departments=[dept])
-        user2 = UserFactory(username='user2', departments=[dept])
+        user1 = UserFactory(username="user1", departments=[dept])
+        user2 = UserFactory(username="user2", departments=[dept])
 
         # Create notifications for user1
         for i in range(3):
             Notification.objects.create(
                 recipient=user1,
-                notification_type='task_assigned',
-                title=f'Test notification {i}',
-                content='Test message'
+                notification_type="task_assigned",
+                title=f"Test notification {i}",
+                content="Test message",
             )
 
         # Create notifications for user2
         for i in range(5):
             Notification.objects.create(
                 recipient=user2,
-                notification_type='task_assigned',
-                title=f'Test notification {i}',
-                content='Test message'
+                notification_type="task_assigned",
+                title=f"Test notification {i}",
+                content="Test message",
             )
 
         # User1 requests notifications
         api_client.force_authenticate(user=user1)
-        response = api_client.get('/api/v1/notifications/')
+        response = api_client.get("/api/v1/notifications/")
 
         assert response.status_code == status.HTTP_200_OK
         # User1 should only see their notifications
-        assert response.data['data']['count'] >= 3
+        assert response.data["data"]["count"] >= 3
 
     def test_mark_notification_as_read(self, api_client):
         """
@@ -112,20 +123,25 @@ class TestNotificationWorkflows:
         WHEN: User marks it as read
         THEN: Notification is_read becomes True
         """
-        user = UserFactory(username='user1')
+        user = UserFactory(username="user1")
         notification = Notification.objects.create(
             recipient=user,
-            notification_type='task_assigned',
-            title='Test',
-            content='Test message',
-            is_read=False
+            notification_type="task_assigned",
+            title="Test",
+            content="Test message",
+            is_read=False,
         )
 
         api_client.force_authenticate(user=user)
-        response = api_client.post(f'/api/v1/notifications/{notification.id}/mark_read/')
+        response = api_client.post(
+            f"/api/v1/notifications/{notification.id}/mark_read/"
+        )
 
         # Endpoint may or may not exist
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
+        assert response.status_code in [
+            status.HTTP_200_OK,
+            status.HTTP_404_NOT_FOUND,
+        ]
 
         if response.status_code == status.HTTP_200_OK:
             notification.refresh_from_db()
@@ -137,30 +153,30 @@ class TestNotificationWorkflows:
         WHEN: User requests unread count
         THEN: Count reflects only unread notifications
         """
-        user = UserFactory(username='user1')
+        user = UserFactory(username="user1")
 
         # Create read and unread notifications
         for i in range(3):
             Notification.objects.create(
                 recipient=user,
-                notification_type='task_assigned',
-                title=f'Unread {i}',
-                content='Test',
-                is_read=False
+                notification_type="task_assigned",
+                title=f"Unread {i}",
+                content="Test",
+                is_read=False,
             )
 
         for i in range(2):
             Notification.objects.create(
                 recipient=user,
-                notification_type='task_assigned',
-                title=f'Read {i}',
-                content='Test',
-                is_read=True
+                notification_type="task_assigned",
+                title=f"Read {i}",
+                content="Test",
+                is_read=True,
             )
 
         api_client.force_authenticate(user=user)
-        response = api_client.get('/api/v1/notifications/')
+        response = api_client.get("/api/v1/notifications/")
 
         assert response.status_code == status.HTTP_200_OK
         # Should have at least 5 total notifications
-        assert response.data['data']['count'] >= 5
+        assert response.data["data"]["count"] >= 5

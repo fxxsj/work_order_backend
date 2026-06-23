@@ -19,7 +19,11 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         user_ids = options.get("user_ids") or None
-        scope = f"用户 {', '.join(str(user_id) for user_id in user_ids)}" if user_ids else "全部用户"
+        scope = (
+            f"用户 {', '.join(str(user_id) for user_id in user_ids)}"
+            if user_ids
+            else "全部用户"
+        )
 
         queryset = Notification.objects.all()
         if user_ids:
@@ -30,7 +34,9 @@ class Command(BaseCommand):
             Notification.apply_retention_policy(user_ids)
             after_count = queryset.count()
         except (OperationalError, ProgrammingError) as exc:
-            raise CommandError("通知相关数据表不存在，请先执行数据库迁移。") from exc
+            raise CommandError(
+                "通知相关数据表不存在，请先执行数据库迁移。"
+            ) from exc
         removed_count = before_count - after_count
 
         self.stdout.write(

@@ -18,9 +18,13 @@ from workorder.services.work_order_flow_service import WorkOrderFlowService
 @pytest.fixture
 def batch_setup(db):
     """创建批量创建施工单测试数据。"""
-    customer = Customer.objects.create(name="测试客户", contact_person="张", phone="138")
+    customer = Customer.objects.create(
+        name="测试客户", contact_person="张", phone="138"
+    )
     user = User.objects.create_user(username="batch_creator", password="test")
-    product = Product.objects.create(name="测试产品", code="TEST001", unit="件")
+    product = Product.objects.create(
+        name="测试产品", code="TEST001", unit="件"
+    )
     process = Process.objects.create(name="测试工序", code="TEST_PROC")
     product.default_processes.add(process)
 

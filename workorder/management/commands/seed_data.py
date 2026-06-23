@@ -127,11 +127,21 @@ class Command(BaseCommand):
             dept_prod.processes.add(process_print, process_pack, process_cut)
             dept_design.processes.add(process_print)
 
-            admin = self._get_or_create_user(User, "admin_seed", is_staff=True, is_superuser=True)
-            salesperson = self._get_or_create_user(User, "sales_seed", is_staff=True)
-            manager = self._get_or_create_user(User, "manager_seed", is_staff=True)
-            operator = self._get_or_create_user(User, "operator_seed", is_staff=True)
-            approver = self._get_or_create_user(User, "approver_seed", is_staff=True)
+            admin = self._get_or_create_user(
+                User, "admin_seed", is_staff=True, is_superuser=True
+            )
+            salesperson = self._get_or_create_user(
+                User, "sales_seed", is_staff=True
+            )
+            manager = self._get_or_create_user(
+                User, "manager_seed", is_staff=True
+            )
+            operator = self._get_or_create_user(
+                User, "operator_seed", is_staff=True
+            )
+            approver = self._get_or_create_user(
+                User, "approver_seed", is_staff=True
+            )
 
             self._ensure_profile(admin, [dept_prod])
             self._ensure_profile(salesperson, [dept_prod])
@@ -254,8 +264,12 @@ class Command(BaseCommand):
             artwork.embossing_plates.add(embossing)
             ArtworkProduct.objects.create(artwork=artwork, product=product)
             DieProduct.objects.create(die=die, product=product)
-            FoilingPlateProduct.objects.create(foiling_plate=foiling, product=product)
-            EmbossingPlateProduct.objects.create(embossing_plate=embossing, product=product)
+            FoilingPlateProduct.objects.create(
+                foiling_plate=foiling, product=product
+            )
+            EmbossingPlateProduct.objects.create(
+                embossing_plate=embossing, product=product
+            )
 
             # === 客户订单 ===
             sales_order = SalesOrder.objects.create(
@@ -275,8 +289,9 @@ class Command(BaseCommand):
             )
 
             # === 施工单 ===
+            seed_date = timezone.now().strftime("%Y%m%d")
             work_order = WorkOrder.objects.create(
-                order_number=f"WOSEED{timezone.now().strftime('%Y%m%d')}{tag.upper()}",
+                order_number=f"WOSEED{seed_date}{tag.upper()}",
                 customer=customers[0],
                 order_date=date.today(),
                 delivery_date=date.today() + timedelta(days=7),
@@ -299,7 +314,7 @@ class Command(BaseCommand):
                 department=dept_prod,
                 sequence=1,
             )
-            work_order_material = WorkOrderMaterial.objects.create(
+            _ = WorkOrderMaterial.objects.create(
                 work_order=work_order,
                 material=material,
                 material_usage="100张",
@@ -383,19 +398,19 @@ class Command(BaseCommand):
             )
 
             # === 库存 ===
-            product_stock = ProductStock.objects.create(
+            _ = ProductStock.objects.create(
                 product=product,
                 quantity=Decimal("100"),
                 unit_cost=Decimal("80.00"),
                 batch_no=f"BATCH{tag}".upper(),
                 work_order=work_order,
             )
-            stock_in = StockIn.objects.create(
+            _ = StockIn.objects.create(
                 work_order=work_order,
                 status="completed",
                 operator=operator,
             )
-            stock_out = StockOut.objects.create(
+            _ = StockOut.objects.create(
                 out_type="delivery",
                 status="completed",
                 operator=operator,
@@ -424,13 +439,13 @@ class Command(BaseCommand):
             )
 
             # === 财务 ===
-            cost_center = CostCenter.objects.create(
+            _ = CostCenter.objects.create(
                 name="生产成本中心",
                 code=f"CC{tag}".upper(),
                 type="production",
                 manager=manager,
             )
-            cost_item = CostItem.objects.create(
+            _ = CostItem.objects.create(
                 name="材料费",
                 code=f"CI{tag}".upper(),
                 type="material",
@@ -452,7 +467,7 @@ class Command(BaseCommand):
                 tax_rate=Decimal("13.00"),
                 created_by=manager,
             )
-            payment = Payment.objects.create(
+            _ = Payment.objects.create(
                 customer=customers[0],
                 sales_order=sales_order,
                 invoice=invoice,
@@ -501,9 +516,13 @@ class Command(BaseCommand):
                 completed_at=timezone.now(),
             )
 
-        self.stdout.write(self.style.SUCCESS("已完成测试数据填充（workorder 全部业务表）。"))
+        self.stdout.write(
+            self.style.SUCCESS("已完成测试数据填充（workorder 全部业务表）。")
+        )
 
-    def _get_or_create_user(self, User, username, is_staff=False, is_superuser=False):
+    def _get_or_create_user(
+        self, User, username, is_staff=False, is_superuser=False
+    ):
         user, created = User.objects.get_or_create(
             username=username,
             defaults={
@@ -524,14 +543,18 @@ class Command(BaseCommand):
         return profile
 
     def _get_or_create_department(self, name, code):
-        dept, _ = Department.objects.get_or_create(name=name, defaults={"code": code})
+        dept, _ = Department.objects.get_or_create(
+            name=name, defaults={"code": code}
+        )
         if dept.code != code:
             dept.code = code
             dept.save(update_fields=["code"])
         return dept
 
     def _get_or_create_process(self, name, code):
-        process, _ = Process.objects.get_or_create(name=name, defaults={"code": code})
+        process, _ = Process.objects.get_or_create(
+            name=name, defaults={"code": code}
+        )
         if process.code != code:
             process.code = code
             process.save(update_fields=["code"])

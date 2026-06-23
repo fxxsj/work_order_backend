@@ -2,6 +2,7 @@
 客户订单财务视图测试
 覆盖开票、收款、计划、对账、成本、毛利等字段
 """
+
 from decimal import Decimal
 
 import pytest
@@ -20,9 +21,15 @@ from workorder.serializers.sales import SalesOrderDetailSerializer
 @pytest.fixture
 def finance_sales_order(db):
     """创建带财务数据的客户订单"""
-    customer = Customer.objects.create(name="财务视图客户", contact_person="张", phone="138")
-    user = User.objects.create_user(username="finance_test_user", password="test")
-    product = Product.objects.create(name="财务测试产品", code="FIN001", unit="件")
+    customer = Customer.objects.create(
+        name="财务视图客户", contact_person="张", phone="138"
+    )
+    user = User.objects.create_user(
+        username="finance_test_user", password="test"
+    )
+    product = Product.objects.create(
+        name="财务测试产品", code="FIN001", unit="件"
+    )
 
     sales_order = SalesOrder.objects.create(
         customer=customer,
@@ -135,7 +142,9 @@ class TestSalesOrderFinanceView:
 
     def test_no_work_order_cost_returns_zero(self, db):
         """无关联施工单时成本为 0"""
-        customer = Customer.objects.create(name="无成本客户", contact_person="张", phone="138")
+        customer = Customer.objects.create(
+            name="无成本客户", contact_person="张", phone="138"
+        )
         sales_order = SalesOrder.objects.create(
             customer=customer,
             order_date=timezone.now().date(),

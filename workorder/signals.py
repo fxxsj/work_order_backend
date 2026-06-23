@@ -6,6 +6,7 @@
 业务逻辑委托给 services/material_task_trigger_service.py，
 此处只负责信号连接和条件判断。
 """
+
 import logging
 
 from django.db import transaction
@@ -59,13 +60,21 @@ def cache_work_order_status(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender=WorkOrder)
-def sync_sales_order_status_on_work_order_change(sender, instance, created, **kwargs):
+def sync_sales_order_status_on_work_order_change(
+    sender, instance, created, **kwargs
+):
     """施工单状态或审核状态变化后，自动同步关联客户订单状态。"""
     previous_status = getattr(instance, "_previous_status", None)
-    previous_approval_status = getattr(instance, "_previous_approval_status", None)
-    previous_sales_order_id = getattr(instance, "_previous_sales_order_id", None)
+    previous_approval_status = getattr(
+        instance, "_previous_approval_status", None
+    )
+    previous_sales_order_id = getattr(
+        instance, "_previous_sales_order_id", None
+    )
     status_changed = instance.status != previous_status
-    approval_status_changed = instance.approval_status != previous_approval_status
+    approval_status_changed = (
+        instance.approval_status != previous_approval_status
+    )
     sales_order_changed = instance.sales_order_id != previous_sales_order_id
 
     if created:
@@ -73,15 +82,24 @@ def sync_sales_order_status_on_work_order_change(sender, instance, created, **kw
             SalesOrderStatusService.sync_status_for_work_order(instance)
         return
 
-    if not status_changed and not approval_status_changed and not sales_order_changed:
+    if (
+        not status_changed
+        and not approval_status_changed
+        and not sales_order_changed
+    ):
         return
 
     if sales_order_changed and previous_sales_order_id:
-        old_sales_order = SalesOrder.objects.filter(pk=previous_sales_order_id).first()
+        old_sales_order = SalesOrder.objects.filter(
+            pk=previous_sales_order_id
+        ).first()
         if old_sales_order is not None:
-            SalesOrderStatusService.sync_status_for_sales_orders([old_sales_order])
+            SalesOrderStatusService.sync_status_for_sales_orders(
+                [old_sales_order]
+            )
 
     SalesOrderStatusService.sync_status_for_work_order(instance)
+
 
 @receiver(pre_save, sender=WorkOrderMaterial)
 def cache_material_status(sender, instance, **kwargs):
@@ -95,21 +113,25 @@ def cache_material_status(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender=WorkOrderMaterial)
-def update_cutting_task_on_material_status_change(sender, instance, created, **kwargs):
+def update_cutting_task_on_material_status_change(
+    sender, instance, created, **kwargs
+):
     """物料状态变化时，自动更新相关开料任务的完成数量"""
     # 只处理状态变化，不处理新建
     if created:
         return
-    
+
     # 检查状态是否真的变化了（从非'cut'变为'cut'）
     old_status = getattr(instance, "_previous_purchase_status", None)
     if old_status == instance.purchase_status:
         # 状态未变化，不处理
         return
-    
+
     # 检查物料状态是否为'cut'（已开料）
     if instance.purchase_status == "cut":
-        transaction.on_commit(lambda: update_cutting_tasks_on_material_cut(instance))
+        transaction.on_commit(
+            lambda: update_cutting_tasks_on_material_cut(instance)
+        )
 
 
 def register_asset_confirmation_handlers(model_class, asset_kwarg_name):
@@ -163,11 +185,14 @@ def register_asset_confirmation_handlers(model_class, asset_kwarg_name):
         update_tasks_on_confirmation,
         sender=model_class,
         weak=False,
-        dispatch_uid=f"update_tasks_on_confirmation_for_{model_class.__name__}",
+        dispatch_uid=(
+            f"update_tasks_on_confirmation_for_{model_class.__name__}"
+        ),
     )
 
 
 # --- 工序完成：库存更新 ---
+
 
 @receiver(pre_save, sender=WorkOrderProcess)
 def cache_work_order_process_status(sender, instance, **kwargs):
@@ -208,8 +233,11 @@ def update_stock_on_process_completed(sender, instance, created, **kwargs):
 
 # --- 施工单完成：成本核算草稿 ---
 
+
 @receiver(post_save, sender=WorkOrder)
-def generate_cost_draft_on_work_order_completed(sender, instance, created, **kwargs):
+def generate_cost_draft_on_work_order_completed(
+    sender, instance, created, **kwargs
+):
     """施工单状态变为 completed 时，自动生成成本核算草稿。"""
     if created:
         return
@@ -221,7 +249,9 @@ def generate_cost_draft_on_work_order_completed(sender, instance, created, **kwa
     try:
         CostCalculationService.generate_cost_draft(instance)
     except Exception as e:
-        logger.warning(f"施工单 {instance.order_number} 完成时成本核算草稿生成失败: {e}")
+        logger.warning(
+            f"施工单 {instance.order_number} 完成时成本核算草稿生成失败: {e}"
+        )
 
 
 # --- 信号注册 ---

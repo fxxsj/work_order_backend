@@ -2,17 +2,21 @@
 送货单拒收后处理动作测试
 覆盖补发、返工、终止三种动作
 """
+
 from decimal import Decimal
 
 import pytest
 from django.utils import timezone
 from django.contrib.auth.models import User
-from datetime import timedelta
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from workorder.models.core import WorkOrder, WorkOrderProduct
-from workorder.models.inventory import DeliveryOrder, DeliveryItem, ProductStock
+from workorder.models.core import WorkOrder
+from workorder.models.inventory import (
+    DeliveryOrder,
+    DeliveryItem,
+    ProductStock,
+)
 from workorder.models.sales import SalesOrder, SalesOrderItem
 from workorder.models.products import Product
 from workorder.models.base import Customer
@@ -21,8 +25,15 @@ from workorder.models.base import Customer
 @pytest.fixture
 def rejected_delivery(db):
     """创建一个已拒收的送货单"""
-    customer = Customer.objects.create(name="测试客户", contact_person="张", phone="138")
-    user = User.objects.create_user(username="reject_test_user", password="test", is_staff=True, is_superuser=True)
+    customer = Customer.objects.create(
+        name="测试客户", contact_person="张", phone="138"
+    )
+    user = User.objects.create_user(
+        username="reject_test_user",
+        password="test",
+        is_staff=True,
+        is_superuser=True,
+    )
     product = Product.objects.create(name="产品A", code="PA001", unit="件")
 
     sales_order = SalesOrder.objects.create(

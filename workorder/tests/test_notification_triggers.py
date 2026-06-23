@@ -19,7 +19,8 @@ def test_process_log_complete_triggers_notification():
     workorder_process = WorkOrderProcessFactory(tasks=0)
 
     with patch(
-        "workorder.services.notification_triggers.notification_service.notify_process_completion"
+        "workorder.services.notification_triggers."
+        "notification_service.notify_process_completion"
     ) as mocked:
         ProcessLog.objects.create(
             work_order_process=workorder_process,
@@ -38,10 +39,13 @@ def test_process_log_complete_triggers_notification():
 @pytest.mark.django_db
 def test_deadline_warning_uses_delivery_date():
     tomorrow = timezone.now().date() + timedelta(days=1)
-    workorder = WorkOrderFactory(delivery_date=tomorrow, status="in_progress", processes=0)
+    workorder = WorkOrderFactory(
+        delivery_date=tomorrow, status="in_progress", processes=0
+    )
 
     with patch(
-        "workorder.services.notification_triggers.notification_service.notify_deadline_warning"
+        "workorder.services.notification_triggers."
+        "notification_service.notify_deadline_warning"
     ) as mocked:
         DeadlineWarningService.check_deadline_warnings()
 
@@ -61,7 +65,8 @@ def test_overdue_tasks_use_planned_end_time():
     )
 
     with patch(
-        "workorder.services.notification_triggers.notification_service.send_notification"
+        "workorder.services.notification_triggers."
+        "notification_service.send_notification"
     ) as mocked:
         DeadlineWarningService.check_overdue_tasks()
 

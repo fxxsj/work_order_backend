@@ -15,7 +15,6 @@ from workorder.models.core import WorkOrder, WorkOrderMaterial
 from workorder.models.materials import (
     Material,
     PurchaseOrder,
-    PurchaseOrderItem,
     Supplier,
 )
 from workorder.constants.status import MaterialPurchaseStatus
@@ -26,7 +25,9 @@ from workorder.services.purchase_order_service import PurchaseOrderService
 @pytest.fixture
 def purchase_setup(db):
     """创建采购单测试数据。"""
-    customer = Customer.objects.create(name="测试客户", contact_person="张", phone="138")
+    customer = Customer.objects.create(
+        name="测试客户", contact_person="张", phone="138"
+    )
     user = User.objects.create_user(username="po_creator", password="test")
     supplier = Supplier.objects.create(name="测试供应商", code="SUP001")
     material = Material.objects.create(

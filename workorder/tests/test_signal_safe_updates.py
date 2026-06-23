@@ -13,7 +13,9 @@ def test_workorder_material_update_blocked():
     WorkOrderMaterial.objects.create(work_order=workorder, material=material)
 
     with pytest.raises(RuntimeError):
-        WorkOrderMaterial.objects.filter(work_order=workorder).update(notes="x")
+        WorkOrderMaterial.objects.filter(work_order=workorder).update(
+            notes="x"
+        )
 
 
 @pytest.mark.django_db

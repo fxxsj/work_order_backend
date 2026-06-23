@@ -1,6 +1,7 @@
 """
 数据一致性检查与运营仪表盘测试
 """
+
 from decimal import Decimal
 
 import pytest
@@ -8,8 +9,11 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 from datetime import timedelta
 
-from workorder.models.core import WorkOrder, WorkOrderTask, WorkOrderProcess, WorkOrderMaterial
-from workorder.models.materials import PurchaseOrder, PurchaseOrderItem, Supplier, Material
+from workorder.models.core import (
+    WorkOrder,
+    WorkOrderTask,
+    WorkOrderProcess,
+)
 from workorder.models.products import Product
 from workorder.models.sales import SalesOrder
 from workorder.models.inventory import ProductStock
@@ -20,9 +24,18 @@ from workorder.services.data_consistency_service import DataConsistencyService
 @pytest.fixture
 def consistency_setup(db):
     """创建一致性检查所需的数据"""
-    customer = Customer.objects.create(name="一致性测试客户", contact_person="张", phone="138")
-    user = User.objects.create_user(username="consistency_user", password="test")
-    product = Product.objects.create(name="一致性产品", code="CON001", unit="件", stock_quantity=Decimal("100"))
+    customer = Customer.objects.create(
+        name="一致性测试客户", contact_person="张", phone="138"
+    )
+    user = User.objects.create_user(
+        username="consistency_user", password="test"
+    )
+    product = Product.objects.create(
+        name="一致性产品",
+        code="CON001",
+        unit="件",
+        stock_quantity=Decimal("100"),
+    )
 
     # 创建库存批次（与 product.stock_quantity 不一致）
     ProductStock.objects.create(
@@ -44,6 +57,7 @@ def consistency_setup(db):
     )
 
     from workorder.models.base import Process
+
     process_obj = Process.objects.create(name="测试工序", code="TEST_PROC")
     process = WorkOrderProcess.objects.create(
         work_order=work_order,
@@ -124,6 +138,7 @@ class TestOperationsDashboard:
         """仪表盘 API 应返回关键指标（跳过响应包装问题）"""
         # 直接调用视图方法测试业务逻辑
         from ..views.monitoring import BusinessMetricsViewSet
+
         viewset = BusinessMetricsViewSet()
         # 验证视图集有该 action 即可
         assert hasattr(viewset, "operations_dashboard")
@@ -131,5 +146,6 @@ class TestOperationsDashboard:
     def test_data_consistency_api(self, consistency_setup):
         """数据一致性检查 API 应返回检查结果（跳过响应包装问题）"""
         from ..views.monitoring import SystemMonitoringViewSet
+
         viewset = SystemMonitoringViewSet()
         assert hasattr(viewset, "data_consistency")

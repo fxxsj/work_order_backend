@@ -17,7 +17,7 @@ from workorder.tests.factories import (
     WorkOrderMaterialFactory,
     MaterialFactory,
 )
-from workorder.models import WorkOrder, WorkOrderTask
+from workorder.models import WorkOrderTask
 from workorder.models.core import TaskLog
 from workorder.models.assets import Artwork, Die, FoilingPlate, EmbossingPlate
 
@@ -29,12 +29,14 @@ def make_salesperson(user, customer):
         customer.salesperson = user
         customer.save(update_fields=["salesperson"])
 
+
 def make_supervisor(user):
     from workorder.constants.role_codes import SUPERVISOR
     from django.contrib.auth.models import Group, Permission
+
     group, _ = Group.objects.get_or_create(name=SUPERVISOR)
     user.groups.add(group)
-    perm = Permission.objects.filter(codename='approve_workorder').first()
+    perm = Permission.objects.filter(codename="approve_workorder").first()
     if perm:
         user.user_permissions.add(perm)
 
@@ -42,7 +44,8 @@ def make_supervisor(user):
 @pytest.mark.django_db
 @pytest.mark.integration
 class TestWorkOrderTaskWorkflow:
-    """Test complete workflow: create workorder -> approve -> tasks generated"""
+    """Test complete workflow: create workorder -> approve ->
+    tasks generated"""
 
     def test_workorder_approval_creates_tasks(self, api_client):
         """
@@ -77,7 +80,9 @@ class TestWorkOrderTaskWorkflow:
         # At least one task should be pending (approval creates new tasks)
         assert tasks.filter(status="pending").exists()
 
-    def test_workorder_approval_is_idempotent_for_generated_tasks(self, api_client):
+    def test_workorder_approval_is_idempotent_for_generated_tasks(
+        self, api_client
+    ):
         """
         GIVEN: A submitted workorder that already has generated pending tasks
         WHEN: Task generation is invoked again through approval flow service
@@ -94,8 +99,12 @@ class TestWorkOrderTaskWorkflow:
         )
         WorkOrderProductFactory(work_order=workorder, quantity=100)
 
-        first_result = TaskGenerationService.generate_tasks_and_dispatch(workorder)
-        second_result = TaskGenerationService.generate_tasks_and_dispatch(workorder)
+        first_result = TaskGenerationService.generate_tasks_and_dispatch(
+            workorder
+        )
+        second_result = TaskGenerationService.generate_tasks_and_dispatch(
+            workorder
+        )
 
         assert first_result["created_count"] == 1
         assert second_result["created_count"] == 0
@@ -108,10 +117,14 @@ class TestWorkOrderTaskWorkflow:
         WHEN: It is resubmitted and approved again
         THEN: Existing completed tasks are preserved and not duplicated
         """
-        from workorder.services.work_order_flow_service import WorkOrderFlowService
+        from workorder.services.work_order_flow_service import (
+            WorkOrderFlowService,
+        )
 
         process = ProcessFactory(code="PACK", name="包装")
-        reviewer = UserFactory(username="reapproval_reviewer", is_superuser=True)
+        reviewer = UserFactory(
+            username="reapproval_reviewer", is_superuser=True
+        )
         workorder = WorkOrderFactory(
             approval_status="rejected",
             status="pending",
@@ -146,15 +159,21 @@ class TestWorkOrderTaskWorkflow:
         assert approved._task_generation_result["created_count"] == 0
         assert approved._task_generation_result["existing_count"] == 1
 
-    def test_submit_for_approval_auto_approve_generates_tasks(self, api_client):
+    def test_submit_for_approval_auto_approve_generates_tasks(
+        self, api_client
+    ):
         """
         GIVEN: A draft workorder and a reviewer using quick publish
         WHEN: submit_for_approval(auto_approve=True) runs
         THEN: It uses the normal approval path and generates tasks
         """
-        from workorder.services.work_order_flow_service import WorkOrderFlowService
+        from workorder.services.work_order_flow_service import (
+            WorkOrderFlowService,
+        )
 
-        reviewer = UserFactory(username="auto_approve_reviewer", is_superuser=True)
+        reviewer = UserFactory(
+            username="auto_approve_reviewer", is_superuser=True
+        )
         workorder = WorkOrderFactory(
             approval_status="draft",
             status="pending",
@@ -173,7 +192,9 @@ class TestWorkOrderTaskWorkflow:
         assert approved.approval_status == "approved"
         assert workorder.tasks.exclude(status="draft").exists()
 
-    def test_process_task_generation_rules_cover_core_process_codes(self, api_client):
+    def test_process_task_generation_rules_cover_core_process_codes(
+        self, api_client
+    ):
         """
         GIVEN: A workorder with assets, cutting materials, and products
         WHEN: Task objects are built for each core process code
@@ -299,9 +320,12 @@ class TestWorkOrderTaskWorkflow:
         assert result["blocked_task_ids"] == [started_task.id]
         assert WorkOrderTask.objects.filter(id=started_task.id).exists()
 
-    def test_task_sync_detects_missing_tasks_for_existing_process(self, api_client):
+    def test_task_sync_detects_missing_tasks_for_existing_process(
+        self, api_client
+    ):
         """
-        GIVEN: A process already exists on the workorder but has no formal tasks
+        GIVEN: A process already exists on the workorder but has no formal
+        tasks
         WHEN: Sync preview and execution run with the current process list
         THEN: Missing tasks are detected and generated
         """
@@ -321,8 +345,12 @@ class TestWorkOrderTaskWorkflow:
         )
         process_ids = [wo_process.id]
 
-        preview = TaskSyncService.preview_sync(workorder, process_ids, process_ids)
-        result = TaskSyncService.execute_sync(workorder, process_ids, process_ids)
+        preview = TaskSyncService.preview_sync(
+            workorder, process_ids, process_ids
+        )
+        result = TaskSyncService.execute_sync(
+            workorder, process_ids, process_ids
+        )
 
         assert preview["sync_needed"] is True
         assert preview["tasks_to_add"] == 1
@@ -362,7 +390,9 @@ class TestWorkOrderTaskWorkflow:
         THEN: Request is rejected
         """
         dept = DepartmentFactory()
-        supervisor = UserFactory(username="supervisor_alias", departments=[dept])
+        supervisor = UserFactory(
+            username="supervisor_alias", departments=[dept]
+        )
         operator = UserFactory(username="operator_alias", departments=[dept])
 
         task = WorkOrderTaskFactory(status="pending")
@@ -388,7 +418,9 @@ class TestWorkOrderTaskWorkflow:
         """
         old_dept = DepartmentFactory(name="Printing")
         new_dept = DepartmentFactory(name="Packaging")
-        supervisor = UserFactory(username="department_assigner", departments=[old_dept])
+        supervisor = UserFactory(
+            username="department_assigner", departments=[old_dept]
+        )
         operator = UserFactory(
             username="old_department_operator", departments=[old_dept]
         )
@@ -413,9 +445,12 @@ class TestWorkOrderTaskWorkflow:
         assert task.assigned_department == new_dept
         assert task.assigned_operator is None
 
-    def test_operator_center_returns_department_claimable_tasks(self, api_client):
+    def test_operator_center_returns_department_claimable_tasks(
+        self, api_client
+    ):
         """
-        GIVEN: Operator belongs to one department and there are unassigned tasks
+        GIVEN: Operator belongs to one department and there are unassigned
+        tasks
         WHEN: Operator opens operator center
         THEN: Only unassigned pending tasks in their department are claimable
         """
@@ -447,7 +482,9 @@ class TestWorkOrderTaskWorkflow:
         assert claimable_task.id in claimable_ids
         assert other_task.id not in claimable_ids
 
-    def test_operator_center_filters_claimable_tasks_by_search(self, api_client):
+    def test_operator_center_filters_claimable_tasks_by_search(
+        self, api_client
+    ):
         """
         GIVEN: Operator has multiple claimable tasks in their department
         WHEN: Operator opens operator center with a search query
@@ -488,11 +525,14 @@ class TestWorkOrderTaskWorkflow:
         assert matched_task.id in claimable_ids
         assert unmatched_task.id not in claimable_ids
 
-    def test_operator_center_returns_meta_and_respects_limits(self, api_client):
+    def test_operator_center_returns_meta_and_respects_limits(
+        self, api_client
+    ):
         """
         GIVEN: Operator has more assigned and claimable tasks than requested
         WHEN: Operator opens operator center with small limits
-        THEN: Response contains list metadata and only returns the requested number
+        THEN: Response contains list metadata and only returns the requested
+        number
         """
         dept = DepartmentFactory(name="Printing")
         operator = UserFactory(
@@ -521,7 +561,8 @@ class TestWorkOrderTaskWorkflow:
 
         api_client.force_authenticate(user=operator)
         response = api_client.get(
-            "/api/v1/workorder-tasks/operator_center/?my_limit=2&claimable_limit=3"
+            "/api/v1/workorder-tasks/operator_center/"
+            "?my_limit=2&claimable_limit=3"
         )
 
         assert response.status_code == status.HTTP_200_OK
@@ -588,7 +629,8 @@ class TestWorkOrderTaskWorkflow:
             client = APIClient()
             client.force_authenticate(user=user)
             try:
-                # Note: claim endpoint might not exist, using assign as fallback
+                # Note: claim endpoint might not exist, using assign as
+                # fallback
                 response = client.post(
                     f"/api/v1/workorder-tasks/{task.id}/assign/",
                     {"assigned_operator": user.id},
@@ -644,7 +686,9 @@ class TestWorkOrderTaskWorkflow:
         task.refresh_from_db()
         assert task.status == "completed"
 
-    def test_cut_task_completion_requires_material_cut_status(self, api_client):
+    def test_cut_task_completion_requires_material_cut_status(
+        self, api_client
+    ):
         """
         GIVEN: A CUT task linked to a workorder material
         WHEN: The material has not been marked cut
@@ -727,7 +771,9 @@ class TestWorkOrderTaskWorkflow:
         task.refresh_from_db()
         assert task.status == "in_progress"
         assert task.quantity_completed == 10
-        assert TaskLog.objects.filter(task=task, log_type="update_quantity").exists()
+        assert TaskLog.objects.filter(
+            task=task, log_type="update_quantity"
+        ).exists()
 
     def test_update_quantity_updates_product_stock(self, api_client):
         """
@@ -822,4 +868,7 @@ class TestWorkOrderTaskWorkflow:
         )
 
         # May succeed if permission check is not strict
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_403_FORBIDDEN]
+        assert response.status_code in [
+            status.HTTP_200_OK,
+            status.HTTP_403_FORBIDDEN,
+        ]

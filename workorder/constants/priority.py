@@ -10,16 +10,16 @@ from django.utils.translation import gettext_lazy as _
 class Priority:
     """通用优先级常量"""
 
-    LOW = 'low'
-    NORMAL = 'normal'
-    HIGH = 'high'
-    URGENT = 'urgent'
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+    URGENT = "urgent"
 
     CHOICES = [
-        (LOW, _('低')),
-        (NORMAL, _('普通')),
-        (HIGH, _('高')),
-        (URGENT, _('紧急')),
+        (LOW, _("低")),
+        (NORMAL, _("普通")),
+        (HIGH, _("高")),
+        (URGENT, _("紧急")),
     ]
 
 
@@ -35,11 +35,11 @@ class WorkflowPriority:
     LOWEST = 5
 
     CHOICES = [
-        (HIGHEST, _('最高')),
-        (HIGH, _('高')),
-        (ABOVE_NORMAL, _('高于正常')),
-        (NORMAL, _('正常')),
-        (BELOW_NORMAL, _('低于正常')),
-        (LOW, _('低')),
-        (LOWEST, _('最低')),
+        (HIGHEST, _("最高")),
+        (HIGH, _("高")),
+        (ABOVE_NORMAL, _("高于正常")),
+        (NORMAL, _("正常")),
+        (BELOW_NORMAL, _("低于正常")),
+        (LOW, _("低")),
+        (LOWEST, _("最低")),
     ]

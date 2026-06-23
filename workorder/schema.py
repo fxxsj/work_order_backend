@@ -24,7 +24,9 @@ def _data_field(data_serializer=None, many: bool = False):
     return serializers.JSONField(required=False, allow_null=True)
 
 
-def standard_success_response(name: str, data_serializer=None, many: bool = False):
+def standard_success_response(
+    name: str, data_serializer=None, many: bool = False
+):
     return inline_serializer(
         name=name,
         fields={

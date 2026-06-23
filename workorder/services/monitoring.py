@@ -825,7 +825,7 @@ class MonitoringStatsService:
                     "type": "performance",
                     "level": "warning",
                     "message": (
-                        f'系统错误率过高: '
+                        f"系统错误率过高: "
                         f'{performance_stats["error_rate"]:.2f}%'
                     ),
                     "timestamp": timezone.now().isoformat(),

@@ -30,7 +30,11 @@ def test_apiresponse_error_normalizes_error_data():
 def test_apiresponse_error_extracts_errors_and_keeps_context():
     response = APIResponse.error(
         "操作失败",
-        data={"error": "操作失败", "errors": {"field": ["无效"]}, "context": {"id": 1}},
+        data={
+            "error": "操作失败",
+            "errors": {"field": ["无效"]},
+            "context": {"id": 1},
+        },
     )
 
     assert response.data["success"] is False
@@ -40,7 +44,9 @@ def test_apiresponse_error_extracts_errors_and_keeps_context():
 
 
 def test_apiresponse_success_unwraps_message_payload():
-    response = APIResponse.success(data={"message": "保存成功", "data": {"id": 1}})
+    response = APIResponse.success(
+        data={"message": "保存成功", "data": {"id": 1}}
+    )
 
     assert response.data["success"] is True
     assert response.data["message"] == "保存成功"

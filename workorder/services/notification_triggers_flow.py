@@ -195,9 +195,9 @@ class NotificationTriggers:
         for operator_id in dispatch_result.get("notified_operators", []):
             try:
                 operator = User.objects.get(id=operator_id)
-                operator_task_count = dispatch_result[
-                    "operator_tasks"
-                ].get(operator_id, 0)
+                operator_task_count = dispatch_result["operator_tasks"].get(
+                    operator_id, 0
+                )
                 NotificationTriggers._create_notification(
                     recipient=operator,
                     notification_type="task_assigned",
@@ -207,9 +207,7 @@ class NotificationTriggers:
                     work_order=work_order,
                     template_key="task_assigned",
                     template_variables={
-                        "task_name": (
-                            f"{operator_task_count} 个新任务"
-                        ),
+                        "task_name": (f"{operator_task_count} 个新任务"),
                         "workorder_number": work_order.order_number,
                         "assigned_by": "系统",
                     },

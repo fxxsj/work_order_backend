@@ -1,10 +1,15 @@
 """Integration tests for inventory workflows"""
+
 import pytest
 from django.utils import timezone
 from rest_framework import status
 
 from workorder.models import ProductStock, StockIn
-from workorder.tests.factories import UserFactory, WorkOrderFactory, WorkOrderProductFactory
+from workorder.tests.factories import (
+    UserFactory,
+    WorkOrderFactory,
+    WorkOrderProductFactory,
+)
 
 
 @pytest.mark.django_db
@@ -18,7 +23,9 @@ class TestInventoryWorkflow:
         """
         user = UserFactory(is_superuser=True)
         work_order = WorkOrderFactory(processes=0)
-        product_line = WorkOrderProductFactory(work_order=work_order, quantity=100)
+        product_line = WorkOrderProductFactory(
+            work_order=work_order, quantity=100
+        )
 
         stock_in = StockIn.objects.create(
             work_order=work_order,
@@ -29,9 +36,18 @@ class TestInventoryWorkflow:
         )
 
         api_client.force_authenticate(user=user)
-        response = api_client.post(f"/api/v1/stock-ins/{stock_in.id}/confirm/", format="json")
+        response = api_client.post(
+            f"/api/v1/stock-ins/{stock_in.id}/confirm/", format="json"
+        )
         if response.status_code != status.HTTP_200_OK:
-            print("Response:", response.data if hasattr(response, 'data') else response.content)
+            print(
+                "Response:",
+                (
+                    response.data
+                    if hasattr(response, "data")
+                    else response.content
+                ),
+            )
         assert response.status_code == status.HTTP_200_OK
         stock_in.refresh_from_db()
         assert stock_in.status == "completed"

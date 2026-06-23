@@ -23,10 +23,18 @@ from workorder.services.task_action_service import TaskActionService
 @pytest.fixture
 def task_setup(db):
     """创建任务测试数据。"""
-    customer = Customer.objects.create(name="测试客户", contact_person="张", phone="138")
-    creator = User.objects.create_user(username="task_creator", password="test")
-    operator = User.objects.create_user(username="operator", password="test", is_staff=True)
-    supervisor = User.objects.create_user(username="supervisor", password="test", is_staff=True)
+    customer = Customer.objects.create(
+        name="测试客户", contact_person="张", phone="138"
+    )
+    creator = User.objects.create_user(
+        username="task_creator", password="test"
+    )
+    operator = User.objects.create_user(
+        username="operator", password="test", is_staff=True
+    )
+    supervisor = User.objects.create_user(
+        username="supervisor", password="test", is_staff=True
+    )
 
     work_order = WorkOrder.objects.create(
         customer=customer,

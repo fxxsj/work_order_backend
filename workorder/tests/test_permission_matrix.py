@@ -12,11 +12,15 @@ from workorder.urls import router
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FLUTTER_SRC = PROJECT_ROOT / "flutter" / "lib" / "src"
-ROLE_MATRIX_PATH = PROJECT_ROOT / "workorder" / "permissions" / "role_matrix.py"
+ROLE_MATRIX_PATH = (
+    PROJECT_ROOT / "workorder" / "permissions" / "role_matrix.py"
+)
 
 
 def _load_role_matrix():
-    spec = importlib.util.spec_from_file_location("role_matrix_0055", ROLE_MATRIX_PATH)
+    spec = importlib.util.spec_from_file_location(
+        "role_matrix_0055", ROLE_MATRIX_PATH
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -35,7 +39,9 @@ def _role_permissions_from_source():
             model_perm_name = _model_name(model_name)
             for action in actions:
                 permissions.add(f"workorder.{action}_{model_perm_name}")
-        for codenames in matrix.ROLE_CUSTOM_PERMISSIONS.get(role_code, {}).values():
+        for codenames in matrix.ROLE_CUSTOM_PERMISSIONS.get(
+            role_code, {}
+        ).values():
             for codename in codenames:
                 permissions.add(f"workorder.{codename}")
         role_permissions[role_code] = permissions
@@ -70,10 +76,14 @@ class PermissionMatrixTest(SimpleTestCase):
             ["rest_framework.permissions.IsAuthenticated"],
         )
 
-    def test_registered_viewsets_do_not_use_anonymous_readonly_permissions(self):
+    def test_registered_viewsets_do_not_use_anonymous_readonly_permissions(
+        self,
+    ):
         offenders = []
         for prefix, viewset, _basename in router.registry:
-            if IsAuthenticatedOrReadOnly in getattr(viewset, "permission_classes", []):
+            if IsAuthenticatedOrReadOnly in getattr(
+                viewset, "permission_classes", []
+            ):
                 offenders.append(f"{prefix}: {viewset.__name__}")
 
         self.assertEqual(offenders, [])

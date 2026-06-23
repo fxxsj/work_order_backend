@@ -3,6 +3,7 @@
 
 提供缓存和优化的权限检查方法，减少数据库查询
 """
+
 from django.core.cache import cache
 from django.db.models import Q
 
@@ -24,13 +25,15 @@ class PermissionCache:
         if not user.is_authenticated:
             return []
 
-        cache_key = f'user_departments_{user.id}'
+        cache_key = f"user_departments_{user.id}"
         departments = cache.get(cache_key)
 
         if departments is None:
             # 缓存未命中，从数据库获取
-            if hasattr(user, 'profile') and user.profile:
-                departments = list(user.profile.departments.values_list('id', flat=True))
+            if hasattr(user, "profile") and user.profile:
+                departments = list(
+                    user.profile.departments.values_list("id", flat=True)
+                )
             else:
                 departments = []
 
@@ -49,7 +52,7 @@ class PermissionCache:
         if not user.is_authenticated:
             return []
 
-        cache_key = f'user_department_scope_{user.id}'
+        cache_key = f"user_department_scope_{user.id}"
         department_scope = cache.get(cache_key)
 
         if department_scope is None:
@@ -60,9 +63,14 @@ class PermissionCache:
                 from workorder.models.base import Department
 
                 scoped_ids = set(departments)
-                for department in Department.objects.filter(id__in=departments):
+                for department in Department.objects.filter(
+                    id__in=departments
+                ):
                     scoped_ids.update(
-                        descendant.id for descendant in department.get_descendants(include_self=True)
+                        descendant.id
+                        for descendant in department.get_descendants(
+                            include_self=True
+                        )
                     )
                 department_scope = list(scoped_ids)
 
@@ -88,7 +96,9 @@ class PermissionCache:
     @staticmethod
     def is_department_in_user_scope(user, department_id, timeout=1800):
         """检查指定部门是否在用户所属部门及子孙部门范围内。"""
-        department_scope = PermissionCache.get_user_department_scope(user, timeout)
+        department_scope = PermissionCache.get_user_department_scope(
+            user, timeout
+        )
         return department_id in department_scope
 
     @staticmethod
@@ -98,18 +108,22 @@ class PermissionCache:
         Args:
             user: 用户对象
         """
-        cache.delete_many([
-            f'user_departments_{user.id}',
-            f'user_department_scope_{user.id}',
-        ])
+        cache.delete_many(
+            [
+                f"user_departments_{user.id}",
+                f"user_department_scope_{user.id}",
+            ]
+        )
 
     @staticmethod
     def clear_all_user_cache():
         """清除所有用户权限缓存（谨慎使用）"""
         # 在用户部门变更时调用
         # 例如：用户被添加到新部门或从部门移除
-        cache.delete_many([key for key in cache.keys('user_departments_*')])
-        cache.delete_many([key for key in cache.keys('user_department_scope_*')])
+        cache.delete_many([key for key in cache.keys("user_departments_*")])
+        cache.delete_many(
+            [key for key in cache.keys("user_department_scope_*")]
+        )
 
 
 class PermissionUtils:
@@ -208,11 +222,11 @@ class PermissionUtils:
         )
         department_ids = PermissionCache.get_user_department_scope(user)
         if department_ids:
-            scope |= Q(
-                **{
-                    f"{prefix}source_work_orders__order_processes__department_id__in": department_ids
-                }
+            dept_filter_key = (
+                f"{prefix}source_work_orders__order_processes__"
+                "department_id__in"
             )
+            scope |= Q(**{dept_filter_key: department_ids})
         return scope
 
     @staticmethod
@@ -224,9 +238,10 @@ class PermissionUtils:
         )
         department_ids = PermissionCache.get_user_department_scope(user)
         if department_ids:
-            scope |= Q(
-                **{f"{prefix}order_processes__department_id__in": department_ids}
+            dept_filter_key = (
+                f"{prefix}order_processes__" "department_id__in"
             )
+            scope |= Q(**{dept_filter_key: department_ids})
         return scope
 
     @staticmethod
@@ -281,9 +296,13 @@ def apply_data_scope(
     if customer_path:
         scope |= PermissionUtils.build_customer_scope_q(user, customer_path)
     if sales_order_path:
-        scope |= PermissionUtils.build_sales_order_scope_q(user, sales_order_path)
+        scope |= PermissionUtils.build_sales_order_scope_q(
+            user, sales_order_path
+        )
     if work_order_path:
-        scope |= PermissionUtils.build_work_order_scope_q(user, work_order_path)
+        scope |= PermissionUtils.build_work_order_scope_q(
+            user, work_order_path
+        )
     for ownership_path in ownership_paths:
         scope |= Q(**{ownership_path: user})
 
@@ -293,7 +312,8 @@ def apply_data_scope(
 
 
 def apply_department_scope(queryset, department_id, path):
-    """Filter queryset to a specific department along the given relation path."""
+    """Filter queryset to a specific department along the given
+    relation path."""
     if not department_id:
         return queryset
     filter_key = f"{path}__id"

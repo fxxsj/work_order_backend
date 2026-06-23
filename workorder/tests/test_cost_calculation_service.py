@@ -2,6 +2,7 @@
 成本核算服务测试
 覆盖施工单完成后自动生成成本核算草稿的场景
 """
+
 from decimal import Decimal
 
 import pytest
@@ -22,9 +23,13 @@ from workorder.services.work_order_flow_service import WorkOrderFlowService
 @pytest.fixture
 def cost_work_order_setup(db):
     """创建一个可完成并触发成本核算的施工单"""
-    customer = Customer.objects.create(name="成本测试客户", contact_person="张", phone="138")
+    customer = Customer.objects.create(
+        name="成本测试客户", contact_person="张", phone="138"
+    )
     user = User.objects.create_user(username="cost_test_user", password="test")
-    product = Product.objects.create(name="成本测试产品", code="COST001", unit="件")
+    product = Product.objects.create(
+        name="成本测试产品", code="COST001", unit="件"
+    )
 
     # 创建物料
     material = Material.objects.create(
@@ -73,6 +78,7 @@ def cost_work_order_setup(db):
     product.default_processes.add(process)
 
     from workorder.models.core import WorkOrderProcess
+
     wp = WorkOrderProcess.objects.create(
         work_order=work_order,
         process=process,
@@ -105,12 +111,16 @@ def cost_work_order_setup(db):
 class TestCostCalculationService:
     """测试成本核算服务"""
 
-    def test_generate_cost_draft_creates_production_cost(self, cost_work_order_setup):
+    def test_generate_cost_draft_creates_production_cost(
+        self, cost_work_order_setup
+    ):
         """施工单完成后应自动生成成本核算草稿"""
         work_order, task, wom, material, user = cost_work_order_setup
 
         # 确认没有预先存在的成本记录
-        assert ProductionCost.objects.filter(work_order=work_order).count() == 0
+        assert (
+            ProductionCost.objects.filter(work_order=work_order).count() == 0
+        )
 
         # 完成任务
         task.status = "completed"
@@ -144,17 +154,25 @@ class TestCostCalculationService:
         work_order, task, wom, material, user = cost_work_order_setup
 
         # 直接调用服务两次
-        cost1, created1 = CostCalculationService.generate_cost_draft(work_order)
+        cost1, created1 = CostCalculationService.generate_cost_draft(
+            work_order
+        )
         assert created1 is True
 
-        cost2, created2 = CostCalculationService.generate_cost_draft(work_order)
+        cost2, created2 = CostCalculationService.generate_cost_draft(
+            work_order
+        )
         assert created2 is False
         assert cost1.id == cost2.id
 
         # 确保数据库中只有一条记录
-        assert ProductionCost.objects.filter(work_order=work_order).count() == 1
+        assert (
+            ProductionCost.objects.filter(work_order=work_order).count() == 1
+        )
 
-    def test_check_and_complete_workorder_triggers_cost(self, cost_work_order_setup):
+    def test_check_and_complete_workorder_triggers_cost(
+        self, cost_work_order_setup
+    ):
         """通过 check_and_complete_workorder 也应触发成本核算"""
         work_order, task, wom, material, user = cost_work_order_setup
 
@@ -166,7 +184,9 @@ class TestCostCalculationService:
         task.save()
 
         # 通过服务标记施工单完成
-        result = WorkOrderFlowService.check_and_complete_workorder(work_order=work_order)
+        result = WorkOrderFlowService.check_and_complete_workorder(
+            work_order=work_order
+        )
         assert result is True
 
         # 验证成本记录已生成

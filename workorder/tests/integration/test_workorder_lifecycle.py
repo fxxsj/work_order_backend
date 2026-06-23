@@ -3,7 +3,6 @@
 import pytest
 from django.contrib.auth.models import Group
 from rest_framework import status
-from rest_framework.test import APIClient
 from workorder.constants.role_codes import SALES
 from workorder.tests.factories import (
     WorkOrderFactory,
@@ -24,6 +23,7 @@ def make_salesperson(user, customer):
     if customer is not None:
         customer.salesperson = user
         customer.save(update_fields=["salesperson"])
+
 
 def make_supervisor(user):
     from workorder.constants.role_codes import SUPERVISOR
@@ -53,7 +53,8 @@ class TestWorkOrderLifecycle:
     def test_full_workorder_lifecycle(self, api_client):
         """
         GIVEN: A new work order
-        WHEN: Following the complete lifecycle (create -> approve -> dispatch -> complete)
+        WHEN: Following the complete lifecycle (create -> approve -> dispatch
+        -> complete)
         THEN: All transitions work correctly
         """
         # Setup
@@ -82,11 +83,13 @@ class TestWorkOrderLifecycle:
         assert response.status_code == status.HTTP_201_CREATED
         workorder_id = response.data["data"]["id"]
         workorder = WorkOrder.objects.get(id=workorder_id)
-        WorkOrderProductFactory(work_order=workorder, product=product, quantity=100)
+        WorkOrderProductFactory(
+            work_order=workorder, product=product, quantity=100
+        )
         make_supervisor(supervisor)
 
         # Add processes manually (API might not support nested creation)
-        wop = WorkOrderProcessFactory(
+        _ = WorkOrderProcessFactory(
             work_order=workorder, process=process, department=dept, tasks=1
         )
 
@@ -134,7 +137,8 @@ class TestWorkOrderLifecycle:
         assert task.assigned_operator == operator
 
         # Step 5: Operator starts task (if endpoint exists, else skip)
-        # Many APIs don't have explicit start, task goes to in_progress on update
+        # Many APIs don't have explicit start, task goes to in_progress on
+        # update
 
         # Step 6: Operator completes task
         api_client.force_authenticate(user=operator)
@@ -182,9 +186,15 @@ class TestWorkOrderLifecycle:
         make_supervisor(supervisor)
 
         # Create multiple processes
-        WorkOrderProcessFactory(work_order=workorder, process=process1, tasks=1)
-        WorkOrderProcessFactory(work_order=workorder, process=process2, tasks=1)
-        WorkOrderProcessFactory(work_order=workorder, process=process3, tasks=1)
+        WorkOrderProcessFactory(
+            work_order=workorder, process=process1, tasks=1
+        )
+        WorkOrderProcessFactory(
+            work_order=workorder, process=process2, tasks=1
+        )
+        WorkOrderProcessFactory(
+            work_order=workorder, process=process3, tasks=1
+        )
 
         # Submit for approval
         api_client.force_authenticate(user=maker)
@@ -239,11 +249,15 @@ class TestWorkOrderLifecycle:
         workorder = WorkOrder.objects.get(id=workorder_id)
 
         # Add first process with tasks
-        WorkOrderProcessFactory(work_order=workorder, process=process1, tasks=1)
+        WorkOrderProcessFactory(
+            work_order=workorder, process=process1, tasks=1
+        )
         initial_task_count = workorder.tasks.count()
 
         # Add second process
-        WorkOrderProcessFactory(work_order=workorder, process=process2, tasks=1)
+        WorkOrderProcessFactory(
+            work_order=workorder, process=process2, tasks=1
+        )
 
         # After adding process, should have more tasks
         workorder.refresh_from_db()

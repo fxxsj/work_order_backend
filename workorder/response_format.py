@@ -78,7 +78,9 @@ def extract_first_error_message(data: Any) -> Optional[str]:
     # 处理特殊情况
     if "detail" in data and isinstance(data["detail"], str):
         return data["detail"]
-    if "non_field_errors" in data and isinstance(data["non_field_errors"], list):
+    if "non_field_errors" in data and isinstance(
+        data["non_field_errors"], list
+    ):
         if data["non_field_errors"]:
             return str(data["non_field_errors"][0])
     return None
@@ -105,7 +107,9 @@ def standardize_renderer_payload(*, data: Any, status_code: int) -> Any:
         errors: Any = {}
 
         if isinstance(data, dict):
-            message = data.get("message") or data.get("error") or data.get("detail")
+            message = (
+                data.get("message") or data.get("error") or data.get("detail")
+            )
             errors = data
         else:
             message = str(data)
@@ -137,4 +141,3 @@ def standardize_renderer_payload(*, data: Any, status_code: int) -> Any:
         code=status_code,
         timestamp=timestamp,
     )
-

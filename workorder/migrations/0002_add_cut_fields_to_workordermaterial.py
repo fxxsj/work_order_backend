@@ -9,23 +9,42 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('workorder', '0001_initial'),
+        ("workorder", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='workordermaterial',
-            name='cut_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='cut_materials', to=settings.AUTH_USER_MODEL, verbose_name='开料人'),
+            model_name="workordermaterial",
+            name="cut_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="cut_materials",
+                to=settings.AUTH_USER_MODEL,
+                verbose_name="开料人",
+            ),
         ),
         migrations.AddField(
-            model_name='workordermaterial',
-            name='cut_quantity',
-            field=models.DecimalField(decimal_places=2, default=0, help_text='实际开料数量', max_digits=12, verbose_name='实际开料数量'),
+            model_name="workordermaterial",
+            name="cut_quantity",
+            field=models.DecimalField(
+                decimal_places=2,
+                default=0,
+                help_text="实际开料数量",
+                max_digits=12,
+                verbose_name="实际开料数量",
+            ),
         ),
         migrations.AddField(
-            model_name='workordermaterial',
-            name='wastage_quantity',
-            field=models.DecimalField(decimal_places=2, default=0, help_text='开料过程中产生的损耗数量', max_digits=12, verbose_name='开料损耗数量'),
+            model_name="workordermaterial",
+            name="wastage_quantity",
+            field=models.DecimalField(
+                decimal_places=2,
+                default=0,
+                help_text="开料过程中产生的损耗数量",
+                max_digits=12,
+                verbose_name="开料损耗数量",
+            ),
         ),
     ]

@@ -72,11 +72,15 @@ class Command(BaseCommand):
                 if not department:
                     skipped_count += 1
                     self.stdout.write(
-                        self.style.WARNING(f"部门编码不存在，跳过工序关联: {dept_code}")
+                        self.style.WARNING(
+                            f"部门编码不存在，跳过工序关联: {dept_code}"
+                        )
                     )
                     continue
 
-                processes = Process.objects.filter(code__in=process_codes, is_active=True)
+                processes = Process.objects.filter(
+                    code__in=process_codes, is_active=True
+                )
                 department.processes.set(processes)
                 configured_count += 1
 

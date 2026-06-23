@@ -13,8 +13,12 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from workorder.constants.status import MaterialPurchaseStatus
-from workorder.models.core import WorkOrder, WorkOrderMaterial
-from workorder.models.materials import PurchaseOrder, PurchaseOrderItem, PurchaseReceiveRecord
+from workorder.models.core import WorkOrder
+from workorder.models.materials import (
+    PurchaseOrder,
+    PurchaseOrderItem,
+    PurchaseReceiveRecord,
+)
 from workorder.tests.factories import (
     SupplierFactory,
     MaterialFactory,
@@ -22,7 +26,6 @@ from workorder.tests.factories import (
     WorkOrderMaterialFactory,
     PurchaseOrderFactory,
     PurchaseOrderItemFactory,
-    PurchaseReceiveRecordFactory,
     UserFactory,
 )
 
@@ -44,7 +47,9 @@ class TestPurchaseOrderWriteback:
         self.material = MaterialFactory(default_supplier=self.supplier)
 
         # 创建施工单 + 物料（已审批状态才能关联采购单）
-        self.work_order = WorkOrderFactory(approval_status="approved", status="in_progress")
+        self.work_order = WorkOrderFactory(
+            approval_status="approved", status="in_progress"
+        )
         self.wo_material = WorkOrderMaterialFactory(
             work_order=self.work_order,
             material=self.material,
@@ -61,7 +66,7 @@ class TestPurchaseOrderWriteback:
             approval_status="approved",
             status="pending",
         )
-        item = PurchaseOrderItemFactory(
+        _ = PurchaseOrderItemFactory(
             purchase_order=po,
             material=self.material,
             quantity=500,
@@ -70,7 +75,9 @@ class TestPurchaseOrderWriteback:
         )
 
         # 执行下单
-        response = self.client.post(f"/api/v1/purchase-orders/{po.id}/place_order/")
+        response = self.client.post(
+            f"/api/v1/purchase-orders/{po.id}/place_order/"
+        )
 
         if response.status_code != 200:
             print("Response:", response.data)
@@ -78,7 +85,9 @@ class TestPurchaseOrderWriteback:
 
         # 刷新并验证
         self.wo_material.refresh_from_db()
-        assert self.wo_material.purchase_status == MaterialPurchaseStatus.ORDERED
+        assert (
+            self.wo_material.purchase_status == MaterialPurchaseStatus.ORDERED
+        )
         assert self.wo_material.purchase_date is not None
 
     def test_place_order_rejects_already_ordered_purchase_order(self):
@@ -91,7 +100,9 @@ class TestPurchaseOrderWriteback:
             ordered_date=timezone.now().date(),
         )
 
-        response = self.client.post(f"/api/v1/purchase-orders/{po.id}/place_order/")
+        response = self.client.post(
+            f"/api/v1/purchase-orders/{po.id}/place_order/"
+        )
 
         assert response.status_code == 400
         assert "待下单" in response.json()["message"]
@@ -105,7 +116,9 @@ class TestPurchaseOrderWriteback:
             status="draft",
         )
 
-        response = self.client.post(f"/api/v1/purchase-orders/{po.id}/place_order/")
+        response = self.client.post(
+            f"/api/v1/purchase-orders/{po.id}/place_order/"
+        )
 
         assert response.status_code == 400
         assert "待下单" in response.json()["message"]
@@ -147,7 +160,8 @@ class TestPurchaseOrderWriteback:
 
         # 质检确认合格
         response = self.client.post(
-            f"/api/v1/purchase-receive-records/{record.id}/confirm_inspection/",
+            f"/api/v1/purchase-receive-records/{record.id}/"
+            "confirm_inspection/",
             data={"qualified_quantity": 500, "unqualified_quantity": 0},
             format="json",
         )
@@ -161,7 +175,9 @@ class TestPurchaseOrderWriteback:
 
         # 验证 WorkOrderMaterial 状态已更新
         self.wo_material.refresh_from_db()
-        assert self.wo_material.purchase_status == MaterialPurchaseStatus.RECEIVED
+        assert (
+            self.wo_material.purchase_status == MaterialPurchaseStatus.RECEIVED
+        )
         assert self.wo_material.received_date is not None
 
     def test_stock_in_partial_updates_work_order_material_to_ordered(self):
@@ -193,11 +209,14 @@ class TestPurchaseOrderWriteback:
         )
         assert response.status_code == 200
 
-        record = PurchaseReceiveRecord.objects.filter(purchase_order_item=item).first()
+        record = PurchaseReceiveRecord.objects.filter(
+            purchase_order_item=item
+        ).first()
 
         # 质检确认（300 全部合格）
         response = self.client.post(
-            f"/api/v1/purchase-receive-records/{record.id}/confirm_inspection/",
+            f"/api/v1/purchase-receive-records/{record.id}/"
+            "confirm_inspection/",
             data={"qualified_quantity": 300, "unqualified_quantity": 0},
             format="json",
         )
@@ -211,7 +230,9 @@ class TestPurchaseOrderWriteback:
 
         # 验证 WorkOrderMaterial 状态保持 ordered（因为是部分收货）
         self.wo_material.refresh_from_db()
-        assert self.wo_material.purchase_status == MaterialPurchaseStatus.ORDERED
+        assert (
+            self.wo_material.purchase_status == MaterialPurchaseStatus.ORDERED
+        )
 
 
 @pytest.mark.django_db
@@ -227,7 +248,9 @@ class TestCreateFromWorkOrder:
         """create_from_work_order 应创建采购单并关联 WorkOrderMaterial"""
         supplier = SupplierFactory(status="active")
         material = MaterialFactory(default_supplier=supplier)
-        work_order = WorkOrderFactory(approval_status="approved", status="in_progress")
+        work_order = WorkOrderFactory(
+            approval_status="approved", status="in_progress"
+        )
         wo_material = WorkOrderMaterialFactory(
             work_order=work_order,
             material=material,
@@ -264,7 +287,9 @@ class TestCreateFromWorkOrder:
         supplier2 = SupplierFactory(status="active", name="Supplier B")
         material1 = MaterialFactory(default_supplier=supplier1)
         material2 = MaterialFactory(default_supplier=supplier2)
-        work_order = WorkOrderFactory(approval_status="approved", status="in_progress")
+        work_order = WorkOrderFactory(
+            approval_status="approved", status="in_progress"
+        )
         WorkOrderMaterialFactory(
             work_order=work_order,
             material=material1,
@@ -290,7 +315,9 @@ class TestCreateFromWorkOrder:
     def test_create_from_work_order_fails_without_default_supplier(self):
         """物料无默认供应商时应报错"""
         material = MaterialFactory(default_supplier=None)
-        work_order = WorkOrderFactory(approval_status="approved", status="in_progress")
+        work_order = WorkOrderFactory(
+            approval_status="approved", status="in_progress"
+        )
         WorkOrderMaterialFactory(
             work_order=work_order,
             material=material,
@@ -311,7 +338,9 @@ class TestCreateFromWorkOrder:
         """只筛选 purchase_status=pending 的物料"""
         supplier = SupplierFactory(status="active")
         material = MaterialFactory(default_supplier=supplier)
-        work_order = WorkOrderFactory(approval_status="approved", status="in_progress")
+        work_order = WorkOrderFactory(
+            approval_status="approved", status="in_progress"
+        )
 
         # 已下单的物料（不应包含在新采购单中）
         WorkOrderMaterialFactory(
@@ -344,7 +373,9 @@ class TestCreateFromWorkOrder:
         """已有关联采购明细的施工单物料不应重复创建"""
         supplier = SupplierFactory(status="active")
         material = MaterialFactory(default_supplier=supplier)
-        work_order = WorkOrderFactory(approval_status="approved", status="in_progress")
+        work_order = WorkOrderFactory(
+            approval_status="approved", status="in_progress"
+        )
         wo_material = WorkOrderMaterialFactory(
             work_order=work_order,
             material=material,
@@ -373,9 +404,12 @@ class TestCreateFromWorkOrder:
         data = response.json()["data"]
         assert data["total_count"] == 0
         assert data["skipped_item_count"] == 1
-        assert PurchaseOrderItem.objects.filter(
-            work_order_material=wo_material
-        ).count() == 1
+        assert (
+            PurchaseOrderItem.objects.filter(
+                work_order_material=wo_material
+            ).count()
+            == 1
+        )
 
 
 @pytest.mark.django_db
@@ -388,7 +422,12 @@ class TestWorkOrderDetailSerializerPurchaseOrders:
 
         supplier = SupplierFactory(name="Test Supplier")
         work_order = WorkOrderFactory(approval_status="approved")
-        po = PurchaseOrderFactory(supplier=supplier, work_order=work_order, approval_status="approved", status="ordered")
+        po = PurchaseOrderFactory(
+            supplier=supplier,
+            work_order=work_order,
+            approval_status="approved",
+            status="ordered",
+        )
 
         serializer = WorkOrderDetailSerializer(work_order)
         data = serializer.data
@@ -406,11 +445,15 @@ class TestWorkOrderDetailSerializerPurchaseOrders:
     def test_work_order_detail_purchase_orders_prefetched(self):
         """使用 prefetched 数据时应避免额外查询"""
         from workorder.serializers.core import WorkOrderDetailSerializer
-        from workorder.services.query_optimizer import QueryOptimizer
 
         supplier = SupplierFactory(name="Prefetch Supplier")
         work_order = WorkOrderFactory(approval_status="approved")
-        PurchaseOrderFactory(supplier=supplier, work_order=work_order, approval_status="draft", status="pending")
+        PurchaseOrderFactory(
+            supplier=supplier,
+            work_order=work_order,
+            approval_status="draft",
+            status="pending",
+        )
 
         # 模拟 include_details=True 的 prefetch
         work_order = (

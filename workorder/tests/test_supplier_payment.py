@@ -2,24 +2,35 @@
 供应商付款模型与应付账款测试
 覆盖付款创建、审核、回写采购单付款状态
 """
+
 from decimal import Decimal
 
 import pytest
-from django.utils import timezone
 from django.contrib.auth.models import User
-from datetime import timedelta
 
 from workorder.models.finance import SupplierPayment
-from workorder.models.materials import PurchaseOrder, PurchaseOrderItem, Supplier, Material
+from workorder.models.materials import (
+    PurchaseOrder,
+    PurchaseOrderItem,
+    Supplier,
+    Material,
+)
 from workorder.services.supplier_payment_service import SupplierPaymentService
 
 
 @pytest.fixture
 def purchase_setup(db):
     """创建采购单和供应商"""
-    user = User.objects.create_user(username="po_test_user", password="test", is_staff=True, is_superuser=True)
+    user = User.objects.create_user(
+        username="po_test_user",
+        password="test",
+        is_staff=True,
+        is_superuser=True,
+    )
     supplier = Supplier.objects.create(name="测试供应商", code="SUP001")
-    material = Material.objects.create(name="灰板纸", code="MAT001", unit_price=Decimal("10.00"))
+    material = Material.objects.create(
+        name="灰板纸", code="MAT001", unit_price=Decimal("10.00")
+    )
 
     po = PurchaseOrder.objects.create(
         supplier=supplier,

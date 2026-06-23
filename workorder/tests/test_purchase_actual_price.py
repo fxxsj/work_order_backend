@@ -1,6 +1,7 @@
 """
 采购实际单价进入材料成本测试
 """
+
 from decimal import Decimal
 
 import pytest
@@ -23,11 +24,18 @@ from workorder.constants.status import MaterialPurchaseStatus
 
 @pytest.fixture
 def purchase_setup(db):
-    customer = Customer.objects.create(name="测试客户", contact_person="张", phone="138")
-    user = User.objects.create_user(username="purchase_test_user", password="test")
+    customer = Customer.objects.create(
+        name="测试客户", contact_person="张", phone="138"
+    )
+    user = User.objects.create_user(
+        username="purchase_test_user", password="test"
+    )
     supplier = Supplier.objects.create(name="测试供应商", code="SUP001")
     material = Material.objects.create(
-        name="灰板纸", code="MAT001", unit_price=Decimal("10.00"), need_cutting=True
+        name="灰板纸",
+        code="MAT001",
+        unit_price=Decimal("10.00"),
+        need_cutting=True,
     )
     work_order = WorkOrder.objects.create(
         customer=customer,

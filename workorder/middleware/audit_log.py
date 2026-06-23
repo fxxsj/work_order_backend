@@ -32,8 +32,8 @@ class AuditLogMiddleware(MiddlewareMixin):
 
     def process_response(self, request, response):
         """清理请求"""
-        if hasattr(_thread_locals, 'request'):
-            delattr(_thread_locals, 'request')
+        if hasattr(_thread_locals, "request"):
+            delattr(_thread_locals, "request")
         return response
 
 
@@ -57,14 +57,14 @@ class RequestCaptureMiddleware(MiddlewareMixin):
         request.audit_log_ip = get_client_ip(request)
 
         # 存储用户代理
-        request.audit_log_user_agent = request.META.get('HTTP_USER_AGENT', '')
+        request.audit_log_user_agent = request.META.get("HTTP_USER_AGENT", "")
 
         return None
 
     def process_response(self, request, response):
         """清理请求信息"""
-        if hasattr(_thread_locals, 'request'):
-            delattr(_thread_locals, 'request')
+        if hasattr(_thread_locals, "request"):
+            delattr(_thread_locals, "request")
         return response
 
 
@@ -75,7 +75,7 @@ def get_current_request():
     Returns:
         HttpRequest: 当前请求，如果没有则返回 None
     """
-    return getattr(_thread_locals, 'request', None)
+    return getattr(_thread_locals, "request", None)
 
 
 def get_current_user():
@@ -87,7 +87,7 @@ def get_current_user():
     """
     request = get_current_request()
     if request:
-        return getattr(request, 'user', None)
+        return getattr(request, "user", None)
     return None
 
 
@@ -101,9 +101,9 @@ def get_client_ip(request):
     Returns:
         str: IP地址
     """
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
     if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
+        ip = x_forwarded_for.split(",")[0]
     else:
-        ip = request.META.get('REMOTE_ADDR')
+        ip = request.META.get("REMOTE_ADDR")
     return ip

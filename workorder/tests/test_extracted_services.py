@@ -20,7 +20,12 @@ from workorder.models.assets import Artwork, ArtworkProduct
 from workorder.models.base import Customer, Process
 from workorder.models.products import Product
 from workorder.models.core import WorkOrder, WorkOrderProcess, WorkOrderTask
-from workorder.models.finance import Invoice, PaymentPlan, ProductionCost, Statement
+from workorder.models.finance import (
+    Invoice,
+    PaymentPlan,
+    ProductionCost,
+    Statement,
+)
 from workorder.models.sales import SalesOrder
 from workorder.models.inventory import (
     ProductStock,
@@ -29,7 +34,6 @@ from workorder.models.inventory import (
 )
 from workorder.models.system import (
     Notification,
-    NotificationTemplate,
     SystemNotificationSettings,
     UserProfile,
 )
@@ -68,7 +72,9 @@ def finance_user(db):
 
 @pytest.fixture
 def test_customer(db):
-    return Customer.objects.create(name="测试客户", contact_person="张", phone="138")
+    return Customer.objects.create(
+        name="测试客户", contact_person="张", phone="138"
+    )
 
 
 @pytest.fixture
@@ -116,17 +122,23 @@ class TestProductStockService:
         )
 
     def test_adjust_add(self, stock):
-        result = ProductStockService.adjust_stock(stock, "add", Decimal("10"), "补货")
+        result = ProductStockService.adjust_stock(
+            stock, "add", Decimal("10"), "补货"
+        )
         assert result["new_quantity"] == float(Decimal("110"))
         assert "补货" in stock.notes
 
     def test_adjust_set(self, stock):
-        result = ProductStockService.adjust_stock(stock, "set", Decimal("50"), "盘点")
+        result = ProductStockService.adjust_stock(
+            stock, "set", Decimal("50"), "盘点"
+        )
         assert result["new_quantity"] == float(Decimal("50"))
 
     def test_adjust_invalid_type(self, stock):
         with pytest.raises(ServiceError) as exc_info:
-            ProductStockService.adjust_stock(stock, "multiply", Decimal("2"), "错误")
+            ProductStockService.adjust_stock(
+                stock, "multiply", Decimal("2"), "错误"
+            )
         assert exc_info.value.code == 400
 
 
@@ -196,7 +208,10 @@ class TestAssetConfirmationService:
     def plate_making_task(self, db, artwork, test_work_order):
         process = Process.objects.create(name="制版", code="PLATE")
         wop = WorkOrderProcess.objects.create(
-            work_order=test_work_order, process=process, sequence=10, status="in_progress"
+            work_order=test_work_order,
+            process=process,
+            sequence=10,
+            status="in_progress",
         )
         return WorkOrderTask.objects.create(
             work_order_process=wop,
@@ -236,7 +251,9 @@ class TestAssetImageService:
         return Artwork.objects.create(name="测试图稿")
 
     def test_create_image_invalid_extension(self, artwork):
-        bad_file = SimpleUploadedFile("test.txt", b"x", content_type="text/plain")
+        bad_file = SimpleUploadedFile(
+            "test.txt", b"x", content_type="text/plain"
+        )
         with pytest.raises(ServiceError) as exc_info:
             AssetImageService.create_image(
                 ArtworkProduct, "artwork", artwork, bad_file
@@ -262,7 +279,9 @@ class TestArtworkVersionService:
         )
         return artwork
 
-    def test_create_version_increments_and_copies_products(self, original, test_product):
+    def test_create_version_increments_and_copies_products(
+        self, original, test_product
+    ):
         new_artwork = ArtworkVersionService.create_version(original)
         assert new_artwork.base_code == original.base_code
         assert new_artwork.version == 2
@@ -301,7 +320,9 @@ class TestInvoiceService:
         assert exc_info.value.code == 400
 
     @patch("workorder.services.finance_service.ApprovalService")
-    def test_submit_calls_approval_service(self, mock_service_cls, invoice, finance_user):
+    def test_submit_calls_approval_service(
+        self, mock_service_cls, invoice, finance_user
+    ):
         mock_service = MagicMock()
         mock_service.submit_for_approval.return_value = invoice
         mock_service_cls.return_value = mock_service
@@ -313,8 +334,14 @@ class TestProductionCostService:
     """生产成本服务测试"""
 
     def test_calculate_material_wraps_exception(self, db, test_work_order):
-        cost = ProductionCost.objects.create(work_order=test_work_order, period="202601")
-        with patch.object(cost, "auto_calculate_material_cost", side_effect=ValueError("boom")):
+        cost = ProductionCost.objects.create(
+            work_order=test_work_order, period="202601"
+        )
+        with patch.object(
+            cost,
+            "auto_calculate_material_cost",
+            side_effect=ValueError("boom"),
+        ):
             with pytest.raises(ServiceError) as exc_info:
                 ProductionCostService.calculate_material(cost)
             assert "boom" in str(exc_info.value.message)
@@ -403,17 +430,26 @@ class TestNotificationService:
             content="内容",
             priority="high",
         )
-        count = NotificationService.mark_all_read(Notification.objects.filter(recipient=finance_user))
+        count = NotificationService.mark_all_read(
+            Notification.objects.filter(recipient=finance_user)
+        )
         assert count == 2
 
     def test_delete_all_read(self, db, finance_user, notification):
         notification.is_read = True
         notification.save()
-        count = NotificationService.delete_all_read(Notification.objects.filter(recipient=finance_user))
+        count = NotificationService.delete_all_read(
+            Notification.objects.filter(recipient=finance_user)
+        )
         assert count == 1
 
     def test_unread_count(self, notification):
-        assert NotificationService.unread_count(Notification.objects.filter(recipient=notification.recipient)) == 1
+        assert (
+            NotificationService.unread_count(
+                Notification.objects.filter(recipient=notification.recipient)
+            )
+            == 1
+        )
 
     def test_statistics(self, db, finance_user, notification):
         Notification.objects.create(
@@ -424,7 +460,9 @@ class TestNotificationService:
             priority="urgent",
             is_read=True,
         )
-        stats = NotificationService.statistics(Notification.objects.filter(recipient=finance_user))
+        stats = NotificationService.statistics(
+            Notification.objects.filter(recipient=finance_user)
+        )
         assert stats["total_count"] == 2
         assert stats["unread_count"] == 1
         assert stats["urgent_count"] == 1
@@ -450,12 +488,16 @@ class TestSystemNotificationService:
 
     def test_create_announcement_missing_title(self):
         with pytest.raises(ServiceError) as exc_info:
-            SystemNotificationService.create_announcement(title="", content="内容")
+            SystemNotificationService.create_announcement(
+                title="", content="内容"
+            )
         assert exc_info.value.code == 400
 
     def test_create_announcement_invalid_priority(self):
         with pytest.raises(ServiceError) as exc_info:
-            SystemNotificationService.create_announcement(title="公告", content="内容", priority="invalid")
+            SystemNotificationService.create_announcement(
+                title="公告", content="内容", priority="invalid"
+            )
         assert exc_info.value.code == 400
 
     def test_send_urgent_alert(self, db, finance_user):
@@ -475,7 +517,12 @@ class TestSystemNotificationService:
         )
         deleted = SystemNotificationService.revoke(result["batch_id"])
         assert deleted == 1
-        assert Notification.objects.filter(data__batch_id=result["batch_id"]).count() == 0
+        assert (
+            Notification.objects.filter(
+                data__batch_id=result["batch_id"]
+            ).count()
+            == 0
+        )
 
     def test_revoke_not_found(self, db):
         with pytest.raises(ServiceError) as exc_info:
@@ -483,28 +530,36 @@ class TestSystemNotificationService:
         assert exc_info.value.code == 404
 
     def test_update_settings_valid(self, db):
-        settings = SystemNotificationSettings.get_solo()
-        data = SystemNotificationService.update_settings({
-            "email_threshold": "urgent",
-            "notification_retention_days": 60,
-            "max_notifications_per_user": 2000,
-        })
+        _ = SystemNotificationSettings.get_solo()
+        data = SystemNotificationService.update_settings(
+            {
+                "email_threshold": "urgent",
+                "notification_retention_days": 60,
+                "max_notifications_per_user": 2000,
+            }
+        )
         assert data["email_threshold"] == "urgent"
         assert data["notification_retention_days"] == 60
 
     def test_update_settings_invalid_threshold(self, db):
         with pytest.raises(ServiceError) as exc_info:
-            SystemNotificationService.update_settings({"email_threshold": "invalid"})
+            SystemNotificationService.update_settings(
+                {"email_threshold": "invalid"}
+            )
         assert exc_info.value.code == 400
 
     def test_update_settings_non_int(self, db):
         with pytest.raises(ServiceError) as exc_info:
-            SystemNotificationService.update_settings({"notification_retention_days": "abc"})
+            SystemNotificationService.update_settings(
+                {"notification_retention_days": "abc"}
+            )
         assert exc_info.value.code == 400
 
     def test_update_settings_negative(self, db):
         with pytest.raises(ServiceError) as exc_info:
-            SystemNotificationService.update_settings({"notification_retention_days": -1})
+            SystemNotificationService.update_settings(
+                {"notification_retention_days": -1}
+            )
         assert exc_info.value.code == 400
 
 
@@ -519,14 +574,17 @@ class TestUserNotificationSettingsService:
 
     def test_update_settings_valid(self, db, finance_user):
         data = UserNotificationSettingsService.update_settings(
-            finance_user, {"urgency_threshold": "high", "quiet_hours_start": "21:00"}
+            finance_user,
+            {"urgency_threshold": "high", "quiet_hours_start": "21:00"},
         )
         assert data["urgency_threshold"] == "high"
         assert data["quiet_hours_start"] == "21:00"
 
     def test_update_settings_invalid_threshold(self, db, finance_user):
         with pytest.raises(ServiceError) as exc_info:
-            UserNotificationSettingsService.update_settings(finance_user, {"urgency_threshold": "xxx"})
+            UserNotificationSettingsService.update_settings(
+                finance_user, {"urgency_threshold": "xxx"}
+            )
         assert exc_info.value.code == 400
 
     def test_update_settings_invalid_time(self, db, finance_user):
@@ -566,7 +624,9 @@ class TestNotificationTemplateService:
 
     def test_update_template_not_found(self, db):
         with pytest.raises(ServiceError) as exc_info:
-            NotificationTemplateService.update_template(template_name="not_exists")
+            NotificationTemplateService.update_template(
+                template_name="not_exists"
+            )
         assert exc_info.value.code == 404
 
     def test_update_template_invalid_variables(self, db):
@@ -597,7 +657,9 @@ class TestMonitoringStatsService:
             {"name": "api/a", "execution_time": 0.3},
             {"name": "api/b", "execution_time": 0.5},
         ]
-        result = MonitoringStatsService.get_execution_time_stats(execution_times)
+        result = MonitoringStatsService.get_execution_time_stats(
+            execution_times
+        )
         assert len(result) == 2
         assert result[0]["endpoint"] == "api/b"
         assert result[0]["avg_time"] == 0.5
@@ -613,7 +675,8 @@ class TestMonitoringStatsService:
 
     def test_get_alerts(self, monkeypatch):
         monkeypatch.setattr(
-            "workorder.services.monitoring.monitoring_service.performance_monitor.get_performance_stats",
+            "workorder.services.monitoring."
+            "monitoring_service.performance_monitor.get_performance_stats",
             lambda: {"error_rate": 10.0},
         )
         monkeypatch.setattr(
@@ -628,11 +691,10 @@ class TestMonitoringStatsService:
             ),
         )
         monkeypatch.setattr(
-            "workorder.services.monitoring.BusinessMetrics.get_workorder_metrics",
+            "workorder.services.monitoring."
+            "BusinessMetrics.get_workorder_metrics",
             staticmethod(
-                lambda _time_range: {
-                    "time_metrics": {"orders_overdue": 10}
-                }
+                lambda _time_range: {"time_metrics": {"orders_overdue": 10}}
             ),
         )
 
@@ -694,4 +756,7 @@ class TestMonitoringStatsService:
             assigned_operator=finance_user,
         )
         result = MonitoringStatsService.get_user_performance(days=30)
-        assert any(item.get("assigned_operator__username") == "finance_user" for item in result)
+        assert any(
+            item.get("assigned_operator__username") == "finance_user"
+            for item in result
+        )

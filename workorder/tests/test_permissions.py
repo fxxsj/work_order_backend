@@ -4,10 +4,10 @@
 """
 
 from django.test import TestCase
-from django.contrib.auth.models import User, Group
+from django.contrib.auth.models import Group
 from rest_framework.test import APIClient
 from .conftest import TestDataFactory, APITestCaseMixin
-from ..models import WorkOrder, Customer, Product, Process, Department
+from ..models import WorkOrder, Process, Department
 from datetime import date
 
 
@@ -55,7 +55,9 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
         self.supervisor = TestDataFactory.create_user(username="supervisor")
         from workorder.models import UserProfile
 
-        self.supervisor_profile = UserProfile.objects.create(user=self.supervisor)
+        self.supervisor_profile = UserProfile.objects.create(
+            user=self.supervisor
+        )
         self.supervisor_profile.departments.add(self.department)
 
     def test_salesperson_can_only_see_own_customers(self):
@@ -82,7 +84,9 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
             "delivery_date": date(2026, 12, 31),
         }
 
-        response = self.api_post("/api/v1/workorders/", data, user=self.salesperson1)
+        response = self.api_post(
+            "/api/v1/workorders/", data, user=self.salesperson1
+        )
 
         # 应该成功
         self.assertEqual(response.status_code, 201)
@@ -97,7 +101,9 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
             "delivery_date": date(2026, 12, 31),
         }
 
-        response = self.api_post("/api/v1/workorders/", data, user=self.salesperson1)
+        response = self.api_post(
+            "/api/v1/workorders/", data, user=self.salesperson1
+        )
 
         # 当前实现允许业务员为任何客户创建施工单
         # 如果需要添加客户所有权限制，应该在 serializer 中添加 validate_customer 方法
@@ -106,9 +112,8 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
     def test_supervisor_can_see_department_related_orders(self):
         """测试生产主管可以看到相关部门的施工单"""
         self.skipTest("Supervisor department-scoped view not yet implemented")
-        pass
 
-    def test_workorder_editor_can_read_related_customers_without_customer_permission(
+    def test_workorder_editor_can_read_related_customers_without_customer_permission(  # noqa: E501
         self,
     ):
         """测试仅有施工单权限的用户也能读取关联客户列表，用于施工单表单。"""
@@ -143,7 +148,7 @@ class WorkOrderDataPermissionTest(APITestCaseMixin, TestCase):
         customer_ids = [item["id"] for item in results]
         self.assertIn(customer.id, customer_ids)
 
-    def test_workorder_editor_can_read_supporting_assets_without_asset_permissions(
+    def test_workorder_editor_can_read_supporting_assets_without_asset_permissions(  # noqa: E501
         self,
     ):
         """测试仅有施工单权限的用户可读取施工单依赖的资产列表。"""
@@ -201,13 +206,19 @@ class WorkOrderTaskPermissionTest(APITestCaseMixin, TestCase):
 
         # 为操作员添加 view_workorder 权限（这样他们可以查看任务）
         ct = ContentType.objects.get_for_model(WorkOrder)
-        view_perm = Permission.objects.get(content_type=ct, codename="view_workorder")
+        view_perm = Permission.objects.get(
+            content_type=ct, codename="view_workorder"
+        )
         self.operator1.user_permissions.add(view_perm)
         self.operator2.user_permissions.add(view_perm)
 
         # 创建部门和施工单
-        self.department = Department.objects.create(name="生产一部", code="DEPT1")
-        self.customer = TestDataFactory.create_customer(salesperson=self.supervisor)
+        self.department = Department.objects.create(
+            name="生产一部", code="DEPT1"
+        )
+        self.customer = TestDataFactory.create_customer(
+            salesperson=self.supervisor
+        )
         self.work_order = TestDataFactory.create_workorder(
             customer=self.customer, creator=self.supervisor
         )
@@ -242,7 +253,9 @@ class WorkOrderTaskPermissionTest(APITestCaseMixin, TestCase):
         self.client.force_login(self.operator1)
 
         # 可以查看自己的任务列表
-        response = self.api_get("/api/v1/workorder-tasks/", user=self.operator1)
+        response = self.api_get(
+            "/api/v1/workorder-tasks/", user=self.operator1
+        )
         self.assertEqual(response.status_code, 200)
         task_ids = [t["id"] for t in response.data["data"]["results"]]
         self.assertIn(task1.id, task_ids)
@@ -316,16 +329,22 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
         self.salesperson2 = TestDataFactory.create_user(username="sales2")
         self.salesperson1.groups.add(self.sales_group)
         self.salesperson2.groups.add(self.sales_group)
-        
-        # Grant approve_workorder to salesperson1 for testing approval/rejection logic
+
+        # Grant approve_workorder to salesperson1 for testing
+        # approval/rejection logic
         from django.contrib.auth.models import Permission
-        perm = Permission.objects.filter(codename='approve_workorder').first()
+
+        perm = Permission.objects.filter(codename="approve_workorder").first()
         if perm:
             self.salesperson1.user_permissions.add(perm)
 
         # 创建客户
-        self.customer1 = TestDataFactory.create_customer(salesperson=self.salesperson1)
-        self.customer2 = TestDataFactory.create_customer(salesperson=self.salesperson2)
+        self.customer1 = TestDataFactory.create_customer(
+            salesperson=self.salesperson1
+        )
+        self.customer2 = TestDataFactory.create_customer(
+            salesperson=self.salesperson2
+        )
 
         # 创建待审核的施工单
         self.wo1 = TestDataFactory.create_workorder(
@@ -335,7 +354,7 @@ class ApprovalPermissionTest(APITestCaseMixin, TestCase):
         self.wo1.save(update_fields=["approval_status"])
 
         # 添加产品和工序以满足审核条件
-        from ..models import WorkOrderProduct, WorkOrderProcess, Artwork, Die
+        from ..models import WorkOrderProduct, WorkOrderProcess
 
         product = TestDataFactory.create_product()
         WorkOrderProduct.objects.create(
@@ -456,7 +475,8 @@ class APIAuthenticationTest(TestCase):
         TestDataFactory.create_user()
 
         response = self.client.post(
-            "/api/v1/auth/login/", {"username": "testuser", "password": "wrongpassword"}
+            "/api/v1/auth/login/",
+            {"username": "testuser", "password": "wrongpassword"},
         )
 
         # 应该失败
