@@ -13,7 +13,11 @@ from django.contrib.auth.models import User
 from django.db import models, transaction
 from django.utils import timezone
 from workorder.models.audit import AuditMixin
-from workorder.models.base import TimeStampedModel, GenerateCodeMixin, ApprovalFieldsMixin
+from workorder.models.base import (
+    TimeStampedModel,
+    GenerateCodeMixin,
+    ApprovalFieldsMixin,
+)
 
 
 class Material(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
@@ -21,7 +25,7 @@ class Material(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
 
     name = models.CharField("物料名称", max_length=200)
     code = models.CharField("物料编码", max_length=50, unique=True, blank=True)
-    
+
     code_prefix = "MAT"
     code_date_format = ""
     code_sequence_length = 5
@@ -35,7 +39,11 @@ class Material(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
         help_text="物料单价，最大值: 999999999.99",
     )
     stock_quantity = models.DecimalField(
-        "库存数量", max_digits=12, decimal_places=3, default=0, help_text="当前库存数量"
+        "库存数量",
+        max_digits=12,
+        decimal_places=3,
+        default=0,
+        help_text="当前库存数量",
     )
     # 库存预警设置
     min_stock_quantity = models.DecimalField(
@@ -58,7 +66,9 @@ class Material(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
     lead_time_days = models.IntegerField(
         "采购周期（天）", default=7, help_text="从下单到收货的天数"
     )
-    is_active = models.BooleanField("启用", default=True, help_text="停用后不再允许新业务选料")
+    is_active = models.BooleanField(
+        "启用", default=True, help_text="停用后不再允许新业务选料"
+    )
     need_cutting = models.BooleanField(
         "需要开料", default=False, help_text="该物料是否需要开料工序处理"
     )
@@ -72,7 +82,9 @@ class Material(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
             models.Index(fields=["name"], name="material_name_idx"),
             models.Index(fields=["code"], name="material_code_idx"),
             models.Index(fields=["stock_quantity"], name="material_stock_idx"),
-            models.Index(fields=["default_supplier"], name="material_supplier_idx"),
+            models.Index(
+                fields=["default_supplier"], name="material_supplier_idx"
+            ),
         ]
 
     def __str__(self):
@@ -105,8 +117,10 @@ class Supplier(TimeStampedModel, GenerateCodeMixin, models.Model):
     ]
 
     name = models.CharField("供应商名称", max_length=200)
-    code = models.CharField("供应商编码", max_length=50, unique=True, blank=True)
-    
+    code = models.CharField(
+        "供应商编码", max_length=50, unique=True, blank=True
+    )
+
     code_prefix = "SUP"
     code_date_format = ""
     code_sequence_length = 5
@@ -149,10 +163,16 @@ class MaterialSupplier(models.Model):
     )
     # 供应商提供的物料信息
     supplier_code = models.CharField(
-        "供应商物料编码", max_length=100, blank=True, help_text="供应商提供的物料编码"
+        "供应商物料编码",
+        max_length=100,
+        blank=True,
+        help_text="供应商提供的物料编码",
     )
     supplier_price = models.DecimalField(
-        "供应商价格", max_digits=10, decimal_places=2, help_text="该供应商提供的单价"
+        "供应商价格",
+        max_digits=10,
+        decimal_places=2,
+        help_text="该供应商提供的单价",
     )
     is_preferred = models.BooleanField(
         "首选供应商", default=False, help_text="是否为该物料的首选供应商"
@@ -199,6 +219,7 @@ class PurchaseOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
     def generate_order_number(cls):
         """生成采购单号：PO + yyyymmdd + 4位序号"""
         from workorder.utils import generate_order_number
+
         return generate_order_number(
             model_class=cls,
             field_name="order_number",
@@ -245,7 +266,9 @@ class PurchaseOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
     expected_date = models.DateField(
         "预计到货日期", null=True, blank=True, help_text="供应商预计的到货日期"
     )
-    actual_received_date = models.DateField("实际到货日期", null=True, blank=True)
+    actual_received_date = models.DateField(
+        "实际到货日期", null=True, blank=True
+    )
     # 关联信息
     work_order = models.ForeignKey(
         "workorder.WorkOrder",
@@ -323,7 +346,9 @@ class PurchaseOrderItem(TimeStampedModel, models.Model):
     )
     unit_price = models.DecimalField("单价", max_digits=10, decimal_places=2)
     # 供应商提供的信息
-    supplier_code = models.CharField("供应商物料编码", max_length=100, blank=True)
+    supplier_code = models.CharField(
+        "供应商物料编码", max_length=100, blank=True
+    )
     # 收货状态
     status = models.CharField(
         "收货状态", max_length=20, choices=STATUS_CHOICES, default="pending"
@@ -362,7 +387,9 @@ class PurchaseOrderItem(TimeStampedModel, models.Model):
         """已质检合格数量"""
         return sum(
             record.qualified_quantity or 0
-            for record in self.receive_records.filter(inspection_status="qualified")
+            for record in self.receive_records.filter(
+                inspection_status="qualified"
+            )
         ) + sum(
             record.qualified_quantity or 0
             for record in self.receive_records.filter(
@@ -375,7 +402,9 @@ class PurchaseOrderItem(TimeStampedModel, models.Model):
         """待质检数量"""
         return sum(
             record.received_quantity or 0
-            for record in self.receive_records.filter(inspection_status="pending")
+            for record in self.receive_records.filter(
+                inspection_status="pending"
+            )
         )
 
 
@@ -421,7 +450,10 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
 
     # 质检信息
     inspection_status = models.CharField(
-        "质检状态", max_length=20, choices=INSPECTION_STATUS_CHOICES, default="pending"
+        "质检状态",
+        max_length=20,
+        choices=INSPECTION_STATUS_CHOICES,
+        default="pending",
     )
     qualified_quantity = models.DecimalField(
         "合格数量",
@@ -493,13 +525,18 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
         ordering = ["-received_date", "-created_at"]
         indexes = [
             models.Index(fields=["purchase_order_item"], name="prr_item_idx"),
-            models.Index(fields=["inspection_status"], name="prr_insp_status_idx"),
+            models.Index(
+                fields=["inspection_status"], name="prr_insp_status_idx"
+            ),
             models.Index(fields=["received_date"], name="prr_recv_date_idx"),
             models.Index(fields=["is_stocked"], name="prr_stocked_idx"),
         ]
 
     def __str__(self):
-        return f"{self.purchase_order_item} - {self.received_date} - {self.received_quantity}"
+        return (
+            f"{self.purchase_order_item} - {self.received_date} - "
+            f"{self.received_quantity}"
+        )
 
     @property
     def purchase_order(self):
@@ -511,7 +548,9 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
         """获取关联的物料"""
         return self.purchase_order_item.material
 
-    def confirm_inspection(self, qualified_qty, unqualified_qty, reason="", user=None):
+    def confirm_inspection(
+        self, qualified_qty, unqualified_qty, reason="", user=None
+    ):
         """确认质检结果
 
         Args:
@@ -597,7 +636,10 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
                     update_fields.append("purchase_status")
 
                 # 回写采购实际单价（首次入库时写入）
-                if wom.actual_unit_price is None and item.unit_price is not None:
+                if (
+                    wom.actual_unit_price is None
+                    and item.unit_price is not None
+                ):
                     wom.actual_unit_price = item.unit_price
                     update_fields.append("actual_unit_price")
 
@@ -626,7 +668,10 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
         if self.is_returned:
             return False
 
-        if not self.unqualified_quantity or return_qty > self.unqualified_quantity:
+        if (
+            not self.unqualified_quantity
+            or return_qty > self.unqualified_quantity
+        ):
             return False
 
         self.is_returned = True
@@ -649,7 +694,9 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
         if all_received:
             purchase_order.status = "received"
             purchase_order.actual_received_date = timezone.now().date()
-            purchase_order.save(update_fields=["status", "actual_received_date"])
+            purchase_order.save(
+                update_fields=["status", "actual_received_date"]
+            )
 
 
 class MaterialStockLog(models.Model):

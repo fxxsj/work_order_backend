@@ -7,7 +7,7 @@
 """
 
 from django.contrib.auth.models import User
-from django.db import models, transaction
+from django.db import models
 from django.utils import timezone
 
 from .base import TimeStampedModel, ApprovalFieldsMixin
@@ -33,6 +33,7 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
     def generate_order_number(cls):
         """生成客户订单号：SO + yyyymmdd + 4位序号"""
         from workorder.utils import generate_order_number
+
         return generate_order_number(
             model_class=cls,
             field_name="order_number",
@@ -47,12 +48,19 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
         "订单状态", max_length=20, choices=STATUS_CHOICES, default="pending"
     )
     payment_status = models.CharField(
-        "付款状态", max_length=20, choices=PAYMENT_STATUS_CHOICES, default="unpaid"
+        "付款状态",
+        max_length=20,
+        choices=PAYMENT_STATUS_CHOICES,
+        default="unpaid",
     )
 
     # 金额信息
     subtotal = models.DecimalField(
-        "小计", max_digits=12, decimal_places=2, default=0, help_text="订单明细总金额"
+        "小计",
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="订单明细总金额",
     )
     tax_rate = models.DecimalField(
         "税率",
@@ -61,7 +69,9 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
         default=0,
         help_text="税率百分比，如13表示13%",
     )
-    tax_amount = models.DecimalField("税额", max_digits=12, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(
+        "税额", max_digits=12, decimal_places=2, default=0
+    )
     discount_amount = models.DecimalField(
         "折扣金额", max_digits=12, decimal_places=2, default=0
     )
@@ -72,7 +82,9 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
     # 订单日期
     order_date = models.DateField("订单日期", default=timezone.now)
     delivery_date = models.DateField("预计交货日期")
-    actual_delivery_date = models.DateField("实际交货日期", null=True, blank=True)
+    actual_delivery_date = models.DateField(
+        "实际交货日期", null=True, blank=True
+    )
 
     # 付款信息
     deposit_amount = models.DecimalField(
@@ -149,9 +161,14 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
         update_fields = kwargs.get("update_fields")
         if update_fields is None:
             from decimal import Decimal
-            tax_rate = Decimal(str(self.tax_rate)) if self.tax_rate else Decimal("0")
+
+            tax_rate = (
+                Decimal(str(self.tax_rate)) if self.tax_rate else Decimal("0")
+            )
             self.tax_amount = self.subtotal * (tax_rate / Decimal("100"))
-            self.total_amount = self.subtotal + self.tax_amount - self.discount_amount
+            self.total_amount = (
+                self.subtotal + self.tax_amount - self.discount_amount
+            )
 
             # 根据已付金额更新付款状态
             if self.total_amount > 0:
@@ -170,22 +187,32 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
         from django.db.models import Sum
 
         items_total = (
-            self.items.aggregate(subtotal_sum=Sum("subtotal"))["subtotal_sum"] or 0
+            self.items.aggregate(subtotal_sum=Sum("subtotal"))["subtotal_sum"]
+            or 0
         )
 
         discount_total = (
-            self.items.aggregate(discount_sum=Sum("discount_amount"))["discount_sum"]
+            self.items.aggregate(discount_sum=Sum("discount_amount"))[
+                "discount_sum"
+            ]
             or 0
         )
 
         self.subtotal = items_total
         self.discount_amount = discount_total
-        tax_rate = Decimal(str(self.tax_rate)) if self.tax_rate else Decimal("0")
+        tax_rate = (
+            Decimal(str(self.tax_rate)) if self.tax_rate else Decimal("0")
+        )
         self.tax_amount = items_total * (tax_rate / Decimal("100"))
         self.total_amount = items_total + self.tax_amount - discount_total
 
         self.save(
-            update_fields=["subtotal", "tax_amount", "discount_amount", "total_amount"]
+            update_fields=[
+                "subtotal",
+                "tax_amount",
+                "discount_amount",
+                "total_amount",
+            ]
         )
 
     def validate_before_approval(self):
@@ -212,7 +239,9 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
         if self.order_date and self.delivery_date:
             if self.delivery_date < self.order_date:
                 errors.append(
-                    f"交货日期不能早于订单日期。交货日期：{self.delivery_date}，订单日期：{self.order_date}"
+                    "交货日期不能早于订单日期。"
+                    f"交货日期：{self.delivery_date}，"
+                    f"订单日期：{self.order_date}"
                 )
 
         return errors
@@ -250,7 +279,9 @@ class SalesOrderItem(TimeStampedModel, models.Model):
     discount_amount = models.DecimalField(
         "折扣金额", max_digits=10, decimal_places=2, default=0
     )
-    subtotal = models.DecimalField("小计", max_digits=12, decimal_places=2, default=0)
+    subtotal = models.DecimalField(
+        "小计", max_digits=12, decimal_places=2, default=0
+    )
     notes = models.TextField("备注", blank=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)

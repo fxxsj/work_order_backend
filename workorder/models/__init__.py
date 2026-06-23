@@ -49,8 +49,8 @@ from .finance import (
     PaymentPlan,
     ProductionCost,
     Statement,
-    SupplierPayment,
 )
+from .finance import SupplierPayment  # noqa: F401
 from .inventory import (
     DeliveryItem,
     DeliveryOrder,

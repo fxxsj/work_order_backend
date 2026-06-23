@@ -9,8 +9,7 @@
 """
 
 from django.contrib.auth.models import User
-from django.db import models, transaction
-from django.utils import timezone
+from django.db import models
 from workorder.models.audit import AuditMixin
 
 
@@ -36,15 +35,16 @@ class TimeStampedModel(models.Model):
     class Meta:
         abstract = True
 
+
 class ApprovalFieldsMixin(models.Model):
     """审核相关字段Mixin，所有需审核的模型继承此Mixin"""
-    
+
     class Status:
         DRAFT = "draft"
         SUBMITTED = "submitted"
         APPROVED = "approved"
         REJECTED = "rejected"
-    
+
     approval_status = models.CharField(
         "审核状态",
         max_length=20,
@@ -66,7 +66,7 @@ class ApprovalFieldsMixin(models.Model):
     )
     approved_at = models.DateTimeField("审核时间", null=True, blank=True)
     approval_comment = models.TextField("审核意见", blank=True)
-    
+
     class Meta:
         abstract = True
 
@@ -102,6 +102,7 @@ class GenerateCodeMixin(models.Model):
     子类设置 code_prefix（如 "DIE"、"FP"、"EP"），
     generate_code() 统一调用通用发号器生成。
     """
+
     code_prefix = ""
     code_date_format = "%Y%m"
     code_sequence_length = 3
@@ -110,12 +111,13 @@ class GenerateCodeMixin(models.Model):
     @classmethod
     def generate_code(cls):
         from workorder.utils import generate_order_number
+
         return generate_order_number(
             model_class=cls,
             field_name=cls.code_field_name,
             prefix=cls.code_prefix,
             date_format=cls.code_date_format,
-            sequence_length=cls.code_sequence_length
+            sequence_length=cls.code_sequence_length,
         )
 
     class Meta:
@@ -150,7 +152,9 @@ class Customer(AuditMixin, TimeStampedModel, models.Model):
         indexes = [
             models.Index(fields=["name"], name="customer_name_idx"),
             models.Index(fields=["phone"], name="customer_phone_idx"),
-            models.Index(fields=["salesperson"], name="customer_salesperson_idx"),
+            models.Index(
+                fields=["salesperson"], name="customer_salesperson_idx"
+            ),
         ]
 
     def __str__(self):
@@ -199,7 +203,10 @@ class Department(TimeStampedModel, models.Model):
         "是否启用", default=True, help_text="禁用后部门将不可用于新的施工单"
     )
     processes = models.ManyToManyField(
-        "Process", blank=True, verbose_name="工序", help_text="该部门负责的工序"
+        "Process",
+        blank=True,
+        verbose_name="工序",
+        help_text="该部门负责的工序",
     )
 
     class Meta:
@@ -211,8 +218,12 @@ class Department(TimeStampedModel, models.Model):
         indexes = [
             models.Index(fields=["name"], name="department_name_idx"),
             models.Index(fields=["code"], name="department_code_idx"),
-            models.Index(fields=["is_active"], name="department_is_active_idx"),
-            models.Index(fields=["sort_order"], name="department_sort_order_idx"),
+            models.Index(
+                fields=["is_active"], name="department_is_active_idx"
+            ),
+            models.Index(
+                fields=["sort_order"], name="department_sort_order_idx"
+            ),
             models.Index(
                 fields=["is_active", "sort_order"], name="dept_active_sort_idx"
             ),
@@ -297,7 +308,9 @@ class Process(models.Model):
     sort_order = models.IntegerField("排序", default=0)
     is_active = models.BooleanField("是否启用", default=True)
     is_builtin = models.BooleanField(
-        "是否内置", default=False, help_text="内置工序不可删除，code字段不可编辑"
+        "是否内置",
+        default=False,
+        help_text="内置工序不可删除，code字段不可编辑",
     )
     task_generation_rule = models.CharField(
         "任务生成规则",
@@ -328,17 +341,26 @@ class Process(models.Model):
     die_required = models.BooleanField(
         "刀模必选",
         default=True,
-        help_text="如果为True，选择该工序时必须选择刀模；如果为False，刀模可选（但需要手动创建设计任务，设计不属于施工单工序）",
+        help_text=(
+            "如果为True，选择该工序时必须选择刀模；"
+            "如果为False，刀模可选（但需要手动创建设计任务，设计不属于施工单工序）"
+        ),
     )
     foiling_plate_required = models.BooleanField(
         "烫金版必选",
         default=True,
-        help_text="如果为True，选择该工序时必须选择烫金版；如果为False，烫金版可选（但需要手动创建设计任务，设计不属于施工单工序）",
+        help_text=(
+            "如果为True，选择该工序时必须选择烫金版；"
+            "如果为False，烫金版可选（但需要手动创建设计任务，设计不属于施工单工序）"
+        ),
     )
     embossing_plate_required = models.BooleanField(
         "压凸版必选",
         default=True,
-        help_text="如果为True，选择该工序时必须选择压凸版；如果为False，压凸版可选（但需要手动创建设计任务，设计不属于施工单工序）",
+        help_text=(
+            "如果为True，选择该工序时必须选择压凸版；"
+            "如果为False，压凸版可选（但需要手动创建设计任务，设计不属于施工单工序）"
+        ),
     )
     is_parallel = models.BooleanField(
         "可并行执行",
@@ -359,7 +381,8 @@ class Process(models.Model):
             models.Index(fields=["is_active"], name="process_is_active_idx"),
             models.Index(fields=["sort_order"], name="process_sort_order_idx"),
             models.Index(
-                fields=["is_active", "sort_order"], name="process_active_sort_idx"
+                fields=["is_active", "sort_order"],
+                name="process_active_sort_idx",
             ),
         ]
 

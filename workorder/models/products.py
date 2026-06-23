@@ -21,20 +21,28 @@ class Product(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
     # 产品类型选项
     PRODUCT_TYPE_CHOICES = [
         ("single", "单品"),  # 独立产品，可单独销售
-        ("group_main", "套装主产品"),  # 套装产品本身（如：天地盒），用于销售下单
-        ("group_item", "套装子产品"),  # 套装中的组成部分（如：天盒、地盒），用于生产
+        (
+            "group_main",
+            "套装主产品",
+        ),  # 套装产品本身（如：天地盒），用于销售下单
+        (
+            "group_item",
+            "套装子产品",
+        ),  # 套装中的组成部分（如：天盒、地盒），用于生产
     ]
 
     name = models.CharField("产品名称", max_length=200)
     code = models.CharField("产品编码", max_length=50, unique=True, blank=True)
-    
+
     # 自动生成编码配置
     code_prefix = "PRD"
     code_date_format = ""
     code_sequence_length = 5
     specification = models.CharField("规格", max_length=200, blank=True)
     unit = models.CharField("单位", max_length=20, default="件")
-    unit_price = models.DecimalField("单价", max_digits=10, decimal_places=2, default=0)
+    unit_price = models.DecimalField(
+        "单价", max_digits=10, decimal_places=2, default=0
+    )
     stock_quantity = models.IntegerField(
         "库存数量", default=0, help_text="产品的当前库存数量"
     )
@@ -124,7 +132,9 @@ class Product(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
         if not self.is_group_main or not self.product_group:
             return Product.objects.none()
         return Product.objects.filter(
-            product_group=self.product_group, product_type="group_item", is_active=True
+            product_group=self.product_group,
+            product_type="group_item",
+            is_active=True,
         ).order_by("code")
 
     def get_group_main_product(self):
@@ -132,7 +142,9 @@ class Product(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
         if not self.is_group_item or not self.product_group:
             return None
         return Product.objects.filter(
-            product_group=self.product_group, product_type="group_main", is_active=True
+            product_group=self.product_group,
+            product_type="group_main",
+            is_active=True,
         ).first()
 
     def get_available_group_stock(self):
@@ -215,7 +227,9 @@ class Product(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
 
         if self.stock_quantity < quantity:
             # 库存不足
-            raise ValueError(f"库存不足：当前库存{self.stock_quantity}，需要{quantity}")
+            raise ValueError(
+                f"库存不足：当前库存{self.stock_quantity}，需要{quantity}"
+            )
 
         old_quantity = self.stock_quantity
         self.stock_quantity -= quantity
@@ -252,7 +266,11 @@ class Product(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
                 recipient=admin,
                 notification_type="low_stock_warning",
                 title=f"产品库存预警：{self.name}",
-                content=f"产品【{self.code} - {self.name}】的库存已低于预警值。当前库存：{self.stock_quantity}，最小库存：{self.min_stock_quantity}。请及时补货。",
+                content=(
+                    f"产品【{self.code} - {self.name}】的库存已低于预警值。"
+                    f"当前库存：{self.stock_quantity}，"
+                    f"最小库存：{self.min_stock_quantity}。请及时补货。"
+                ),
                 priority="high",
             )
 
@@ -271,7 +289,9 @@ class ProductImage(TimeStampedModel, models.Model):
         upload_to="product_images/",
         help_text="支持 JPG、PNG、WebP 等常见图片格式",
     )
-    sort_order = models.IntegerField("排序", default=0, help_text="数值越小排越前")
+    sort_order = models.IntegerField(
+        "排序", default=0, help_text="数值越小排越前"
+    )
     description = models.CharField(
         "描述",
         max_length=200,
@@ -309,7 +329,9 @@ class ProductStockLog(models.Model):
     change_type = models.CharField(
         "变更类型", max_length=20, choices=CHANGE_TYPE_CHOICES
     )
-    quantity = models.IntegerField("变更数量", help_text="正数表示入库，负数表示出库")
+    quantity = models.IntegerField(
+        "变更数量", help_text="正数表示入库，负数表示出库"
+    )
     old_quantity = models.IntegerField("变更前库存")
     new_quantity = models.IntegerField("变更后库存")
     reason = models.TextField("变更原因", blank=True)
@@ -330,7 +352,8 @@ class ProductStockLog(models.Model):
 
     def __str__(self):
         return (
-            f"{self.product.name} - {self.get_change_type_display()}: {self.quantity}"
+            f"{self.product.name} - {self.get_change_type_display()}: "
+            f"{self.quantity}"
         )
 
 
@@ -373,8 +396,10 @@ class ProductGroup(TimeStampedModel, GenerateCodeMixin, models.Model):
     """产品组（如：天地盒、套装等，一个产品组可能需要多个施工单完成）"""
 
     name = models.CharField("产品组名称", max_length=200)
-    code = models.CharField("产品组编码", max_length=50, unique=True, blank=True)
-    
+    code = models.CharField(
+        "产品组编码", max_length=50, unique=True, blank=True
+    )
+
     code_prefix = "PRDG"
     code_date_format = ""
     code_sequence_length = 5
@@ -411,7 +436,9 @@ class ProductGroupItem(models.Model):
         related_name="items",
         verbose_name="产品组",
     )
-    product = models.ForeignKey(Product, on_delete=models.PROTECT, verbose_name="产品")
+    product = models.ForeignKey(
+        Product, on_delete=models.PROTECT, verbose_name="产品"
+    )
     item_name = models.CharField(
         "子产品名称", max_length=200, help_text="如：天盒、地盒"
     )
@@ -425,4 +452,7 @@ class ProductGroupItem(models.Model):
         unique_together = ["product_group", "product"]
 
     def __str__(self):
-        return f"{self.product_group.name} - {self.item_name} ({self.product.name})"
+        return (
+            f"{self.product_group.name} - {self.item_name} "
+            f"({self.product.name})"
+        )

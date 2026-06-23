@@ -15,7 +15,6 @@ from django.db import models
 from django.utils import timezone
 
 from .base import Department, TimeStampedModel
-from .core import WorkOrder
 
 
 def default_user_notification_preferences():
@@ -62,18 +61,27 @@ def default_notification_template_definitions():
         },
         "task_completed": {
             "title": "任务完成",
-            "message": "任务 \"{task_name}\" 已完成",
+            "message": '任务 "{task_name}" 已完成',
             "variables": ["task_name", "workorder_number", "completed_by"],
         },
         "task_overdue": {
             "title": "任务逾期警告",
             "message": "任务 {task_name} 已逾期",
-            "variables": ["task_name", "workorder_number", "deadline", "assigned_to"],
+            "variables": [
+                "task_name",
+                "workorder_number",
+                "deadline",
+                "assigned_to",
+            ],
         },
         "task_cancelled": {
             "title": "任务已取消",
-            "message": "任务 \"{task_name}\" 已被取消",
-            "variables": ["task_name", "workorder_number", "cancellation_reason"],
+            "message": '任务 "{task_name}" 已被取消',
+            "variables": [
+                "task_name",
+                "workorder_number",
+                "cancellation_reason",
+            ],
         },
         "process_completed": {
             "title": "工序完成",
@@ -83,12 +91,21 @@ def default_notification_template_definitions():
         "approval_requested": {
             "title": "施工单待审核",
             "message": "施工单 {workorder_number} 待审核",
-            "variables": ["workorder_number", "customer", "total_amount", "comment"],
+            "variables": [
+                "workorder_number",
+                "customer",
+                "total_amount",
+                "comment",
+            ],
         },
         "approval_passed": {
             "title": "施工单已审核通过",
             "message": "施工单 {workorder_number} 已审核通过",
-            "variables": ["workorder_number", "dispatched_count", "approved_by"],
+            "variables": [
+                "workorder_number",
+                "dispatched_count",
+                "approved_by",
+            ],
         },
         "approval_rejected": {
             "title": "施工单审核被拒绝",
@@ -98,7 +115,12 @@ def default_notification_template_definitions():
         "reapproval_requested": {
             "title": "施工单请求重新审核",
             "message": "施工单 {workorder_number} 已请求重新审核",
-            "variables": ["workorder_number", "reason", "requested_by", "recipient_role"],
+            "variables": [
+                "workorder_number",
+                "reason",
+                "requested_by",
+                "recipient_role",
+            ],
         },
         "workorder_approved": {
             "title": "施工单审核通过",
@@ -132,7 +154,10 @@ class UserProfile(TimeStampedModel, models.Model):
     """用户扩展信息"""
 
     user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name="profile", verbose_name="用户"
+        User,
+        on_delete=models.CASCADE,
+        related_name="profile",
+        verbose_name="用户",
     )
     departments = models.ManyToManyField(
         Department,
@@ -155,7 +180,9 @@ class UserProfile(TimeStampedModel, models.Model):
 
     def __str__(self):
         if self.pk and self.departments.exists():
-            dept_names = ", ".join([dept.name for dept in self.departments.all()])
+            dept_names = ", ".join(
+                [dept.name for dept in self.departments.all()]
+            )
             return f"{self.user.username} - {dept_names}"
         return f"{self.user.username} - 未分配部门"
 
@@ -177,7 +204,9 @@ class SystemNotificationSettings(TimeStampedModel, models.Model):
         unique=True,
         editable=False,
     )
-    websocket_enabled = models.BooleanField("启用 WebSocket 通知", default=True)
+    websocket_enabled = models.BooleanField(
+        "启用 WebSocket 通知", default=True
+    )
     email_enabled = models.BooleanField("启用邮件通知", default=True)
     sms_enabled = models.BooleanField("启用短信通知", default=False)
     email_threshold = models.CharField(
@@ -190,7 +219,9 @@ class SystemNotificationSettings(TimeStampedModel, models.Model):
         "通知保留天数",
         default=30,
     )
-    auto_cleanup_enabled = models.BooleanField("自动清理过期通知", default=True)
+    auto_cleanup_enabled = models.BooleanField(
+        "自动清理过期通知", default=True
+    )
     max_notifications_per_user = models.PositiveIntegerField(
         "单用户通知上限",
         default=1000,
@@ -249,7 +280,8 @@ class NotificationTemplate(TimeStampedModel, models.Model):
             return None
 
         safe_variables = {
-            field: "" if value is None else str(value) for field, value in variables.items()
+            field: "" if value is None else str(value)
+            for field, value in variables.items()
         }
 
         class _SafeDict(dict):
@@ -315,7 +347,10 @@ class WorkOrderApprovalLog(models.Model):
         status_display = dict(self.APPROVAL_STATUS_CHOICES).get(
             self.approval_status, self.approval_status
         )
-        return f"{self.work_order.order_number} - {status_display} - {self.approved_by.username if self.approved_by else '未知'}"
+        return (
+            f"{self.work_order.order_number} - {status_display} - "
+            f"{self.approved_by.username if self.approved_by else '未知'}"
+        )
 
 
 class Notification(models.Model):
@@ -407,7 +442,10 @@ class Notification(models.Model):
     # 元数据
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     expires_at = models.DateTimeField(
-        "过期时间", null=True, blank=True, help_text="通知过期时间，过期后不再显示"
+        "过期时间",
+        null=True,
+        blank=True,
+        help_text="通知过期时间，过期后不再显示",
     )
     data = models.JSONField("扩展数据", null=True, blank=True)
 
@@ -476,12 +514,19 @@ class Notification(models.Model):
             queryset = queryset.filter(recipient_id__in=user_ids)
 
         if settings.auto_cleanup_enabled:
-            expiry_cutoff = timezone.now() - timedelta(days=settings.notification_retention_days)
+            expiry_cutoff = timezone.now() - timedelta(
+                days=settings.notification_retention_days
+            )
             queryset.filter(created_at__lt=expiry_cutoff).delete()
-            queryset.filter(expires_at__isnull=False, expires_at__lt=timezone.now()).delete()
+            queryset.filter(
+                expires_at__isnull=False, expires_at__lt=timezone.now()
+            ).delete()
 
         max_count = settings.max_notifications_per_user
-        recipient_ids = user_ids or queryset.values_list("recipient_id", flat=True).distinct()
+        recipient_ids = (
+            user_ids
+            or queryset.values_list("recipient_id", flat=True).distinct()
+        )
         for recipient_id in recipient_ids:
             stale_ids = list(
                 cls.objects.filter(recipient_id=recipient_id)
@@ -535,7 +580,12 @@ class TaskAssignmentRule(TimeStampedModel, models.Model):
         verbose_name = "任务分派规则"
         verbose_name_plural = "任务分派规则管理"
         ordering = ["process", "-priority", "department"]
-        unique_together = [["process", "department"]]  # 同一工序同一部门只能有一条规则
+        unique_together = [
+            ["process", "department"]
+        ]  # 同一工序同一部门只能有一条规则
 
     def __str__(self):
-        return f"{self.process.name} -> {self.department.name} (优先级:{self.priority})"
+        return (
+            f"{self.process.name} -> {self.department.name} "
+            f"(优先级:{self.priority})"
+        )

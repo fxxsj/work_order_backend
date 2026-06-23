@@ -11,7 +11,7 @@
 """
 
 from django.contrib.auth.models import User
-from django.db import models, transaction
+from django.db import models
 from django.utils import timezone
 
 from workorder.constants.status import (
@@ -145,6 +145,7 @@ class StockIn(models.Model):
     def generate_order_number(cls):
         """生成入库单号：RK + yyyymmdd + 4位序号"""
         from workorder.utils import generate_order_number
+
         return generate_order_number(
             model_class=cls,
             field_name="order_number",
@@ -162,7 +163,10 @@ class StockIn(models.Model):
     )
     stock_in_date = models.DateField("入库日期", default=timezone.now)
     status = models.CharField(
-        "状态", max_length=20, choices=STATUS_CHOICES, default=StockInStatus.DRAFT
+        "状态",
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=StockInStatus.DRAFT,
     )
 
     # 审核信息
@@ -226,6 +230,7 @@ class StockOut(models.Model):
     def generate_order_number(cls):
         """生成出库单号：CK + yyyymmdd + 4位序号"""
         from workorder.utils import generate_order_number
+
         return generate_order_number(
             model_class=cls,
             field_name="order_number",
@@ -248,7 +253,10 @@ class StockOut(models.Model):
     )
     stock_out_date = models.DateField("出库日期", default=timezone.now)
     status = models.CharField(
-        "状态", max_length=20, choices=STATUS_CHOICES, default=StockOutStatus.DRAFT
+        "状态",
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=StockOutStatus.DRAFT,
     )
 
     # 审核信息
@@ -305,6 +313,7 @@ class DeliveryOrder(TimeStampedModel, models.Model):
     def generate_order_number(cls):
         """生成送货单号：FH + yyyymmdd + 4位序号"""
         from workorder.utils import generate_order_number
+
         return generate_order_number(
             model_class=cls,
             field_name="order_number",
@@ -325,7 +334,10 @@ class DeliveryOrder(TimeStampedModel, models.Model):
     )
     delivery_date = models.DateField("发货日期", null=True, blank=True)
     status = models.CharField(
-        "状态", max_length=20, choices=STATUS_CHOICES, default=DeliveryOrderModelStatus.PENDING
+        "状态",
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=DeliveryOrderModelStatus.PENDING,
     )
 
     # 收货信息
@@ -334,9 +346,13 @@ class DeliveryOrder(TimeStampedModel, models.Model):
     delivery_address = models.TextField("送货地址")
 
     # 物流信息
-    logistics_company = models.CharField("物流公司", max_length=100, blank=True)
+    logistics_company = models.CharField(
+        "物流公司", max_length=100, blank=True
+    )
     tracking_number = models.CharField("物流单号", max_length=100, blank=True)
-    freight = models.DecimalField("运费", max_digits=10, decimal_places=2, default=0)
+    freight = models.DecimalField(
+        "运费", max_digits=10, decimal_places=2, default=0
+    )
 
     # 签收信息
     received_date = models.DateTimeField("签收时间", null=True, blank=True)
@@ -402,8 +418,12 @@ class DeliveryItem(models.Model):
     )
     quantity = models.DecimalField("发货数量", max_digits=10, decimal_places=2)
     unit = models.CharField("单位", max_length=20, default="件")
-    unit_price = models.DecimalField("单价", max_digits=10, decimal_places=2, default=0)
-    subtotal = models.DecimalField("小计", max_digits=12, decimal_places=2, default=0)
+    unit_price = models.DecimalField(
+        "单价", max_digits=10, decimal_places=2, default=0
+    )
+    subtotal = models.DecimalField(
+        "小计", max_digits=12, decimal_places=2, default=0
+    )
 
     # 关联库存批次
     stock_batch = models.CharField("库存批次号", max_length=50, blank=True)
@@ -446,6 +466,7 @@ class QualityInspection(models.Model):
     def generate_inspection_number(cls):
         """生成质检单号：ZJ + yyyymmdd + 4位序号"""
         from workorder.utils import generate_order_number
+
         return generate_order_number(
             model_class=cls,
             field_name="inspection_number",
@@ -455,7 +476,9 @@ class QualityInspection(models.Model):
     inspection_number = models.CharField(
         "质检单号", max_length=50, unique=True, editable=False
     )
-    inspection_type = models.CharField("检验类型", max_length=20, choices=TYPE_CHOICES)
+    inspection_type = models.CharField(
+        "检验类型", max_length=20, choices=TYPE_CHOICES
+    )
     work_order = models.ForeignKey(
         "workorder.WorkOrder",
         on_delete=models.SET_NULL,
@@ -537,7 +560,9 @@ class QualityInspection(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.inspection_number} - {self.get_inspection_type_display()}"
+        return (
+            f"{self.inspection_number} - {self.get_inspection_type_display()}"
+        )
 
     def save(self, *args, **kwargs):
         if not self.inspection_number:

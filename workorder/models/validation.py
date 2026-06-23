@@ -81,7 +81,9 @@ class WorkOrderValidator:
         selected_processes = self.work_order.order_processes.values_list(
             "process", flat=True
         )
-        processes = Process.objects.filter(id__in=selected_processes, is_active=True)
+        processes = Process.objects.filter(
+            id__in=selected_processes, is_active=True
+        )
 
         # 检查图稿（任一必需字段为真即要求资产）
         processes_requiring_artwork = processes.filter(
@@ -91,7 +93,9 @@ class WorkOrderValidator:
             processes_requiring_artwork.exists()
             and not self.work_order.artworks.exists()
         ):
-            process_names = ", ".join([p.name for p in processes_requiring_artwork])
+            process_names = ", ".join(
+                [p.name for p in processes_requiring_artwork]
+            )
             self.errors.append(
                 f"选择了需要图稿的工序（{process_names}），请至少选择一个图稿"
             )
@@ -100,15 +104,21 @@ class WorkOrderValidator:
         processes_requiring_die = processes.filter(
             models.Q(requires_die=True) | models.Q(die_required=True)
         )
-        if processes_requiring_die.exists() and not self.work_order.dies.exists():
-            process_names = ", ".join([p.name for p in processes_requiring_die])
+        if (
+            processes_requiring_die.exists()
+            and not self.work_order.dies.exists()
+        ):
+            process_names = ", ".join(
+                [p.name for p in processes_requiring_die]
+            )
             self.errors.append(
                 f"选择了需要刀模的工序（{process_names}），请至少选择一个刀模"
             )
 
         # 检查烫金版（任一必需字段为真即要求资产）
         processes_requiring_foiling_plate = processes.filter(
-            models.Q(requires_foiling_plate=True) | models.Q(foiling_plate_required=True)
+            models.Q(requires_foiling_plate=True)
+            | models.Q(foiling_plate_required=True)
         )
         if (
             processes_requiring_foiling_plate.exists()
@@ -123,7 +133,8 @@ class WorkOrderValidator:
 
         # 检查压凸版（任一必需字段为真即要求资产）
         processes_requiring_embossing_plate = processes.filter(
-            models.Q(requires_embossing_plate=True) | models.Q(embossing_plate_required=True)
+            models.Q(requires_embossing_plate=True)
+            | models.Q(embossing_plate_required=True)
         )
         if (
             processes_requiring_embossing_plate.exists()
@@ -176,7 +187,10 @@ class WorkOrderValidator:
 
         # 检查交货日期是否在过去（允许今天）
         today = timezone.now().date()
-        if self.work_order.delivery_date and self.work_order.delivery_date < today:
+        if (
+            self.work_order.delivery_date
+            and self.work_order.delivery_date < today
+        ):
             self.errors.append(
                 f"交货日期不能早于今天。"
                 f"交货日期：{self.work_order.delivery_date}，"

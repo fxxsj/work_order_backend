@@ -11,13 +11,13 @@ from ..models.audit import AuditLog, AuditLogExport, AuditLogSettings
 
 def mask_sensitive_data(input_data):
     sensitive_keys = [
-        'password',
-        'token',
-        'secret',
-        'csrf',
-        'api_key',
-        'access',
-        'refresh',
+        "password",
+        "token",
+        "secret",
+        "csrf",
+        "api_key",
+        "access",
+        "refresh",
     ]
 
     def is_sensitive(key):
@@ -32,7 +32,7 @@ def mask_sensitive_data(input_data):
         if isinstance(value, dict):
             result = {}
             for key, val in value.items():
-                result[key] = '***' if is_sensitive(key) else walk(val)
+                result[key] = "***" if is_sensitive(key) else walk(val)
             return result
         return value
 
@@ -45,38 +45,40 @@ class AuditLogSerializer(serializers.ModelSerializer):
     """
 
     username = serializers.CharField(read_only=True)
-    user_email = serializers.EmailField(source='user.email', read_only=True)
-    content_type_name = serializers.CharField(source='content_type.model', read_only=True)
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    content_type_name = serializers.CharField(
+        source="content_type.model", read_only=True
+    )
 
     class Meta:
         model = AuditLog
         fields = [
-            'id',
-            'action_type',
-            'user',
-            'username',
-            'user_email',
-            'content_type',
-            'content_type_name',
-            'object_id',
-            'object_repr',
-            'changes',
-            'changed_fields',
-            'ip_address',
-            'user_agent',
-            'request_method',
-            'request_path',
-            'extra_context',
-            'created_at',
+            "id",
+            "action_type",
+            "user",
+            "username",
+            "user_email",
+            "content_type",
+            "content_type_name",
+            "object_id",
+            "object_repr",
+            "changes",
+            "changed_fields",
+            "ip_address",
+            "user_agent",
+            "request_method",
+            "request_path",
+            "extra_context",
+            "created_at",
         ]
         read_only_fields = fields
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        if data.get('changes'):
-            data['changes'] = mask_sensitive_data(data['changes'])
-        if data.get('extra_context'):
-            data['extra_context'] = mask_sensitive_data(data['extra_context'])
+        if data.get("changes"):
+            data["changes"] = mask_sensitive_data(data["changes"])
+        if data.get("extra_context"):
+            data["extra_context"] = mask_sensitive_data(data["extra_context"])
         return data
 
 
@@ -86,22 +88,24 @@ class AuditLogListSerializer(serializers.ModelSerializer):
     """
 
     username = serializers.CharField(read_only=True)
-    content_type_name = serializers.CharField(source='content_type.model', read_only=True)
+    content_type_name = serializers.CharField(
+        source="content_type.model", read_only=True
+    )
 
     class Meta:
         model = AuditLog
         fields = [
-            'id',
-            'action_type',
-            'username',
-            'content_type_name',
-            'object_id',
-            'object_repr',
-            'changed_fields',
-            'ip_address',
-            'request_method',
-            'request_path',
-            'created_at',
+            "id",
+            "action_type",
+            "username",
+            "content_type_name",
+            "object_id",
+            "object_repr",
+            "changed_fields",
+            "ip_address",
+            "request_method",
+            "request_path",
+            "created_at",
         ]
 
 
@@ -120,26 +124,28 @@ class AuditLogExportSerializer(serializers.ModelSerializer):
     审计日志导出序列化器
     """
 
-    username = serializers.CharField(source='user.username', read_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    username = serializers.CharField(source="user.username", read_only=True)
+    status_display = serializers.CharField(
+        source="get_status_display", read_only=True
+    )
 
     class Meta:
         model = AuditLogExport
         fields = [
-            'id',
-            'user',
-            'username',
-            'start_date',
-            'end_date',
-            'filters',
-            'file_path',
-            'record_count',
-            'file_size',
-            'status',
-            'status_display',
-            'error_message',
-            'created_at',
-            'completed_at',
+            "id",
+            "user",
+            "username",
+            "start_date",
+            "end_date",
+            "filters",
+            "file_path",
+            "record_count",
+            "file_size",
+            "status",
+            "status_display",
+            "error_message",
+            "created_at",
+            "completed_at",
         ]
         read_only_fields = fields
 
@@ -152,14 +158,14 @@ class AuditLogSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuditLogSettings
         fields = [
-            'retention_days',
-            'enabled',
-            'log_login',
-            'log_logout',
-            'log_export',
-            'log_import',
-            'async_write',
-            'audited_models',
-            'excluded_fields',
-            'updated_at',
+            "retention_days",
+            "enabled",
+            "log_login",
+            "log_logout",
+            "log_export",
+            "log_import",
+            "async_write",
+            "audited_models",
+            "excluded_fields",
+            "updated_at",
         ]

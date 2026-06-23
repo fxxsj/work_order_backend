@@ -104,7 +104,9 @@ class ProductSerializer(serializers.ModelSerializer):
 
         # 验证编码格式：只能包含字母、数字和连字符
         if not re.match(r"^[A-Za-z0-9-]+$", value):
-            raise serializers.ValidationError("产品编码只能包含字母、数字和连字符")
+            raise serializers.ValidationError(
+                "产品编码只能包含字母、数字和连字符"
+            )
 
         # 验证长度
         if len(value) < 2:
@@ -228,7 +230,9 @@ class ProductGroupSerializer(serializers.ModelSerializer):
         if not value:
             return value
         if not re.match(r"^[A-Za-z0-9-]+$", value):
-            raise serializers.ValidationError("产品组编码只能包含字母、数字和连字符")
+            raise serializers.ValidationError(
+                "产品组编码只能包含字母、数字和连字符"
+            )
         return value
 
     def validate_name(self, value):
@@ -275,6 +279,8 @@ class ProductGroupSerializer(serializers.ModelSerializer):
                 for item_data in items_data:
                     # 移除可能存在的 id 字段
                     item_data.pop("id", None)
-                    ProductGroupItem.objects.create(product_group=instance, **item_data)
+                    ProductGroupItem.objects.create(
+                        product_group=instance, **item_data
+                    )
 
         return instance

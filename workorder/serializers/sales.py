@@ -16,12 +16,19 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
 
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_code = serializers.CharField(source="product.code", read_only=True)
-    subtotal = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    subtotal = serializers.DecimalField(
+        max_digits=12, decimal_places=2, read_only=True
+    )
 
     class Meta:
         model = SalesOrderItem
         fields = "__all__"
-        read_only_fields = ["created_at", "updated_at", "subtotal", "sales_order"]
+        read_only_fields = [
+            "created_at",
+            "updated_at",
+            "subtotal",
+            "sales_order",
+        ]
         extra_kwargs = {
             "sales_order": {"required": False},
             "delivered_quantity": {"required": False},
@@ -36,9 +43,15 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
 class SalesOrderListSerializer(serializers.ModelSerializer):
     """客户订单列表序列化器"""
 
-    customer_name = serializers.CharField(source="customer.name", read_only=True)
-    customer_code = serializers.CharField(source="customer.code", read_only=True)
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    customer_name = serializers.CharField(
+        source="customer.name", read_only=True
+    )
+    customer_code = serializers.CharField(
+        source="customer.code", read_only=True
+    )
+    status_display = serializers.CharField(
+        source="get_status_display", read_only=True
+    )
     approval_status_display = serializers.CharField(
         source="get_approval_status_display", read_only=True
     )
@@ -62,13 +75,21 @@ class SalesOrderListSerializer(serializers.ModelSerializer):
 class SalesOrderDetailSerializer(serializers.ModelSerializer):
     """客户订单详情序列化器"""
 
-    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    customer_name = serializers.CharField(
+        source="customer.name", read_only=True
+    )
     customer_contact = serializers.CharField(
         source="customer.contact_person", read_only=True
     )
-    customer_phone = serializers.CharField(source="customer.phone", read_only=True)
-    customer_address = serializers.CharField(source="customer.address", read_only=True)
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    customer_phone = serializers.CharField(
+        source="customer.phone", read_only=True
+    )
+    customer_address = serializers.CharField(
+        source="customer.address", read_only=True
+    )
+    status_display = serializers.CharField(
+        source="get_status_display", read_only=True
+    )
     approval_status_display = serializers.CharField(
         source="get_approval_status_display", read_only=True
     )
@@ -215,7 +236,9 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         """获取待收款计划金额"""
         pending_amount = 0
         for plan in obj.payment_plans.exclude(status="completed").all():
-            pending_amount += max(float(plan.plan_amount - plan.paid_amount), 0)
+            pending_amount += max(
+                float(plan.plan_amount - plan.paid_amount), 0
+            )
         return pending_amount
 
     def get_unpaid_amount(self, obj) -> float:
@@ -225,12 +248,14 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
     def get_invoice_total_amount(self, obj) -> float:
         """获取关联发票总额（价税合计）"""
         from django.db.models import Sum
+
         total = obj.invoices.aggregate(total=Sum("total_amount"))["total"]
         return float(total or 0)
 
     def get_invoice_received_amount(self, obj) -> float:
         """获取发票已收金额（按核销金额汇总）"""
         from django.db.models import Sum
+
         total = obj.invoices.filter(payments__isnull=False).aggregate(
             total=Sum("payments__applied_amount")
         )["total"]
@@ -238,11 +263,16 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
 
     def get_invoice_unreceived_amount(self, obj) -> float:
         """获取发票未收金额"""
-        return max(self.get_invoice_total_amount(obj) - self.get_invoice_received_amount(obj), 0)
+        return max(
+            self.get_invoice_total_amount(obj)
+            - self.get_invoice_received_amount(obj),
+            0,
+        )
 
     def get_production_cost_total(self, obj) -> float:
         """获取关联施工单的生产成本汇总"""
         from django.db.models import Sum
+
         total = obj.source_work_orders.filter(
             production_cost__isnull=False
         ).aggregate(total=Sum("production_cost__total_cost"))["total"]
@@ -250,7 +280,9 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
 
     def get_gross_profit(self, obj) -> float:
         """毛利 = 订单金额 - 生产成本"""
-        return max(float(obj.total_amount) - self.get_production_cost_total(obj), 0)
+        return max(
+            float(obj.total_amount) - self.get_production_cost_total(obj), 0
+        )
 
     def get_gross_profit_rate(self, obj) -> float:
         """毛利率 = 毛利 / 订单金额"""
@@ -323,7 +355,9 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         # 创建订单明细
         for i, item_data in enumerate(items_data):
             try:
-                SalesOrderItem.objects.create(sales_order=sales_order, **item_data)
+                SalesOrderItem.objects.create(
+                    sales_order=sales_order, **item_data
+                )
             except Exception as e:
                 raise serializers.ValidationError(
                     f"创建订单明细失败 (第{i+1}项): {str(e)}"
@@ -332,7 +366,7 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
         # 更新订单总金额
         try:
             sales_order.update_totals()
-        except Exception as e:
+        except Exception:
             # 不阻止流程，记录错误即可
             pass
 
@@ -354,7 +388,9 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
 
             # 创建新明细
             for item_data in items_data:
-                SalesOrderItem.objects.create(sales_order=instance, **item_data)
+                SalesOrderItem.objects.create(
+                    sales_order=instance, **item_data
+                )
 
             # 更新订单总金额
             instance.update_totals()

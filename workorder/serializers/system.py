@@ -6,7 +6,11 @@
 
 from rest_framework import serializers
 
-from ..models.system import Notification, TaskAssignmentRule, WorkOrderApprovalLog
+from ..models.system import (
+    Notification,
+    TaskAssignmentRule,
+    WorkOrderApprovalLog,
+)
 
 
 class WorkOrderApprovalLogSerializer(serializers.ModelSerializer):
@@ -33,7 +37,9 @@ class NotificationSerializer(serializers.ModelSerializer):
     priority_display = serializers.CharField(
         source="get_priority_display", read_only=True
     )
-    recipient_name = serializers.CharField(source="recipient.username", read_only=True)
+    recipient_name = serializers.CharField(
+        source="recipient.username", read_only=True
+    )
     work_order_number = serializers.CharField(
         source="work_order.order_number", read_only=True, allow_null=True
     )
@@ -49,8 +55,12 @@ class TaskAssignmentRuleSerializer(serializers.ModelSerializer):
 
     process_name = serializers.CharField(source="process.name", read_only=True)
     process_code = serializers.CharField(source="process.code", read_only=True)
-    department_name = serializers.CharField(source="department.name", read_only=True)
-    department_code = serializers.CharField(source="department.code", read_only=True)
+    department_name = serializers.CharField(
+        source="department.name", read_only=True
+    )
+    department_code = serializers.CharField(
+        source="department.code", read_only=True
+    )
     operator_selection_strategy_display = serializers.CharField(
         source="get_operator_selection_strategy_display", read_only=True
     )

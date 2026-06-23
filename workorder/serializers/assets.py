@@ -4,7 +4,7 @@
 包含图稿、刀模、烫金版、压凸版等资产的序列化器。
 """
 
-from typing import List, Optional
+from typing import List
 
 from rest_framework import serializers
 
@@ -22,7 +22,11 @@ from ..models.assets import (
     FoilingPlateImage,
     FoilingPlateProduct,
 )
-from .base import PlateAssetSerializer, create_image_serializer, create_product_serializer
+from .base import (
+    PlateAssetSerializer,
+    create_image_serializer,
+    create_product_serializer,
+)
 from ..utils import format_color_display
 
 
@@ -38,7 +42,9 @@ class ArtworkProductSerializer(serializers.ModelSerializer):
 
 
 # 资产图片序列化器（工厂生成，字段配置统一）
-ArtworkImageSerializer = create_image_serializer(ArtworkImage, "ArtworkImageSerializer")
+ArtworkImageSerializer = create_image_serializer(
+    ArtworkImage, "ArtworkImageSerializer"
+)
 DieImageSerializer = create_image_serializer(DieImage, "DieImageSerializer")
 
 
@@ -181,7 +187,9 @@ class ArtworkSerializer(serializers.ModelSerializer):
                 ArtworkProduct.objects.create(
                     artwork=artwork,
                     product_id=product_data.get("product"),
-                    imposition_quantity=product_data.get("imposition_quantity", 1),
+                    imposition_quantity=product_data.get(
+                        "imposition_quantity", 1
+                    ),
                     sort_order=idx,
                 )
 
@@ -192,7 +200,7 @@ DieProductSerializer = create_product_serializer(
     DieProduct,
     "DieProductSerializer",
     extra_fields={
-        'relation_type_display': serializers.CharField(
+        "relation_type_display": serializers.CharField(
             source="get_relation_type_display", read_only=True
         ),
     },
@@ -227,8 +235,12 @@ class DieSerializer(PlateAssetSerializer):
         }
 
 
-FoilingPlateImageSerializer = create_image_serializer(FoilingPlateImage, "FoilingPlateImageSerializer")
-FoilingPlateProductSerializer = create_product_serializer(FoilingPlateProduct, "FoilingPlateProductSerializer")
+FoilingPlateImageSerializer = create_image_serializer(
+    FoilingPlateImage, "FoilingPlateImageSerializer"
+)
+FoilingPlateProductSerializer = create_product_serializer(
+    FoilingPlateProduct, "FoilingPlateProductSerializer"
+)
 
 
 class FoilingPlateSerializer(PlateAssetSerializer):
@@ -248,8 +260,12 @@ class FoilingPlateSerializer(PlateAssetSerializer):
         fields = "__all__"
 
 
-EmbossingPlateImageSerializer = create_image_serializer(EmbossingPlateImage, "EmbossingPlateImageSerializer")
-EmbossingPlateProductSerializer = create_product_serializer(EmbossingPlateProduct, "EmbossingPlateProductSerializer")
+EmbossingPlateImageSerializer = create_image_serializer(
+    EmbossingPlateImage, "EmbossingPlateImageSerializer"
+)
+EmbossingPlateProductSerializer = create_product_serializer(
+    EmbossingPlateProduct, "EmbossingPlateProductSerializer"
+)
 
 
 class EmbossingPlateSerializer(PlateAssetSerializer):

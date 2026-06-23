@@ -12,12 +12,15 @@
 """
 
 from django.contrib.auth.models import User
-from django.db import models, transaction
-from django.db.models import Sum
+from django.db import models
 from django.utils import timezone
 
 from .base import TimeStampedModel, ApprovalFieldsMixin
-from workorder.constants.status import InvoiceStatus, PaymentPlanStatus, StatementStatus
+from workorder.constants.status import (
+    InvoiceStatus,
+    PaymentPlanStatus,
+    StatementStatus,
+)
 
 
 class CostCenter(TimeStampedModel, models.Model):
@@ -85,7 +88,10 @@ class CostItem(TimeStampedModel, models.Model):
     code = models.CharField("成本项目编码", max_length=50, unique=True)
     type = models.CharField("类型", max_length=20, choices=TYPE_CHOICES)
     allocation_method = models.CharField(
-        "分摊方法", max_length=20, choices=ALLOCATION_METHOD_CHOICES, default="direct"
+        "分摊方法",
+        max_length=20,
+        choices=ALLOCATION_METHOD_CHOICES,
+        default="direct",
     )
     description = models.TextField("描述", blank=True)
     is_active = models.BooleanField("是否启用", default=True)
@@ -108,7 +114,9 @@ class ProductionCost(TimeStampedModel, models.Model):
         related_name="production_cost",
         verbose_name="施工单",
     )
-    period = models.CharField("成本核算期", max_length=20, help_text="格式: 2024-01")
+    period = models.CharField(
+        "成本核算期", max_length=20, help_text="格式: 2024-01"
+    )
 
     # 成本明细
     material_cost = models.DecimalField(
@@ -177,7 +185,9 @@ class ProductionCost(TimeStampedModel, models.Model):
         if self.standard_cost > 0:
             self.variance = self.total_cost - self.standard_cost
             self.variance_rate = (
-                (self.variance / self.standard_cost) * 100 if self.standard_cost else 0
+                (self.variance / self.standard_cost) * 100
+                if self.standard_cost
+                else 0
             )
 
         self.save()
@@ -186,13 +196,17 @@ class ProductionCost(TimeStampedModel, models.Model):
         """自动计算材料成本（优先使用采购实际单价）"""
         from workorder.models import WorkOrderMaterial
 
-        materials = WorkOrderMaterial.objects.filter(work_order=self.work_order)
+        materials = WorkOrderMaterial.objects.filter(
+            work_order=self.work_order
+        )
         total = 0
         for material in materials:
             if not material.material:
                 continue
             # 优先使用采购实际单价，其次使用物料档案单价
-            unit_price = material.actual_unit_price or material.material.unit_price
+            unit_price = (
+                material.actual_unit_price or material.material.unit_price
+            )
             # material_usage 可能是字符串（如 "100张"），需要解析数字
             usage_qty = self._parse_material_usage(material.material_usage)
             total += usage_qty * unit_price
@@ -204,9 +218,10 @@ class ProductionCost(TimeStampedModel, models.Model):
         """解析物料用量字符串，提取数字部分"""
         from decimal import Decimal
         import re
+
         if not usage_str:
             return Decimal("0")
-        numbers = re.findall(r'\d+\.?\d*', str(usage_str))
+        numbers = re.findall(r"\d+\.?\d*", str(usage_str))
         if numbers:
             try:
                 return Decimal(numbers[0])
@@ -226,7 +241,9 @@ class ProductionCost(TimeStampedModel, models.Model):
         from decimal import Decimal
         from workorder.models.core import WorkOrderTask
 
-        tasks = WorkOrderTask.objects.filter(work_order_process__work_order=self.work_order)
+        tasks = WorkOrderTask.objects.filter(
+            work_order_process__work_order=self.work_order
+        )
 
         total_hours = Decimal("0")
         total_operators = 0
@@ -241,7 +258,9 @@ class ProductionCost(TimeStampedModel, models.Model):
 
         # 预设人工单价（元/小时），后续可扩展为配置表
         LABOR_RATE_PER_HOUR = Decimal("25.00")
-        self.labor_cost = total_hours * LABOR_RATE_PER_HOUR * max(total_operators, 1)
+        self.labor_cost = (
+            total_hours * LABOR_RATE_PER_HOUR * max(total_operators, 1)
+        )
 
         # 设备成本：只要有使用设备，按小时数估算折旧/能耗
         if has_machine:
@@ -268,6 +287,7 @@ class Invoice(TimeStampedModel, ApprovalFieldsMixin, models.Model):
     def generate_invoice_number(cls):
         """生成发票号码：FP + yyyymmdd + 4位序号"""
         from workorder.utils import generate_order_number
+
         return generate_order_number(
             model_class=cls,
             field_name="invoice_number",
@@ -304,19 +324,30 @@ class Invoice(TimeStampedModel, ApprovalFieldsMixin, models.Model):
     )
 
     # 金额信息
-    amount = models.DecimalField("金额(不含税)", max_digits=12, decimal_places=2)
-    tax_rate = models.DecimalField("税率", max_digits=5, decimal_places=2, default=13)
+    amount = models.DecimalField(
+        "金额(不含税)", max_digits=12, decimal_places=2
+    )
+    tax_rate = models.DecimalField(
+        "税率", max_digits=5, decimal_places=2, default=13
+    )
     tax_amount = models.DecimalField("税额", max_digits=12, decimal_places=2)
-    total_amount = models.DecimalField("价税合计", max_digits=12, decimal_places=2)
+    total_amount = models.DecimalField(
+        "价税合计", max_digits=12, decimal_places=2
+    )
 
     # 开票信息
     issue_date = models.DateField("开票日期", null=True, blank=True)
     status = models.CharField(
-        "状态", max_length=20, choices=STATUS_CHOICES, default=InvoiceStatus.DRAFT
+        "状态",
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=InvoiceStatus.DRAFT,
     )
 
     # 客户开票信息
-    customer_tax_number = models.CharField("客户税号", max_length=50, blank=True)
+    customer_tax_number = models.CharField(
+        "客户税号", max_length=50, blank=True
+    )
     customer_address = models.TextField("客户地址", blank=True)
     customer_phone = models.CharField("客户电话", max_length=50, blank=True)
     customer_bank = models.CharField("开户行", max_length=100, blank=True)
@@ -392,6 +423,7 @@ class Payment(models.Model):
     def generate_payment_number(cls):
         """生成收款单号：SK + yyyymmdd + 4位序号"""
         from workorder.utils import generate_order_number
+
         return generate_order_number(
             model_class=cls,
             field_name="payment_number",
@@ -422,12 +454,16 @@ class Payment(models.Model):
     )
 
     amount = models.DecimalField("收款金额", max_digits=12, decimal_places=2)
-    payment_method = models.CharField("收款方式", max_length=20, choices=METHOD_CHOICES)
+    payment_method = models.CharField(
+        "收款方式", max_length=20, choices=METHOD_CHOICES
+    )
     payment_date = models.DateField("收款日期", default=timezone.now)
 
     # 银行信息
     bank_account = models.CharField("收款账户", max_length=50, blank=True)
-    transaction_number = models.CharField("交易流水号", max_length=100, blank=True)
+    transaction_number = models.CharField(
+        "交易流水号", max_length=100, blank=True
+    )
 
     # 核销信息
     applied_amount = models.DecimalField(
@@ -479,7 +515,9 @@ class PaymentPlan(models.Model):
         related_name="payment_plans",
         verbose_name="客户订单",
     )
-    plan_amount = models.DecimalField("计划金额", max_digits=12, decimal_places=2)
+    plan_amount = models.DecimalField(
+        "计划金额", max_digits=12, decimal_places=2
+    )
     plan_date = models.DateField("计划收款日期")
     status = models.CharField(
         "状态",
@@ -526,6 +564,7 @@ class Statement(models.Model):
     def generate_statement_number(cls):
         """生成对账单号：DZ + yyyymmdd + 4位序号"""
         from workorder.utils import generate_order_number
+
         return generate_order_number(
             model_class=cls,
             field_name="statement_number",
@@ -555,7 +594,9 @@ class Statement(models.Model):
         verbose_name="供应商",
     )
 
-    period = models.CharField("对账周期", max_length=20, help_text="格式: 2024-01")
+    period = models.CharField(
+        "对账周期", max_length=20, help_text="格式: 2024-01"
+    )
     start_date = models.DateField("开始日期")
     end_date = models.DateField("结束日期")
 
@@ -574,7 +615,10 @@ class Statement(models.Model):
     )
 
     status = models.CharField(
-        "状态", max_length=20, choices=STATUS_CHOICES, default=StatementStatus.DRAFT
+        "状态",
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=StatementStatus.DRAFT,
     )
 
     # 确认信息
@@ -607,8 +651,13 @@ class Statement(models.Model):
 
     def __str__(self):
         if self.customer:
-            return f"{self.statement_number} - {self.customer.name} ({self.period})"
-        return f"{self.statement_number} - {self.supplier.name} ({self.period})"
+            return (
+                f"{self.statement_number} - {self.customer.name} "
+                f"({self.period})"
+            )
+        return (
+            f"{self.statement_number} - {self.supplier.name} ({self.period})"
+        )
 
     def save(self, *args, **kwargs):
         if not self.statement_number:
@@ -642,6 +691,7 @@ class SupplierPayment(models.Model):
     def generate_payment_number(cls):
         """生成付款单号：FK + yyyymmdd + 4位序号"""
         from workorder.utils import generate_order_number
+
         return generate_order_number(
             model_class=cls,
             field_name="payment_number",
@@ -684,7 +734,9 @@ class SupplierPayment(models.Model):
 
     # 银行信息
     bank_account = models.CharField("付款账户", max_length=50, blank=True)
-    transaction_number = models.CharField("交易流水号", max_length=100, blank=True)
+    transaction_number = models.CharField(
+        "交易流水号", max_length=100, blank=True
+    )
 
     # 审核信息
     status = models.CharField(

@@ -78,7 +78,9 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_role_codes(self, obj) -> List[str]:
         """获取用户所属的角色代码列表"""
-        return resolve_role_codes(list(obj.groups.values_list("name", flat=True)))
+        return resolve_role_codes(
+            list(obj.groups.values_list("name", flat=True))
+        )
 
     def get_is_salesperson(self, obj) -> bool:
         """判断用户是否为业务员"""
@@ -195,10 +197,14 @@ class DepartmentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("部门编码不能为空")
 
         if not re.match(r"^[a-z0-9_]+$", value):
-            raise serializers.ValidationError("部门编码只能包含小写字母、数字和下划线")
+            raise serializers.ValidationError(
+                "部门编码只能包含小写字母、数字和下划线"
+            )
 
         if len(value) < 2 or len(value) > 20:
-            raise serializers.ValidationError("部门编码长度必须在2-20个字符之间")
+            raise serializers.ValidationError(
+                "部门编码长度必须在2-20个字符之间"
+            )
 
         # 编辑时不允许修改编码
         if self.instance and value != self.instance.code:
@@ -212,7 +218,9 @@ class DepartmentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("部门名称不能为空")
 
         if len(value) < 2 or len(value) > 50:
-            raise serializers.ValidationError("部门名称长度必须在2-50个字符之间")
+            raise serializers.ValidationError(
+                "部门名称长度必须在2-50个字符之间"
+            )
 
         return value
 
@@ -221,7 +229,9 @@ class DepartmentSerializer(serializers.ModelSerializer):
         if value < 0:
             raise serializers.ValidationError("排序值不能为负数")
         if value > 99999:
-            raise serializers.ValidationError("排序值超出合理范围（最大99999）")
+            raise serializers.ValidationError(
+                "排序值超出合理范围（最大99999）"
+            )
         return value
 
     def validate(self, attrs):
@@ -248,13 +258,17 @@ class DepartmentSerializer(serializers.ModelSerializer):
                 descendant_ids = [d.id for d in descendants]
                 if parent.id in descendant_ids:
                     raise serializers.ValidationError(
-                        {"parent": "不能将子部门设为上级部门，这会造成循环引用"}
+                        {
+                            "parent": "不能将子部门设为上级部门，这会造成循环引用"
+                        }
                     )
 
             # 检查层级深度（最多3级：0, 1, 2）
             parent_level = parent.get_level()
             if parent_level >= 2:
-                raise serializers.ValidationError({"parent": "部门层级不能超过3级"})
+                raise serializers.ValidationError(
+                    {"parent": "部门层级不能超过3级"}
+                )
 
         return attrs
 
@@ -266,13 +280,23 @@ def create_image_serializer(model_class, name=None):
     fields = ["id", "image", "sort_order", "description", "created_at"]
     read_only_fields = ["id", "created_at"]
     """
-    Meta = type('Meta', (), {
-        'model': model_class,
-        'fields': ["id", "image", "sort_order", "description", "created_at"],
-        'read_only_fields': ["id", "created_at"],
-    })
+    Meta = type(
+        "Meta",
+        (),
+        {
+            "model": model_class,
+            "fields": [
+                "id",
+                "image",
+                "sort_order",
+                "description",
+                "created_at",
+            ],
+            "read_only_fields": ["id", "created_at"],
+        },
+    )
     cls_name = name or f"{model_class.__name__}Serializer"
-    return type(cls_name, (serializers.ModelSerializer,), {'Meta': Meta})
+    return type(cls_name, (serializers.ModelSerializer,), {"Meta": Meta})
 
 
 def create_product_serializer(model_class, name=None, extra_fields=None):
@@ -282,8 +306,8 @@ def create_product_serializer(model_class, name=None, extra_fields=None):
     可通过 extra_fields 添加额外字段（如 DieProduct 的 relation_type_display）。
     """
     attrs = {
-        'product_name': serializers.SerializerMethodField(),
-        'product_code': serializers.SerializerMethodField(),
+        "product_name": serializers.SerializerMethodField(),
+        "product_code": serializers.SerializerMethodField(),
     }
     if extra_fields:
         attrs.update(extra_fields)
@@ -294,13 +318,18 @@ def create_product_serializer(model_class, name=None, extra_fields=None):
     def get_product_code(self, obj):
         return obj.product.code if obj.product else None
 
-    Meta = type('Meta', (), {'model': model_class, 'fields': '__all__'})
+    Meta = type("Meta", (), {"model": model_class, "fields": "__all__"})
     cls_name = name or f"{model_class.__name__}Serializer"
-    return type(cls_name, (serializers.ModelSerializer,), {
-        'Meta': Meta, **attrs,
-        'get_product_name': get_product_name,
-        'get_product_code': get_product_code,
-    })
+    return type(
+        cls_name,
+        (serializers.ModelSerializer,),
+        {
+            "Meta": Meta,
+            **attrs,
+            "get_product_name": get_product_name,
+            "get_product_code": get_product_code,
+        },
+    )
 
 
 class PlateAssetSerializer(serializers.ModelSerializer):
@@ -376,16 +405,29 @@ class PlateAssetSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         if self.instance and self.instance.confirmed:
-            protected_fields = ["code", "name", "size", "material", "thickness"]
+            protected_fields = [
+                "code",
+                "name",
+                "size",
+                "material",
+                "thickness",
+            ]
             for field in protected_fields:
                 if field in attrs:
                     old_value = getattr(self.instance, field, None) or ""
                     new_value = attrs.get(field, "") or ""
                     if old_value != new_value:
-                        verbose = self.plate_model._meta.get_field(field).verbose_name
-                        raise serializers.ValidationError({
-                            field: f"已确认的{self.plate_name_verbose}不允许修改{verbose}"
-                        })
+                        verbose = self.plate_model._meta.get_field(
+                            field
+                        ).verbose_name
+                        raise serializers.ValidationError(
+                            {
+                                field: (
+                                    f"已确认的{self.plate_name_verbose}"
+                                    f"不允许修改{verbose}"
+                                )
+                            }
+                        )
         return attrs
 
     def _build_product_kwargs(self, product_data, index):
@@ -422,7 +464,9 @@ class PlateAssetSerializer(serializers.ModelSerializer):
         products_data = validated_data.pop("products_data", None)
 
         def _do_update():
-            obj = super(PlateAssetSerializer, self).update(instance, validated_data)
+            obj = super(PlateAssetSerializer, self).update(
+                instance, validated_data
+            )
             if products_data is not None:
                 filter_kwargs = {self.product_fk_field: obj}
                 self.product_model.objects.filter(**filter_kwargs).delete()
@@ -450,7 +494,9 @@ class WorkOrderProductInfoMixin:
             return f"{products.count()}款拼版"
         elif products.count() == 1:
             first_product = products.first()
-            return first_product.product.name if first_product.product else None
+            return (
+                first_product.product.name if first_product.product else None
+            )
         return None
 
     def get_quantity(self, obj):
@@ -467,7 +513,10 @@ class WorkOrderProductInfoMixin:
 
     def get_total_task_count(self, obj):
         from ..models import WorkOrderTask
-        return WorkOrderTask.objects.filter(work_order_process__work_order=obj).count()
+
+        return WorkOrderTask.objects.filter(
+            work_order_process__work_order=obj
+        ).count()
 
 
 class ProcessSerializer(serializers.ModelSerializer):
@@ -496,7 +545,9 @@ class ProcessSerializer(serializers.ModelSerializer):
             )
 
         if len(value) < 2 or len(value) > 50:
-            raise serializers.ValidationError("工序编码长度必须在2-50个字符之间")
+            raise serializers.ValidationError(
+                "工序编码长度必须在2-50个字符之间"
+            )
 
         # 保护内置工序的 code
         if self.instance and self.instance.is_builtin:
@@ -510,7 +561,9 @@ class ProcessSerializer(serializers.ModelSerializer):
         if value < 0:
             raise serializers.ValidationError("标准工时不能为负数")
         if value > 9999:
-            raise serializers.ValidationError("标准工时超出合理范围（最大9999小时）")
+            raise serializers.ValidationError(
+                "标准工时超出合理范围（最大9999小时）"
+            )
         return value
 
     def validate_sort_order(self, value):
@@ -541,14 +594,18 @@ class ProcessSerializer(serializers.ModelSerializer):
             "foiling_plate_required"
         ):
             raise serializers.ValidationError(
-                {"foiling_plate_required": "工序需要烫金版时，烫金版必选必须开启"}
+                {
+                    "foiling_plate_required": "工序需要烫金版时，烫金版必选必须开启"
+                }
             )
 
         if attrs.get("requires_embossing_plate") and not attrs.get(
             "embossing_plate_required"
         ):
             raise serializers.ValidationError(
-                {"embossing_plate_required": "工序需要压凸版时，压凸版必选必须开启"}
+                {
+                    "embossing_plate_required": "工序需要压凸版时，压凸版必选必须开启"
+                }
             )
 
         # 验证任务生成规则与版要求的一致性

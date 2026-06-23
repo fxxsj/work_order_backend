@@ -31,10 +31,14 @@ class MaterialSerializer(serializers.ModelSerializer):
             return value
 
         if not re.match(r"^[A-Za-z0-9-]+$", value):
-            raise serializers.ValidationError("物料编码只能包含字母、数字和连字符")
+            raise serializers.ValidationError(
+                "物料编码只能包含字母、数字和连字符"
+            )
 
         if len(value) < 2 or len(value) > 50:
-            raise serializers.ValidationError("物料编码长度必须在2-50个字符之间")
+            raise serializers.ValidationError(
+                "物料编码长度必须在2-50个字符之间"
+            )
 
         return value
 
@@ -54,7 +58,9 @@ class MaterialSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("单价不能为负数")
 
         if value > 999999999.99:
-            raise serializers.ValidationError("单价超出允许范围（最大999999999.99）")
+            raise serializers.ValidationError(
+                "单价超出允许范围（最大999999999.99）"
+            )
 
         return value
 
@@ -116,7 +122,9 @@ class MaterialSerializer(serializers.ModelSerializer):
 class SupplierSerializer(serializers.ModelSerializer):
     """供应商序列化器（优化版）"""
 
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    status_display = serializers.CharField(
+        source="get_status_display", read_only=True
+    )
     material_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -143,7 +151,9 @@ class SupplierSerializer(serializers.ModelSerializer):
             )
 
         if len(value) < 2 or len(value) > 50:
-            raise serializers.ValidationError("供应商编码长度必须在2-50个字符之间")
+            raise serializers.ValidationError(
+                "供应商编码长度必须在2-50个字符之间"
+            )
 
         return value
 
@@ -180,10 +190,18 @@ class SupplierSerializer(serializers.ModelSerializer):
 class MaterialSupplierSerializer(serializers.ModelSerializer):
     """物料供应商关联序列化器（增强版）"""
 
-    material_name = serializers.CharField(source="material.name", read_only=True)
-    material_code = serializers.CharField(source="material.code", read_only=True)
-    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
-    supplier_code = serializers.CharField(source="supplier.code", read_only=True)
+    material_name = serializers.CharField(
+        source="material.name", read_only=True
+    )
+    material_code = serializers.CharField(
+        source="material.code", read_only=True
+    )
+    supplier_name = serializers.CharField(
+        source="supplier.name", read_only=True
+    )
+    supplier_code = serializers.CharField(
+        source="supplier.code", read_only=True
+    )
 
     class Meta:
         model = MaterialSupplier
@@ -233,7 +251,9 @@ class MaterialSupplierSerializer(serializers.ModelSerializer):
         # 更新时检查唯一性（排除自身）
         if self.instance and material and supplier:
             if (
-                MaterialSupplier.objects.filter(material=material, supplier=supplier)
+                MaterialSupplier.objects.filter(
+                    material=material, supplier=supplier
+                )
                 .exclude(id=self.instance.id)
                 .exists()
             ):
@@ -247,10 +267,18 @@ class MaterialSupplierSerializer(serializers.ModelSerializer):
 class PurchaseOrderItemSerializer(serializers.ModelSerializer):
     """采购单明细序列化器（增强版）"""
 
-    material_name = serializers.CharField(source="material.name", read_only=True)
-    material_code = serializers.CharField(source="material.code", read_only=True)
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
-    subtotal = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    material_name = serializers.CharField(
+        source="material.name", read_only=True
+    )
+    material_code = serializers.CharField(
+        source="material.code", read_only=True
+    )
+    status_display = serializers.CharField(
+        source="get_status_display", read_only=True
+    )
+    subtotal = serializers.DecimalField(
+        max_digits=14, decimal_places=2, read_only=True
+    )
     remaining_quantity = serializers.DecimalField(
         max_digits=12, decimal_places=3, read_only=True
     )
@@ -307,9 +335,15 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
 class PurchaseOrderListSerializer(serializers.ModelSerializer):
     """采购单列表序列化器（优化版）"""
 
-    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
-    supplier_code = serializers.CharField(source="supplier.code", read_only=True)
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    supplier_name = serializers.CharField(
+        source="supplier.name", read_only=True
+    )
+    supplier_code = serializers.CharField(
+        source="supplier.code", read_only=True
+    )
+    status_display = serializers.CharField(
+        source="get_status_display", read_only=True
+    )
     approval_status_display = serializers.CharField(
         source="get_approval_status_display", read_only=True
     )
@@ -338,12 +372,18 @@ class PurchaseOrderListSerializer(serializers.ModelSerializer):
 class PurchaseOrderDetailSerializer(serializers.ModelSerializer):
     """采购单详情序列化器"""
 
-    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    supplier_name = serializers.CharField(
+        source="supplier.name", read_only=True
+    )
     supplier_contact = serializers.CharField(
         source="supplier.contact_person", read_only=True
     )
-    supplier_phone = serializers.CharField(source="supplier.phone", read_only=True)
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    supplier_phone = serializers.CharField(
+        source="supplier.phone", read_only=True
+    )
+    status_display = serializers.CharField(
+        source="get_status_display", read_only=True
+    )
     approval_status_display = serializers.CharField(
         source="get_approval_status_display", read_only=True
     )
@@ -366,7 +406,12 @@ class PurchaseOrderDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseOrder
         fields = "__all__"
-        read_only_fields = ["order_number", "total_amount", "created_at", "updated_at"]
+        read_only_fields = [
+            "order_number",
+            "total_amount",
+            "created_at",
+            "updated_at",
+        ]
 
     def create(self, validated_data):
         """创建采购单及其明细"""
@@ -411,7 +456,9 @@ class PurchaseOrderDetailSerializer(serializers.ModelSerializer):
                     material_id=item_data.get("material"),
                     quantity=item_data.get("quantity", 0),
                     unit_price=item_data.get("unit_price", 0),
-                    work_order_material_id=item_data.get("work_order_material"),
+                    work_order_material_id=item_data.get(
+                        "work_order_material"
+                    ),
                 )
 
             # 更新总金额
@@ -427,9 +474,15 @@ class PurchaseReceiveRecordSerializer(serializers.ModelSerializer):
     """采购收货记录序列化器"""
 
     # 关联信息（只读）
-    material_name = serializers.CharField(source="material.name", read_only=True)
-    material_code = serializers.CharField(source="material.code", read_only=True)
-    material_unit = serializers.CharField(source="material.unit", read_only=True)
+    material_name = serializers.CharField(
+        source="material.name", read_only=True
+    )
+    material_code = serializers.CharField(
+        source="material.code", read_only=True
+    )
+    material_unit = serializers.CharField(
+        source="material.unit", read_only=True
+    )
     purchase_order_number = serializers.CharField(
         source="purchase_order.order_number", read_only=True
     )
@@ -491,7 +544,9 @@ class PurchaseReceiveRecordSerializer(serializers.ModelSerializer):
 
             if received_qty > remaining:
                 raise serializers.ValidationError(
-                    {"received_quantity": f"收货数量不能超过剩余数量 {remaining}"}
+                    {
+                        "received_quantity": f"收货数量不能超过剩余数量 {remaining}"
+                    }
                 )
 
         return attrs
@@ -502,7 +557,10 @@ class PurchaseReceiveRecordCreateSerializer(serializers.Serializer):
 
     items = serializers.ListField(
         child=serializers.DictField(),
-        help_text="收货明细列表，每项包含 item_id, received_quantity, delivery_note_number, notes",
+        help_text=(
+            "收货明细列表，每项包含 item_id, received_quantity, "
+            "delivery_note_number, notes"
+        ),
     )
     received_date = serializers.DateField(
         required=False, help_text="收货日期，默认为今天"
@@ -515,7 +573,9 @@ class PurchaseReceiveRecordCreateSerializer(serializers.Serializer):
 
         for item in value:
             if "item_id" not in item:
-                raise serializers.ValidationError("每个收货明细必须包含 item_id")
+                raise serializers.ValidationError(
+                    "每个收货明细必须包含 item_id"
+                )
             if "received_quantity" not in item:
                 raise serializers.ValidationError(
                     "每个收货明细必须包含 received_quantity"

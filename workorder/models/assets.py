@@ -12,12 +12,15 @@
 - EmbossingPlateProduct: 压凸版产品关联
 """
 
-from django.contrib.auth.models import User
-from django.db import models, transaction
+from django.db import models
 from django.db.models import Max
-from django.utils import timezone
 
-from .base import ConfirmableMixin, GenerateCodeMixin, TimeStampedModel, _SignalSafeQuerySet
+from .base import (
+    ConfirmableMixin,
+    GenerateCodeMixin,
+    TimeStampedModel,
+    _SignalSafeQuerySet,
+)
 
 
 class Artwork(ConfirmableMixin, TimeStampedModel, models.Model):
@@ -50,11 +53,17 @@ class Artwork(ConfirmableMixin, TimeStampedModel, models.Model):
         help_text='其他颜色列表，如：["528C", "金色"]',
     )
     imposition_size = models.CharField(
-        "拼版尺寸", max_length=100, blank=True, help_text="如：420x594mm、889x1194mm等"
+        "拼版尺寸",
+        max_length=100,
+        blank=True,
+        help_text="如：420x594mm、889x1194mm等",
     )
     # 关联刀模（多对多关系）
     dies = models.ManyToManyField(
-        "Die", blank=True, verbose_name="关联刀模", help_text="该图稿关联的刀模"
+        "Die",
+        blank=True,
+        verbose_name="关联刀模",
+        help_text="该图稿关联的刀模",
     )
     # 关联烫金版（多对多关系）
     foiling_plates = models.ManyToManyField(
@@ -100,12 +109,13 @@ class Artwork(ConfirmableMixin, TimeStampedModel, models.Model):
     def generate_base_code(cls):
         """生成图稿主编码：格式 ART + yyyymm + 3位自增序号"""
         from workorder.utils import generate_order_number
+
         return generate_order_number(
             model_class=cls,
             field_name="base_code",
             prefix="ART",
             date_format="%Y%m",
-            sequence_length=3
+            sequence_length=3,
         )
 
     @classmethod
@@ -143,7 +153,9 @@ class ArtworkImage(TimeStampedModel, models.Model):
         "排序", default=0, help_text="数值越小排越前"
     )
     description = models.CharField(
-        "描述", max_length=200, blank=True,
+        "描述",
+        max_length=200,
+        blank=True,
         help_text="如：正面、背面、拼版效果等",
     )
 
@@ -164,7 +176,10 @@ class ArtworkProduct(models.Model):
     """图稿产品关联（包含拼版数量）"""
 
     artwork = models.ForeignKey(
-        Artwork, on_delete=models.CASCADE, related_name="products", verbose_name="图稿"
+        Artwork,
+        on_delete=models.CASCADE,
+        related_name="products",
+        verbose_name="图稿",
     )
     product = models.ForeignKey(
         "workorder.Product", on_delete=models.PROTECT, verbose_name="产品"
@@ -183,7 +198,8 @@ class ArtworkProduct(models.Model):
 
     def __str__(self):
         return (
-            f"{self.artwork.name} - {self.product.name} ({self.imposition_quantity}拼)"
+            f"{self.artwork.name} - {self.product.name} "
+            f"({self.imposition_quantity}拼)"
         )
 
 
@@ -206,7 +222,9 @@ class Die(ConfirmableMixin, GenerateCodeMixin, models.Model):
         help_text="刀模唯一编码，留空则自动生成，格式：DIE + yyyymm + 3位序号",
     )
     name = models.CharField(
-        "刀模名称", max_length=200, help_text="刀模的描述性名称，必填，最大200字符"
+        "刀模名称",
+        max_length=200,
+        help_text="刀模的描述性名称，必填，最大200字符",
     )
     die_type = models.CharField(
         "刀模类型",
@@ -222,12 +240,17 @@ class Die(ConfirmableMixin, GenerateCodeMixin, models.Model):
         help_text="刀模尺寸规格，如：420x594mm、889x1194mm等",
     )
     material = models.CharField(
-        "材质", max_length=100, blank=True, help_text="刀模材质，如：木板、胶板、钢板等"
+        "材质",
+        max_length=100,
+        blank=True,
+        help_text="刀模材质，如：木板、胶板、钢板等",
     )
     thickness = models.CharField(
         "厚度", max_length=50, blank=True, help_text="刀模厚度，如：3mm、5mm等"
     )
-    notes = models.TextField("备注", blank=True, help_text="刀模的补充说明信息")
+    notes = models.TextField(
+        "备注", blank=True, help_text="刀模的补充说明信息"
+    )
     created_at = models.DateTimeField(
         "创建时间", auto_now_add=True, help_text="刀模记录创建时间"
     )
@@ -278,7 +301,9 @@ class DieImage(TimeStampedModel, models.Model):
         "排序", default=0, help_text="数值越小排越前"
     )
     description = models.CharField(
-        "描述", max_length=200, blank=True,
+        "描述",
+        max_length=200,
+        blank=True,
         help_text="如：正面、背面、线刀图等",
     )
 
@@ -304,7 +329,10 @@ class DieProduct(models.Model):
     ]
 
     die = models.ForeignKey(
-        Die, on_delete=models.CASCADE, related_name="products", verbose_name="刀模"
+        Die,
+        on_delete=models.CASCADE,
+        related_name="products",
+        verbose_name="刀模",
     )
     product = models.ForeignKey(
         "workorder.Product", on_delete=models.PROTECT, verbose_name="产品"
@@ -332,7 +360,9 @@ class DieProduct(models.Model):
         return f"{self.die.name} - {self.product.name} ({self.quantity}个)"
 
 
-class FoilingPlate(ConfirmableMixin, GenerateCodeMixin, TimeStampedModel, models.Model):
+class FoilingPlate(
+    ConfirmableMixin, GenerateCodeMixin, TimeStampedModel, models.Model
+):
     """烫金版信息"""
 
     code_prefix = "FP"
@@ -342,7 +372,9 @@ class FoilingPlate(ConfirmableMixin, GenerateCodeMixin, TimeStampedModel, models
         ("silver", "烫银"),
     ]
 
-    code = models.CharField("烫金版编码", max_length=50, unique=True, blank=True)
+    code = models.CharField(
+        "烫金版编码", max_length=50, unique=True, blank=True
+    )
     name = models.CharField("烫金版名称", max_length=200)
     foiling_type = models.CharField(
         "类型",
@@ -352,7 +384,10 @@ class FoilingPlate(ConfirmableMixin, GenerateCodeMixin, TimeStampedModel, models
         help_text="该版是烫金还是烫银",
     )
     size = models.CharField(
-        "尺寸", max_length=100, blank=True, help_text="如：420x594mm、889x1194mm等"
+        "尺寸",
+        max_length=100,
+        blank=True,
+        help_text="如：420x594mm、889x1194mm等",
     )
     material = models.CharField(
         "材质", max_length=100, blank=True, help_text="如：铜版、锌版等"
@@ -373,8 +408,12 @@ class FoilingPlate(ConfirmableMixin, GenerateCodeMixin, TimeStampedModel, models
         indexes = [
             models.Index(fields=["code"], name="foiling_plate_code_idx"),
             models.Index(fields=["name"], name="foiling_plate_name_idx"),
-            models.Index(fields=["confirmed"], name="foiling_plate_confirmed_idx"),
-            models.Index(fields=["created_at"], name="foiling_plate_created_idx"),
+            models.Index(
+                fields=["confirmed"], name="foiling_plate_confirmed_idx"
+            ),
+            models.Index(
+                fields=["created_at"], name="foiling_plate_created_idx"
+            ),
         ]
 
     def __str__(self):
@@ -404,7 +443,9 @@ class FoilingPlateImage(TimeStampedModel, models.Model):
         "排序", default=0, help_text="数值越小排越前"
     )
     description = models.CharField(
-        "描述", max_length=200, blank=True,
+        "描述",
+        max_length=200,
+        blank=True,
         help_text="如：正面、背面、烫金效果等",
     )
 
@@ -413,7 +454,9 @@ class FoilingPlateImage(TimeStampedModel, models.Model):
         verbose_name_plural = "烫金版图片"
         ordering = ["foiling_plate", "sort_order"]
         indexes = [
-            models.Index(fields=["foiling_plate"], name="foiling_plate_image_idx"),
+            models.Index(
+                fields=["foiling_plate"], name="foiling_plate_image_idx"
+            ),
         ]
 
     def __str__(self):
@@ -446,18 +489,28 @@ class FoilingPlateProduct(models.Model):
         unique_together = ["foiling_plate", "product"]
 
     def __str__(self):
-        return f"{self.foiling_plate.name} - {self.product.name} ({self.quantity}个)"
+        return (
+            f"{self.foiling_plate.name} - {self.product.name} "
+            f"({self.quantity}个)"
+        )
 
 
-class EmbossingPlate(ConfirmableMixin, GenerateCodeMixin, TimeStampedModel, models.Model):
+class EmbossingPlate(
+    ConfirmableMixin, GenerateCodeMixin, TimeStampedModel, models.Model
+):
     """压凸版信息"""
 
     code_prefix = "EP"
 
-    code = models.CharField("压凸版编码", max_length=50, unique=True, blank=True)
+    code = models.CharField(
+        "压凸版编码", max_length=50, unique=True, blank=True
+    )
     name = models.CharField("压凸版名称", max_length=200)
     size = models.CharField(
-        "尺寸", max_length=100, blank=True, help_text="如：420x594mm、889x1194mm等"
+        "尺寸",
+        max_length=100,
+        blank=True,
+        help_text="如：420x594mm、889x1194mm等",
     )
     material = models.CharField(
         "材质", max_length=100, blank=True, help_text="如：铜版、锌版等"
@@ -478,8 +531,12 @@ class EmbossingPlate(ConfirmableMixin, GenerateCodeMixin, TimeStampedModel, mode
         indexes = [
             models.Index(fields=["code"], name="embossing_plate_code_idx"),
             models.Index(fields=["name"], name="embossing_plate_name_idx"),
-            models.Index(fields=["confirmed"], name="embossing_plate_conf_idx"),
-            models.Index(fields=["created_at"], name="embossing_plate_created_idx"),
+            models.Index(
+                fields=["confirmed"], name="embossing_plate_conf_idx"
+            ),
+            models.Index(
+                fields=["created_at"], name="embossing_plate_created_idx"
+            ),
         ]
 
     def __str__(self):
@@ -509,7 +566,9 @@ class EmbossingPlateImage(TimeStampedModel, models.Model):
         "排序", default=0, help_text="数值越小排越前"
     )
     description = models.CharField(
-        "描述", max_length=200, blank=True,
+        "描述",
+        max_length=200,
+        blank=True,
         help_text="如：正面、背面、压凸效果等",
     )
 
@@ -518,7 +577,9 @@ class EmbossingPlateImage(TimeStampedModel, models.Model):
         verbose_name_plural = "压凸版图片"
         ordering = ["embossing_plate", "sort_order"]
         indexes = [
-            models.Index(fields=["embossing_plate"], name="embossing_plate_image_idx"),
+            models.Index(
+                fields=["embossing_plate"], name="embossing_plate_image_idx"
+            ),
         ]
 
     def __str__(self):
@@ -551,4 +612,7 @@ class EmbossingPlateProduct(models.Model):
         unique_together = ["embossing_plate", "product"]
 
     def __str__(self):
-        return f"{self.embossing_plate.name} - {self.product.name} ({self.quantity}个)"
+        return (
+            f"{self.embossing_plate.name} - {self.product.name} "
+            f"({self.quantity}个)"
+        )

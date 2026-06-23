@@ -13,7 +13,8 @@
 - TaskLog: 任务日志
 
 Performance Indexes (Phase 9 - 2026-02-01):
-WorkOrderTask model includes composite indexes to optimize multi-column filter queries:
+WorkOrderTask model includes composite indexes to optimize
+multi-column filter queries:
 - task_dept_status_type_idx: (assigned_department, status, task_type)
 - task_operator_status_idx: (assigned_operator, status)
 - task_status_created_idx: (status, created_at)
@@ -31,7 +32,11 @@ from django.db import models
 from django.utils import timezone
 from rest_framework import status
 from workorder.models.audit import AuditMixin
-from workorder.models.base import TimeStampedModel, _SignalSafeQuerySet, ApprovalFieldsMixin
+from workorder.models.base import (
+    TimeStampedModel,
+    _SignalSafeQuerySet,
+    ApprovalFieldsMixin,
+)
 
 # 配置日志记录器
 logger = logging.getLogger(__name__)
@@ -72,7 +77,9 @@ APPROVED_ORDER_EDITABLE_FIELDS = [
 ]
 
 
-class WorkOrder(AuditMixin, TimeStampedModel, ApprovalFieldsMixin, models.Model):
+class WorkOrder(
+    AuditMixin, TimeStampedModel, ApprovalFieldsMixin, models.Model
+):
     """印刷施工单"""
 
     STATUS_CHOICES = [
@@ -196,7 +203,9 @@ class WorkOrder(AuditMixin, TimeStampedModel, ApprovalFieldsMixin, models.Model)
         "交货日期",
         help_text="客户订单交期快照，创建施工单时自动复制，请勿手动修改",
     )
-    actual_delivery_date = models.DateField("实际交货日期", null=True, blank=True)
+    actual_delivery_date = models.DateField(
+        "实际交货日期", null=True, blank=True
+    )
 
     production_quantity = models.IntegerField(
         "生产数量", null=True, blank=True, help_text="单位：车"
@@ -230,8 +239,6 @@ class WorkOrder(AuditMixin, TimeStampedModel, ApprovalFieldsMixin, models.Model)
 
     notes = models.TextField("备注", blank=True)
 
-
-
     # 审核状态转换规则 - 集中管理状态转换
     APPROVAL_STATUS_TRANSITIONS = {
         "draft": ["submitted"],
@@ -251,6 +258,7 @@ class WorkOrder(AuditMixin, TimeStampedModel, ApprovalFieldsMixin, models.Model)
         """验证审核状态转换是否合法，不合法则抛出异常"""
         if not self.can_transition_to_approval_status(new_status):
             from workorder.exceptions import ServiceError
+
             raise ServiceError(
                 f"不允许的审核状态转换：{self.approval_status} → {new_status}",
                 code=status.HTTP_400_BAD_REQUEST,
@@ -263,7 +271,10 @@ class WorkOrder(AuditMixin, TimeStampedModel, ApprovalFieldsMixin, models.Model)
     def get_protected_fields(self) -> list:
         """获取当前状态下受保护的字段列表"""
         if self.is_approved():
-            return APPROVED_ORDER_PROTECTED_FIELDS + APPROVED_ORDER_EDITABLE_FIELDS
+            return (
+                APPROVED_ORDER_PROTECTED_FIELDS
+                + APPROVED_ORDER_EDITABLE_FIELDS
+            )
         return []
 
     def validate_editable_fields(self, fields: list) -> None:
@@ -274,6 +285,7 @@ class WorkOrder(AuditMixin, TimeStampedModel, ApprovalFieldsMixin, models.Model)
         protected_fields_in_request = [f for f in fields if f in protected]
         if protected_fields_in_request:
             from workorder.exceptions import ServiceError
+
             raise ServiceError(
                 f"该施工单已审核通过，以下字段禁止编辑：{', '.join(protected_fields_in_request)}",
                 code=status.HTTP_403_FORBIDDEN,
@@ -323,7 +335,10 @@ class WorkOrder(AuditMixin, TimeStampedModel, ApprovalFieldsMixin, models.Model)
         if products.exists():
             first_product = products.first()
             if products.count() > 1:
-                return f"{self.order_number} - {first_product.product.name} 等{products.count()}款"
+                return (
+                    f"{self.order_number} - {first_product.product.name} "
+                    f"等{products.count()}款"
+                )
             return f"{self.order_number} - {first_product.product.name}"
         return f"{self.order_number}"
 
@@ -339,14 +354,18 @@ class WorkOrder(AuditMixin, TimeStampedModel, ApprovalFieldsMixin, models.Model)
     @property
     def tasks(self):
         """所有关联任务"""
-        return WorkOrderTask.objects.filter(work_order_process__work_order=self)
+        return WorkOrderTask.objects.filter(
+            work_order_process__work_order=self
+        )
 
     def get_progress_percentage(self):
         """计算进度百分比"""
         total_processes = self.order_processes.count()
         if total_processes == 0:
             return 0
-        completed_processes = self.order_processes.filter(status="completed").count()
+        completed_processes = self.order_processes.filter(
+            status="completed"
+        ).count()
         return int((completed_processes / total_processes) * 100)
 
     def validate_before_approval(self):
@@ -375,6 +394,7 @@ class WorkOrder(AuditMixin, TimeStampedModel, ApprovalFieldsMixin, models.Model)
     def generate_order_number(cls):
         """生成施工单号：格式 yyyymm + 3位自增序号"""
         from workorder.utils import generate_order_number
+
         return generate_order_number(
             model_class=cls,
             field_name="order_number",
@@ -432,11 +452,19 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
         verbose_name="操作员",
     )
 
-    planned_start_time = models.DateTimeField("计划开始时间", null=True, blank=True)
-    planned_end_time = models.DateTimeField("计划结束时间", null=True, blank=True)
+    planned_start_time = models.DateTimeField(
+        "计划开始时间", null=True, blank=True
+    )
+    planned_end_time = models.DateTimeField(
+        "计划结束时间", null=True, blank=True
+    )
 
-    actual_start_time = models.DateTimeField("实际开始时间", null=True, blank=True)
-    actual_end_time = models.DateTimeField("实际结束时间", null=True, blank=True)
+    actual_start_time = models.DateTimeField(
+        "实际开始时间", null=True, blank=True
+    )
+    actual_end_time = models.DateTimeField(
+        "实际结束时间", null=True, blank=True
+    )
 
     duration_hours = models.DecimalField(
         "耗时(小时)", max_digits=6, decimal_places=2, default=0, blank=True
@@ -501,7 +529,9 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
         from .process_codes import ProcessCodes
 
         # 优先使用配置字段，如果未配置则使用编码判断
-        if self.process.is_parallel or ProcessCodes.is_parallel(self.process.code):
+        if self.process.is_parallel or ProcessCodes.is_parallel(
+            self.process.code
+        ):
             # 这些工序可以并行，只要没有其他限制就可以开始
             return True
 
@@ -588,8 +618,12 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
                             return False
 
         # 汇总任务的完成数量和不良品数量
-        total_quantity_completed = sum(task.quantity_completed or 0 for task in tasks)
-        total_quantity_defective = sum(task.quantity_defective or 0 for task in tasks)
+        total_quantity_completed = sum(
+            task.quantity_completed or 0 for task in tasks
+        )
+        total_quantity_defective = sum(
+            task.quantity_defective or 0 for task in tasks
+        )
 
         # 获取施工单对象
         work_order = self.work_order
@@ -647,7 +681,11 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
                     template_key="workorder_completed",
                     template_variables={
                         "workorder_number": work_order.order_number,
-                        "customer": work_order.customer.name if work_order.customer else "",
+                        "customer": (
+                            work_order.customer.name
+                            if work_order.customer
+                            else ""
+                        ),
                     },
                 )
 
@@ -746,6 +784,7 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
         import random
 
         from django.contrib.auth.models import User
+
         department_users = User.objects.filter(
             profile__departments=department, is_active=True
         ).exclude(
@@ -760,7 +799,8 @@ class WorkOrderProcess(AuditMixin, TimeStampedModel, models.Model):
             users_with_task_count = []
             for user in department_users:
                 task_count = WorkOrderTask.objects.filter(
-                    assigned_operator=user, status__in=["pending", "in_progress"]
+                    assigned_operator=user,
+                    status__in=["pending", "in_progress"],
                 ).count()
                 users_with_task_count.append((user, task_count))
 
@@ -841,7 +881,10 @@ class WorkOrderProduct(models.Model):
         unique_together = ["work_order", "product", "sort_order"]
 
     def __str__(self):
-        return f"{self.work_order.order_number} - {self.product.name} ({self.quantity}{self.unit})"
+        return (
+            f"{self.work_order.order_number} - {self.product.name} "
+            f"({self.quantity}{self.unit})"
+        )
 
 
 class WorkOrderMaterial(models.Model):
@@ -958,7 +1001,9 @@ class ProcessLog(models.Model):
         related_name="logs",
         verbose_name="工序",
     )
-    log_type = models.CharField("日志类型", max_length=20, choices=LOG_TYPE_CHOICES)
+    log_type = models.CharField(
+        "日志类型", max_length=20, choices=LOG_TYPE_CHOICES
+    )
     content = models.TextField("内容")
     operator = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, verbose_name="操作员"
@@ -989,7 +1034,9 @@ class TaskLog(models.Model):
         related_name="logs",
         verbose_name="任务",
     )
-    log_type = models.CharField("日志类型", max_length=20, choices=LOG_TYPE_CHOICES)
+    log_type = models.CharField(
+        "日志类型", max_length=20, choices=LOG_TYPE_CHOICES
+    )
     content = models.TextField("内容", help_text="操作内容描述")
     quantity_before = models.IntegerField("更新前数量", null=True, blank=True)
     quantity_after = models.IntegerField("更新后数量", null=True, blank=True)
@@ -997,10 +1044,17 @@ class TaskLog(models.Model):
         "数量增量", null=True, blank=True, help_text="本次操作的数量增量"
     )
     quantity_defective_increment = models.IntegerField(
-        "不良品数量增量", null=True, blank=True, help_text="本次操作的不良品数量增量"
+        "不良品数量增量",
+        null=True,
+        blank=True,
+        help_text="本次操作的不良品数量增量",
     )
-    status_before = models.CharField("更新前状态", max_length=20, null=True, blank=True)
-    status_after = models.CharField("更新后状态", max_length=20, null=True, blank=True)
+    status_before = models.CharField(
+        "更新前状态", max_length=20, null=True, blank=True
+    )
+    status_after = models.CharField(
+        "更新后状态", max_length=20, null=True, blank=True
+    )
     completion_reason = models.TextField(
         "完成理由", blank=True, help_text="强制完成时的理由说明"
     )
@@ -1200,7 +1254,8 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
                 name="task_dept_status_type_idx",
             ),
             models.Index(
-                fields=["assigned_operator", "status"], name="task_operator_status_idx"
+                fields=["assigned_operator", "status"],
+                name="task_operator_status_idx",
             ),
             models.Index(
                 fields=["status", "created_at"], name="task_status_created_idx"
@@ -1230,16 +1285,22 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
         if not self.is_subtask() and self.subtasks.exists():
             subtasks = self.subtasks.all()
             # 汇总完成数量
-            total_completed = sum(st.quantity_completed or 0 for st in subtasks)
+            total_completed = sum(
+                st.quantity_completed or 0 for st in subtasks
+            )
             # 汇总不良品数量
-            total_defective = sum(st.quantity_defective or 0 for st in subtasks)
+            total_defective = sum(
+                st.quantity_defective or 0 for st in subtasks
+            )
 
             # 更新父任务
             self.quantity_completed = total_completed
             self.quantity_defective = total_defective
 
             # 判断父任务状态：所有子任务完成则父任务完成
-            all_subtasks_completed = subtasks.exclude(status="completed").count() == 0
+            all_subtasks_completed = (
+                subtasks.exclude(status="completed").count() == 0
+            )
             if all_subtasks_completed and self.status != "completed":
                 self.status = "completed"
             elif not all_subtasks_completed and self.status == "completed":
@@ -1292,7 +1353,10 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
         TaskLog.objects.create(
             task=self,
             log_type="update_quantity",
-            content=f"更新完成数量：{old_quantity} → {self.quantity_completed}（增量 {increment}）",
+            content=(
+                f"更新完成数量：{old_quantity} → {self.quantity_completed} "
+                f"（增量 {increment}）"
+            ),
             quantity_before=old_quantity,
             quantity_after=self.quantity_completed,
             quantity_increment=increment,
@@ -1306,7 +1370,6 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
 
         由于草稿状态已移除，此方法仅保留用于数据验证。
         """
-        pass
 
     def save(self, *args, **kwargs):
         """保存时实现乐观锁机制
@@ -1368,8 +1431,10 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
             if self.assigned_operator_id == user.id:
                 return True
             # 检查用户是否属于 assigned_department
-            if self.assigned_department_id and hasattr(user, 'profile'):
-                if user.profile.departments.filter(id=self.assigned_department_id).exists():
+            if self.assigned_department_id and hasattr(user, "profile"):
+                if user.profile.departments.filter(
+                    id=self.assigned_department_id
+                ).exists():
                     return True
             return False
 
@@ -1419,6 +1484,7 @@ class WorkOrderTask(AuditMixin, TimeStampedModel, models.Model):
         can_change, reason = self.can_change_status(new_status, user)
         if not can_change:
             from workorder.exceptions import ServiceError
+
             raise ServiceError(
                 reason,
                 code=status.HTTP_400_BAD_REQUEST,

@@ -42,7 +42,9 @@ class CostCenterSerializer(serializers.ModelSerializer):
         source="manager.username", read_only=True, allow_null=True
     )
     children_count = serializers.SerializerMethodField()
-    type_display = serializers.CharField(source="get_type_display", read_only=True)
+    type_display = serializers.CharField(
+        source="get_type_display", read_only=True
+    )
 
     class Meta:
         model = CostCenter
@@ -72,7 +74,9 @@ class CostCenterSerializer(serializers.ModelSerializer):
         parent = data.get("parent")
         if self.instance is not None and parent is not None:
             if parent.pk == self.instance.pk:
-                raise serializers.ValidationError({"parent": "上级成本中心不能是自身"})
+                raise serializers.ValidationError(
+                    {"parent": "上级成本中心不能是自身"}
+                )
         return data
 
     def get_children_count(self, obj) -> int:
@@ -83,7 +87,9 @@ class CostCenterSerializer(serializers.ModelSerializer):
 class CostItemSerializer(serializers.ModelSerializer):
     """成本项目序列化器"""
 
-    type_display = serializers.CharField(source="get_type_display", read_only=True)
+    type_display = serializers.CharField(
+        source="get_type_display", read_only=True
+    )
     allocation_method_display = serializers.CharField(
         source="get_allocation_method_display", read_only=True
     )
@@ -188,7 +194,9 @@ class InvoiceSerializer(serializers.ModelSerializer):
     invoice_type_display = serializers.CharField(
         source="get_invoice_type_display", read_only=True
     )
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    status_display = serializers.CharField(
+        source="get_status_display", read_only=True
+    )
     approval_status_display = serializers.CharField(
         source="get_approval_status_display", read_only=True
     )
@@ -200,7 +208,9 @@ class InvoiceSerializer(serializers.ModelSerializer):
     work_order_number = serializers.CharField(
         source="work_order.order_number", read_only=True, allow_null=True
     )
-    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    customer_name = serializers.CharField(
+        source="customer.name", read_only=True
+    )
 
     # 操作人信息
     created_by_name = serializers.CharField(
@@ -233,7 +243,9 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
         # 税率必须在合理范围内
         if tax_rate is not None and (tax_rate < 0 or tax_rate > 100):
-            raise serializers.ValidationError({"tax_rate": "税率必须在0-100之间"})
+            raise serializers.ValidationError(
+                {"tax_rate": "税率必须在0-100之间"}
+            )
 
         return data
 
@@ -241,10 +253,9 @@ class InvoiceSerializer(serializers.ModelSerializer):
         received = getattr(obj, "received_payment_amount", None)
         if received is not None:
             return received
-        return (
-            obj.payments.aggregate(total=Sum("applied_amount"))["total"]
-            or Decimal("0")
-        )
+        return obj.payments.aggregate(total=Sum("applied_amount"))[
+            "total"
+        ] or Decimal("0")
 
     def get_payment_remaining_amount(self, obj):
         total_amount = obj.total_amount or Decimal("0")
@@ -308,7 +319,9 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
             customer = sales_order.customer
             # 如果未提供客户开票信息，尝试从客户信息获取
             if not data.get("customer_tax_number"):
-                data["customer_tax_number"] = getattr(customer, "tax_number", "")
+                data["customer_tax_number"] = getattr(
+                    customer, "tax_number", ""
+                )
             if not data.get("customer_address"):
                 data["customer_address"] = customer.address
             if not data.get("customer_phone"):
@@ -356,7 +369,9 @@ class PaymentSerializer(serializers.ModelSerializer):
     invoice_number = serializers.CharField(
         source="invoice.invoice_number", read_only=True, allow_null=True
     )
-    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    customer_name = serializers.CharField(
+        source="customer.name", read_only=True
+    )
     recorded_by_name = serializers.CharField(
         source="recorded_by.username", read_only=True, allow_null=True
     )
@@ -428,7 +443,9 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
         # 付款日期不能晚于今天
         payment_date = data.get("payment_date")
         if payment_date and payment_date > timezone.now().date():
-            raise serializers.ValidationError({"payment_date": "付款日期不能晚于今天"})
+            raise serializers.ValidationError(
+                {"payment_date": "付款日期不能晚于今天"}
+            )
 
         return data
 
@@ -468,7 +485,9 @@ class PaymentUpdateSerializer(serializers.ModelSerializer):
 class PaymentPlanSerializer(serializers.ModelSerializer):
     """收款计划序列化器"""
 
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    status_display = serializers.CharField(
+        source="get_status_display", read_only=True
+    )
     sales_order_number = serializers.CharField(
         source="sales_order.order_number", read_only=True
     )
@@ -492,11 +511,15 @@ class PaymentPlanSerializer(serializers.ModelSerializer):
         return 0
 
     def get_remaining_amount(self, obj):
-        remaining = (obj.plan_amount or Decimal("0")) - (obj.paid_amount or Decimal("0"))
+        remaining = (obj.plan_amount or Decimal("0")) - (
+            obj.paid_amount or Decimal("0")
+        )
         return remaining if remaining > 0 else Decimal("0")
 
     def get_is_overdue(self, obj) -> bool:
-        return obj.status != "completed" and obj.plan_date < timezone.localdate()
+        return (
+            obj.status != "completed" and obj.plan_date < timezone.localdate()
+        )
 
     def get_overdue_days(self, obj) -> int:
         if not self.get_is_overdue(obj):
@@ -508,7 +531,9 @@ class PaymentPlanSerializer(serializers.ModelSerializer):
         if obj.status == "completed":
             return "已完成"
         if self.get_is_overdue(obj):
-            return f"已逾期 {self.get_overdue_days(obj)} 天，待收 {remaining:.2f}"
+            return (
+                f"已逾期 {self.get_overdue_days(obj)} 天，待收 {remaining:.2f}"
+            )
         if obj.status == "partial":
             return f"已部分收款，待收 {remaining:.2f}"
         if obj.plan_date == timezone.localdate():
@@ -525,7 +550,9 @@ class StatementSerializer(serializers.ModelSerializer):
     statement_type_display = serializers.CharField(
         source="get_statement_type_display", read_only=True
     )
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    status_display = serializers.CharField(
+        source="get_status_display", read_only=True
+    )
 
     # 关联信息
     customer_name = serializers.CharField(
@@ -599,7 +626,9 @@ class StatementCreateSerializer(serializers.ModelSerializer):
 
         # 客户对账单必须选择客户
         if statement_type == "customer" and not data.get("customer"):
-            raise serializers.ValidationError({"customer": "客户对账单必须选择客户"})
+            raise serializers.ValidationError(
+                {"customer": "客户对账单必须选择客户"}
+            )
 
         # 供应商对账单必须选择供应商
         if statement_type == "supplier" and not data.get("supplier"):
@@ -660,11 +689,15 @@ class SupplierPaymentSerializer(serializers.ModelSerializer):
     payment_method_display = serializers.CharField(
         source="get_payment_method_display", read_only=True
     )
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    status_display = serializers.CharField(
+        source="get_status_display", read_only=True
+    )
     purchase_order_number = serializers.CharField(
         source="purchase_order.order_number", read_only=True, allow_null=True
     )
-    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    supplier_name = serializers.CharField(
+        source="supplier.name", read_only=True
+    )
     created_by_name = serializers.CharField(
         source="created_by.username", read_only=True, allow_null=True
     )
