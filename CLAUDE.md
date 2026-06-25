@@ -33,6 +33,7 @@
 ## API Contracts
 
 - 施工单审批统一使用 `/api/v1/workorders-flow/`。
+- 模块级审核开关使用 `/api/v1/approval-config/`（GET 读取，PUT 更新）。
 - 任务分派请求字段使用 `assigned_operator`。
 - 施工单待审核筛选使用 `approval_status=submitted`。
 - 对账单列表筛选类型参数使用 `type`，客户过滤使用 `customer`。

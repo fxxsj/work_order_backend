@@ -15,6 +15,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from ..models import (
+    ApprovalConfig,
     Notification,
     NotificationTemplate,
     SystemNotificationSettings,
@@ -123,6 +124,57 @@ class SystemNotificationSettingsAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         if SystemNotificationSettings.objects.exists():
+            return False
+        return super().has_add_permission(request)
+
+
+@admin.register(ApprovalConfig)
+class ApprovalConfigAdmin(admin.ModelAdmin):
+    """模块级审核开关配置管理"""
+
+    list_display = [
+        "singleton_key",
+        "workorder_approval_enabled",
+        "salesorder_approval_enabled",
+        "purchaseorder_approval_enabled",
+        "invoice_approval_enabled",
+        "supplierpayment_approval_enabled",
+        "stockin_approval_enabled",
+        "stockout_approval_enabled",
+        "updated_at",
+    ]
+    readonly_fields = ["singleton_key", "created_at", "updated_at"]
+
+    fieldsets = (
+        (
+            "核心模块",
+            {
+                "fields": (
+                    "workorder_approval_enabled",
+                    "salesorder_approval_enabled",
+                    "purchaseorder_approval_enabled",
+                    "invoice_approval_enabled",
+                )
+            },
+        ),
+        (
+            "其他模块",
+            {
+                "fields": (
+                    "supplierpayment_approval_enabled",
+                    "stockin_approval_enabled",
+                    "stockout_approval_enabled",
+                )
+            },
+        ),
+        (
+            "系统信息",
+            {"fields": ("singleton_key", "created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
+
+    def has_add_permission(self, request):
+        if ApprovalConfig.objects.exists():
             return False
         return super().has_add_permission(request)
 

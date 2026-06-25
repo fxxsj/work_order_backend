@@ -78,6 +78,7 @@ from .products import (
 )
 from .sales import SalesOrder, SalesOrderItem
 from .system import (
+    ApprovalConfig,
     Notification,
     NotificationTemplate,
     SystemNotificationSettings,
@@ -136,6 +137,7 @@ __all__ = [
     "NotificationTemplate",
     "SystemNotificationSettings",
     "TaskAssignmentRule",
+    "ApprovalConfig",
     # 销售模型
     "SalesOrder",
     "SalesOrderItem",

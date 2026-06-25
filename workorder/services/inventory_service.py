@@ -142,6 +142,9 @@ class ProductStockService:
         }
 
 
+from ..models.system import ApprovalConfig
+
+
 class StockInService:
     """入库单服务"""
 
@@ -158,6 +161,11 @@ class StockInService:
         stock_in.submitted_by = user
         stock_in.submitted_at = timezone.now()
         stock_in.save()
+
+        # 模块审核开关：若入库单审核已关闭，系统自动确认
+        if not ApprovalConfig.get_solo().is_enabled("stockin"):
+            return StockInService.confirm(stock_in=stock_in, user=user)
+
         return stock_in
 
     @staticmethod
@@ -240,6 +248,11 @@ class StockOutService:
         stock_out.submitted_by = user
         stock_out.submitted_at = timezone.now()
         stock_out.save()
+
+        # 模块审核开关：若出库单审核已关闭，系统自动确认
+        if not ApprovalConfig.get_solo().is_enabled("stockout"):
+            return StockOutService.confirm(stock_out=stock_out, user=user)
+
         return stock_out
 
     @staticmethod

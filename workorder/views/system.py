@@ -7,8 +7,9 @@
 from django.db.models import Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, viewsets
+from rest_framework import filters, permissions, viewsets
 from rest_framework.decorators import action
+from rest_framework.views import APIView
 from workorder.response import APIResponse
 from workorder.docs.system import (
     notification_docs,
@@ -21,12 +22,58 @@ from workorder.docs.system import (
     task_assignment_set_state_docs,
 )
 
-from ..models.system import Notification, TaskAssignmentRule
+from ..models.system import ApprovalConfig, Notification, TaskAssignmentRule
 from ..serializers.system import (
+    ApprovalConfigSerializer,
     NotificationSerializer,
     TaskAssignmentRuleSerializer,
 )
 from .base_viewsets import BaseViewSet
+
+
+class IsApprovalConfigAdmin(permissions.BasePermission):
+    """审核开关配置权限：超管 / staff / 拥有变更权限者。"""
+
+    permission_codes = (
+        "workorder.view_approvalconfig",
+        "workorder.change_approvalconfig",
+    )
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_superuser or user.is_staff:
+            return True
+        # 读取允许任意已登录用户（前端按钮联动需要），写入需变更权限
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return user.has_perm("workorder.change_approvalconfig")
+
+
+class ApprovalConfigView(APIView):
+    """模块级审核开关配置（单例读写）。
+
+    GET  /api/v1/approval-config/  读取当前配置（已登录即可，供前端按钮联动）
+    PUT  /api/v1/approval-config/  更新配置（需管理员 / 变更权限）
+    """
+
+    permission_classes = [IsApprovalConfigAdmin]
+
+    def get(self, request):
+        config = ApprovalConfig.get_solo()
+        return APIResponse.success(data=ApprovalConfigSerializer(config).data)
+
+    def put(self, request):
+        config = ApprovalConfig.get_solo()
+        serializer = ApprovalConfigSerializer(
+            config, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return APIResponse.success(
+            data=serializer.data, message="审核开关已更新"
+        )
 
 
 @notification_docs

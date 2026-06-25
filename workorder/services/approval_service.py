@@ -136,6 +136,15 @@ class ApprovalService(Generic[T]):
 
         self._log_approval(obj, user, "submit", comment)
 
+        # 模块审核开关：若该模块审核已关闭，系统自动通过（不依赖前端参数）
+        from workorder.models.system import ApprovalConfig
+
+        if not ApprovalConfig.get_solo().is_enabled(self.model_name):
+            self._system_approve(
+                obj, user, comment="模块审核已关闭，系统自动通过"
+            )
+            return obj
+
         # 智能免审逻辑：如果请求了自动审核，并且用户拥有审核权限
         if auto_approve:
             permission = self.get_approve_permission()
@@ -144,6 +153,21 @@ class ApprovalService(Generic[T]):
                     obj, user, comment="系统自动审核通过（具有审核权限）"
                 )
 
+        return obj
+
+    def _system_approve(self, obj, user, comment: str = "") -> T:
+        """系统自动通过（绕过审核权限校验，用于模块审核关闭场景）。
+
+        与 approve() 的区别：不校验审核权限，因为这是系统行为而非
+        用户主动审核。审核人记为触发提交的用户，并写入审计日志留痕。
+        """
+        obj.approval_status = "approved"
+        obj.approved_by = user
+        obj.approved_at = timezone.now()
+        obj.approval_comment = comment
+        obj.save()
+
+        self._log_approval(obj, user, "approve", comment)
         return obj
 
     def _log_approval(self, obj, user, action: str, comment: str) -> None:

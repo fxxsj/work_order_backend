@@ -7,10 +7,29 @@
 from rest_framework import serializers
 
 from ..models.system import (
+    ApprovalConfig,
     Notification,
     TaskAssignmentRule,
     WorkOrderApprovalLog,
 )
+
+
+class ApprovalConfigSerializer(serializers.ModelSerializer):
+    """模块级审核开关配置序列化器（单例）"""
+
+    class Meta:
+        model = ApprovalConfig
+        fields = [
+            "workorder_approval_enabled",
+            "salesorder_approval_enabled",
+            "purchaseorder_approval_enabled",
+            "invoice_approval_enabled",
+            "supplierpayment_approval_enabled",
+            "stockin_approval_enabled",
+            "stockout_approval_enabled",
+            "updated_at",
+        ]
+        read_only_fields = ["updated_at"]
 
 
 class WorkOrderApprovalLogSerializer(serializers.ModelSerializer):

@@ -52,7 +52,7 @@ from .views.products import (
     ProductViewSet,
 )
 from .views.sales import SalesOrderItemViewSet, SalesOrderViewSet
-from .views.system import TaskAssignmentRuleViewSet
+from .views.system import ApprovalConfigView, TaskAssignmentRuleViewSet
 from .views.work_order_flow_views import WorkOrderFlowViewSet
 from .views.work_order_materials import WorkOrderMaterialViewSet
 from .views.work_order_processes import WorkOrderProcessViewSet
@@ -161,6 +161,11 @@ router.register(
 
 urlpatterns = [
     path("", include(router.urls)),
+    path(
+        "approval-config/",
+        ApprovalConfigView.as_view(),
+        name="approval-config",
+    ),
     path("auth/login/", LoginView.as_view(), name="login"),
     path(
         "auth/refresh/",

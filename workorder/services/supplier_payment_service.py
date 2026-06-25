@@ -18,6 +18,9 @@ from .service_errors import ServiceError
 logger = logging.getLogger(__name__)
 
 
+from workorder.models.system import ApprovalConfig
+
+
 class SupplierPaymentService:
     """供应商付款业务服务，负责付款回写采购单付款状态。"""
 
@@ -93,6 +96,14 @@ class SupplierPaymentService:
         payment.submitted_by = user
         payment.submitted_at = timezone.now()
         payment.save(update_fields=["submitted_by", "submitted_at"])
+
+        # 模块审核开关：若供应商付款审核已关闭，系统自动通过
+        if not ApprovalConfig.get_solo().is_enabled("supplierpayment"):
+            return SupplierPaymentService.approve(
+                payment=payment,
+                user=user,
+            )
+
         return payment
 
     @staticmethod

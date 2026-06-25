@@ -525,6 +525,16 @@ class WorkOrderFlowService:
                 comment=comment,
             )
 
+        # 模块审核开关：若施工单审核已关闭，系统自动通过（不依赖前端参数）
+        from ..models.system import ApprovalConfig
+
+        if not ApprovalConfig.get_solo().is_enabled("workorder"):
+            return WorkOrderFlowService.handle_approval_passed(
+                work_order=work_order,
+                approved_by=submitted_by,
+                comment="模块审核已关闭，系统自动通过",
+            )
+
         if auto_approve:
             try:
                 WorkOrderFlowService._validate_approval_actor(

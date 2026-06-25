@@ -240,6 +240,71 @@ class SystemNotificationSettings(TimeStampedModel, models.Model):
         return settings
 
 
+class ApprovalConfig(TimeStampedModel, models.Model):
+    """模块级审核开关配置（单例）
+
+    控制每个业务模块是否开启审核流程。关闭后该模块提交即由系统
+    自动通过并留痕，无需审核人介入；开启后走原有审批流程。
+
+    所有开关默认 True，保证上线后行为与现状完全一致（零回归）。
+    """
+
+    # model._meta.model_name -> 配置字段名，统一通过 is_enabled() 查询
+    MODULE_FIELD_MAP = {
+        "workorder": "workorder_approval_enabled",
+        "salesorder": "salesorder_approval_enabled",
+        "purchaseorder": "purchaseorder_approval_enabled",
+        "invoice": "invoice_approval_enabled",
+        "supplierpayment": "supplierpayment_approval_enabled",
+        "stockin": "stockin_approval_enabled",
+        "stockout": "stockout_approval_enabled",
+    }
+
+    singleton_key = models.CharField(
+        "单例键",
+        max_length=32,
+        default="default",
+        unique=True,
+        editable=False,
+    )
+    workorder_approval_enabled = models.BooleanField(
+        "施工单审核", default=True
+    )
+    salesorder_approval_enabled = models.BooleanField(
+        "客户订单审核", default=True
+    )
+    purchaseorder_approval_enabled = models.BooleanField(
+        "采购单审核", default=True
+    )
+    invoice_approval_enabled = models.BooleanField("发票审核", default=True)
+    supplierpayment_approval_enabled = models.BooleanField(
+        "供应商付款审核", default=True
+    )
+    stockin_approval_enabled = models.BooleanField("入库单审核", default=True)
+    stockout_approval_enabled = models.BooleanField(
+        "出库单审核", default=True
+    )
+
+    class Meta:
+        verbose_name = "审核开关设置"
+        verbose_name_plural = "审核开关设置"
+
+    def __str__(self):
+        return "审核开关设置"
+
+    @classmethod
+    def get_solo(cls):
+        config, _ = cls.objects.get_or_create(singleton_key="default")
+        return config
+
+    def is_enabled(self, model_name: str) -> bool:
+        """指定模块是否开启审核。未知模块默认开启（保守策略）。"""
+        field = self.MODULE_FIELD_MAP.get(model_name)
+        if field is None:
+            return True
+        return getattr(self, field, True)
+
+
 class NotificationTemplate(TimeStampedModel, models.Model):
     """通知模板"""
 

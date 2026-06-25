@@ -127,3 +127,43 @@ class TestSupplierPayment:
         po.refresh_from_db()
         assert po.paid_amount == Decimal("500.00")
         assert po.payment_status == "partial"
+
+    def test_submit_keeps_pending_when_approval_enabled(self, purchase_setup):
+        """审核开启（默认）：提交后停留在 pending。"""
+        po, supplier, user = purchase_setup
+        payment = SupplierPayment.objects.create(
+            purchase_order=po,
+            supplier=supplier,
+            amount=Decimal("500.00"),
+            applied_amount=Decimal("500.00"),
+            payment_method="transfer",
+            created_by=user,
+        )
+
+        SupplierPaymentService.submit(payment, user)
+
+        assert payment.status == "pending"
+
+    def test_submit_auto_approves_when_disabled(self, purchase_setup):
+        """审核关闭：提交后系统自动通过并回写采购单。"""
+        from workorder.models.system import ApprovalConfig
+
+        po, supplier, user = purchase_setup
+        config = ApprovalConfig.get_solo()
+        config.supplierpayment_approval_enabled = False
+        config.save()
+
+        payment = SupplierPayment.objects.create(
+            purchase_order=po,
+            supplier=supplier,
+            amount=Decimal("500.00"),
+            applied_amount=Decimal("500.00"),
+            payment_method="transfer",
+            created_by=user,
+        )
+
+        SupplierPaymentService.submit(payment, user)
+
+        assert payment.status == "approved"
+        po.refresh_from_db()
+        assert po.paid_amount == Decimal("500.00")
