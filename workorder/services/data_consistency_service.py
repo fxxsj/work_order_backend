@@ -9,7 +9,8 @@ import logging
 from decimal import Decimal
 from typing import Dict, Any
 
-from django.db.models import Sum
+from django.db.models import DecimalField, Q, Sum, Value
+from django.db.models.functions import Coalesce
 
 logger = logging.getLogger(__name__)
 
@@ -58,15 +59,21 @@ class DataConsistencyService:
     def check_inventory_consistency() -> Dict[str, Any]:
         """检查库存一致性：Product.stock_quantity 与 ProductStock 批次汇总是否一致"""
         from workorder.models.products import Product
-        from workorder.models.inventory import ProductStock
 
         issues = []
-        products = Product.objects.all()
+        products = Product.objects.annotate(
+            batch_total=Coalesce(
+                Sum(
+                    "productstock__quantity",
+                    filter=Q(productstock__status="in_stock"),
+                ),
+                Value(Decimal("0")),
+                output_field=DecimalField(max_digits=10, decimal_places=2),
+            )
+        )
 
         for product in products:
-            batch_total = ProductStock.objects.filter(
-                product=product, status="in_stock"
-            ).aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+            batch_total = product.batch_total
             if product.stock_quantity != batch_total:
                 issues.append(
                     {

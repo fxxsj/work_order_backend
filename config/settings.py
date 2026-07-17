@@ -174,6 +174,8 @@ if DATABASE_URL:
             "PASSWORD": parsed.password or os.environ.get("POSTGRES_PASSWORD", ""),
             "HOST": parsed.hostname or os.environ.get("POSTGRES_HOST", "localhost"),
             "PORT": str(parsed.port or os.environ.get("POSTGRES_PORT", "5432")),
+            "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE", "60")),
+            "CONN_HEALTH_CHECKS": True,
             "OPTIONS": {
                 "connect_timeout": 10,
                 **({"sslmode": query["sslmode"]} if "sslmode" in query else {}),
@@ -199,6 +201,8 @@ elif os.environ.get("POSTGRES_DB"):
         "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "postgres"),
         "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
         "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+        "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE", "60")),
+        "CONN_HEALTH_CHECKS": True,
         "OPTIONS": {
             "connect_timeout": 10,
         },

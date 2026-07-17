@@ -491,33 +491,41 @@ class PlateAssetSerializer(serializers.ModelSerializer):
 class WorkOrderProductInfoMixin:
     """WorkOrder 列表/详情序列化器共享的计算字段"""
 
+    @staticmethod
+    def _products_for_display(obj):
+        """优先使用列表查询预取的产品，详情/单对象场景保留回退。"""
+        prefetched = getattr(obj, "_prefetched_objects_cache", {})
+        if "products" in prefetched:
+            return prefetched["products"]
+        return list(obj.products.select_related("product").all())
+
     def get_progress_percentage(self, obj):
+        total = getattr(obj, "total_process_count", None)
+        completed = getattr(obj, "completed_process_count", None)
+        if total is not None and completed is not None:
+            return int(completed / total * 100) if total else 0
         return obj.get_progress_percentage()
 
     def get_product_name(self, obj):
-        products = obj.products.all()
-        if products.count() > 1:
-            return f"{products.count()}款拼版"
-        elif products.count() == 1:
-            first_product = products.first()
-            return (
-                first_product.product.name if first_product.product else None
-            )
+        products = self._products_for_display(obj)
+        if len(products) > 1:
+            return f"{len(products)}款拼版"
+        if products:
+            return products[0].product.name if products[0].product else None
         return None
 
     def get_quantity(self, obj):
-        products = obj.products.all()
-        if products.exists():
-            return sum(p.quantity for p in products)
-        return 0
+        return sum(product.quantity for product in self._products_for_display(obj))
 
     def get_unit(self, obj):
-        products = obj.products.all()
-        if products.exists():
-            return products.first().unit
-        return "件"
+        products = self._products_for_display(obj)
+        return products[0].unit if products else "件"
 
     def get_total_task_count(self, obj):
+        task_count = getattr(obj, "total_task_count", None)
+        if task_count is not None:
+            return task_count
+
         from ..models import WorkOrderTask
 
         return WorkOrderTask.objects.filter(

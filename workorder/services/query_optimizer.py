@@ -53,6 +53,30 @@ class QueryOptimizer:
             "product_group_item__product",
         )
 
+        if not include_details:
+            # List serializer reads product information and process/task counts.
+            # Fetch products once and calculate the remaining values in the base
+            # query so its per-row method fields cannot introduce N+1 queries.
+            from ..models.core import WorkOrderProduct
+
+            return queryset.prefetch_related(
+                Prefetch(
+                    "products",
+                    queryset=WorkOrderProduct.objects.select_related("product")
+                    .order_by("sort_order"),
+                )
+            ).annotate(
+                total_process_count=Count("order_processes", distinct=True),
+                completed_process_count=Count(
+                    "order_processes",
+                    filter=Q(order_processes__status="completed"),
+                    distinct=True,
+                ),
+                total_task_count=Count(
+                    "order_processes__tasks", distinct=True
+                ),
+            )
+
         if include_details:
             # 详细信息需要更复杂的prefetch_related
             from ..models.materials import PurchaseOrder

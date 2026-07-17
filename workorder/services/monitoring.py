@@ -6,7 +6,7 @@
 
 import time
 import psutil
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Dict, List, Any
 from functools import wraps
 from django.db import connection
@@ -14,8 +14,35 @@ from django.utils import timezone
 from django.core.cache import cache
 from django.conf import settings
 from django.db.models import Count, Avg, Sum, Q, F
+from django.db.models.functions import TruncDate
 
 from ..models.core import WorkOrder, WorkOrderTask
+
+
+MONITORING_CACHE_VERSION_KEY = "monitoring:version"
+
+
+def monitoring_cache(cache_name):
+    """Cache global monitoring results with a versioned, backend-agnostic key."""
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            version = cache.get(MONITORING_CACHE_VERSION_KEY, 1)
+            arguments = repr((args, sorted(kwargs.items())))
+            key = f"monitoring:{cache_name}:v{version}:{arguments}"
+            cached = cache.get(key)
+            if cached is not None:
+                return cached
+
+            result = func(*args, **kwargs)
+            timeout = getattr(settings, "CACHE_TIMEOUTS", {}).get("SHORT", 60)
+            cache.set(key, result, timeout)
+            return result
+
+        return wrapper
+
+    return decorator
 
 
 class PerformanceMonitor:
@@ -202,6 +229,7 @@ class BusinessMetrics:
     """业务指标监控"""
 
     @staticmethod
+    @monitoring_cache("workorder_metrics")
     def get_workorder_metrics(time_range: str = "24h") -> Dict[str, Any]:
         """获取施工单业务指标"""
         now = timezone.now()
@@ -293,6 +321,7 @@ class BusinessMetrics:
         }
 
     @staticmethod
+    @monitoring_cache("task_metrics")
     def get_task_metrics(time_range: str = "24h") -> Dict[str, Any]:
         """获取任务业务指标"""
         now = timezone.now()
@@ -583,28 +612,48 @@ class MonitoringStatsService:
         return list(user_stats)
 
     @staticmethod
+    @monitoring_cache("productivity_trends")
     def get_productivity_trends(days: int = 7) -> List[Dict[str, Any]]:
         """获取最近 N 天的生产力趋势。"""
         from ..models.core import WorkOrder, WorkOrderTask
 
-        daily_data = []
-        for i in range(days):
-            date = (timezone.now() - timedelta(days=i)).date()
-            completed_orders = WorkOrder.objects.filter(
-                status="completed", updated_at__date=date
-            ).count()
-            completed_tasks = WorkOrderTask.objects.filter(
-                status="completed", updated_at__date=date
-            ).count()
-            daily_data.append(
-                {
-                    "date": date.isoformat(),
-                    "completed_orders": completed_orders,
-                    "completed_tasks": completed_tasks,
-                }
+        days = max(int(days), 1)
+        today = timezone.localdate()
+        first_date = today - timedelta(days=days - 1)
+        start = timezone.make_aware(
+            datetime.combine(first_date, datetime.min.time())
+        )
+        end = timezone.make_aware(
+            datetime.combine(
+                today + timedelta(days=1), datetime.min.time()
             )
+        )
 
-        return list(reversed(daily_data))
+        def daily_counts(model):
+            return {
+                row["date"]: row["count"]
+                for row in model.objects.filter(
+                    status="completed", updated_at__gte=start, updated_at__lt=end
+                )
+                .annotate(date=TruncDate("updated_at"))
+                .values("date")
+                .annotate(count=Count("id"))
+            }
+
+        order_counts = daily_counts(WorkOrder)
+        task_counts = daily_counts(WorkOrderTask)
+        return [
+            {
+                "date": (first_date + timedelta(days=offset)).isoformat(),
+                "completed_orders": order_counts.get(
+                    first_date + timedelta(days=offset), 0
+                ),
+                "completed_tasks": task_counts.get(
+                    first_date + timedelta(days=offset), 0
+                ),
+            }
+            for offset in range(days)
+        ]
 
     @staticmethod
     def get_quality_metrics(days: int = 30) -> Dict[str, Any]:
@@ -647,6 +696,7 @@ class MonitoringStatsService:
         }
 
     @staticmethod
+    @monitoring_cache("operations_dashboard")
     def get_operations_dashboard() -> Dict[str, Any]:
         """运营仪表盘关键指标聚合。"""
         from ..constants.status import MaterialPurchaseStatus

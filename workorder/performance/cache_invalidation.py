@@ -16,6 +16,15 @@ TASK_STATS_KEY_PATTERN = "task_stats:{dept_id}"
 DEPT_WORKLOAD_KEY_PATTERN = "dept_workload:{dept_id}"
 OPERATOR_STATS_KEY_PATTERN = "operator_stats:{operator_id}"
 DASHBOARD_PATTERN = "dashboard:*"
+MONITORING_CACHE_VERSION_KEY = "monitoring:version"
+
+
+def invalidate_monitoring_cache() -> None:
+    """Version global monitoring results without cache-backend-specific deletes."""
+    try:
+        cache.incr(MONITORING_CACHE_VERSION_KEY)
+    except ValueError:
+        cache.set(MONITORING_CACHE_VERSION_KEY, 2)
 
 
 @receiver(post_save, sender="workorder.WorkOrderTask")
@@ -30,6 +39,7 @@ def invalidate_task_cache_on_change(sender, instance, **kwargs):
     - Dashboard cache pattern
     """
     try:
+        invalidate_monitoring_cache()
         # Invalidate department stats
         if instance.assigned_department_id:
             dept_key = TASK_STATS_KEY_PATTERN.format(
@@ -67,6 +77,21 @@ def invalidate_task_cache_on_change(sender, instance, **kwargs):
 
     except Exception as e:
         logger.error(f"Error invalidating cache for task {instance.id}: {e}")
+
+
+
+@receiver(post_save, sender="workorder.WorkOrder")
+@receiver(post_delete, sender="workorder.WorkOrder")
+@receiver(post_save, sender="workorder.Product")
+@receiver(post_delete, sender="workorder.Product")
+@receiver(post_save, sender="workorder.ProductStock")
+@receiver(post_delete, sender="workorder.ProductStock")
+def invalidate_monitoring_cache_on_change(sender, instance, **kwargs):
+    """Refresh global monitoring metrics after relevant domain changes."""
+    try:
+        invalidate_monitoring_cache()
+    except Exception as error:
+        logger.error("Error invalidating monitoring cache: %s", error)
 
 
 def invalidate_department_stats(department_id: int) -> None:
