@@ -13,6 +13,7 @@ from django.contrib.auth.models import User
 from django.db import models, transaction
 from workorder.models.audit import AuditMixin
 from workorder.models.base import TimeStampedModel, GenerateCodeMixin
+from workorder.upload_paths import product_image_upload_to
 
 
 class Product(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
@@ -286,7 +287,7 @@ class ProductImage(TimeStampedModel, models.Model):
     )
     image = models.ImageField(
         "图片文件",
-        upload_to="product_images/",
+        upload_to=product_image_upload_to,
         help_text="支持 JPG、PNG、WebP 等常见图片格式",
     )
     sort_order = models.IntegerField(

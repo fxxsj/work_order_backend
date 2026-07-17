@@ -37,6 +37,7 @@ from workorder.models.base import (
     _SignalSafeQuerySet,
     ApprovalFieldsMixin,
 )
+from workorder.upload_paths import work_order_design_upload_to
 
 # 配置日志记录器
 logger = logging.getLogger(__name__)
@@ -224,7 +225,7 @@ class WorkOrder(
 
     # 文件附件
     design_file = models.FileField(
-        "设计文件", upload_to="designs/", blank=True, null=True
+        "设计文件", upload_to=work_order_design_upload_to, blank=True, null=True
     )
 
     # 制表人（创建者）

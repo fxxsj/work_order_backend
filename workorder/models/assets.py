@@ -15,6 +15,13 @@
 from django.db import models
 from django.db.models import Max
 
+from workorder.upload_paths import (
+    artwork_image_upload_to,
+    die_image_upload_to,
+    embossing_plate_image_upload_to,
+    foiling_plate_image_upload_to,
+)
+
 from .base import (
     ConfirmableMixin,
     GenerateCodeMixin,
@@ -146,7 +153,7 @@ class ArtworkImage(TimeStampedModel, models.Model):
     )
     image = models.ImageField(
         "图片文件",
-        upload_to="artwork_images/",
+        upload_to=artwork_image_upload_to,
         help_text="支持 JPG、PNG、WebP 等常见图片格式",
     )
     sort_order = models.IntegerField(
@@ -294,7 +301,7 @@ class DieImage(TimeStampedModel, models.Model):
     )
     image = models.ImageField(
         "图片文件",
-        upload_to="die_images/",
+        upload_to=die_image_upload_to,
         help_text="支持 JPG、PNG、WebP 等常见图片格式",
     )
     sort_order = models.IntegerField(
@@ -436,7 +443,7 @@ class FoilingPlateImage(TimeStampedModel, models.Model):
     )
     image = models.ImageField(
         "图片文件",
-        upload_to="foiling_plate_images/",
+        upload_to=foiling_plate_image_upload_to,
         help_text="支持 JPG、PNG、WebP 等常见图片格式",
     )
     sort_order = models.IntegerField(
@@ -559,7 +566,7 @@ class EmbossingPlateImage(TimeStampedModel, models.Model):
     )
     image = models.ImageField(
         "图片文件",
-        upload_to="embossing_plate_images/",
+        upload_to=embossing_plate_image_upload_to,
         help_text="支持 JPG、PNG、WebP 等常见图片格式",
     )
     sort_order = models.IntegerField(

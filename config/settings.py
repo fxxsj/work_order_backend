@@ -9,6 +9,8 @@ from urllib.parse import parse_qsl, urlparse
 
 from dotenv import load_dotenv
 
+from config.storage import build_r2_storages
+
 # 加载环境变量
 load_dotenv()
 
@@ -246,6 +248,12 @@ STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else 
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Optional Cloudflare R2 object storage. Local filesystem storage remains the
+# default unless USE_R2_STORAGE is explicitly enabled.
+_r2_storages = build_r2_storages(os.environ)
+if _r2_storages is not None:
+    STORAGES = _r2_storages
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

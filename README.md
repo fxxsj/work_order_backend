@@ -9,6 +9,7 @@ Django 4.2 + Django REST Framework 后端 API 服务。
 - Django REST Framework 3.14
 - PostgreSQL
 - Redis / Channels / Daphne
+- django-storages / Cloudflare R2（可选媒体存储）
 - drf-spectacular OpenAPI 文档
 
 ## 目录结构
@@ -77,3 +78,4 @@ python manage.py loaddata workorder/fixtures/initial_products.json
 - API 参考：[../docs/BACKEND_API.md](../docs/BACKEND_API.md)
 - 施工单流程服务：[../docs/WORKORDER_FLOW_SERVICE.md](../docs/WORKORDER_FLOW_SERVICE.md)
 - 字段说明：[../docs/WORKORDER_FIELDS.md](../docs/WORKORDER_FIELDS.md)
+- Cloudflare R2 媒体存储：[docs/r2_storage.md](docs/r2_storage.md)

@@ -21,6 +21,7 @@ from workorder.constants.status import (
     PaymentPlanStatus,
     StatementStatus,
 )
+from workorder.upload_paths import invoice_attachment_upload_to
 
 
 class CostCenter(TimeStampedModel, models.Model):
@@ -356,7 +357,7 @@ class Invoice(TimeStampedModel, ApprovalFieldsMixin, models.Model):
     # 备注和附件
     notes = models.TextField("备注", blank=True)
     attachment = models.FileField(
-        "发票附件", upload_to="invoices/", null=True, blank=True
+        "发票附件", upload_to=invoice_attachment_upload_to, null=True, blank=True
     )
 
     submitted_by = models.ForeignKey(

@@ -19,6 +19,10 @@ from workorder.constants.status import (
     StockInStatus,
     StockOutStatus,
 )
+from workorder.upload_paths import (
+    delivery_signature_upload_to,
+    quality_report_upload_to,
+)
 
 from .base import TimeStampedModel
 
@@ -357,7 +361,7 @@ class DeliveryOrder(TimeStampedModel, models.Model):
     # 签收信息
     received_date = models.DateTimeField("签收时间", null=True, blank=True)
     receiver_signature = models.ImageField(
-        "签收照片", upload_to="signatures/", null=True, blank=True
+        "签收照片", upload_to=delivery_signature_upload_to, null=True, blank=True
     )
     received_notes = models.TextField("签收备注", blank=True)
 
@@ -543,7 +547,7 @@ class QualityInspection(models.Model):
 
     # 附件
     attachment = models.FileField(
-        "检验报告", upload_to="quality_reports/", null=True, blank=True
+        "检验报告", upload_to=quality_report_upload_to, null=True, blank=True
     )
 
     notes = models.TextField("备注", blank=True)
