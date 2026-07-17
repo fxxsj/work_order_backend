@@ -1,9 +1,12 @@
 """角色与部门范围对齐测试。"""
 
+from datetime import timedelta
+
 from django.contrib.auth.models import Group, User
 from django.core.management import call_command
-from django.test import TestCase
 from django.core.cache import cache
+from django.test import TestCase
+from django.utils import timezone
 
 from workorder.constants.role_codes import ALL_ROLE_CODES
 from workorder.models import Department, Process, UserProfile, WorkOrderTask
@@ -11,6 +14,40 @@ from workorder.permission_utils import PermissionCache
 from workorder.services.task_assignment import TaskAssignmentService
 
 from .conftest import TestDataFactory
+
+
+class PermissionCacheIdentityTest(TestCase):
+    """验证用户主键复用时不会继承旧账号的部门权限缓存。"""
+
+    def test_reused_user_id_does_not_reuse_department_scope(self):
+        department = Department.objects.create(
+            name="缓存身份测试部门",
+            code="cache_identity_department",
+        )
+        first_user = User.objects.create_user(
+            username="first_cache_user",
+            date_joined=timezone.now() - timedelta(days=1),
+        )
+        first_profile = UserProfile.objects.create(user=first_user)
+        first_profile.departments.add(department)
+        reused_id = first_user.id
+
+        self.assertEqual(
+            PermissionCache.get_user_department_scope(first_user),
+            [department.id],
+        )
+
+        first_user.delete()
+        replacement_user = User.objects.create_user(
+            id=reused_id,
+            username="replacement_cache_user",
+            date_joined=timezone.now(),
+        )
+        UserProfile.objects.create(user=replacement_user)
+
+        self.assertEqual(
+            PermissionCache.get_user_department_scope(replacement_user), []
+        )
 
 
 class InitialUserRoleDepartmentTest(TestCase):

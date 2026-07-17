@@ -29,8 +29,10 @@ pytest-xdist==3.5.0
 black==24.1.1
 # pylint==3.0.3
 channels>=4.0.0
+channels-redis>=4.2.0,<5.0
 daphne>=4.0.0
 redis>=5.0.0
+django-redis>=5.4.0,<6.0
 
 # API Documentation
 drf-spectacular==0.27.0

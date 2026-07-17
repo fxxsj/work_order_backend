@@ -57,7 +57,9 @@ def capture_changes(instance, created=False):
         created: 是否为新建操作
     """
     # 检查审计日志是否启用
-    settings = AuditLogSettings.get_settings()
+    settings = getattr(instance, "_audit_settings", None)
+    if settings is None:
+        settings = AuditLogSettings.get_settings()
     if not settings.enabled:
         return
 
@@ -226,6 +228,8 @@ def audit_log_save(sender, instance, created, **kwargs):
     # 清理缓存的旧数据，避免长生命周期对象持有
     if hasattr(instance, "_audit_old_data"):
         delattr(instance, "_audit_old_data")
+    if hasattr(instance, "_audit_settings"):
+        delattr(instance, "_audit_settings")
 
 
 def audit_log_pre_save(sender, instance, **kwargs):
@@ -248,6 +252,7 @@ def audit_log_pre_save(sender, instance, **kwargs):
 
     # 检查审计日志是否启用
     settings = AuditLogSettings.get_settings()
+    instance._audit_settings = settings
     if not settings.enabled:
         return
 

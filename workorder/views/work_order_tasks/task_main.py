@@ -7,7 +7,7 @@
 import logging
 from datetime import timedelta
 
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
@@ -23,7 +23,8 @@ from rest_framework.decorators import action
 from workorder.response import APIResponse
 
 from workorder.services.service_errors import ServiceError
-from workorder.models.core import WorkOrderTask
+from workorder.models.base import Department
+from workorder.models.core import TaskLog, WorkOrderMaterial, WorkOrderTask
 from workorder.permission_utils import PermissionCache
 from workorder.permissions import WorkOrderTaskPermission
 from workorder.permissions.permission_utils import is_manager_user
@@ -233,8 +234,23 @@ class BaseWorkOrderTaskViewSet(TaskExportMixin, viewsets.ModelViewSet):
             "embossing_plate",
         )
         .prefetch_related(
-            "logs",
+            Prefetch(
+                "logs",
+                queryset=TaskLog.objects.select_related("operator"),
+            ),
             "subtasks",
+            Prefetch(
+                "work_order_process__process__department_set",
+                queryset=Department.objects.filter(is_active=True).order_by(
+                    "sort_order"
+                ),
+                to_attr="active_departments",
+            ),
+            Prefetch(
+                "work_order_process__work_order__materials",
+                queryset=WorkOrderMaterial.objects.select_related("material"),
+                to_attr="task_materials",
+            ),
         )
         .all()
     )
