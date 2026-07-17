@@ -22,7 +22,7 @@ class PermissionCacheIdentityTest(TestCase):
     def test_reused_user_id_does_not_reuse_department_scope(self):
         department = Department.objects.create(
             name="缓存身份测试部门",
-            code="cache_identity_department",
+            code="cache_identity",
         )
         first_user = User.objects.create_user(
             username="first_cache_user",
