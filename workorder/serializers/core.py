@@ -192,13 +192,38 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
         """获取关联的 WorkOrderMaterial 记录，不存在时返回 None"""
         if not (obj.material and obj.work_order_process):
             return None
+
+        work_order = obj.work_order_process.work_order
+        cache_key = (work_order.id, obj.material_id)
+        cache = getattr(self, "_work_order_material_cache", None)
+        if cache is None:
+            cache = {}
+            self._work_order_material_cache = cache
+        if cache_key in cache:
+            return cache[cache_key]
+
+        prefetched_materials = getattr(work_order, "task_materials", None)
+        if prefetched_materials is not None:
+            material_record = next(
+                (
+                    record
+                    for record in prefetched_materials
+                    if record.material_id == obj.material_id
+                ),
+                None,
+            )
+            cache[cache_key] = material_record
+            return material_record
+
         try:
-            return WorkOrderMaterial.objects.get(
-                work_order=obj.work_order_process.work_order,
+            material_record = WorkOrderMaterial.objects.get(
+                work_order=work_order,
                 material=obj.material,
             )
         except WorkOrderMaterial.DoesNotExist:
-            return None
+            material_record = None
+        cache[cache_key] = material_record
+        return material_record
 
     def get_material_purchase_status(self, obj) -> Optional[str]:
         """获取物料采购状态"""
@@ -231,12 +256,19 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
             # 获取与工序关联的部门
             departments = []
             if process:
-                # 使用反向关系 department_set 来访问关联的部门
-                departments = [
-                    {"id": dept.id, "name": dept.name, "code": dept.code}
-                    for dept in process.department_set.filter(
+                prefetched_departments = getattr(
+                    process, "active_departments", None
+                )
+                department_queryset = (
+                    prefetched_departments
+                    if prefetched_departments is not None
+                    else process.department_set.filter(
                         is_active=True
                     ).order_by("sort_order")
+                )
+                departments = [
+                    {"id": dept.id, "name": dept.name, "code": dept.code}
+                    for dept in department_queryset
                 ]
             return {
                 "process": {

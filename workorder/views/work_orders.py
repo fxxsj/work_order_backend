@@ -354,7 +354,7 @@ class WorkOrderViewSet(
 
     def get_queryset(self):
         """根据用户权限过滤查询集，使用查询优化器提升性能"""
-        from ..services.query_optimizer import QueryCache, QueryOptimizer
+        from ..services.query_optimizer import QueryOptimizer
 
         # 使用查询优化器获取基础查询集
         queryset = QueryOptimizer.optimize_workorder_queryset(
@@ -363,47 +363,30 @@ class WorkOrderViewSet(
         )
 
         user = self.request.user
-        cache_key = f"workorder_queryset_{user.id}_{user.is_superuser}"
-
         # 管理员和经理可以查看所有数据
         if user.is_superuser or is_manager_user(user):
             return queryset
 
-        # 使用缓存优化权限查询
-        def get_filtered_queryset():
-            if is_sales_user(user):
-                return queryset.filter(customer__salesperson=user)
+        if is_sales_user(user):
+            return queryset.filter(customer__salesperson=user)
 
-            elif user.has_perm("workorder.change_workorder"):
-                department_scope = PermissionCache.get_user_department_scope(
-                    user
-                )
-                if department_scope:
-                    # 使用优化的子查询，添加 select_related 优化跨表查询性能
-                    from ..models.core import WorkOrderTask
+        if user.has_perm("workorder.change_workorder"):
+            department_scope = PermissionCache.get_user_department_scope(user)
+            if department_scope:
+                from ..models.core import WorkOrderTask
 
-                    work_order_ids = (
-                        WorkOrderTask.objects.filter(
-                            assigned_department_id__in=department_scope
-                        )
-                        .select_related(
-                            "work_order_process"  # 优化跨表查询，避免N+1问题
-                        )
-                        .values_list(
-                            "work_order_process__work_order_id", flat=True
-                        )
-                        .distinct()
+                work_order_ids = (
+                    WorkOrderTask.objects.filter(
+                        assigned_department_id__in=department_scope
                     )
-                    return queryset.filter(id__in=work_order_ids)
-                else:
-                    return queryset.filter(created_by=user)
+                    .values_list(
+                        "work_order_process__work_order_id", flat=True
+                    )
+                    .distinct()
+                )
+                return queryset.filter(id__in=work_order_ids)
 
-            else:
-                return queryset.filter(created_by=user)
-
-        return QueryCache.get_cached_queryset(
-            cache_key, get_filtered_queryset, timeout=300
-        )
+        return queryset.filter(created_by=user)
 
     def perform_create(self, serializer):
         # 自动设置创建人和制表人为当前用户

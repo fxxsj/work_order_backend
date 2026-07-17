@@ -12,6 +12,15 @@ class PermissionCache:
     """权限缓存工具类"""
 
     @staticmethod
+    def _user_cache_suffix(user):
+        """返回不会因数据库主键复用而冲突的用户缓存标识。"""
+        joined_at = getattr(user, "date_joined", None)
+        identity_version = (
+            joined_at.strftime("%Y%m%d%H%M%S%f") if joined_at else "legacy"
+        )
+        return f"{user.id}_{identity_version}"
+
+    @staticmethod
     def get_user_departments(user, timeout=1800):
         """获取用户部门列表（带缓存）
 
@@ -25,7 +34,9 @@ class PermissionCache:
         if not user.is_authenticated:
             return []
 
-        cache_key = f"user_departments_{user.id}"
+        cache_key = (
+            f"user_departments_{PermissionCache._user_cache_suffix(user)}"
+        )
         departments = cache.get(cache_key)
 
         if departments is None:
@@ -52,7 +63,10 @@ class PermissionCache:
         if not user.is_authenticated:
             return []
 
-        cache_key = f"user_department_scope_{user.id}"
+        cache_key = (
+            "user_department_scope_"
+            f"{PermissionCache._user_cache_suffix(user)}"
+        )
         department_scope = cache.get(cache_key)
 
         if department_scope is None:
@@ -110,8 +124,10 @@ class PermissionCache:
         """
         cache.delete_many(
             [
-                f"user_departments_{user.id}",
-                f"user_department_scope_{user.id}",
+                "user_departments_"
+                f"{PermissionCache._user_cache_suffix(user)}",
+                "user_department_scope_"
+                f"{PermissionCache._user_cache_suffix(user)}",
             ]
         )
 
@@ -238,9 +254,7 @@ class PermissionUtils:
         )
         department_ids = PermissionCache.get_user_department_scope(user)
         if department_ids:
-            dept_filter_key = (
-                f"{prefix}order_processes__" "department_id__in"
-            )
+            dept_filter_key = f"{prefix}order_processes__" "department_id__in"
             scope |= Q(**{dept_filter_key: department_ids})
         return scope
 

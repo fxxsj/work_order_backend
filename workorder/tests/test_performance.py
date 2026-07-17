@@ -8,6 +8,7 @@ and use efficient annotated queries instead of loop-based counting.
 from datetime import timedelta
 
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.db import connection, reset_queries
 from django.contrib.auth.models import User, Permission
 from django.contrib.contenttypes.models import ContentType
@@ -219,12 +220,48 @@ class PerformanceTestCase(TestCase):
 
         query_count = len(connection.queries)
 
-        # Should be a small, constant number of queries (not 1+N)
+        # The base query plus four bounded prefetches stays constant as rows grow.
         self.assertLessEqual(
             query_count,
-            3,
-            f"Expected <=3 queries for task list, got {query_count}. "
+            5,
+            f"Expected <=5 queries for task list, got {query_count}. "
             f"Query: {[q['sql'] for q in connection.queries]}",
+        )
+
+    def test_task_list_serialization_has_constant_query_count(self):
+        """Serializing task rows must not query per task or per field."""
+        from workorder.models.core import WorkOrderMaterial
+        from workorder.serializers.core import WorkOrderTaskSerializer
+        from workorder.tests.factories import MaterialFactory
+        from workorder.views.work_order_tasks.task_main import (
+            BaseWorkOrderTaskViewSet,
+        )
+
+        material = MaterialFactory()
+        WorkOrderMaterial.objects.create(
+            work_order=self.work_order,
+            material=material,
+            purchase_status="received",
+            material_size="100x100mm",
+            material_usage="10张",
+        )
+        WorkOrderTask.objects.filter(
+            work_order_process=self.work_order_process
+        ).update(material=material, task_type="cutting")
+        self.department.processes.add(self.process)
+
+        queryset = BaseWorkOrderTaskViewSet.queryset.filter(
+            work_order_process=self.work_order_process
+        ).order_by("id")
+        with CaptureQueriesContext(connection) as queries:
+            data = WorkOrderTaskSerializer(queryset, many=True).data
+
+        self.assertEqual(len(data), 10)
+        self.assertLessEqual(
+            len(queries),
+            6,
+            "Task serialization issued per-row queries: "
+            f"{[query['sql'] for query in queries.captured_queries]}",
         )
 
     @override_settings(DEBUG=True)

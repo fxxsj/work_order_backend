@@ -74,3 +74,26 @@ def test_overdue_tasks_use_planned_end_time():
     _, kwargs = mocked.call_args
     assert kwargs["data"]["task_id"] == task.id
     assert kwargs["data"]["deadline"] == planned_end_time.isoformat()
+
+
+@pytest.mark.django_db
+def test_task_assignment_notification_only_fires_when_operator_changes():
+    workorder_process = WorkOrderProcessFactory(tasks=0)
+    first_operator = UserFactory()
+    second_operator = UserFactory()
+
+    with patch(
+        "workorder.services.notification_triggers."
+        "notification_service.notify_task_assigned"
+    ) as mocked:
+        task = WorkOrderTaskFactory(
+            work_order_process=workorder_process,
+            assigned_operator=first_operator,
+        )
+        task.quantity_completed = 10
+        task.save(update_fields=["quantity_completed", "updated_at"])
+        task.assigned_operator = second_operator
+        task.save(update_fields=["assigned_operator", "updated_at"])
+
+    assert mocked.call_count == 2
+    assert mocked.call_args.kwargs["assigned_operator"] == second_operator

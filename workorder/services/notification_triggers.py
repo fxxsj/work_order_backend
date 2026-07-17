@@ -44,8 +44,13 @@ def workorder_created_handler(sender, instance, created, **kwargs):
 @receiver(post_save, sender=WorkOrderTask)
 def task_assigned_handler(sender, instance, created, **kwargs):
     """任务分配时触发通知"""
-    # Check if operator was assigned (not just department)
-    if instance.assigned_operator:
+    previous_operator_id = getattr(
+        instance, "_previous_assigned_operator_id", None
+    )
+    operator_changed = created or (
+        previous_operator_id != instance.assigned_operator_id
+    )
+    if instance.assigned_operator_id and operator_changed:
         notification_service.notify_task_assigned(
             task=instance,
             assigned_operator=instance.assigned_operator,
@@ -62,7 +67,12 @@ def task_status_change_handler(sender, instance, **kwargs):
     """任务状态变更时触发通知"""
     if instance.pk:
         try:
-            old_instance = WorkOrderTask.objects.get(pk=instance.pk)
+            old_instance = WorkOrderTask.objects.only(
+                "status", "assigned_operator_id"
+            ).get(pk=instance.pk)
+            instance._previous_assigned_operator_id = (
+                old_instance.assigned_operator_id
+            )
             old_status = old_instance.status
             new_status = instance.status
 

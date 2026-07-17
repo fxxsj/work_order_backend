@@ -475,7 +475,6 @@ if REDIS_URL and not DEBUG:
                 "LOCATION": REDIS_URL,
                 "OPTIONS": {
                     "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                    "SERIALIZER": "django_redis.serializers.json.JSONSerializer",
                     "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
                     "SOCKET_CONNECT_TIMEOUT": 5,
                     "SOCKET_TIMEOUT": 5,
