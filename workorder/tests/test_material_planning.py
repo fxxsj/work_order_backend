@@ -509,10 +509,13 @@ class TestMaterialPlanning:
             )
 
     def test_purchase_order_rejects_unconfirmed_planning_material(self):
-        with pytest.raises(ServiceError, match="物料计划尚未确认"):
-            PurchaseOrderService.create_from_work_order(
-                work_order_id=self.work_order.id
-            )
+        result = PurchaseOrderService.create_from_work_order(
+            work_order_id=self.work_order.id
+        )
+
+        assert result["total_count"] == 0
+        assert result["blocked_item_count"] == 1
+        assert result["blocked_items"][0]["reason"] == "物料规格计划尚未确认"
 
     def test_purchase_order_uses_selected_stock_sku_and_shortage(self):
         WorkOrderMaterialService.calculate_plan(

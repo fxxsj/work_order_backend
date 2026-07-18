@@ -14,6 +14,7 @@ from workorder.models.base import Customer
 from workorder.models.core import WorkOrder, WorkOrderMaterial
 from workorder.models.materials import (
     Material,
+    MaterialSupplier,
     PurchaseOrder,
     Supplier,
 )
@@ -85,13 +86,13 @@ class TestPurchaseOrderService:
         material.default_supplier = None
         material.save()
 
-        with pytest.raises(ServiceError) as exc_info:
-            PurchaseOrderService.create_from_work_order(
-                work_order_id=purchase_setup["work_order"].id,
-            )
+        result = PurchaseOrderService.create_from_work_order(
+            work_order_id=purchase_setup["work_order"].id,
+        )
 
-        assert exc_info.value.code == 400
-        assert "blocked_items" in exc_info.value.data
+        assert result["total_count"] == 0
+        assert result["blocked_item_count"] == 1
+        assert "有效供应商" in result["blocked_items"][0]["reason"]
 
     def test_create_from_work_order_no_pending_materials(self, purchase_setup):
         """测试没有待采购物料时失败"""
@@ -105,6 +106,78 @@ class TestPurchaseOrderService:
             )
 
         assert exc_info.value.code == 400
+
+    def test_create_uses_resolved_sku_preferred_supplier_and_price(
+        self, purchase_setup
+    ):
+        requirement = purchase_setup["material"]
+        requirement.specification_level = "requirement"
+        requirement.material_type = "paper"
+        requirement.save(update_fields=["specification_level", "material_type"])
+        requirement.default_supplier = purchase_setup["supplier"]
+        requirement.save(update_fields=["default_supplier"])
+        sku_supplier = Supplier.objects.create(
+            name="大度纸供应商",
+            code="SUP-SHEET",
+            status="active",
+        )
+        stock = Material.objects.create(
+            name="测试纸张 大度",
+            code="PAPER-LARGE",
+            unit="张",
+            specification_level="stock",
+            base_material=requirement,
+            material_type="paper",
+            unit_price=Decimal("2.00"),
+        )
+        MaterialSupplier.objects.create(
+            material=stock,
+            supplier=sku_supplier,
+            supplier_price=Decimal("1.80"),
+            is_preferred=True,
+        )
+        wom = purchase_setup["wom"]
+        wom.purchase_material = stock
+        wom.calculation_mode = "sheet_imposition"
+        wom.preparation_mode = "supplier_cutting"
+        wom.planning_required = True
+        wom.planning_status = "confirmed"
+        wom.purchase_quantity = Decimal("80")
+        wom.save()
+
+        PurchaseOrderService.create_from_work_order(
+            work_order_id=purchase_setup["work_order"].id,
+        )
+
+        order = PurchaseOrder.objects.get()
+        item = order.items.get()
+        assert order.supplier == sku_supplier
+        assert item.material == stock
+        assert item.quantity == Decimal("80")
+        assert item.unit_price == Decimal("1.80")
+
+    def test_create_processes_ready_items_and_reports_blocked_items(
+        self, purchase_setup
+    ):
+        blocked_material = Material.objects.create(
+            name="未配置供应商物料",
+            code="NO-SUPPLIER",
+            unit="个",
+        )
+        WorkOrderMaterial.objects.create(
+            work_order=purchase_setup["work_order"],
+            material=blocked_material,
+            material_usage="20个",
+            purchase_status=MaterialPurchaseStatus.PENDING,
+        )
+
+        result = PurchaseOrderService.create_from_work_order(
+            work_order_id=purchase_setup["work_order"].id,
+        )
+
+        assert result["created_item_count"] == 1
+        assert result["blocked_item_count"] == 1
+        assert result["blocked_items"][0]["material_name"] == "未配置供应商物料"
 
     def test_cancel_purchase_order_success(self, purchase_setup):
         """测试取消采购单成功"""

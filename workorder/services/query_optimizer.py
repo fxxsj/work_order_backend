@@ -62,8 +62,9 @@ class QueryOptimizer:
             return queryset.prefetch_related(
                 Prefetch(
                     "products",
-                    queryset=WorkOrderProduct.objects.select_related("product")
-                    .order_by("sort_order"),
+                    queryset=WorkOrderProduct.objects.select_related(
+                        "product"
+                    ).order_by("sort_order"),
                 )
             ).annotate(
                 total_process_count=Count("order_processes", distinct=True),
@@ -72,9 +73,7 @@ class QueryOptimizer:
                     filter=Q(order_processes__status="completed"),
                     distinct=True,
                 ),
-                total_task_count=Count(
-                    "order_processes__tasks", distinct=True
-                ),
+                total_task_count=Count("order_processes__tasks", distinct=True),
             )
 
         if include_details:
@@ -119,14 +118,19 @@ class QueryOptimizer:
                 Prefetch("artworks", to_attr="ordered_artworks"),
                 Prefetch("dies", to_attr="ordered_dies"),
                 Prefetch("foiling_plates", to_attr="ordered_foiling_plates"),
-                Prefetch(
-                    "embossing_plates", to_attr="ordered_embossing_plates"
-                ),
+                Prefetch("embossing_plates", to_attr="ordered_embossing_plates"),
                 # 物料信息
                 Prefetch(
                     "materials",
                     queryset=WorkOrder.materials.through.objects.select_related(  # noqa: E501
-                        "material"
+                        "material",
+                        "material__default_supplier",
+                        "purchase_material",
+                        "purchase_material__default_supplier",
+                    ).prefetch_related(
+                        "material__materialsupplier_set__supplier",
+                        "purchase_material__materialsupplier_set__supplier",
+                        "purchaseorderitem_set__purchase_order",
                     ),
                     to_attr="ordered_materials",
                 ),
@@ -217,13 +221,9 @@ class QueryOptimizer:
                     distinct=True,
                 ),
                 # 不良品统计
-                total_defective=Sum(
-                    "order_processes__tasks__quantity_defective"
-                ),
+                total_defective=Sum("order_processes__tasks__quantity_defective"),
                 # 完成数量统计
-                total_completed=Sum(
-                    "order_processes__tasks__quantity_completed"
-                ),
+                total_completed=Sum("order_processes__tasks__quantity_completed"),
             )
         )
 
@@ -239,11 +239,7 @@ class QueryOptimizer:
                 "total_defective": work_order.total_defective or 0,
                 "total_completed": work_order.total_completed or 0,
                 "progress_percentage": int(
-                    (
-                        work_order.completed_processes
-                        / work_order.total_processes
-                        * 100
-                    )
+                    (work_order.completed_processes / work_order.total_processes * 100)
                     if work_order.total_processes > 0
                     else 0
                 ),
@@ -258,9 +254,7 @@ class QueryCache:
     CACHE_TIMEOUT = getattr(settings, "QUERY_CACHE_TIMEOUT", 300)  # 5分钟
 
     @classmethod
-    def get_cached_queryset(
-        cls, cache_key: str, queryset_func, timeout: int = None
-    ):
+    def get_cached_queryset(cls, cache_key: str, queryset_func, timeout: int = None):
         """
         获取缓存的查询结果
 
@@ -306,11 +300,7 @@ class QueryCache:
     @classmethod
     def get_workorder_cache_key(cls, order_id: int, suffix: str = "") -> str:
         """生成施工单缓存键"""
-        return (
-            f"workorder:{order_id}:{suffix}"
-            if suffix
-            else f"workorder:{order_id}"
-        )
+        return f"workorder:{order_id}:{suffix}" if suffix else f"workorder:{order_id}"
 
     @classmethod
     def get_task_cache_key(cls, task_id: int, suffix: str = "") -> str:
@@ -407,9 +397,7 @@ class PerformanceOptimizedManager(models.Manager):
         def queryset_func():
             return list(self.get_optimized_queryset(include_details=True))
 
-        return QueryCache.get_cached_queryset(
-            cache_key, queryset_func, timeout
-        )
+        return QueryCache.get_cached_queryset(cache_key, queryset_func, timeout)
 
     def batch_update(self, objs: List, fields: List[str]) -> int:
         """批量更新"""
@@ -425,9 +413,7 @@ class WorkOrderOptimizedManager(PerformanceOptimizedManager):
 
     def get_optimized_queryset(self, queryset, include_details=False):
         """获取优化的施工单查询集"""
-        return QueryOptimizer.optimize_workorder_queryset(
-            queryset, include_details
-        )
+        return QueryOptimizer.optimize_workorder_queryset(queryset, include_details)
 
     def get_dashboard_stats(self) -> Dict[str, Any]:
         """获取仪表板统计信息（优化版）"""
@@ -440,9 +426,7 @@ class WorkOrderOptimizedManager(PerformanceOptimizedManager):
             in_progress_orders=Count("id", filter=Q(status="in_progress")),
             completed_orders=Count("id", filter=Q(status="completed")),
             urgent_orders=Count("id", filter=Q(priority="urgent")),
-            pending_approval=Count(
-                "id", filter=Q(approval_status="submitted")
-            ),
+            pending_approval=Count("id", filter=Q(approval_status="submitted")),
         )
 
         # 获取即将到期的订单
@@ -507,9 +491,7 @@ class TaskOptimizedManager(PerformanceOptimizedManager):
         from ..models.core import WorkOrderTask
 
         date_path = "work_order_process__work_order__delivery_date"
-        return WorkOrderTask.objects.filter(
-            assigned_operator_id=user_id
-        ).aggregate(
+        return WorkOrderTask.objects.filter(assigned_operator_id=user_id).aggregate(
             total_tasks=Count("id"),
             pending_tasks=Count("id", filter=Q(status="pending")),
             in_progress_tasks=Count("id", filter=Q(status="in_progress")),

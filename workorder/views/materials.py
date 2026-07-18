@@ -48,6 +48,7 @@ from ..serializers.materials import (
     InspectionConfirmSerializer,
     MaterialSerializer,
     MaterialSupplierSerializer,
+    PurchaseOrderFromWorkOrderSerializer,
     PurchaseOrderDetailSerializer,
     PurchaseOrderItemSerializer,
     PurchaseOrderListSerializer,
@@ -70,9 +71,7 @@ from ..import_export_configs import (
 
 
 class PurchaseOrderFilterSet(FilterSet):
-    supplier_name = CharFilter(
-        field_name="supplier__name", lookup_expr="icontains"
-    )
+    supplier_name = CharFilter(field_name="supplier__name", lookup_expr="icontains")
     ordered_date = DateFromToRangeFilter()
     expected_date = DateFromToRangeFilter()
     actual_received_date = DateFromToRangeFilter()
@@ -423,18 +422,19 @@ class PurchaseOrderViewSet(ApprovalTimelineMixin, BaseViewSet):
         return APIResponse.success(message="取消成功")
 
     @action(detail=False, methods=["post"])
+    @handle_service_error
     def create_from_work_order(self, request):
         """从施工单创建采购单"""
-        try:
-            result = PurchaseOrderService.create_from_work_order(
-                work_order_id=request.data.get("work_order_id"),
-                material_ids=request.data.get("material_ids"),
-                notes=request.data.get("notes", ""),
-                item_overrides=request.data.get("items", []),
-            )
-        except ServiceError as e:
-            data = e.data if e.data else {}
-            return APIResponse.error(message=str(e), code=e.code, data=data)
+        input_serializer = PurchaseOrderFromWorkOrderSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        data = input_serializer.validated_data
+        result = PurchaseOrderService.create_from_work_order(
+            work_order_id=data["work_order_id"],
+            material_ids=data.get("material_ids"),
+            work_order_material_ids=data.get("work_order_material_ids"),
+            notes=data.get("notes", ""),
+            item_overrides=data.get("items", []),
+        )
 
         if result["total_count"] == 0:
             return APIResponse.success(
@@ -481,9 +481,7 @@ class PurchaseOrderViewSet(ApprovalTimelineMixin, BaseViewSet):
                 "min_stock_quantity",
                 "default_supplier__name",
             )
-            .annotate(
-                needed_quantity=F("min_stock_quantity") - F("stock_quantity")
-            )
+            .annotate(needed_quantity=F("min_stock_quantity") - F("stock_quantity"))
         )
 
         return APIResponse.success(data={"materials": list(materials)})
@@ -515,9 +513,7 @@ class PurchaseOrderItemViewSet(BaseViewSet):
         return (
             super()
             .get_queryset()
-            .select_related(
-                "purchase_order", "material", "work_order_material"
-            )
+            .select_related("purchase_order", "material", "work_order_material")
             .prefetch_related("receive_records")
         )
 
@@ -602,9 +598,7 @@ class PurchaseReceiveRecordViewSet(BaseViewSet):
             )
 
         qualified_qty = serializer.validated_data["qualified_quantity"]
-        unqualified_qty = serializer.validated_data.get(
-            "unqualified_quantity", 0
-        )
+        unqualified_qty = serializer.validated_data.get("unqualified_quantity", 0)
         reason = serializer.validated_data.get("unqualified_reason", "")
 
         # 验证数量总和
@@ -645,14 +639,10 @@ class PurchaseReceiveRecordViewSet(BaseViewSet):
         record = self.get_object()
 
         if record.inspection_status == "pending":
-            return APIResponse.error(
-                "请先完成质检", code=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("请先完成质检", code=status.HTTP_400_BAD_REQUEST)
 
         if record.is_stocked:
-            return APIResponse.error(
-                "该记录已入库", code=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("该记录已入库", code=status.HTTP_400_BAD_REQUEST)
 
         if not record.qualified_quantity or record.qualified_quantity <= 0:
             return APIResponse.error(
@@ -671,9 +661,7 @@ class PurchaseReceiveRecordViewSet(BaseViewSet):
                 }
             )
         else:
-            return APIResponse.error(
-                "入库失败", code=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("入库失败", code=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=["post"])
     @receive_return_docs
@@ -685,14 +673,10 @@ class PurchaseReceiveRecordViewSet(BaseViewSet):
         record = self.get_object()
 
         if record.inspection_status == "pending":
-            return APIResponse.error(
-                "请先完成质检", code=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("请先完成质检", code=status.HTTP_400_BAD_REQUEST)
 
         if record.is_returned:
-            return APIResponse.error(
-                "该记录已退货", code=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("该记录已退货", code=status.HTTP_400_BAD_REQUEST)
 
         if not record.unqualified_quantity or record.unqualified_quantity <= 0:
             return APIResponse.error(
@@ -729,9 +713,7 @@ class PurchaseReceiveRecordViewSet(BaseViewSet):
                 }
             )
         else:
-            return APIResponse.error(
-                "退货处理失败", code=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error("退货处理失败", code=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=["get"])
     @receive_pending_list_docs

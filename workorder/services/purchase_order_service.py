@@ -1,6 +1,9 @@
 """采购单业务服务"""
 
+from decimal import Decimal, InvalidOperation
+
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import status
 
 from workorder.constants.status import MaterialPurchaseStatus
@@ -12,7 +15,11 @@ from workorder.models.materials import (
     PurchaseReceiveRecord,
 )
 from workorder.services.service_errors import ServiceError
-from workorder.services.task_generation import TaskGenerationService
+from workorder.services.procurement_rules import (
+    get_procurement_material,
+    get_purchase_requirement_quantity,
+    get_supplier_context,
+)
 
 
 class PurchaseOrderService:
@@ -75,10 +82,12 @@ class PurchaseOrderService:
         return {"created_record_ids": created_records, "errors": errors}
 
     @staticmethod
+    @transaction.atomic
     def create_from_work_order(
         *,
         work_order_id,
         material_ids=None,
+        work_order_material_ids=None,
         notes: str = "",
         item_overrides: list = None,
     ):
@@ -101,19 +110,32 @@ class PurchaseOrderService:
             )
 
         try:
-            work_order = WorkOrder.objects.get(pk=work_order_id)
+            work_order = WorkOrder.objects.select_for_update().get(pk=work_order_id)
         except WorkOrder.DoesNotExist as exc:
             raise ServiceError("施工单不存在", code=status.HTTP_404_NOT_FOUND) from exc
 
-        wo_materials = work_order.materials.select_related(
-            "material",
-            "material__default_supplier",
-            "purchase_material",
-            "purchase_material__default_supplier",
-        ).filter(purchase_status=MaterialPurchaseStatus.PENDING)
+        wo_materials = (
+            work_order.materials.select_for_update()
+            .select_related(
+                "material",
+                "material__default_supplier",
+                "purchase_material",
+                "purchase_material__default_supplier",
+            )
+            .prefetch_related(
+                "material__materialsupplier_set__supplier",
+                "purchase_material__materialsupplier_set__supplier",
+            )
+            .filter(purchase_status=MaterialPurchaseStatus.PENDING)
+        )
 
         if material_ids:
-            wo_materials = wo_materials.filter(material_id__in=material_ids)
+            wo_materials = wo_materials.filter(
+                Q(material_id__in=material_ids)
+                | Q(purchase_material_id__in=material_ids)
+            )
+        if work_order_material_ids:
+            wo_materials = wo_materials.filter(id__in=work_order_material_ids)
 
         if not wo_materials.exists():
             raise ServiceError("没有待采购的物料", code=status.HTTP_400_BAD_REQUEST)
@@ -124,11 +146,19 @@ class PurchaseOrderService:
             if requires_material_planning(wom)
             and wom.planning_status != wom.PlanningStatus.CONFIRMED
         ]
+        blocked_items = []
         if unconfirmed_plans:
-            names = "、".join(item.material.name for item in unconfirmed_plans)
-            raise ServiceError(
-                f"物料计划尚未确认：{names}",
-                code=status.HTTP_409_CONFLICT,
+            blocked_items.extend(
+                {
+                    "work_order_material_id": wom.id,
+                    "material_id": wom.material_id,
+                    "material_name": wom.material.name,
+                    "reason": "物料规格计划尚未确认",
+                }
+                for wom in unconfirmed_plans
+            )
+            wo_materials = wo_materials.exclude(
+                id__in=[wom.id for wom in unconfirmed_plans]
             )
 
         existing_item_wom_ids = set(
@@ -159,7 +189,8 @@ class PurchaseOrderService:
                 "created_item_count": 0,
                 "skipped_item_count": len(skipped_items),
                 "skipped_items": skipped_items,
-                "blocked_items": [],
+                "blocked_item_count": len(blocked_items),
+                "blocked_items": blocked_items,
             }
 
         no_shortage_ids = {
@@ -180,76 +211,103 @@ class PurchaseOrderService:
             )
             wo_materials = wo_materials.exclude(id__in=no_shortage_ids)
 
+        supplier_contexts = {}
         missing_supplier = []
         for wom in wo_materials:
-            procurement_material = wom.purchase_material or wom.material
-            if not procurement_material.default_supplier:
+            procurement_material = get_procurement_material(wom)
+            context = get_supplier_context(procurement_material)
+            supplier_contexts[wom.id] = context
+            if not context["supplier"]:
                 missing_supplier.append(
                     {
                         "work_order_material_id": wom.id,
                         "material_id": wom.material_id,
                         "material_name": wom.material.name,
-                        "reason": "物料未配置默认供应商",
+                        "procurement_material_id": procurement_material.id,
+                        "procurement_material_name": procurement_material.name,
+                        "reason": "具体采购规格未配置有效供应商",
                     }
                 )
 
         if missing_supplier:
-            raise ServiceError(
-                "部分物料没有默认供应商，请先配置",
-                code=status.HTTP_400_BAD_REQUEST,
-                data={"blocked_items": missing_supplier},
+            blocked_items.extend(missing_supplier)
+            wo_materials = wo_materials.exclude(
+                id__in=[item["work_order_material_id"] for item in missing_supplier]
             )
+
+        if not wo_materials.exists():
+            return {
+                "purchase_orders": [],
+                "total_count": 0,
+                "created_item_count": 0,
+                "skipped_item_count": len(skipped_items),
+                "skipped_items": skipped_items,
+                "blocked_item_count": len(blocked_items),
+                "blocked_items": blocked_items,
+            }
 
         supplier_groups = {}
         for wom in wo_materials:
-            procurement_material = wom.purchase_material or wom.material
-            supplier = procurement_material.default_supplier
+            supplier = supplier_contexts[wom.id]["supplier"]
             if supplier.id not in supplier_groups:
                 supplier_groups[supplier.id] = {
                     "supplier": supplier,
                     "items": [],
                 }
-            supplier_groups[supplier.id]["items"].append(wom)
+            supplier_groups[supplier.id]["items"].append(
+                (wom, supplier_contexts[wom.id])
+            )
 
         quantity_overrides = {}
         for item_override in item_overrides:
             wom_id = item_override.get("work_order_material_id")
             qty = item_override.get("quantity")
-            if wom_id and qty:
-                quantity_overrides[wom_id] = qty
+            if not wom_id or qty is None:
+                continue
+            try:
+                quantity = Decimal(str(qty))
+            except (InvalidOperation, TypeError, ValueError) as exc:
+                raise ServiceError(
+                    "采购数量格式不正确",
+                    code=status.HTTP_400_BAD_REQUEST,
+                ) from exc
+            if quantity <= 0:
+                raise ServiceError(
+                    "采购数量必须大于0",
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
+            quantity_overrides[wom_id] = quantity
 
         created_orders = []
         created_item_count = 0
-        with transaction.atomic():
-            for group_data in supplier_groups.values():
-                po = PurchaseOrder.objects.create(
-                    supplier=group_data["supplier"],
-                    work_order=work_order,
-                    notes=notes,
+        for group_data in supplier_groups.values():
+            po = PurchaseOrder.objects.create(
+                supplier=group_data["supplier"],
+                work_order=work_order,
+                notes=notes,
+            )
+
+            for wom, context in group_data["items"]:
+                procurement_material = get_procurement_material(wom)
+                default_quantity = get_purchase_requirement_quantity(wom)
+                quantity = quantity_overrides.get(wom.id, default_quantity)
+                if quantity <= 0:
+                    raise ServiceError(
+                        f"物料 {procurement_material.name} 的采购数量必须大于0",
+                        code=status.HTTP_400_BAD_REQUEST,
+                    )
+                PurchaseOrderItem.objects.create(
+                    purchase_order=po,
+                    material=procurement_material,
+                    quantity=quantity,
+                    unit_price=context["unit_price"],
+                    supplier_code=context["supplier_code"],
+                    work_order_material=wom,
                 )
+                created_item_count += 1
 
-                for wom in group_data["items"]:
-                    procurement_material = wom.purchase_material or wom.material
-                    default_quantity = (
-                        wom.purchase_quantity
-                        if requires_material_planning(wom)
-                        else TaskGenerationService._parse_material_usage(
-                            wom.material_usage or ""
-                        )
-                        or 1
-                    )
-                    quantity = quantity_overrides.get(wom.id, default_quantity)
-                    PurchaseOrderItem.objects.create(
-                        purchase_order=po,
-                        material=procurement_material,
-                        quantity=quantity,
-                        unit_price=procurement_material.unit_price or 0,
-                        work_order_material=wom,
-                    )
-                    created_item_count += 1
-
-                po.update_total_amount()
-                created_orders.append(po)
+            po.update_total_amount()
+            created_orders.append(po)
 
         result = []
         for po in created_orders:
@@ -270,7 +328,8 @@ class PurchaseOrderService:
             "created_item_count": created_item_count,
             "skipped_item_count": len(skipped_items),
             "skipped_items": skipped_items,
-            "blocked_items": [],
+            "blocked_item_count": len(blocked_items),
+            "blocked_items": blocked_items,
         }
 
     @staticmethod

@@ -32,6 +32,12 @@ from ..models.material_modes import (
     validate_material_modes,
 )
 from ..models.sales import SalesOrderItem
+from ..services.procurement_rules import (
+    get_procurement_material,
+    get_purchase_requirement_quantity,
+    get_supplier_context,
+    has_active_purchase_order,
+)
 from ..utils import format_color_display
 from .base import WorkOrderProductInfoMixin
 
@@ -144,6 +150,27 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
             "embossing_plate",
             "auto_calculate_quantity",
             "created_at",
+        ]
+        read_only_fields = [
+            "planning_status",
+            "purchase_material",
+            "artwork",
+            "cut_width_mm",
+            "cut_height_mm",
+            "parent_sheet_width_mm",
+            "parent_sheet_height_mm",
+            "required_cut_quantity",
+            "pieces_per_parent_sheet",
+            "theoretical_parent_quantity",
+            "wastage_rate",
+            "planned_parent_quantity",
+            "planned_material_quantity",
+            "reserved_quantity",
+            "inbound_quantity_snapshot",
+            "purchase_quantity",
+            "plan_version",
+            "plan_confirmed_by",
+            "plan_confirmed_at",
         ]
 
     def get_assigned_operator_name(self, obj) -> Optional[str]:
@@ -471,6 +498,15 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
     preparation_mode_display = serializers.CharField(
         source="get_preparation_mode_display", read_only=True
     )
+    procurement_material_id = serializers.SerializerMethodField()
+    procurement_material_name = serializers.SerializerMethodField()
+    procurement_material_code = serializers.SerializerMethodField()
+    procurement_material_unit = serializers.SerializerMethodField()
+    procurement_supplier_id = serializers.SerializerMethodField()
+    procurement_supplier_name = serializers.SerializerMethodField()
+    procurement_quantity = serializers.SerializerMethodField()
+    procurement_ready = serializers.SerializerMethodField()
+    procurement_block_reason = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkOrderMaterial
@@ -487,6 +523,15 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
             "purchase_material_is_temporary",
             "purchase_material_supplier",
             "purchase_material_unit_price",
+            "procurement_material_id",
+            "procurement_material_name",
+            "procurement_material_code",
+            "procurement_material_unit",
+            "procurement_supplier_id",
+            "procurement_supplier_name",
+            "procurement_quantity",
+            "procurement_ready",
+            "procurement_block_reason",
             "artwork",
             "material_size",
             "material_usage",
@@ -522,27 +567,56 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
             "cut_date",
             "created_at",
         ]
-        read_only_fields = [
-            "planning_status",
-            "purchase_material",
-            "artwork",
-            "cut_width_mm",
-            "cut_height_mm",
-            "parent_sheet_width_mm",
-            "parent_sheet_height_mm",
-            "required_cut_quantity",
-            "pieces_per_parent_sheet",
-            "theoretical_parent_quantity",
-            "wastage_rate",
-            "planned_parent_quantity",
-            "planned_material_quantity",
-            "reserved_quantity",
-            "inbound_quantity_snapshot",
-            "purchase_quantity",
-            "plan_version",
-            "plan_confirmed_by",
-            "plan_confirmed_at",
-        ]
+
+    def _procurement_context(self, obj):
+        cache = getattr(self, "_procurement_context_cache", None)
+        if cache is None:
+            cache = self._procurement_context_cache = {}
+        if obj.pk in cache:
+            return cache[obj.pk]
+        material = get_procurement_material(obj)
+        supplier_context = get_supplier_context(material)
+        cache[obj.pk] = (material, supplier_context)
+        return cache[obj.pk]
+
+    def get_procurement_material_id(self, obj):
+        return get_procurement_material(obj).id
+
+    def get_procurement_material_name(self, obj):
+        return get_procurement_material(obj).name
+
+    def get_procurement_material_code(self, obj):
+        return get_procurement_material(obj).code
+
+    def get_procurement_material_unit(self, obj):
+        return get_procurement_material(obj).unit
+
+    def get_procurement_supplier_id(self, obj):
+        supplier = self._procurement_context(obj)[1]["supplier"]
+        return supplier.id if supplier else None
+
+    def get_procurement_supplier_name(self, obj):
+        supplier = self._procurement_context(obj)[1]["supplier"]
+        return supplier.name if supplier else None
+
+    def get_procurement_quantity(self, obj):
+        return str(get_purchase_requirement_quantity(obj))
+
+    def get_procurement_ready(self, obj):
+        return self.get_procurement_block_reason(obj) == ""
+
+    def get_procurement_block_reason(self, obj):
+        if obj.purchase_status != "pending":
+            return "当前物料不是待采购状态"
+        if obj.planning_required and obj.planning_status != "confirmed":
+            return "物料规格计划尚未确认"
+        if has_active_purchase_order(obj):
+            return "已生成待处理采购单"
+        if get_purchase_requirement_quantity(obj) <= 0:
+            return "库存和在途已覆盖需求"
+        if not self._procurement_context(obj)[1]["supplier"]:
+            return "具体采购规格未配置有效供应商"
+        return ""
 
     def validate(self, attrs):
         material = attrs.get("material", getattr(self.instance, "material", None))
@@ -627,9 +701,7 @@ class MaterialPlanCalculateSerializer(serializers.Serializer):
         )
         has_custom = any(value is not None for value in custom_fields)
         if purchase_material and has_custom:
-            raise serializers.ValidationError(
-                "常用库存规格和本单临时规格只能选择一种"
-            )
+            raise serializers.ValidationError("常用库存规格和本单临时规格只能选择一种")
         if not purchase_material and not all(
             value is not None for value in custom_fields
         ):
@@ -1803,16 +1875,12 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             calculation_mode = item["calculation_mode"]
             preparation_mode = item["preparation_mode"]
             if existing is not None:
-                if (
-                    existing.planning_status
-                    in {
-                        WorkOrderMaterial.PlanningStatus.CALCULATED,
-                        WorkOrderMaterial.PlanningStatus.CONFIRMED,
-                    }
-                    and (
-                        calculation_mode != effective_calculation_mode(existing)
-                        or preparation_mode != effective_preparation_mode(existing)
-                    )
+                if existing.planning_status in {
+                    WorkOrderMaterial.PlanningStatus.CALCULATED,
+                    WorkOrderMaterial.PlanningStatus.CONFIRMED,
+                } and (
+                    calculation_mode != effective_calculation_mode(existing)
+                    or preparation_mode != effective_preparation_mode(existing)
                 ):
                     raise serializers.ValidationError(
                         {

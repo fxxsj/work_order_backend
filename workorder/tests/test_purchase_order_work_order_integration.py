@@ -10,6 +10,7 @@
 
 import pytest
 from django.utils import timezone
+from rest_framework import status
 from rest_framework.test import APIClient
 
 from workorder.constants.status import MaterialPurchaseStatus
@@ -75,9 +76,7 @@ class TestPurchaseOrderWriteback:
         )
 
         # 执行下单
-        response = self.client.post(
-            f"/api/v1/purchase-orders/{po.id}/place_order/"
-        )
+        response = self.client.post(f"/api/v1/purchase-orders/{po.id}/place_order/")
 
         if response.status_code != 200:
             print("Response:", response.data)
@@ -85,9 +84,7 @@ class TestPurchaseOrderWriteback:
 
         # 刷新并验证
         self.wo_material.refresh_from_db()
-        assert (
-            self.wo_material.purchase_status == MaterialPurchaseStatus.ORDERED
-        )
+        assert self.wo_material.purchase_status == MaterialPurchaseStatus.ORDERED
         assert self.wo_material.purchase_date is not None
 
     def test_place_order_rejects_already_ordered_purchase_order(self):
@@ -100,9 +97,7 @@ class TestPurchaseOrderWriteback:
             ordered_date=timezone.now().date(),
         )
 
-        response = self.client.post(
-            f"/api/v1/purchase-orders/{po.id}/place_order/"
-        )
+        response = self.client.post(f"/api/v1/purchase-orders/{po.id}/place_order/")
 
         assert response.status_code == 400
         assert "待下单" in response.json()["message"]
@@ -116,9 +111,7 @@ class TestPurchaseOrderWriteback:
             status="draft",
         )
 
-        response = self.client.post(
-            f"/api/v1/purchase-orders/{po.id}/place_order/"
-        )
+        response = self.client.post(f"/api/v1/purchase-orders/{po.id}/place_order/")
 
         assert response.status_code == 400
         assert "待下单" in response.json()["message"]
@@ -153,15 +146,12 @@ class TestPurchaseOrderWriteback:
         assert response.status_code == 200
 
         # 获取收货记录
-        record = PurchaseReceiveRecord.objects.filter(
-            purchase_order_item=item
-        ).first()
+        record = PurchaseReceiveRecord.objects.filter(purchase_order_item=item).first()
         assert record is not None
 
         # 质检确认合格
         response = self.client.post(
-            f"/api/v1/purchase-receive-records/{record.id}/"
-            "confirm_inspection/",
+            f"/api/v1/purchase-receive-records/{record.id}/" "confirm_inspection/",
             data={"qualified_quantity": 500, "unqualified_quantity": 0},
             format="json",
         )
@@ -175,9 +165,7 @@ class TestPurchaseOrderWriteback:
 
         # 验证 WorkOrderMaterial 状态已更新
         self.wo_material.refresh_from_db()
-        assert (
-            self.wo_material.purchase_status == MaterialPurchaseStatus.RECEIVED
-        )
+        assert self.wo_material.purchase_status == MaterialPurchaseStatus.RECEIVED
         assert self.wo_material.received_date is not None
 
     def test_stock_in_partial_updates_work_order_material_to_ordered(self):
@@ -209,14 +197,11 @@ class TestPurchaseOrderWriteback:
         )
         assert response.status_code == 200
 
-        record = PurchaseReceiveRecord.objects.filter(
-            purchase_order_item=item
-        ).first()
+        record = PurchaseReceiveRecord.objects.filter(purchase_order_item=item).first()
 
         # 质检确认（300 全部合格）
         response = self.client.post(
-            f"/api/v1/purchase-receive-records/{record.id}/"
-            "confirm_inspection/",
+            f"/api/v1/purchase-receive-records/{record.id}/" "confirm_inspection/",
             data={"qualified_quantity": 300, "unqualified_quantity": 0},
             format="json",
         )
@@ -230,9 +215,7 @@ class TestPurchaseOrderWriteback:
 
         # 验证 WorkOrderMaterial 状态保持 ordered（因为是部分收货）
         self.wo_material.refresh_from_db()
-        assert (
-            self.wo_material.purchase_status == MaterialPurchaseStatus.ORDERED
-        )
+        assert self.wo_material.purchase_status == MaterialPurchaseStatus.ORDERED
 
 
 @pytest.mark.django_db
@@ -244,13 +227,23 @@ class TestCreateFromWorkOrder:
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
+    def test_create_from_work_order_requires_authentication(self):
+        response = APIClient().post(
+            "/api/v1/purchase-orders/create_from_work_order/",
+            data={"work_order_id": 1},
+            format="json",
+        )
+
+        assert response.status_code in {
+            status.HTTP_401_UNAUTHORIZED,
+            status.HTTP_403_FORBIDDEN,
+        }
+
     def test_create_from_work_order_creates_linked_po(self):
         """create_from_work_order 应创建采购单并关联 WorkOrderMaterial"""
         supplier = SupplierFactory(status="active")
         material = MaterialFactory(default_supplier=supplier)
-        work_order = WorkOrderFactory(
-            approval_status="approved", status="in_progress"
-        )
+        work_order = WorkOrderFactory(approval_status="approved", status="in_progress")
         wo_material = WorkOrderMaterialFactory(
             work_order=work_order,
             material=material,
@@ -287,9 +280,7 @@ class TestCreateFromWorkOrder:
         supplier2 = SupplierFactory(status="active", name="Supplier B")
         material1 = MaterialFactory(default_supplier=supplier1)
         material2 = MaterialFactory(default_supplier=supplier2)
-        work_order = WorkOrderFactory(
-            approval_status="approved", status="in_progress"
-        )
+        work_order = WorkOrderFactory(approval_status="approved", status="in_progress")
         WorkOrderMaterialFactory(
             work_order=work_order,
             material=material1,
@@ -315,9 +306,7 @@ class TestCreateFromWorkOrder:
     def test_create_from_work_order_fails_without_default_supplier(self):
         """物料无默认供应商时应报错"""
         material = MaterialFactory(default_supplier=None)
-        work_order = WorkOrderFactory(
-            approval_status="approved", status="in_progress"
-        )
+        work_order = WorkOrderFactory(approval_status="approved", status="in_progress")
         WorkOrderMaterialFactory(
             work_order=work_order,
             material=material,
@@ -330,17 +319,43 @@ class TestCreateFromWorkOrder:
             format="json",
         )
 
-        assert response.status_code == 400
-        assert "默认供应商" in response.json()["message"]
+        assert response.status_code == 200
+        assert response.json()["data"]["total_count"] == 0
         assert response.json()["data"]["blocked_items"]
+
+    def test_create_from_work_order_rejects_non_positive_override(self):
+        supplier = SupplierFactory(status="active")
+        material = MaterialFactory(default_supplier=supplier)
+        work_order = WorkOrderFactory(approval_status="approved", status="in_progress")
+        wom = WorkOrderMaterialFactory(
+            work_order=work_order,
+            material=material,
+            purchase_status=MaterialPurchaseStatus.PENDING,
+            material_usage="200张",
+        )
+
+        response = self.client.post(
+            "/api/v1/purchase-orders/create_from_work_order/",
+            data={
+                "work_order_id": work_order.id,
+                "items": [
+                    {
+                        "work_order_material_id": wom.id,
+                        "quantity": "0",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert PurchaseOrder.objects.filter(work_order=work_order).exists() is False
 
     def test_create_from_work_order_filters_only_pending(self):
         """只筛选 purchase_status=pending 的物料"""
         supplier = SupplierFactory(status="active")
         material = MaterialFactory(default_supplier=supplier)
-        work_order = WorkOrderFactory(
-            approval_status="approved", status="in_progress"
-        )
+        work_order = WorkOrderFactory(approval_status="approved", status="in_progress")
 
         # 已下单的物料（不应包含在新采购单中）
         WorkOrderMaterialFactory(
@@ -373,9 +388,7 @@ class TestCreateFromWorkOrder:
         """已有关联采购明细的施工单物料不应重复创建"""
         supplier = SupplierFactory(status="active")
         material = MaterialFactory(default_supplier=supplier)
-        work_order = WorkOrderFactory(
-            approval_status="approved", status="in_progress"
-        )
+        work_order = WorkOrderFactory(approval_status="approved", status="in_progress")
         wo_material = WorkOrderMaterialFactory(
             work_order=work_order,
             material=material,
@@ -405,9 +418,7 @@ class TestCreateFromWorkOrder:
         assert data["total_count"] == 0
         assert data["skipped_item_count"] == 1
         assert (
-            PurchaseOrderItem.objects.filter(
-                work_order_material=wo_material
-            ).count()
+            PurchaseOrderItem.objects.filter(work_order_material=wo_material).count()
             == 1
         )
 

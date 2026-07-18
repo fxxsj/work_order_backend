@@ -18,6 +18,44 @@ from ..models.materials import (
 )
 
 
+class OptionalIntegerListField(serializers.ListField):
+    """兼容单个 ID 和 ID 数组，并统一执行整数校验。"""
+
+    child = serializers.IntegerField(min_value=1)
+
+    def to_internal_value(self, data):
+        if data in (None, ""):
+            return []
+        if not isinstance(data, (list, tuple)):
+            data = [data]
+        return super().to_internal_value(data)
+
+
+class PurchaseOrderItemOverrideSerializer(serializers.Serializer):
+    work_order_material_id = serializers.IntegerField(min_value=1)
+    quantity = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=0,
+    )
+
+    def validate_quantity(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("采购数量必须大于0")
+        return value
+
+
+class PurchaseOrderFromWorkOrderSerializer(serializers.Serializer):
+    work_order_id = serializers.IntegerField(min_value=1)
+    material_ids = OptionalIntegerListField(required=False, allow_null=True)
+    work_order_material_ids = OptionalIntegerListField(
+        required=False,
+        allow_null=True,
+    )
+    notes = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    items = PurchaseOrderItemOverrideSerializer(many=True, required=False)
+
+
 class MaterialSerializer(serializers.ModelSerializer):
     """物料序列化器（增强版）"""
 
