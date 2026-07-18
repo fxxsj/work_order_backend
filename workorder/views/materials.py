@@ -89,7 +89,14 @@ class MaterialViewSet(BaseViewSet):
 
     queryset = Material.objects.all()
     serializer_class = MaterialSerializer
-    filterset_fields = ["default_supplier", "need_cutting", "is_active"]
+    filterset_fields = [
+        "default_supplier",
+        "need_cutting",
+        "is_active",
+        "specification_level",
+        "material_type",
+        "base_material",
+    ]
     search_fields = ["name", "code", "specification"]
     ordering_fields = [
         "code",
@@ -104,7 +111,7 @@ class MaterialViewSet(BaseViewSet):
     def get_queryset(self):
         """优化查询性能"""
         queryset = super().get_queryset()
-        return queryset.select_related("default_supplier")
+        return queryset.select_related("default_supplier", "base_material")
 
     @action(detail=False, methods=["get"])
     def export(self, request):

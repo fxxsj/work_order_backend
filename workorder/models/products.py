@@ -379,6 +379,11 @@ class ProductMaterial(models.Model):
     need_cutting = models.BooleanField(
         "需要开料", default=False, help_text="该物料是否需要开料工序处理"
     )
+    planning_required = models.BooleanField(
+        "需拼版后规划",
+        default=False,
+        help_text="产品阶段仅确定材料要求，拼版确认后再选择采购规格和计算数量",
+    )
     notes = models.TextField("备注", blank=True)
     sort_order = models.IntegerField("排序", default=0)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)

@@ -40,9 +40,7 @@ class PurchaseOrderService:
             for item_data in items_data:
                 item_id = item_data.get("item_id")
                 received_quantity = item_data.get("received_quantity")
-                delivery_note_number = item_data.get(
-                    "delivery_note_number", ""
-                )
+                delivery_note_number = item_data.get("delivery_note_number", "")
                 notes = item_data.get("notes", "")
 
                 item = order.items.filter(id=item_id).first()
@@ -51,8 +49,7 @@ class PurchaseOrderService:
                     continue
 
                 existing_received = sum(
-                    r.received_quantity or 0
-                    for r in item.receive_records.all()
+                    r.received_quantity or 0 for r in item.receive_records.all()
                 )
                 remaining = item.quantity - existing_received
 
@@ -105,20 +102,32 @@ class PurchaseOrderService:
         try:
             work_order = WorkOrder.objects.get(pk=work_order_id)
         except WorkOrder.DoesNotExist as exc:
-            raise ServiceError(
-                "施工单不存在", code=status.HTTP_404_NOT_FOUND
-            ) from exc
+            raise ServiceError("施工单不存在", code=status.HTTP_404_NOT_FOUND) from exc
 
         wo_materials = work_order.materials.select_related(
-            "material", "material__default_supplier"
+            "material",
+            "material__default_supplier",
+            "purchase_material",
+            "purchase_material__default_supplier",
         ).filter(purchase_status=MaterialPurchaseStatus.PENDING)
 
         if material_ids:
             wo_materials = wo_materials.filter(material_id__in=material_ids)
 
         if not wo_materials.exists():
+            raise ServiceError("没有待采购的物料", code=status.HTTP_400_BAD_REQUEST)
+
+        unconfirmed_plans = [
+            wom
+            for wom in wo_materials
+            if wom.planning_required
+            and wom.planning_status != wom.PlanningStatus.CONFIRMED
+        ]
+        if unconfirmed_plans:
+            names = "、".join(item.material.name for item in unconfirmed_plans)
             raise ServiceError(
-                "没有待采购的物料", code=status.HTTP_400_BAD_REQUEST
+                f"物料计划尚未确认：{names}",
+                code=status.HTTP_409_CONFLICT,
             )
 
         existing_item_wom_ids = set(
@@ -152,9 +161,28 @@ class PurchaseOrderService:
                 "blocked_items": [],
             }
 
+        no_shortage_ids = {
+            wom.id
+            for wom in wo_materials
+            if wom.planning_required and wom.purchase_quantity <= 0
+        }
+        if no_shortage_ids:
+            skipped_items.extend(
+                {
+                    "work_order_material_id": wom.id,
+                    "material_id": wom.material_id,
+                    "material_name": wom.material.name,
+                    "reason": "库存和在途数量已覆盖计划需求",
+                }
+                for wom in wo_materials
+                if wom.id in no_shortage_ids
+            )
+            wo_materials = wo_materials.exclude(id__in=no_shortage_ids)
+
         missing_supplier = []
         for wom in wo_materials:
-            if not wom.material.default_supplier:
+            procurement_material = wom.purchase_material or wom.material
+            if not procurement_material.default_supplier:
                 missing_supplier.append(
                     {
                         "work_order_material_id": wom.id,
@@ -173,7 +201,8 @@ class PurchaseOrderService:
 
         supplier_groups = {}
         for wom in wo_materials:
-            supplier = wom.material.default_supplier
+            procurement_material = wom.purchase_material or wom.material
+            supplier = procurement_material.default_supplier
             if supplier.id not in supplier_groups:
                 supplier_groups[supplier.id] = {
                     "supplier": supplier,
@@ -199,18 +228,21 @@ class PurchaseOrderService:
                 )
 
                 for wom in group_data["items"]:
-                    quantity = quantity_overrides.get(
-                        wom.id,
-                        TaskGenerationService._parse_material_usage(
+                    procurement_material = wom.purchase_material or wom.material
+                    default_quantity = (
+                        wom.purchase_quantity
+                        if wom.planning_required
+                        else TaskGenerationService._parse_material_usage(
                             wom.material_usage or ""
                         )
-                        or 1,
+                        or 1
                     )
+                    quantity = quantity_overrides.get(wom.id, default_quantity)
                     PurchaseOrderItem.objects.create(
                         purchase_order=po,
-                        material=wom.material,
+                        material=procurement_material,
                         quantity=quantity,
-                        unit_price=wom.material.unit_price or 0,
+                        unit_price=procurement_material.unit_price or 0,
                         work_order_material=wom,
                     )
                     created_item_count += 1
@@ -241,6 +273,7 @@ class PurchaseOrderService:
         }
 
     @staticmethod
+    @transaction.atomic
     def cancel(*, order):
         """取消采购单。"""
         if order.status in ["received", "cancelled"]:
@@ -248,6 +281,28 @@ class PurchaseOrderService:
                 "已收货或已取消的采购单无法取消",
                 code=status.HTTP_400_BAD_REQUEST,
             )
+        linked_material_ids = list(
+            order.items.exclude(work_order_material__isnull=True).values_list(
+                "work_order_material_id", flat=True
+            )
+        )
         order.status = "cancelled"
-        order.save()
+        order.save(update_fields=["status"])
+        if linked_material_ids:
+            from workorder.models.core import WorkOrderMaterial
+
+            for wom in WorkOrderMaterial.objects.select_for_update().filter(
+                id__in=linked_material_ids
+            ):
+                has_other_active_order = (
+                    PurchaseOrderItem.objects.filter(
+                        work_order_material=wom,
+                    )
+                    .exclude(purchase_order__status="cancelled")
+                    .exists()
+                )
+                if not has_other_active_order:
+                    wom.purchase_status = MaterialPurchaseStatus.PENDING
+                    wom.purchase_date = None
+                    wom.save(update_fields=["purchase_status", "purchase_date"])
         return order

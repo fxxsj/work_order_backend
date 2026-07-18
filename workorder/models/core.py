@@ -891,6 +891,13 @@ class WorkOrderProduct(models.Model):
 class WorkOrderMaterial(models.Model):
     """施工单物料使用记录"""
 
+    class PlanningStatus(models.TextChoices):
+        NOT_REQUIRED = "not_required", "无需规划"
+        DRAFT = "draft", "待规划"
+        CALCULATED = "calculated", "已计算"
+        CONFIRMED = "confirmed", "已确认"
+        INVALIDATED = "invalidated", "已失效"
+
     PURCHASE_STATUS_CHOICES = [
         ("pending", "待采购"),
         ("ordered", "已下单"),
@@ -908,6 +915,23 @@ class WorkOrderMaterial(models.Model):
     material = models.ForeignKey(
         "workorder.Material", on_delete=models.PROTECT, verbose_name="物料"
     )
+    purchase_material = models.ForeignKey(
+        "workorder.Material",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="planned_work_order_materials",
+        verbose_name="采购/库存规格",
+        help_text="拼版后选定的可库存、可采购具体规格",
+    )
+    artwork = models.ForeignKey(
+        "workorder.Artwork",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="material_plans",
+        verbose_name="拼版图稿",
+    )
 
     material_size = models.CharField(
         "尺寸", max_length=100, blank=True, help_text="如：A4、210x297mm等"
@@ -919,6 +943,63 @@ class WorkOrderMaterial(models.Model):
     # 开料相关
     need_cutting = models.BooleanField(
         "需要开料", default=False, help_text="该物料是否需要开料工序处理"
+    )
+    planning_required = models.BooleanField(
+        "需拼版后规划", default=False
+    )
+    planning_status = models.CharField(
+        "物料规划状态",
+        max_length=20,
+        choices=PlanningStatus.choices,
+        default=PlanningStatus.NOT_REQUIRED,
+    )
+    cut_width_mm = models.DecimalField(
+        "开料宽度(mm)", max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    cut_height_mm = models.DecimalField(
+        "开料高度(mm)", max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    parent_sheet_width_mm = models.DecimalField(
+        "原纸宽度(mm)", max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    parent_sheet_height_mm = models.DecimalField(
+        "原纸高度(mm)", max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    required_cut_quantity = models.DecimalField(
+        "所需开料数量", max_digits=12, decimal_places=3, default=0
+    )
+    pieces_per_parent_sheet = models.PositiveIntegerField(
+        "每张原纸开出数", default=0
+    )
+    theoretical_parent_quantity = models.DecimalField(
+        "理论原纸数量", max_digits=12, decimal_places=3, default=0
+    )
+    wastage_rate = models.DecimalField(
+        "计划损耗率(%)", max_digits=6, decimal_places=3, default=0
+    )
+    planned_parent_quantity = models.DecimalField(
+        "计划原纸数量", max_digits=12, decimal_places=3, default=0
+    )
+    reserved_quantity = models.DecimalField(
+        "已预留数量", max_digits=12, decimal_places=3, default=0
+    )
+    inbound_quantity_snapshot = models.DecimalField(
+        "在途数量快照", max_digits=12, decimal_places=3, default=0
+    )
+    purchase_quantity = models.DecimalField(
+        "建议采购数量", max_digits=12, decimal_places=3, default=0
+    )
+    plan_version = models.PositiveIntegerField("规划版本", default=1)
+    plan_confirmed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="confirmed_material_plans",
+        verbose_name="规划确认人",
+    )
+    plan_confirmed_at = models.DateTimeField(
+        "规划确认时间", null=True, blank=True
     )
 
     # 采购和开料状态

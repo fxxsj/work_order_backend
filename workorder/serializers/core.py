@@ -6,10 +6,11 @@
 
 from typing import Any, Dict, List, Optional
 
+from django.db import transaction
 from django.db.models import Count, Sum
 from rest_framework import serializers
 
-from ..models.assets import ArtworkProduct
+from ..models.assets import Artwork, ArtworkProduct
 from ..models.base import Department, Process
 from ..models.core import (
     APPROVED_ORDER_PROTECTED_FIELDS,
@@ -22,6 +23,7 @@ from ..models.core import (
     WorkOrderTask,
 )
 from ..models.products import Product
+from ..models.materials import Material
 from ..models.sales import SalesOrderItem
 from ..utils import format_color_display
 from .base import WorkOrderProductInfoMixin
@@ -30,9 +32,7 @@ from .base import WorkOrderProductInfoMixin
 class ProcessLogSerializer(serializers.ModelSerializer):
     """工序日志序列化器"""
 
-    operator_name = serializers.CharField(
-        source="operator.username", read_only=True
-    )
+    operator_name = serializers.CharField(source="operator.username", read_only=True)
     log_type_display = serializers.CharField(
         source="get_log_type_display", read_only=True
     )
@@ -81,9 +81,7 @@ class TaskLogSerializer(serializers.ModelSerializer):
 class WorkOrderTaskSerializer(serializers.ModelSerializer):
     """施工单任务序列化器"""
 
-    status_display = serializers.CharField(
-        source="get_status_display", read_only=True
-    )
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
     is_draft = serializers.SerializerMethodField()
     task_type_display = serializers.CharField(
         source="get_task_type_display", read_only=True
@@ -233,20 +231,12 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
     def get_material_size(self, obj) -> Optional[str]:
         """获取开料尺寸（从 WorkOrderMaterial 关联获取）"""
         material_record = self._get_work_order_material(obj)
-        return (
-            (material_record.material_size or None)
-            if material_record
-            else None
-        )
+        return (material_record.material_size or None) if material_record else None
 
     def get_material_usage(self, obj) -> Optional[str]:
         """获取物料用量（从 WorkOrderMaterial 关联获取）"""
         material_record = self._get_work_order_material(obj)
-        return (
-            (material_record.material_usage or None)
-            if material_record
-            else None
-        )
+        return (material_record.material_usage or None) if material_record else None
 
     def get_work_order_process_info(self, obj) -> Optional[Dict[str, Any]]:
         """获取工序和施工单信息"""
@@ -256,15 +246,13 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
             # 获取与工序关联的部门
             departments = []
             if process:
-                prefetched_departments = getattr(
-                    process, "active_departments", None
-                )
+                prefetched_departments = getattr(process, "active_departments", None)
                 department_queryset = (
                     prefetched_departments
                     if prefetched_departments is not None
-                    else process.department_set.filter(
-                        is_active=True
-                    ).order_by("sort_order")
+                    else process.department_set.filter(is_active=True).order_by(
+                        "sort_order"
+                    )
                 )
                 departments = [
                     {"id": dept.id, "name": dept.name, "code": dept.code}
@@ -279,9 +267,7 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
                 },
                 "work_order": {
                     "id": work_order.id if work_order else None,
-                    "order_number": (
-                        work_order.order_number if work_order else None
-                    ),
+                    "order_number": (work_order.order_number if work_order else None),
                     "customer_name": (
                         work_order.customer.name
                         if work_order and work_order.customer
@@ -289,9 +275,7 @@ class WorkOrderTaskSerializer(serializers.ModelSerializer):
                     ),
                     "priority": work_order.priority if work_order else None,
                     "priority_display": (
-                        work_order.get_priority_display()
-                        if work_order
-                        else None
+                        work_order.get_priority_display() if work_order else None
                     ),
                     "delivery_date": (
                         work_order.delivery_date.strftime("%Y-%m-%d")
@@ -363,12 +347,8 @@ class WorkOrderProcessSerializer(serializers.ModelSerializer):
 
     process_name = serializers.CharField(source="process.name", read_only=True)
     process_code = serializers.CharField(source="process.code", read_only=True)
-    operator_name = serializers.CharField(
-        source="operator.username", read_only=True
-    )
-    status_display = serializers.CharField(
-        source="get_status_display", read_only=True
-    )
+    operator_name = serializers.CharField(source="operator.username", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
     department_name = serializers.CharField(
         source="department.name", read_only=True, allow_null=True
     )
@@ -450,17 +430,20 @@ class WorkOrderProductSerializer(serializers.ModelSerializer):
 class WorkOrderMaterialSerializer(serializers.ModelSerializer):
     """施工单物料序列化器"""
 
-    material_name = serializers.CharField(
-        source="material.name", read_only=True
-    )
-    material_code = serializers.CharField(
-        source="material.code", read_only=True
-    )
-    material_unit = serializers.CharField(
-        source="material.unit", read_only=True
-    )
+    material_name = serializers.CharField(source="material.name", read_only=True)
+    material_code = serializers.CharField(source="material.code", read_only=True)
+    material_unit = serializers.CharField(source="material.unit", read_only=True)
     purchase_status_display = serializers.CharField(
         source="get_purchase_status_display", read_only=True
+    )
+    purchase_material_name = serializers.CharField(
+        source="purchase_material.name", read_only=True, allow_null=True
+    )
+    purchase_material_code = serializers.CharField(
+        source="purchase_material.code", read_only=True, allow_null=True
+    )
+    planning_status_display = serializers.CharField(
+        source="get_planning_status_display", read_only=True
     )
 
     class Meta:
@@ -472,9 +455,31 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
             "material_name",
             "material_code",
             "material_unit",
+            "purchase_material",
+            "purchase_material_name",
+            "purchase_material_code",
+            "artwork",
             "material_size",
             "material_usage",
             "need_cutting",
+            "planning_required",
+            "planning_status",
+            "planning_status_display",
+            "cut_width_mm",
+            "cut_height_mm",
+            "parent_sheet_width_mm",
+            "parent_sheet_height_mm",
+            "required_cut_quantity",
+            "pieces_per_parent_sheet",
+            "theoretical_parent_quantity",
+            "wastage_rate",
+            "planned_parent_quantity",
+            "reserved_quantity",
+            "inbound_quantity_snapshot",
+            "purchase_quantity",
+            "plan_version",
+            "plan_confirmed_by",
+            "plan_confirmed_at",
             "notes",
             "purchase_status",
             "purchase_status_display",
@@ -483,16 +488,56 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
             "cut_date",
             "created_at",
         ]
+        read_only_fields = [
+            "planning_status",
+            "purchase_material",
+            "artwork",
+            "cut_width_mm",
+            "cut_height_mm",
+            "parent_sheet_width_mm",
+            "parent_sheet_height_mm",
+            "required_cut_quantity",
+            "pieces_per_parent_sheet",
+            "theoretical_parent_quantity",
+            "wastage_rate",
+            "planned_parent_quantity",
+            "reserved_quantity",
+            "inbound_quantity_snapshot",
+            "purchase_quantity",
+            "plan_version",
+            "plan_confirmed_by",
+            "plan_confirmed_at",
+        ]
 
 
-class WorkOrderListSerializer(
-    WorkOrderProductInfoMixin, serializers.ModelSerializer
-):
+class MaterialPlanCalculateSerializer(serializers.Serializer):
+    purchase_material = serializers.PrimaryKeyRelatedField(
+        queryset=Material.objects.filter(is_active=True)
+    )
+    artwork = serializers.PrimaryKeyRelatedField(
+        queryset=Artwork.objects.all(), required=False, allow_null=True
+    )
+    cut_width_mm = serializers.DecimalField(max_digits=10, decimal_places=2)
+    cut_height_mm = serializers.DecimalField(max_digits=10, decimal_places=2)
+    required_cut_quantity = serializers.DecimalField(max_digits=12, decimal_places=3)
+    wastage_rate = serializers.DecimalField(
+        max_digits=6,
+        decimal_places=3,
+        required=False,
+        default=0,
+        min_value=0,
+        max_value=100,
+    )
+
+
+class MaterialPlanInvalidateSerializer(serializers.Serializer):
+    reason = serializers.CharField(required=True, allow_blank=False)
+
+
+class WorkOrderListSerializer(WorkOrderProductInfoMixin, serializers.ModelSerializer):
     """施工单列表序列化器（精简版）"""
 
-    customer_name = serializers.CharField(
-        source="customer.name", read_only=True
-    )
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
     salesperson_name = serializers.CharField(
         source="customer.salesperson.username", read_only=True, allow_null=True
     )
@@ -505,9 +550,7 @@ class WorkOrderListSerializer(
     approval_status_display = serializers.CharField(
         source="get_approval_status_display", read_only=True
     )
-    status_display = serializers.CharField(
-        source="get_status_display", read_only=True
-    )
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
     priority_display = serializers.CharField(
         source="get_priority_display", read_only=True
     )
@@ -559,14 +602,10 @@ class WorkOrderListSerializer(
         ]
 
 
-class WorkOrderDetailSerializer(
-    WorkOrderProductInfoMixin, serializers.ModelSerializer
-):
+class WorkOrderDetailSerializer(WorkOrderProductInfoMixin, serializers.ModelSerializer):
     """施工单详情序列化器（完整版）"""
 
-    customer_name = serializers.CharField(
-        source="customer.name", read_only=True
-    )
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
     customer_detail = serializers.SerializerMethodField()
     product_group_item_display = serializers.SerializerMethodField()
     manager_name = serializers.CharField(
@@ -581,9 +620,7 @@ class WorkOrderDetailSerializer(
     approval_status_display = serializers.CharField(
         source="get_approval_status_display", read_only=True
     )
-    status_display = serializers.CharField(
-        source="get_status_display", read_only=True
-    )
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
     printing_type_display = serializers.CharField(
         source="get_printing_type_display", read_only=True
     )
@@ -602,15 +639,11 @@ class WorkOrderDetailSerializer(
     die_names = serializers.SerializerMethodField()
     die_codes = serializers.SerializerMethodField()
     # 烫金版信息：支持多个烫金版
-    foiling_plates = serializers.PrimaryKeyRelatedField(
-        many=True, read_only=True
-    )
+    foiling_plates = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     foiling_plate_names = serializers.SerializerMethodField()
     foiling_plate_codes = serializers.SerializerMethodField()
     # 压凸版信息：支持多个压凸版
-    embossing_plates = serializers.PrimaryKeyRelatedField(
-        many=True, read_only=True
-    )
+    embossing_plates = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     embossing_plate_names = serializers.SerializerMethodField()
     embossing_plate_codes = serializers.SerializerMethodField()
     priority_display = serializers.CharField(
@@ -721,9 +754,7 @@ class WorkOrderDetailSerializer(
             return None
         group_name = item.product_group.name if item.product_group else None
         product_name = item.product.name if item.product else None
-        parts = [
-            part for part in [group_name, item.item_name, product_name] if part
-        ]
+        parts = [part for part in [group_name, item.item_name, product_name] if part]
         return " - ".join(parts) if parts else None
 
     def get_sales_order_numbers(self, obj) -> List[str]:
@@ -796,15 +827,11 @@ class WorkOrderDetailSerializer(
 
     def get_sales_order_total_amount(self, obj) -> float:
         """获取来源客户订单金额合计"""
-        return sum(
-            float(order.total_amount) for order in self._get_sales_orders(obj)
-        )
+        return sum(float(order.total_amount) for order in self._get_sales_orders(obj))
 
     def get_sales_order_paid_amount(self, obj) -> float:
         """获取来源客户订单已回款合计"""
-        return sum(
-            float(order.paid_amount) for order in self._get_sales_orders(obj)
-        )
+        return sum(float(order.paid_amount) for order in self._get_sales_orders(obj))
 
     def get_sales_order_unpaid_amount(self, obj) -> float:
         """获取来源客户订单未回款合计"""
@@ -815,17 +842,13 @@ class WorkOrderDetailSerializer(
     def get_settled_sales_order_count(self, obj) -> int:
         """获取已结清客户订单数量"""
         return sum(
-            1
-            for order in self._get_sales_orders(obj)
-            if order.payment_status == "paid"
+            1 for order in self._get_sales_orders(obj) if order.payment_status == "paid"
         )
 
     def get_unsettled_sales_order_count(self, obj) -> int:
         """获取未结清客户订单数量"""
         return sum(
-            1
-            for order in self._get_sales_orders(obj)
-            if order.payment_status != "paid"
+            1 for order in self._get_sales_orders(obj) if order.payment_status != "paid"
         )
 
     def _get_sales_orders(self, obj):
@@ -895,9 +918,7 @@ class WorkOrderDetailSerializer(
                 "name": artwork.name,
                 "confirmed": artwork.confirmed,
                 "confirmed_by_name": (
-                    artwork.confirmed_by.username
-                    if artwork.confirmed_by
-                    else None
+                    artwork.confirmed_by.username if artwork.confirmed_by else None
                 ),
                 "confirmed_at": artwork.confirmed_at,
             }
@@ -911,18 +932,14 @@ class WorkOrderDetailSerializer(
             return None
         color_displays = []
         for artwork in artworks:
-            display = format_color_display(
-                artwork.cmyk_colors, artwork.other_colors
-            )
+            display = format_color_display(artwork.cmyk_colors, artwork.other_colors)
             if display:
                 color_displays.append(display)
         return ", ".join(color_displays) if color_displays else None
 
     def get_printing_colors_display(self, obj) -> Optional[str]:
         """生成印刷色数显示格式"""
-        return format_color_display(
-            obj.printing_cmyk_colors, obj.printing_other_colors
-        )
+        return format_color_display(obj.printing_cmyk_colors, obj.printing_other_colors)
 
     get_die_names = _m2m_list.__func__("dies", "name")
     get_die_codes = _m2m_list.__func__("dies", "code")
@@ -1015,9 +1032,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
     def validate(self, data):
         """验证数据，根据工序验证版的选择。"""
         instance = getattr(self, "instance", None)
-        sales_order = data.get(
-            "sales_order", getattr(instance, "sales_order", None)
-        )
+        sales_order = data.get("sales_order", getattr(instance, "sales_order", None))
         products_data = data.get("products_data", [])
         artworks = data.get("artworks")
         dies = data.get("dies")
@@ -1036,9 +1051,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             products_data = validated_products_data
 
         if process_ids:
-            processes = Process.objects.filter(
-                id__in=process_ids, is_active=True
-            )
+            processes = Process.objects.filter(id__in=process_ids, is_active=True)
             self._validate_plate_requirements(
                 processes,
                 instance,
@@ -1143,9 +1156,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                     )
 
                 requested_quantities_by_sales_item[sales_order_item.id] = (
-                    requested_quantities_by_sales_item.get(
-                        sales_order_item.id, 0
-                    )
+                    requested_quantities_by_sales_item.get(sales_order_item.id, 0)
                     + quantity
                 )
             else:
@@ -1170,22 +1181,18 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             source_type="sales_order",
         )
         if instance is not None:
-            allocated_queryset = allocated_queryset.exclude(
-                work_order=instance
-            )
+            allocated_queryset = allocated_queryset.exclude(work_order=instance)
 
         allocated_totals = {
             item["sales_order_item_id"]: item["total_quantity"] or 0
-            for item in allocated_queryset.values(
-                "sales_order_item_id"
-            ).annotate(total_quantity=Sum("quantity"))
+            for item in allocated_queryset.values("sales_order_item_id").annotate(
+                total_quantity=Sum("quantity")
+            )
         }
 
         sales_order_items = {
             item.id: item
-            for item in SalesOrderItem.objects.filter(
-                id__in=sales_order_item_ids
-            )
+            for item in SalesOrderItem.objects.filter(id__in=sales_order_item_ids)
         }
         for (
             sales_order_item_id,
@@ -1196,9 +1203,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"products_data": "来源订单明细不存在"}
                 )
-            allocated_quantity = int(
-                allocated_totals.get(sales_order_item_id, 0) or 0
-            )
+            allocated_quantity = int(allocated_totals.get(sales_order_item_id, 0) or 0)
             remaining_quantity = max(
                 int(sales_order_item.quantity) - allocated_quantity,
                 0,
@@ -1321,6 +1326,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
         return work_order
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         """更新施工单并处理多个产品和图稿"""
         from rest_framework.exceptions import ValidationError
@@ -1345,14 +1351,12 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
                 if not can_edit_approved:
                     # 检查是否尝试修改核心字段
-                    modified_protected_fields = (
-                        self._get_modified_protected_m2m_fields(
-                            instance,
-                            artworks,
-                            dies,
-                            foiling_plates,
-                            embossing_plates,
-                        )
+                    modified_protected_fields = self._get_modified_protected_m2m_fields(
+                        instance,
+                        artworks,
+                        dies,
+                        foiling_plates,
+                        embossing_plates,
                     )
 
                     # 检查产品列表
@@ -1480,9 +1484,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
         # 如果提供了 process_ids，使用用户选择的工序
         if process_ids:
-            processes.update(
-                Process.objects.filter(id__in=process_ids, is_active=True)
-            )
+            processes.update(Process.objects.filter(id__in=process_ids, is_active=True))
         else:
             # 否则，收集所有产品的默认工序
             for product_item in work_order.products.all():
@@ -1497,9 +1499,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
         if has_artwork or has_die or has_foiling_plate or has_embossing_plate:
             # 查找制版工序（使用 code 字段精确匹配）
-            plate_making_processes = Process.objects.filter(
-                code="CTP", is_active=True
-            )
+            plate_making_processes = Process.objects.filter(code="CTP", is_active=True)
             processes.update(plate_making_processes)
 
         # 为每个工序创建 WorkOrderProcess
@@ -1510,9 +1510,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             # 1. TaskAssignmentRule 中该工序优先级最高的部门
             # 2. 兜底：M2M processes 关联的第一个部门
             assignment_rule = (
-                TaskAssignmentRule.objects.filter(
-                    process=process, is_active=True
-                )
+                TaskAssignmentRule.objects.filter(process=process, is_active=True)
                 .select_related("department")
                 .order_by("-priority")
                 .first()
@@ -1523,9 +1521,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                 departments = Department.objects.filter(
                     processes=process, is_active=True
                 )
-                department = (
-                    departments.first() if departments.exists() else None
-                )
+                department = departments.first() if departments.exists() else None
 
             WorkOrderProcess.objects.get_or_create(
                 work_order=work_order,
@@ -1553,9 +1549,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         if sent_values is not None:
             return sent_values
         if instance:
-            return list(
-                getattr(instance, relation_name).values_list("id", flat=True)
-            )
+            return list(getattr(instance, relation_name).values_list("id", flat=True))
         return []
 
     def _validate_plate_requirement(
@@ -1628,20 +1622,156 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             )
 
     def _sync_materials(self, work_order, materials_data):
-        """同步施工单物料：删除旧记录并重建。"""
+        """同步施工单物料，同时保留已计算计划和库存预留。"""
         if materials_data is None:
             return
-        WorkOrderMaterial.objects.filter(work_order=work_order).delete()
+
+        existing_by_material = {}
+        existing_items = list(
+            WorkOrderMaterial.objects.select_for_update().filter(work_order=work_order)
+        )
+        for existing in existing_items:
+            existing_by_material.setdefault(existing.material_id, []).append(existing)
+
+        matches = []
         for item in materials_data:
+            material_id = item.get("material")
+            if item.get("planning_required", False):
+                material = Material.objects.filter(pk=material_id).first()
+                if material is None or material.specification_level != "requirement":
+                    raise serializers.ValidationError(
+                        {
+                            "materials_data": (
+                                "制版后规划的施工单物料必须选择材料要求层级"
+                            )
+                        }
+                    )
+            queue = existing_by_material.get(material_id, [])
+            existing = queue.pop(0) if queue else None
+            matches.append((item, existing))
+
+        stale_items = [
+            item for queue in existing_by_material.values() for item in queue
+        ]
+        protected = [
+            item
+            for item in stale_items
+            if item.reserved_quantity > 0
+            or item.planning_status == WorkOrderMaterial.PlanningStatus.CONFIRMED
+            or item.purchaseorderitem_set.exclude(
+                purchase_order__status="cancelled"
+            ).exists()
+        ]
+        if protected:
+            raise serializers.ValidationError(
+                {
+                    "materials_data": (
+                        "已确认规划、已预留库存或已有采购单的物料不能直接删除；"
+                        "请先取消采购单并作废物料计划。"
+                    )
+                }
+            )
+
+        for item, existing in matches:
+            planning_required = item.get("planning_required", False)
+            if existing is not None:
+                if (
+                    existing.planning_status
+                    in {
+                        WorkOrderMaterial.PlanningStatus.CALCULATED,
+                        WorkOrderMaterial.PlanningStatus.CONFIRMED,
+                    }
+                    and planning_required != existing.planning_required
+                ):
+                    raise serializers.ValidationError(
+                        {
+                            "materials_data": (
+                                "已确认的物料计划不能修改规划方式，请先作废计划。"
+                            )
+                        }
+                    )
+                existing.need_cutting = item.get("need_cutting", existing.need_cutting)
+                existing.notes = item.get("notes", existing.notes)
+                if existing.planning_status in {
+                    WorkOrderMaterial.PlanningStatus.CALCULATED,
+                    WorkOrderMaterial.PlanningStatus.CONFIRMED,
+                }:
+                    existing.save(update_fields=["need_cutting", "notes"])
+                    continue
+
+                existing.material_size = item.get("material_size", "")
+                existing.material_usage = item.get("material_usage", "")
+                existing.planning_required = planning_required
+                existing.planning_status = (
+                    WorkOrderMaterial.PlanningStatus.DRAFT
+                    if planning_required
+                    else WorkOrderMaterial.PlanningStatus.NOT_REQUIRED
+                )
+                if existing.planning_status in {
+                    WorkOrderMaterial.PlanningStatus.DRAFT,
+                    WorkOrderMaterial.PlanningStatus.NOT_REQUIRED,
+                }:
+                    existing.purchase_material = None
+                    existing.artwork = None
+                    existing.cut_width_mm = None
+                    existing.cut_height_mm = None
+                    existing.parent_sheet_width_mm = None
+                    existing.parent_sheet_height_mm = None
+                    existing.required_cut_quantity = 0
+                    existing.pieces_per_parent_sheet = 0
+                    existing.theoretical_parent_quantity = 0
+                    existing.wastage_rate = 0
+                    existing.planned_parent_quantity = 0
+                    existing.inbound_quantity_snapshot = 0
+                    existing.purchase_quantity = 0
+                    existing.plan_confirmed_by = None
+                    existing.plan_confirmed_at = None
+                existing.save(
+                    update_fields=[
+                        "material_size",
+                        "material_usage",
+                        "need_cutting",
+                        "planning_required",
+                        "planning_status",
+                        "notes",
+                        "purchase_material",
+                        "artwork",
+                        "cut_width_mm",
+                        "cut_height_mm",
+                        "parent_sheet_width_mm",
+                        "parent_sheet_height_mm",
+                        "required_cut_quantity",
+                        "pieces_per_parent_sheet",
+                        "theoretical_parent_quantity",
+                        "wastage_rate",
+                        "planned_parent_quantity",
+                        "inbound_quantity_snapshot",
+                        "purchase_quantity",
+                        "plan_confirmed_by",
+                        "plan_confirmed_at",
+                    ]
+                )
+                continue
+
             WorkOrderMaterial.objects.create(
                 work_order=work_order,
                 material_id=item.get("material"),
                 material_size=item.get("material_size", ""),
                 material_usage=item.get("material_usage", ""),
                 need_cutting=item.get("need_cutting", False),
+                planning_required=planning_required,
+                planning_status=(
+                    WorkOrderMaterial.PlanningStatus.DRAFT
+                    if planning_required
+                    else WorkOrderMaterial.PlanningStatus.NOT_REQUIRED
+                ),
                 notes=item.get("notes", ""),
                 purchase_status=item.get("purchase_status", "pending"),
             )
+
+        WorkOrderMaterial.objects.filter(
+            pk__in=[item.pk for item in stale_items]
+        ).delete()
 
     def _get_modified_protected_m2m_fields(
         self, instance, artworks, dies, foiling_plates, embossing_plates

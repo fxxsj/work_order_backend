@@ -1048,6 +1048,12 @@ class WorkOrderFlowService:
                     material_size=product_material.material_size,
                     material_usage=product_material.material_usage,
                     need_cutting=product_material.need_cutting,
+                    planning_required=product_material.planning_required,
+                    planning_status=(
+                        WorkOrderMaterial.PlanningStatus.DRAFT
+                        if product_material.planning_required
+                        else WorkOrderMaterial.PlanningStatus.NOT_REQUIRED
+                    ),
                     notes=f"从产品 {product_item.product.name} 自动生成",
                 )
 

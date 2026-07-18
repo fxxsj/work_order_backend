@@ -23,6 +23,25 @@ from workorder.models.base import (
 class Material(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
     """物料信息"""
 
+    SPECIFICATION_LEVEL_CHOICES = [
+        ("requirement", "材料要求"),
+        ("stock", "库存/采购规格"),
+    ]
+    MATERIAL_TYPE_CHOICES = [
+        ("paper", "纸张"),
+        ("ink", "油墨"),
+        ("film", "覆膜"),
+        ("foil", "烫印料"),
+        ("adhesive", "胶黏剂"),
+        ("packing", "包装辅料"),
+        ("other", "其他"),
+    ]
+    GRAIN_DIRECTION_CHOICES = [
+        ("", "未指定"),
+        ("long", "长纹"),
+        ("short", "短纹"),
+    ]
+
     name = models.CharField("物料名称", max_length=200)
     code = models.CharField("物料编码", max_length=50, unique=True, blank=True)
 
@@ -30,6 +49,47 @@ class Material(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
     code_date_format = ""
     code_sequence_length = 5
     specification = models.CharField("规格", max_length=200, blank=True)
+    specification_level = models.CharField(
+        "规格层级",
+        max_length=20,
+        choices=SPECIFICATION_LEVEL_CHOICES,
+        default="stock",
+        help_text="材料要求用于产品BOM；库存/采购规格用于库存和采购",
+    )
+    base_material = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="stock_variants",
+        verbose_name="对应材料要求",
+        help_text="库存规格对应的上层材料要求，如大度150g双铜对应150g双铜",
+    )
+    material_type = models.CharField(
+        "物料类型",
+        max_length=20,
+        choices=MATERIAL_TYPE_CHOICES,
+        default="other",
+    )
+    paper_type = models.CharField(
+        "纸张品种", max_length=100, blank=True, help_text="如双铜、双胶、白卡"
+    )
+    grammage = models.DecimalField(
+        "克重(g/㎡)", max_digits=8, decimal_places=2, null=True, blank=True
+    )
+    sheet_width_mm = models.DecimalField(
+        "纸张宽度(mm)", max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    sheet_height_mm = models.DecimalField(
+        "纸张高度(mm)", max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    grain_direction = models.CharField(
+        "纹向",
+        max_length=10,
+        choices=GRAIN_DIRECTION_CHOICES,
+        blank=True,
+        default="",
+    )
     unit = models.CharField("单位", max_length=20, default="个")
     unit_price = models.DecimalField(
         "单价",
@@ -44,6 +104,20 @@ class Material(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
         decimal_places=3,
         default=0,
         help_text="当前库存数量",
+    )
+    reserved_quantity = models.DecimalField(
+        "已预留数量",
+        max_digits=12,
+        decimal_places=3,
+        default=0,
+        help_text="已被施工单物料计划占用、尚未消耗的库存",
+    )
+    quality_hold_quantity = models.DecimalField(
+        "质量冻结数量",
+        max_digits=12,
+        decimal_places=3,
+        default=0,
+        help_text="待检或质量冻结、不可用于生产的库存",
     )
     # 库存预警设置
     min_stock_quantity = models.DecimalField(
@@ -82,9 +156,7 @@ class Material(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
             models.Index(fields=["name"], name="material_name_idx"),
             models.Index(fields=["code"], name="material_code_idx"),
             models.Index(fields=["stock_quantity"], name="material_stock_idx"),
-            models.Index(
-                fields=["default_supplier"], name="material_supplier_idx"
-            ),
+            models.Index(fields=["default_supplier"], name="material_supplier_idx"),
         ]
 
     def __str__(self):
@@ -104,8 +176,18 @@ class Material(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
 
     def get_needed_quantity(self, required_quantity):
         """获取需要采购的数量"""
-        available = max(0, self.stock_quantity)
+        available = self.available_quantity
         return max(0, required_quantity - available)
+
+    @property
+    def available_quantity(self):
+        """可用库存：现存减去已预留和质量冻结。"""
+        return max(
+            0,
+            (self.stock_quantity or 0)
+            - (self.reserved_quantity or 0)
+            - (self.quality_hold_quantity or 0),
+        )
 
 
 class Supplier(TimeStampedModel, GenerateCodeMixin, models.Model):
@@ -117,9 +199,7 @@ class Supplier(TimeStampedModel, GenerateCodeMixin, models.Model):
     ]
 
     name = models.CharField("供应商名称", max_length=200)
-    code = models.CharField(
-        "供应商编码", max_length=50, unique=True, blank=True
-    )
+    code = models.CharField("供应商编码", max_length=50, unique=True, blank=True)
 
     code_prefix = "SUP"
     code_date_format = ""
@@ -266,9 +346,7 @@ class PurchaseOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
     expected_date = models.DateField(
         "预计到货日期", null=True, blank=True, help_text="供应商预计的到货日期"
     )
-    actual_received_date = models.DateField(
-        "实际到货日期", null=True, blank=True
-    )
+    actual_received_date = models.DateField("实际到货日期", null=True, blank=True)
     # 关联信息
     work_order = models.ForeignKey(
         "workorder.WorkOrder",
@@ -346,9 +424,7 @@ class PurchaseOrderItem(TimeStampedModel, models.Model):
     )
     unit_price = models.DecimalField("单价", max_digits=10, decimal_places=2)
     # 供应商提供的信息
-    supplier_code = models.CharField(
-        "供应商物料编码", max_length=100, blank=True
-    )
+    supplier_code = models.CharField("供应商物料编码", max_length=100, blank=True)
     # 收货状态
     status = models.CharField(
         "收货状态", max_length=20, choices=STATUS_CHOICES, default="pending"
@@ -387,9 +463,7 @@ class PurchaseOrderItem(TimeStampedModel, models.Model):
         """已质检合格数量"""
         return sum(
             record.qualified_quantity or 0
-            for record in self.receive_records.filter(
-                inspection_status="qualified"
-            )
+            for record in self.receive_records.filter(inspection_status="qualified")
         ) + sum(
             record.qualified_quantity or 0
             for record in self.receive_records.filter(
@@ -402,9 +476,7 @@ class PurchaseOrderItem(TimeStampedModel, models.Model):
         """待质检数量"""
         return sum(
             record.received_quantity or 0
-            for record in self.receive_records.filter(
-                inspection_status="pending"
-            )
+            for record in self.receive_records.filter(inspection_status="pending")
         )
 
 
@@ -525,9 +597,7 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
         ordering = ["-received_date", "-created_at"]
         indexes = [
             models.Index(fields=["purchase_order_item"], name="prr_item_idx"),
-            models.Index(
-                fields=["inspection_status"], name="prr_insp_status_idx"
-            ),
+            models.Index(fields=["inspection_status"], name="prr_insp_status_idx"),
             models.Index(fields=["received_date"], name="prr_recv_date_idx"),
             models.Index(fields=["is_stocked"], name="prr_stocked_idx"),
         ]
@@ -548,9 +618,7 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
         """获取关联的物料"""
         return self.purchase_order_item.material
 
-    def confirm_inspection(
-        self, qualified_qty, unqualified_qty, reason="", user=None
-    ):
+    def confirm_inspection(self, qualified_qty, unqualified_qty, reason="", user=None):
         """确认质检结果
 
         Args:
@@ -594,11 +662,24 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
 
         with transaction.atomic():
             # 更新物料库存
-            material = self.material
-            material.stock_quantity = (
-                material.stock_quantity or 0
-            ) + self.qualified_quantity
+            item = self.purchase_order_item
+            material = Material.objects.select_for_update().get(
+                pk=item.material_id
+            )
+            old_quantity = material.stock_quantity or 0
+            material.stock_quantity = old_quantity + self.qualified_quantity
             material.save(update_fields=["stock_quantity"])
+
+            MaterialStockLog.objects.create(
+                material=material,
+                change_type="add",
+                quantity=self.qualified_quantity,
+                old_quantity=old_quantity,
+                new_quantity=material.stock_quantity,
+                reason=(f"采购单 {self.purchase_order.order_number} " f"质检合格入库"),
+                work_order=self.purchase_order.work_order,
+                created_by=user,
+            )
 
             # 更新收货记录
             self.is_stocked = True
@@ -607,7 +688,6 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
             self.save()
 
             # 更新采购单明细的已收货数量
-            item = self.purchase_order_item
             item.received_quantity = (
                 item.received_quantity or 0
             ) + self.qualified_quantity
@@ -636,15 +716,22 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
                     update_fields.append("purchase_status")
 
                 # 回写采购实际单价（首次入库时写入）
-                if (
-                    wom.actual_unit_price is None
-                    and item.unit_price is not None
-                ):
+                if wom.actual_unit_price is None and item.unit_price is not None:
                     wom.actual_unit_price = item.unit_price
                     update_fields.append("actual_unit_price")
 
                 if update_fields:
                     wom.save(update_fields=update_fields)
+
+            from workorder.services.work_order_material_service import (
+                WorkOrderMaterialService,
+            )
+
+            WorkOrderMaterialService.allocate_received_inventory(
+                material=material,
+                quantity=self.qualified_quantity,
+                preferred_wom=item.work_order_material,
+            )
 
             # 检查采购单是否全部收货完成
             self._check_purchase_order_completion()
@@ -668,10 +755,7 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
         if self.is_returned:
             return False
 
-        if (
-            not self.unqualified_quantity
-            or return_qty > self.unqualified_quantity
-        ):
+        if not self.unqualified_quantity or return_qty > self.unqualified_quantity:
             return False
 
         self.is_returned = True
@@ -694,9 +778,7 @@ class PurchaseReceiveRecord(TimeStampedModel, models.Model):
         if all_received:
             purchase_order.status = "received"
             purchase_order.actual_received_date = timezone.now().date()
-            purchase_order.save(
-                update_fields=["status", "actual_received_date"]
-            )
+            purchase_order.save(update_fields=["status", "actual_received_date"])
 
 
 class MaterialStockLog(models.Model):

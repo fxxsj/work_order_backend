@@ -7,6 +7,7 @@
 
 import logging
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from workorder.constants.status import (
@@ -180,7 +181,8 @@ class StockUpdateService:
 
                     work_order_material = (
                         work_order_process.work_order.materials.filter(
-                            material=task.material
+                            Q(purchase_material=task.material)
+                            | Q(material=task.material)
                         ).first()
                     )
                     if work_order_material:
@@ -237,6 +239,14 @@ class StockUpdateService:
                     new_qty = 0
 
                 material.stock_quantity = new_qty
+                reserved_release = min(
+                    material.reserved_quantity or 0,
+                    quantity,
+                )
+                material.reserved_quantity = max(
+                    0,
+                    (material.reserved_quantity or 0) - reserved_release,
+                )
                 stock_updates.append((material, old_qty, new_qty, quantity))
 
             if not stock_updates:
@@ -244,8 +254,14 @@ class StockUpdateService:
 
             materials_to_update = [item[0] for item in stock_updates]
             Material.objects.bulk_update(
-                materials_to_update, ["stock_quantity"]
+                materials_to_update, ["stock_quantity", "reserved_quantity"]
             )
+
+            planned_items = work_order_process.work_order.materials.filter(
+                purchase_material_id__in=material_quantities.keys(),
+                reserved_quantity__gt=0,
+            )
+            planned_items.update(reserved_quantity=0)
 
             log_entries = [
                 MaterialStockLog(
@@ -258,6 +274,7 @@ class StockUpdateService:
                         f"施工单 {work_order_process.work_order.order_number} "
                         f"开料工序完成，扣减库存{item[3]}{item[0].unit}"
                     ),
+                    work_order=work_order_process.work_order,
                     created_by=None,
                 )
                 for item in stock_updates

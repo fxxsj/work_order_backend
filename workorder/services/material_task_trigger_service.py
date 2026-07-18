@@ -42,9 +42,12 @@ def update_cutting_tasks_on_material_cut(material_instance) -> None:
         return
 
     with transaction.atomic():
+        task_material = (
+            material_instance.purchase_material or material_instance.material
+        )
         cutting_tasks = WorkOrderTask.objects.select_for_update().filter(
             task_type=TaskType.CUTTING,
-            material=material_instance.material,
+            material=task_material,
             work_order_process__work_order=material_instance.work_order,
             auto_calculate_quantity=True,
             status__in=[TaskStatus.PENDING, TaskStatus.IN_PROGRESS],

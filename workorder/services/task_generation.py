@@ -223,14 +223,24 @@ class TaskGenerationService:
             # 开料工序：为需要开料的物料每个生成一个任务
             for material_item in work_order.materials.all():
                 if material_item.need_cutting:
-                    quantity = TaskGenerationService._parse_material_usage(
-                        material_item.material_usage
-                    )
+                    if material_item.planning_required:
+                        if (
+                            material_item.planning_status
+                            != material_item.PlanningStatus.CONFIRMED
+                        ):
+                            continue
+                        quantity = int(material_item.planned_parent_quantity)
+                        task_material = material_item.purchase_material
+                    else:
+                        quantity = TaskGenerationService._parse_material_usage(
+                            material_item.material_usage
+                        )
+                        task_material = material_item.material
                     tasks.append(
                         WorkOrderTask(
                             work_order_process=work_order_process,
                             task_type="cutting",
-                            material=material_item.material,
+                            material=task_material,
                             work_content=f"{order_number}开料",
                             production_quantity=quantity,
                             quantity_completed=0,

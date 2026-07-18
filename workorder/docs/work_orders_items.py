@@ -11,6 +11,8 @@ from drf_spectacular.utils import (
 
 from workorder.schema import standard_success_response
 from workorder.serializers.core import (
+    MaterialPlanCalculateSerializer,
+    MaterialPlanInvalidateSerializer,
     WorkOrderMaterialSerializer,
     WorkOrderProductSerializer,
 )
@@ -66,6 +68,48 @@ work_order_material_docs = extend_schema_view(
                     WorkOrderMaterialSerializer,
                 ),
                 description="施工单物料详情",
+            )
+        },
+    ),
+    calculate_plan=extend_schema(
+        tags=["施工单"],
+        summary="计算物料采购规格与原纸需求",
+        request=MaterialPlanCalculateSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response(
+                    "MaterialPlanCalculateResponse",
+                    WorkOrderMaterialSerializer,
+                ),
+                description="计算成功",
+            )
+        },
+    ),
+    confirm_plan=extend_schema(
+        tags=["施工单"],
+        summary="确认物料计划并预留库存",
+        request=None,
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response(
+                    "MaterialPlanConfirmResponse",
+                    WorkOrderMaterialSerializer,
+                ),
+                description="确认成功",
+            )
+        },
+    ),
+    invalidate_plan=extend_schema(
+        tags=["施工单"],
+        summary="作废物料计划并释放库存预留",
+        request=MaterialPlanInvalidateSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=standard_success_response(
+                    "MaterialPlanInvalidateResponse",
+                    WorkOrderMaterialSerializer,
+                ),
+                description="作废成功",
             )
         },
     ),
