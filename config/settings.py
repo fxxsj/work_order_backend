@@ -113,10 +113,10 @@ WSGI_APPLICATION = "config.wsgi.application"
 # ASGI configuration for WebSocket support
 ASGI_APPLICATION = "config.asgi.application"
 
-# Channels configuration for WebSocket support
-# Use Redis for production, in-memory backend for development
 REDIS_URL = os.environ.get("REDIS_URL")
 
+# Channels configuration for WebSocket support
+# Use Redis for production, in-memory backend for development
 if REDIS_URL:
     # Use Redis channel layer if available; otherwise fall back to in-memory so the
     # app can still boot in minimal environments (e.g. CI smoke runs).
@@ -466,8 +466,6 @@ LOGGING = {
 
 # P1 优化: 缓存配置
 # 根据环境自动选择缓存后端
-REDIS_URL = os.environ.get("REDIS_URL")
-
 if REDIS_URL and not DEBUG:
     # 生产环境：使用 Redis 缓存
     try:

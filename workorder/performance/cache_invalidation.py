@@ -52,9 +52,7 @@ def invalidate_task_cache_on_change(sender, instance, **kwargs):
                 dept_id=instance.assigned_department_id
             )
             cache.delete(dept_workload_key)
-            logger.debug(
-                f"Invalidated dept workload cache: {dept_workload_key}"
-            )
+            logger.debug(f"Invalidated dept workload cache: {dept_workload_key}")
 
         # Invalidate operator stats
         if instance.assigned_operator_id:
@@ -68,9 +66,7 @@ def invalidate_task_cache_on_change(sender, instance, **kwargs):
         try:
             # For Redis backend
             cache._cache.get_client().delete_pattern(DASHBOARD_PATTERN)
-            logger.debug(
-                f"Invalidated dashboard cache pattern: {DASHBOARD_PATTERN}"
-            )
+            logger.debug(f"Invalidated dashboard cache pattern: {DASHBOARD_PATTERN}")
         except AttributeError:
             # Fallback for non-Redis backends
             pass
@@ -79,15 +75,22 @@ def invalidate_task_cache_on_change(sender, instance, **kwargs):
         logger.error(f"Error invalidating cache for task {instance.id}: {e}")
 
 
-
 @receiver(post_save, sender="workorder.WorkOrder")
 @receiver(post_delete, sender="workorder.WorkOrder")
+@receiver(post_save, sender="workorder.WorkOrderMaterial")
+@receiver(post_delete, sender="workorder.WorkOrderMaterial")
+@receiver(post_save, sender="workorder.PurchaseOrder")
+@receiver(post_delete, sender="workorder.PurchaseOrder")
+@receiver(post_save, sender="workorder.SalesOrder")
+@receiver(post_delete, sender="workorder.SalesOrder")
+@receiver(post_save, sender="workorder.DeliveryOrder")
+@receiver(post_delete, sender="workorder.DeliveryOrder")
 @receiver(post_save, sender="workorder.Product")
 @receiver(post_delete, sender="workorder.Product")
 @receiver(post_save, sender="workorder.ProductStock")
 @receiver(post_delete, sender="workorder.ProductStock")
 def invalidate_monitoring_cache_on_change(sender, instance, **kwargs):
-    """Refresh global monitoring metrics after relevant domain changes."""
+    """Refresh global monitoring metrics after dashboard source changes."""
     try:
         invalidate_monitoring_cache()
     except Exception as error:

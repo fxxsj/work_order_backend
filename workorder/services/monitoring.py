@@ -4,6 +4,7 @@
 提供API性能监控、业务指标统计、系统健康检查等功能
 """
 
+import hashlib
 import time
 import psutil
 from datetime import datetime, timedelta
@@ -30,7 +31,8 @@ def monitoring_cache(cache_name):
         def wrapper(*args, **kwargs):
             version = cache.get(MONITORING_CACHE_VERSION_KEY, 1)
             arguments = repr((args, sorted(kwargs.items())))
-            key = f"monitoring:{cache_name}:v{version}:{arguments}"
+            digest = hashlib.sha256(arguments.encode("utf-8")).hexdigest()[:16]
+            key = f"monitoring:{cache_name}:v{version}:{digest}"
             cached = cache.get(key)
             if cached is not None:
                 return cached
@@ -105,9 +107,7 @@ class PerformanceMonitor:
 
         # 保留最近1000条记录
         if len(self.metrics["execution_times"]) > 1000:
-            self.metrics["execution_times"] = self.metrics["execution_times"][
-                -1000:
-            ]
+            self.metrics["execution_times"] = self.metrics["execution_times"][-1000:]
 
         # 更新缓存
         cache.set(f"perf:{name}:last_execution", execution_time, 300)
@@ -144,9 +144,7 @@ class PerformanceMonitor:
         # 发送告警（如果配置了）
         self._send_performance_alert(name, execution_time)
 
-    def _record_error(
-        self, name: str, execution_time: float, error: str
-    ) -> None:
+    def _record_error(self, name: str, execution_time: float, error: str) -> None:
         """记录错误"""
         timestamp = timezone.now().isoformat()
 
@@ -181,9 +179,7 @@ class PerformanceMonitor:
 
         return "".join(traceback.format_stack()[-5:-1])
 
-    def _send_performance_alert(
-        self, name: str, execution_time: float
-    ) -> None:
+    def _send_performance_alert(self, name: str, execution_time: float) -> None:
         """发送性能告警"""
         if not getattr(settings, "PERFORMANCE_ALERTS_ENABLED", False):
             return
@@ -245,33 +241,41 @@ class BusinessMetrics:
 
         queryset = WorkOrder.objects.filter(created_at__gte=start_time)
 
-        # 基础指标
-        total_orders = queryset.count()
-        completed_orders = queryset.filter(status="completed").count()
-        pending_orders = queryset.filter(status="pending").count()
-        in_progress_orders = queryset.filter(status="in_progress").count()
-
-        # 审核指标
-        approved_orders = queryset.filter(approval_status="approved").count()
-        rejected_orders = queryset.filter(approval_status="rejected").count()
-
-        # 金额指标
-        total_amount = (
-            queryset.aggregate(total=Sum("total_amount"))["total"] or 0
+        # 基础、审核和金额指标
+        metrics = queryset.aggregate(
+            total_orders=Count("id"),
+            completed_orders=Count("id", filter=Q(status="completed")),
+            pending_orders=Count("id", filter=Q(status="pending")),
+            in_progress_orders=Count("id", filter=Q(status="in_progress")),
+            approved_orders=Count("id", filter=Q(approval_status="approved")),
+            rejected_orders=Count("id", filter=Q(approval_status="rejected")),
+            submitted_orders=Count("id", filter=Q(approval_status="submitted")),
+            overdue_orders=Count(
+                "id",
+                filter=Q(
+                    delivery_date__lt=now,
+                    status__in=["pending", "in_progress"],
+                ),
+            ),
+            total_amount=Sum("total_amount"),
+            avg_amount=Avg("total_amount"),
         )
-        avg_amount = queryset.aggregate(avg=Avg("total_amount"))["avg"] or 0
+        total_orders = metrics["total_orders"]
+        completed_orders = metrics["completed_orders"]
+        pending_orders = metrics["pending_orders"]
+        in_progress_orders = metrics["in_progress_orders"]
+        approved_orders = metrics["approved_orders"]
+        rejected_orders = metrics["rejected_orders"]
+        total_amount = metrics["total_amount"] or 0
+        avg_amount = metrics["avg_amount"] or 0
 
         # 优先级分布
         priority_stats = (
-            queryset.values("priority")
-            .annotate(count=Count("id"))
-            .order_by("-count")
+            queryset.values("priority").annotate(count=Count("id")).order_by("-count")
         )
 
         # 时间相关指标
-        avg_completion_time = BusinessMetrics._calculate_avg_completion_time(
-            queryset
-        )
+        avg_completion_time = BusinessMetrics._calculate_avg_completion_time(queryset)
 
         return {
             "time_range": time_range,
@@ -285,23 +289,15 @@ class BusinessMetrics:
                 "pending": pending_orders,
                 "in_progress": in_progress_orders,
                 "completion_rate": (
-                    (completed_orders / total_orders * 100)
-                    if total_orders > 0
-                    else 0
+                    (completed_orders / total_orders * 100) if total_orders > 0 else 0
                 ),
             },
             "approval_stats": {
                 "approved": approved_orders,
                 "rejected": rejected_orders,
-                "pending": queryset.filter(
-                    approval_status="submitted"
-                ).count(),
+                "pending": metrics["submitted_orders"],
                 "approval_rate": (
-                    (
-                        approved_orders
-                        / (approved_orders + rejected_orders)
-                        * 100
-                    )
+                    (approved_orders / (approved_orders + rejected_orders) * 100)
                     if (approved_orders + rejected_orders) > 0
                     else 0
                 ),
@@ -313,10 +309,7 @@ class BusinessMetrics:
             "priority_distribution": list(priority_stats),
             "time_metrics": {
                 "avg_completion_days": avg_completion_time,
-                "orders_overdue": queryset.filter(
-                    delivery_date__lt=now,
-                    status__in=["pending", "in_progress"],
-                ).count(),
+                "orders_overdue": metrics["overdue_orders"],
             },
         }
 
@@ -336,10 +329,23 @@ class BusinessMetrics:
         queryset = WorkOrderTask.objects.filter(created_at__gte=start_time)
 
         # 基础指标
-        total_tasks = queryset.count()
-        completed_tasks = queryset.filter(status="completed").count()
-        pending_tasks = queryset.filter(status="pending").count()
-        in_progress_tasks = queryset.filter(status="in_progress").count()
+        metrics = queryset.aggregate(
+            total_tasks=Count("id"),
+            completed_tasks=Count("id", filter=Q(status="completed")),
+            pending_tasks=Count("id", filter=Q(status="pending")),
+            in_progress_tasks=Count("id", filter=Q(status="in_progress")),
+            overdue_tasks=Count(
+                "id",
+                filter=Q(
+                    updated_at__lt=now,
+                    status__in=["pending", "in_progress"],
+                ),
+            ),
+        )
+        total_tasks = metrics["total_tasks"]
+        completed_tasks = metrics["completed_tasks"]
+        pending_tasks = metrics["pending_tasks"]
+        in_progress_tasks = metrics["in_progress_tasks"]
 
         # 用户指标
         user_stats = (
@@ -353,9 +359,7 @@ class BusinessMetrics:
         )
 
         # 超时任务（WorkOrderTask 无 deadline 字段，按更新时间超过 24h/7d 的在办任务兜底）
-        overdue_tasks = queryset.filter(
-            updated_at__lt=now, status__in=["pending", "in_progress"]
-        ).count()
+        overdue_tasks = metrics["overdue_tasks"]
 
         return {
             "time_range": time_range,
@@ -365,18 +369,14 @@ class BusinessMetrics:
                 "pending": pending_tasks,
                 "in_progress": in_progress_tasks,
                 "completion_rate": (
-                    (completed_tasks / total_tasks * 100)
-                    if total_tasks > 0
-                    else 0
+                    (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
                 ),
             },
             "user_performance": list(user_stats),
             "time_metrics": {
                 "overdue_tasks": overdue_tasks,
                 "overdue_rate": (
-                    (overdue_tasks / total_tasks * 100)
-                    if total_tasks > 0
-                    else 0
+                    (overdue_tasks / total_tasks * 100) if total_tasks > 0 else 0
                 ),
             },
         }
@@ -388,8 +388,7 @@ class BusinessMetrics:
         try:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "SELECT count(*) FROM pg_stat_activity "
-                    "WHERE state = 'active'"
+                    "SELECT count(*) FROM pg_stat_activity " "WHERE state = 'active'"
                 )
                 db_connections = cursor.fetchone()[0]
         except Exception:
@@ -407,8 +406,10 @@ class BusinessMetrics:
             # 尝试获取Redis信息（如果使用Redis缓存）
             import redis
 
-            r = redis.Redis(host="localhost", port=6379, db=0)
-            info = r.info()
+            redis_url = getattr(settings, "REDIS_URL", None)
+            if not redis_url:
+                raise RuntimeError("REDIS_URL is not configured")
+            info = redis.Redis.from_url(redis_url).info()
             cache_info.update(
                 {
                     "redis_available": True,
@@ -425,7 +426,7 @@ class BusinessMetrics:
             "timestamp": timezone.now().isoformat(),
             "database": {
                 "connections": db_connections,
-                "max_connections": getattr(settings, "DATABASES", {})
+                "connection_max_age_seconds": getattr(settings, "DATABASES", {})
                 .get("default", {})
                 .get("CONN_MAX_AGE", 0),
             },
@@ -459,9 +460,7 @@ class BusinessMetrics:
         total_days = 0
         for order in completed_orders:
             if order.completed_at and order.created_at:
-                days = (
-                    order.completed_at.date() - order.created_at.date()
-                ).days
+                days = (order.completed_at.date() - order.created_at.date()).days
                 total_days += days
 
         return total_days / completed_orders.count()
@@ -541,9 +540,7 @@ class MonitoringService:
         """获取仪表板指标"""
         return {
             "performance": self.performance_monitor.get_performance_stats(),
-            "business_workorder": self.business_metrics.get_workorder_metrics(
-                "24h"
-            ),
+            "business_workorder": self.business_metrics.get_workorder_metrics("24h"),
             "business_task": self.business_metrics.get_task_metrics("24h"),
             "system": self.business_metrics.get_system_metrics(),
             "health": self.health_check(),
@@ -573,17 +570,12 @@ class MonitoringStatsService:
             stats = endpoint_stats[name]
             stats["count"] += 1
             stats["total_time"] += execution["execution_time"]
-            stats["min_time"] = min(
-                stats["min_time"], execution["execution_time"]
-            )
-            stats["max_time"] = max(
-                stats["max_time"], execution["execution_time"]
-            )
+            stats["min_time"] = min(stats["min_time"], execution["execution_time"])
+            stats["max_time"] = max(stats["max_time"], execution["execution_time"])
             stats["avg_time"] = stats["total_time"] / stats["count"]
 
         endpoint_list = [
-            {"endpoint": name, **stats}
-            for name, stats in endpoint_stats.items()
+            {"endpoint": name, **stats} for name, stats in endpoint_stats.items()
         ]
         endpoint_list.sort(key=lambda x: x["avg_time"], reverse=True)
         return endpoint_list
@@ -620,13 +612,9 @@ class MonitoringStatsService:
         days = max(int(days), 1)
         today = timezone.localdate()
         first_date = today - timedelta(days=days - 1)
-        start = timezone.make_aware(
-            datetime.combine(first_date, datetime.min.time())
-        )
+        start = timezone.make_aware(datetime.combine(first_date, datetime.min.time()))
         end = timezone.make_aware(
-            datetime.combine(
-                today + timedelta(days=1), datetime.min.time()
-            )
+            datetime.combine(today + timedelta(days=1), datetime.min.time())
         )
 
         def daily_counts(model):
@@ -676,9 +664,7 @@ class MonitoringStatsService:
         total_completed = tasks_with_defects["total_completed"] or 0
 
         defect_rate = (
-            (total_defects / total_completed * 100)
-            if total_completed > 0
-            else 0
+            (total_defects / total_completed * 100) if total_completed > 0 else 0
         )
 
         return {
@@ -823,24 +809,12 @@ class MonitoringStatsService:
 
         return {
             "performance_alerts": {
-                "enabled": getattr(
-                    settings, "PERFORMANCE_ALERTS_ENABLED", False
-                ),
-                "slow_query_threshold": getattr(
-                    settings, "SLOW_QUERY_THRESHOLD", 1.0
-                ),
-                "error_rate_threshold": getattr(
-                    settings, "ERROR_RATE_THRESHOLD", 5.0
-                ),
-                "cpu_threshold": getattr(
-                    settings, "CPU_ALERT_THRESHOLD", 80.0
-                ),
-                "memory_threshold": getattr(
-                    settings, "MEMORY_ALERT_THRESHOLD", 80.0
-                ),
-                "disk_threshold": getattr(
-                    settings, "DISK_ALERT_THRESHOLD", 80.0
-                ),
+                "enabled": getattr(settings, "PERFORMANCE_ALERTS_ENABLED", False),
+                "slow_query_threshold": getattr(settings, "SLOW_QUERY_THRESHOLD", 1.0),
+                "error_rate_threshold": getattr(settings, "ERROR_RATE_THRESHOLD", 5.0),
+                "cpu_threshold": getattr(settings, "CPU_ALERT_THRESHOLD", 80.0),
+                "memory_threshold": getattr(settings, "MEMORY_ALERT_THRESHOLD", 80.0),
+                "disk_threshold": getattr(settings, "DISK_ALERT_THRESHOLD", 80.0),
             },
             "business_alerts": {
                 "enabled": getattr(settings, "BUSINESS_ALERTS_ENABLED", False),
@@ -875,8 +849,7 @@ class MonitoringStatsService:
                     "type": "performance",
                     "level": "warning",
                     "message": (
-                        f"系统错误率过高: "
-                        f'{performance_stats["error_rate"]:.2f}%'
+                        f"系统错误率过高: " f'{performance_stats["error_rate"]:.2f}%'
                     ),
                     "timestamp": timezone.now().isoformat(),
                 }

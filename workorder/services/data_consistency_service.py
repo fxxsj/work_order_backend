@@ -9,7 +9,7 @@ import logging
 from decimal import Decimal
 from typing import Dict, Any
 
-from django.db.models import DecimalField, Q, Sum, Value
+from django.db.models import Count, DecimalField, Q, Sum, Value
 from django.db.models.functions import Coalesce
 
 logger = logging.getLogger(__name__)
@@ -41,10 +41,7 @@ class DataConsistencyService:
 
         total_issues = sum(len(c["issues"]) for c in checks)
         critical_issues = sum(
-            1
-            for c in checks
-            for i in c["issues"]
-            if i.get("severity") == "critical"
+            1 for c in checks for i in c["issues"] if i.get("severity") == "critical"
         )
 
         return {
@@ -81,13 +78,9 @@ class DataConsistencyService:
                         "type": "inventory_mismatch",
                         "product_id": product.id,
                         "product_name": product.name,
-                        "product_stock_quantity": float(
-                            product.stock_quantity
-                        ),
+                        "product_stock_quantity": float(product.stock_quantity),
                         "batch_total": float(batch_total),
-                        "difference": float(
-                            product.stock_quantity - batch_total
-                        ),
+                        "difference": float(product.stock_quantity - batch_total),
                         "suggestion": "请核对入库和发货记录，使用库存调整功能修正",
                     }
                 )
@@ -101,19 +94,22 @@ class DataConsistencyService:
     @staticmethod
     def check_work_order_quantity_consistency() -> Dict[str, Any]:
         """检查施工单数量一致性：生产数量与所有任务完成数量是否匹配"""
-        from workorder.models.core import WorkOrder, WorkOrderTask
+        from workorder.models.core import WorkOrder
 
         issues = []
-        work_orders = WorkOrder.objects.filter(status="completed")
+        work_orders = WorkOrder.objects.filter(status="completed").annotate(
+            task_count=Count("order_processes__tasks"),
+            total_completed=Coalesce(
+                Sum("order_processes__tasks__quantity_completed"),
+                Value(0),
+            ),
+        )
 
         for wo in work_orders:
-            tasks = WorkOrderTask.objects.filter(
-                work_order_process__work_order=wo
-            )
-            if not tasks.exists():
+            if not wo.task_count:
                 continue
 
-            total_completed = sum(t.quantity_completed or 0 for t in tasks)
+            total_completed = wo.total_completed
             if total_completed != wo.production_quantity:
                 issues.append(
                     {
@@ -140,12 +136,16 @@ class DataConsistencyService:
         from workorder.models.sales import SalesOrder
 
         issues = []
-        sales_orders = SalesOrder.objects.all()
+        sales_orders = SalesOrder.objects.annotate(
+            total_applied=Coalesce(
+                Sum("payments__applied_amount"),
+                Value(Decimal("0")),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            )
+        )
 
         for so in sales_orders:
-            total_applied = so.payments.aggregate(total=Sum("applied_amount"))[
-                "total"
-            ] or Decimal("0")
+            total_applied = so.total_applied
             if so.paid_amount != total_applied:
                 issues.append(
                     {
@@ -171,29 +171,34 @@ class DataConsistencyService:
     @staticmethod
     def check_task_process_consistency() -> Dict[str, Any]:
         """检查任务工序一致性：已完成工序下是否存在未完成任务"""
-        from workorder.models.core import WorkOrderProcess, WorkOrderTask
+        from workorder.models.core import WorkOrderProcess
 
         issues = []
-        processes = WorkOrderProcess.objects.filter(status="completed")
+        processes = (
+            WorkOrderProcess.objects.filter(status="completed")
+            .select_related("work_order", "process")
+            .annotate(
+                incomplete_task_count=Count(
+                    "tasks",
+                    filter=~Q(tasks__status="completed"),
+                )
+            )
+            .filter(incomplete_task_count__gt=0)
+        )
 
         for process in processes:
-            incomplete_tasks = WorkOrderTask.objects.filter(
-                work_order_process=process,
-            ).exclude(status="completed")
-
-            if incomplete_tasks.exists():
-                issues.append(
-                    {
-                        "severity": "critical",
-                        "type": "process_task_mismatch",
-                        "work_order_id": process.work_order.id,
-                        "work_order_number": process.work_order.order_number,
-                        "process_id": process.id,
-                        "process_name": process.process.name,
-                        "incomplete_task_count": incomplete_tasks.count(),
-                        "suggestion": "请检查工序完成条件或手动完成任务",
-                    }
-                )
+            issues.append(
+                {
+                    "severity": "critical",
+                    "type": "process_task_mismatch",
+                    "work_order_id": process.work_order.id,
+                    "work_order_number": process.work_order.order_number,
+                    "process_id": process.id,
+                    "process_name": process.process.name,
+                    "incomplete_task_count": process.incomplete_task_count,
+                    "suggestion": "请检查工序完成条件或手动完成任务",
+                }
+            )
 
         return {
             "name": "任务工序一致性",

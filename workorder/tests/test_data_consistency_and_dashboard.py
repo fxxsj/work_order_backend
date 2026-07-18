@@ -4,7 +4,12 @@
 
 from decimal import Decimal
 
+from unittest.mock import patch
+
 import pytest
+from django.db import connection
+from django.db.models.signals import post_save
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from django.contrib.auth.models import User
 from datetime import timedelta
@@ -27,9 +32,7 @@ def consistency_setup(db):
     customer = Customer.objects.create(
         name="一致性测试客户", contact_person="张", phone="138"
     )
-    user = User.objects.create_user(
-        username="consistency_user", password="test"
-    )
+    user = User.objects.create_user(username="consistency_user", password="test")
     product = Product.objects.create(
         name="一致性产品",
         code="CON001",
@@ -129,6 +132,18 @@ class TestDataConsistencyService:
         assert len(result["checks"]) == 4
         assert result["summary"]["total_issues"] >= 2
 
+    def test_consistency_checks_use_constant_query_counts(self, consistency_setup):
+        """每项检查应使用固定数量的聚合查询，而非随记录数增长。"""
+        checks = [
+            DataConsistencyService.check_work_order_quantity_consistency,
+            DataConsistencyService.check_payment_status_consistency,
+            DataConsistencyService.check_task_process_consistency,
+        ]
+        for check in checks:
+            with CaptureQueriesContext(connection) as queries:
+                check()
+            assert len(queries) <= 1, [query["sql"] for query in queries]
+
 
 @pytest.mark.django_db(transaction=True)
 class TestOperationsDashboard:
@@ -149,3 +164,34 @@ class TestOperationsDashboard:
 
         viewset = SystemMonitoringViewSet()
         assert hasattr(viewset, "data_consistency")
+
+    def test_dashboard_cache_invalidates_for_each_source_model(self):
+        """Dashboard source saves must advance the monitoring cache version."""
+        from workorder.models.core import WorkOrderMaterial
+        from workorder.models.inventory import DeliveryOrder
+        from workorder.models.materials import PurchaseOrder
+        from workorder.performance.cache_invalidation import (
+            invalidate_monitoring_cache_on_change,
+        )
+
+        source_models = [
+            WorkOrderMaterial,
+            PurchaseOrder,
+            SalesOrder,
+            DeliveryOrder,
+            Product,
+            ProductStock,
+        ]
+
+        for model in source_models:
+            assert invalidate_monitoring_cache_on_change in post_save._live_receivers(
+                model
+            )
+            with patch(
+                "workorder.performance.cache_invalidation."
+                "invalidate_monitoring_cache"
+            ) as invalidate:
+                invalidate_monitoring_cache_on_change(
+                    sender=model, instance=object(), created=False
+                )
+            invalidate.assert_called_once()
