@@ -169,7 +169,10 @@ class ApprovalConfigAdmin(admin.ModelAdmin):
         ),
         (
             "系统信息",
-            {"fields": ("singleton_key", "created_at", "updated_at"), "classes": ("collapse",)},
+            {
+                "fields": ("singleton_key", "created_at", "updated_at"),
+                "classes": ("collapse",),
+            },
         ),
     )
 

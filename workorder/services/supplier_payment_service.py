@@ -13,12 +13,11 @@ from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import status
 
+from workorder.models.system import ApprovalConfig
+
 from .service_errors import ServiceError
 
 logger = logging.getLogger(__name__)
-
-
-from workorder.models.system import ApprovalConfig
 
 
 class SupplierPaymentService:

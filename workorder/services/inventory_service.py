@@ -31,6 +31,7 @@ from workorder.models import (
     StockIn,
     StockOut,
 )
+from workorder.models.system import ApprovalConfig
 from workorder.serializers.inventory import (
     upsert_delivery_exception_resolution,
 )
@@ -140,9 +141,6 @@ class ProductStockService:
             "new_quantity": float(stock.quantity),
             "stock": stock,
         }
-
-
-from ..models.system import ApprovalConfig
 
 
 class StockInService:

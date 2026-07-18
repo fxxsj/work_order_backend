@@ -3,7 +3,7 @@
 from decimal import Decimal
 
 from django.test import TestCase
-from django.contrib.auth.models import User
+
 from workorder.models.base import Customer
 from workorder.serializers.base import CustomerSerializer
 
