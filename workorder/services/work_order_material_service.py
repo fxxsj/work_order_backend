@@ -9,6 +9,13 @@ from rest_framework import status
 
 from workorder.constants.status import MaterialPurchaseStatus
 from workorder.models.core import WorkOrderMaterial
+from workorder.models.material_modes import (
+    MaterialPreparationMode,
+    effective_preparation_mode,
+    requires_internal_cutting,
+    requires_specification_selection,
+    requires_sheet_planning,
+)
 from workorder.services.service_errors import ServiceError
 
 
@@ -53,11 +60,102 @@ class WorkOrderMaterialService:
         return max(normal, rotated)
 
     @staticmethod
+    def _planned_quantity(wom: WorkOrderMaterial) -> Decimal:
+        if requires_specification_selection(wom):
+            return Decimal(str(wom.planned_material_quantity or 0))
+        return Decimal(str(wom.planned_parent_quantity or 0))
+
+    @staticmethod
+    def _format_dimension(value: Decimal) -> str:
+        return f"{Decimal(str(value)):g}"
+
+    @staticmethod
+    def _resolve_purchase_material(
+        *,
+        wom: WorkOrderMaterial,
+        purchase_material=None,
+        custom_parent_width_mm=None,
+        custom_parent_height_mm=None,
+        custom_supplier=None,
+        custom_unit_price=Decimal("0"),
+    ):
+        """选择常用规格，或创建/更新当前施工单专用的精确规格。"""
+        from workorder.models.materials import Material
+
+        if purchase_material is not None:
+            if (
+                purchase_material.is_temporary
+                and purchase_material.temporary_for_work_order_material_id != wom.pk
+            ):
+                raise ServiceError(
+                    "施工单专用规格不能用于其他施工单",
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
+            return purchase_material
+
+        width = Decimal(str(custom_parent_width_mm))
+        height = Decimal(str(custom_parent_height_mm))
+        unit_price = Decimal(str(custom_unit_price or 0))
+        if width <= 0 or height <= 0:
+            raise ServiceError(
+                "本单特规的原纸宽度和高度必须大于0",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        if unit_price < 0:
+            raise ServiceError(
+                "本单特规单价不能小于0",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        supplier_status = getattr(custom_supplier, "status", "active")
+        if custom_supplier is None or supplier_status != "active":
+            raise ServiceError(
+                "本单特规必须选择有效供应商",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        width_text = WorkOrderMaterialService._format_dimension(width)
+        height_text = WorkOrderMaterialService._format_dimension(height)
+        defaults = {
+            "name": (
+                f"{wom.material.name} {width_text}×{height_text}mm"
+                f"（{wom.work_order.order_number}专用）"
+            )[:200],
+            "specification": f"{width_text}×{height_text}mm / 施工单专用",
+            "specification_level": "stock",
+            "base_material": wom.material,
+            "material_type": wom.material.material_type,
+            "paper_type": wom.material.paper_type,
+            "grammage": wom.material.grammage,
+            "sheet_width_mm": width,
+            "sheet_height_mm": height,
+            "grain_direction": wom.material.grain_direction,
+            "unit": wom.material.unit,
+            "unit_price": unit_price,
+            "default_supplier": custom_supplier,
+            "is_active": True,
+            "is_temporary": True,
+        }
+        material, created = Material.objects.get_or_create(
+            temporary_for_work_order_material=wom,
+            defaults=defaults,
+        )
+        if not created:
+            for field, value in defaults.items():
+                setattr(material, field, value)
+            material.save(update_fields=[*defaults.keys(), "updated_at"])
+        return material
+
+    @staticmethod
     @transaction.atomic
     def calculate_plan(
         *,
         wom: WorkOrderMaterial,
-        purchase_material,
+        purchase_material=None,
+        custom_parent_width_mm=None,
+        custom_parent_height_mm=None,
+        custom_supplier=None,
+        custom_unit_price=Decimal("0"),
+        preparation_mode=None,
         cut_width_mm,
         cut_height_mm,
         required_cut_quantity,
@@ -66,7 +164,7 @@ class WorkOrderMaterialService:
     ) -> WorkOrderMaterial:
         """由开料尺寸、原纸规格和损耗率计算原纸需求及采购缺口。"""
         wom = WorkOrderMaterial.objects.select_for_update().get(pk=wom.pk)
-        if not wom.planning_required:
+        if not requires_sheet_planning(wom):
             raise ServiceError(
                 "该施工单物料无需拼版规划",
                 code=status.HTTP_400_BAD_REQUEST,
@@ -76,11 +174,53 @@ class WorkOrderMaterialService:
                 "需拼版规划的施工单物料必须使用材料要求层级",
                 code=status.HTTP_400_BAD_REQUEST,
             )
+        if wom.material.material_type != "paper":
+            raise ServiceError(
+                "只有纸张类物料可以使用拼版后算纸",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        if preparation_mode is not None:
+            if preparation_mode not in {
+                MaterialPreparationMode.INTERNAL_CUTTING,
+                MaterialPreparationMode.SUPPLIER_CUTTING,
+            }:
+                raise ServiceError(
+                    "拼版后算纸必须选择厂内开料或供应商按尺寸供货",
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
+            wom.preparation_mode = preparation_mode
+            wom.need_cutting = (
+                preparation_mode == MaterialPreparationMode.INTERNAL_CUTTING
+            )
+        if (
+            not requires_internal_cutting(wom)
+            and effective_preparation_mode(wom)
+            != MaterialPreparationMode.SUPPLIER_CUTTING
+        ):
+            raise ServiceError(
+                "拼版后算纸必须选择厂内开料或供应商按尺寸供货",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
         if wom.planning_status == WorkOrderMaterial.PlanningStatus.CONFIRMED:
             raise ServiceError(
                 "已确认的物料计划不能直接重算，请先作废原计划",
                 code=status.HTTP_409_CONFLICT,
             )
+        if purchase_material is None and (
+            custom_parent_width_mm is None or custom_parent_height_mm is None
+        ):
+            raise ServiceError(
+                "请选择常用库存规格，或填写本单特规原纸尺寸",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        purchase_material = WorkOrderMaterialService._resolve_purchase_material(
+            wom=wom,
+            purchase_material=purchase_material,
+            custom_parent_width_mm=custom_parent_width_mm,
+            custom_parent_height_mm=custom_parent_height_mm,
+            custom_supplier=custom_supplier,
+            custom_unit_price=custom_unit_price,
+        )
         if purchase_material.specification_level != "stock":
             raise ServiceError(
                 "采购规格必须选择库存/采购规格物料",
@@ -179,6 +319,66 @@ class WorkOrderMaterialService:
 
     @staticmethod
     @transaction.atomic
+    def resolve_specification(
+        *,
+        wom: WorkOrderMaterial,
+        purchase_material,
+        required_quantity,
+    ) -> WorkOrderMaterial:
+        """为手挽绳等非纸材料要求选择具体SKU并计算库存缺口。"""
+        wom = WorkOrderMaterial.objects.select_for_update().get(pk=wom.pk)
+        if not requires_specification_selection(wom):
+            raise ServiceError(
+                "该施工单物料无需规格确认",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        if wom.planning_status == WorkOrderMaterial.PlanningStatus.CONFIRMED:
+            raise ServiceError(
+                "已确认的物料计划不能直接修改，请先作废原计划",
+                code=status.HTTP_409_CONFLICT,
+            )
+        if purchase_material.specification_level != "stock":
+            raise ServiceError(
+                "必须选择具体库存/采购规格",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        if not purchase_material.is_active or purchase_material.is_temporary:
+            raise ServiceError(
+                "所选具体规格不可用",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        if purchase_material.base_material_id != wom.material_id:
+            raise ServiceError(
+                "所选具体规格不属于当前材料要求",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+        quantity = Decimal(str(required_quantity))
+        if quantity <= 0:
+            raise ServiceError(
+                "计划需求数量必须大于0",
+                code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        inbound = WorkOrderMaterialService._unallocated_inbound_quantity(
+            purchase_material, exclude_wom=wom
+        )
+        available = Decimal(str(purchase_material.available_quantity))
+        shortage = max(Decimal("0"), quantity - available - inbound)
+
+        wom.purchase_material = purchase_material
+        wom.preparation_mode = MaterialPreparationMode.DIRECT
+        wom.need_cutting = False
+        wom.planned_material_quantity = quantity
+        wom.inbound_quantity_snapshot = inbound
+        wom.purchase_quantity = shortage
+        wom.planning_status = WorkOrderMaterial.PlanningStatus.CALCULATED
+        wom.material_size = purchase_material.specification
+        wom.material_usage = f"{quantity:g}{purchase_material.unit}"
+        wom.save()
+        return wom
+
+    @staticmethod
+    @transaction.atomic
     def confirm_plan(*, wom: WorkOrderMaterial, user) -> WorkOrderMaterial:
         """确认计划并原子预留当前可用库存。"""
         from workorder.models.materials import Material
@@ -202,14 +402,15 @@ class WorkOrderMaterialService:
             material, exclude_wom=wom
         )
         available = Decimal(str(material.available_quantity))
-        reserve = min(wom.planned_parent_quantity, available)
+        planned_quantity = WorkOrderMaterialService._planned_quantity(wom)
+        reserve = min(planned_quantity, available)
         inbound = min(
-            wom.planned_parent_quantity - reserve,
+            planned_quantity - reserve,
             inbound_available,
         )
         purchase_quantity = max(
             Decimal("0"),
-            wom.planned_parent_quantity - reserve - inbound,
+            planned_quantity - reserve - inbound,
         )
 
         material.reserved_quantity = (
@@ -223,7 +424,7 @@ class WorkOrderMaterialService:
         wom.planning_status = WorkOrderMaterial.PlanningStatus.CONFIRMED
         wom.plan_confirmed_by = user
         wom.plan_confirmed_at = timezone.now()
-        if reserve >= wom.planned_parent_quantity:
+        if reserve >= planned_quantity:
             wom.purchase_status = MaterialPurchaseStatus.RECEIVED
             wom.received_date = timezone.now().date()
         elif inbound > 0 and purchase_quantity == 0:
@@ -268,7 +469,7 @@ class WorkOrderMaterialService:
                 break
             unmet = max(
                 Decimal("0"),
-                plan.planned_parent_quantity
+                WorkOrderMaterialService._planned_quantity(plan)
                 - plan.reserved_quantity
                 - plan.inbound_quantity_snapshot,
             )
@@ -283,7 +484,9 @@ class WorkOrderMaterialService:
             if allocation <= 0:
                 continue
             plan.reserved_quantity += allocation
-            if plan.reserved_quantity >= plan.planned_parent_quantity:
+            if plan.reserved_quantity >= WorkOrderMaterialService._planned_quantity(
+                plan
+            ):
                 plan.purchase_status = MaterialPurchaseStatus.RECEIVED
                 plan.received_date = timezone.now().date()
             plan.save(

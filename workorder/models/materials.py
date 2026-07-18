@@ -143,6 +143,20 @@ class Material(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
     is_active = models.BooleanField(
         "启用", default=True, help_text="停用后不再允许新业务选料"
     )
+    is_temporary = models.BooleanField(
+        "施工单专用规格",
+        default=False,
+        db_index=True,
+        help_text="由物料规划自动生成，仅供对应施工单采购和库存追溯",
+    )
+    temporary_for_work_order_material = models.OneToOneField(
+        "workorder.WorkOrderMaterial",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="temporary_purchase_specification",
+        verbose_name="所属施工单物料",
+    )
     need_cutting = models.BooleanField(
         "需要开料", default=False, help_text="该物料是否需要开料工序处理"
     )

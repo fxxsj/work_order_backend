@@ -10,6 +10,11 @@ from typing import Any, Dict, List, Optional
 from rest_framework import serializers
 
 from ..models.base import Process
+from ..models.material_modes import (
+    derive_product_material_modes,
+    normalize_material_modes,
+    validate_material_modes,
+)
 from ..models.products import (
     Product,
     ProductGroup,
@@ -24,6 +29,12 @@ class ProductMaterialSerializer(serializers.ModelSerializer):
 
     material_name = serializers.SerializerMethodField()
     material_code = serializers.SerializerMethodField()
+    calculation_mode_display = serializers.CharField(
+        source="get_calculation_mode_display", read_only=True
+    )
+    preparation_mode_display = serializers.CharField(
+        source="get_preparation_mode_display", read_only=True
+    )
 
     class Meta:
         model = ProductMaterial
@@ -37,18 +48,27 @@ class ProductMaterialSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         material = attrs.get("material", getattr(self.instance, "material", None))
-        planning_required = attrs.get(
-            "planning_required",
-            getattr(self.instance, "planning_required", False),
-        )
-        if (
-            planning_required
-            and material
-            and material.specification_level != "requirement"
-        ):
-            raise serializers.ValidationError(
-                {"material": ("制版后规划的产品物料必须选择‘材料要求’层级")}
+        if material:
+            if material.is_temporary:
+                raise serializers.ValidationError(
+                    {"material": "施工单专用规格不能配置到产品BOM"}
+                )
+            calculation_mode, preparation_mode = derive_product_material_modes(
+                material
             )
+            attrs["calculation_mode"] = calculation_mode
+            attrs["preparation_mode"] = preparation_mode
+            attrs["planning_required"] = material.specification_level == "requirement"
+            attrs["need_cutting"] = False
+            errors = validate_material_modes(
+                material=material,
+                calculation_mode=calculation_mode,
+                preparation_mode=preparation_mode,
+            )
+            if errors:
+                raise serializers.ValidationError(errors)
+        else:
+            normalize_material_modes(attrs, instance=self.instance)
         return attrs
 
 

@@ -4,6 +4,7 @@
 包含施工单、工序、任务、日志等核心业务的序列化器。
 """
 
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from django.db import transaction
@@ -23,7 +24,13 @@ from ..models.core import (
     WorkOrderTask,
 )
 from ..models.products import Product
-from ..models.materials import Material
+from ..models.materials import Material, Supplier
+from ..models.material_modes import (
+    effective_calculation_mode,
+    effective_preparation_mode,
+    normalize_material_modes,
+    validate_material_modes,
+)
 from ..models.sales import SalesOrderItem
 from ..utils import format_color_display
 from .base import WorkOrderProductInfoMixin
@@ -442,8 +449,27 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
     purchase_material_code = serializers.CharField(
         source="purchase_material.code", read_only=True, allow_null=True
     )
+    purchase_material_is_temporary = serializers.BooleanField(
+        source="purchase_material.is_temporary", read_only=True, allow_null=True
+    )
+    purchase_material_supplier = serializers.IntegerField(
+        source="purchase_material.default_supplier_id", read_only=True, allow_null=True
+    )
+    purchase_material_unit_price = serializers.DecimalField(
+        source="purchase_material.unit_price",
+        max_digits=12,
+        decimal_places=2,
+        read_only=True,
+        allow_null=True,
+    )
     planning_status_display = serializers.CharField(
         source="get_planning_status_display", read_only=True
+    )
+    calculation_mode_display = serializers.CharField(
+        source="get_calculation_mode_display", read_only=True
+    )
+    preparation_mode_display = serializers.CharField(
+        source="get_preparation_mode_display", read_only=True
     )
 
     class Meta:
@@ -458,11 +484,18 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
             "purchase_material",
             "purchase_material_name",
             "purchase_material_code",
+            "purchase_material_is_temporary",
+            "purchase_material_supplier",
+            "purchase_material_unit_price",
             "artwork",
             "material_size",
             "material_usage",
             "need_cutting",
             "planning_required",
+            "calculation_mode",
+            "calculation_mode_display",
+            "preparation_mode",
+            "preparation_mode_display",
             "planning_status",
             "planning_status_display",
             "cut_width_mm",
@@ -474,6 +507,7 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
             "theoretical_parent_quantity",
             "wastage_rate",
             "planned_parent_quantity",
+            "planned_material_quantity",
             "reserved_quantity",
             "inbound_quantity_snapshot",
             "purchase_quantity",
@@ -501,6 +535,7 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
             "theoretical_parent_quantity",
             "wastage_rate",
             "planned_parent_quantity",
+            "planned_material_quantity",
             "reserved_quantity",
             "inbound_quantity_snapshot",
             "purchase_quantity",
@@ -509,10 +544,64 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
             "plan_confirmed_at",
         ]
 
+    def validate(self, attrs):
+        material = attrs.get("material", getattr(self.instance, "material", None))
+        calculation_mode, preparation_mode = normalize_material_modes(
+            attrs, instance=self.instance
+        )
+        if material:
+            errors = validate_material_modes(
+                material=material,
+                calculation_mode=calculation_mode,
+                preparation_mode=preparation_mode,
+            )
+            if errors:
+                raise serializers.ValidationError(errors)
+        if (
+            self.instance
+            and self.instance.planning_status
+            in {
+                WorkOrderMaterial.PlanningStatus.CALCULATED,
+                WorkOrderMaterial.PlanningStatus.CONFIRMED,
+            }
+            and (
+                calculation_mode != effective_calculation_mode(self.instance)
+                or preparation_mode != effective_preparation_mode(self.instance)
+            )
+        ):
+            raise serializers.ValidationError(
+                "已计算的物料计划不能修改规划方式，请先作废计划。"
+            )
+        return attrs
+
 
 class MaterialPlanCalculateSerializer(serializers.Serializer):
     purchase_material = serializers.PrimaryKeyRelatedField(
-        queryset=Material.objects.filter(is_active=True)
+        queryset=Material.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+    )
+    custom_parent_width_mm = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, min_value=Decimal("0.01")
+    )
+    custom_parent_height_mm = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, min_value=Decimal("0.01")
+    )
+    custom_supplier = serializers.PrimaryKeyRelatedField(
+        queryset=Supplier.objects.filter(status="active"),
+        required=False,
+        allow_null=True,
+    )
+    custom_unit_price = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        default=0,
+        min_value=0,
+    )
+    preparation_mode = serializers.ChoiceField(
+        choices=["internal_cutting", "supplier_cutting"],
+        required=False,
     )
     artwork = serializers.PrimaryKeyRelatedField(
         queryset=Artwork.objects.all(), required=False, allow_null=True
@@ -529,9 +618,40 @@ class MaterialPlanCalculateSerializer(serializers.Serializer):
         max_value=100,
     )
 
+    def validate(self, attrs):
+        purchase_material = attrs.get("purchase_material")
+        custom_fields = (
+            attrs.get("custom_parent_width_mm"),
+            attrs.get("custom_parent_height_mm"),
+            attrs.get("custom_supplier"),
+        )
+        has_custom = any(value is not None for value in custom_fields)
+        if purchase_material and has_custom:
+            raise serializers.ValidationError(
+                "常用库存规格和本单临时规格只能选择一种"
+            )
+        if not purchase_material and not all(
+            value is not None for value in custom_fields
+        ):
+            raise serializers.ValidationError(
+                "请选择常用库存规格，或完整填写本单特规尺寸和供应商"
+            )
+        return attrs
+
 
 class MaterialPlanInvalidateSerializer(serializers.Serializer):
     reason = serializers.CharField(required=True, allow_blank=False)
+
+
+class MaterialSpecificationResolveSerializer(serializers.Serializer):
+    purchase_material = serializers.PrimaryKeyRelatedField(
+        queryset=Material.objects.filter(is_active=True, is_temporary=False)
+    )
+    required_quantity = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        min_value=Decimal("0.001"),
+    )
 
 
 class WorkOrderListSerializer(WorkOrderProductInfoMixin, serializers.ModelSerializer):
@@ -1636,18 +1756,24 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         matches = []
         for item in materials_data:
             material_id = item.get("material")
-            if item.get("planning_required", False):
-                material = Material.objects.filter(pk=material_id).first()
-                if material is None or material.specification_level != "requirement":
-                    raise serializers.ValidationError(
-                        {
-                            "materials_data": (
-                                "制版后规划的施工单物料必须选择材料要求层级"
-                            )
-                        }
-                    )
             queue = existing_by_material.get(material_id, [])
             existing = queue.pop(0) if queue else None
+            calculation_mode, preparation_mode = normalize_material_modes(
+                item, instance=existing
+            )
+            material = Material.objects.filter(pk=material_id).first()
+            if material is None:
+                raise serializers.ValidationError(
+                    {"materials_data": "施工单物料不存在"}
+                )
+            mode_errors = validate_material_modes(
+                material=material,
+                calculation_mode=calculation_mode,
+                preparation_mode=preparation_mode,
+            )
+            if mode_errors:
+                message = "；".join(mode_errors.values())
+                raise serializers.ValidationError({"materials_data": message})
             matches.append((item, existing))
 
         stale_items = [
@@ -1674,6 +1800,8 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
 
         for item, existing in matches:
             planning_required = item.get("planning_required", False)
+            calculation_mode = item["calculation_mode"]
+            preparation_mode = item["preparation_mode"]
             if existing is not None:
                 if (
                     existing.planning_status
@@ -1681,7 +1809,10 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                         WorkOrderMaterial.PlanningStatus.CALCULATED,
                         WorkOrderMaterial.PlanningStatus.CONFIRMED,
                     }
-                    and planning_required != existing.planning_required
+                    and (
+                        calculation_mode != effective_calculation_mode(existing)
+                        or preparation_mode != effective_preparation_mode(existing)
+                    )
                 ):
                     raise serializers.ValidationError(
                         {
@@ -1691,17 +1822,27 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                         }
                     )
                 existing.need_cutting = item.get("need_cutting", existing.need_cutting)
+                existing.planning_required = planning_required
+                existing.calculation_mode = calculation_mode
+                existing.preparation_mode = preparation_mode
                 existing.notes = item.get("notes", existing.notes)
                 if existing.planning_status in {
                     WorkOrderMaterial.PlanningStatus.CALCULATED,
                     WorkOrderMaterial.PlanningStatus.CONFIRMED,
                 }:
-                    existing.save(update_fields=["need_cutting", "notes"])
+                    existing.save(
+                        update_fields=[
+                            "need_cutting",
+                            "planning_required",
+                            "calculation_mode",
+                            "preparation_mode",
+                            "notes",
+                        ]
+                    )
                     continue
 
                 existing.material_size = item.get("material_size", "")
                 existing.material_usage = item.get("material_usage", "")
-                existing.planning_required = planning_required
                 existing.planning_status = (
                     WorkOrderMaterial.PlanningStatus.DRAFT
                     if planning_required
@@ -1732,6 +1873,8 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                         "material_usage",
                         "need_cutting",
                         "planning_required",
+                        "calculation_mode",
+                        "preparation_mode",
                         "planning_status",
                         "notes",
                         "purchase_material",
@@ -1760,6 +1903,8 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                 material_usage=item.get("material_usage", ""),
                 need_cutting=item.get("need_cutting", False),
                 planning_required=planning_required,
+                calculation_mode=calculation_mode,
+                preparation_mode=preparation_mode,
                 planning_status=(
                     WorkOrderMaterial.PlanningStatus.DRAFT
                     if planning_required

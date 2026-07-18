@@ -8,18 +8,23 @@ from rest_framework.test import APIClient
 from workorder.models.core import WorkOrderMaterial
 from workorder.services.purchase_order_service import PurchaseOrderService
 from workorder.services.service_errors import ServiceError
+from workorder.services.task_generation import TaskGenerationService
 from workorder.services.work_order_material_service import (
     WorkOrderMaterialService,
 )
 from workorder.serializers.core import WorkOrderCreateUpdateSerializer
+from workorder.serializers.materials import MaterialSerializer
+from workorder.serializers.products import ProductMaterialSerializer
 from workorder.tests.factories import (
     MaterialFactory,
+    ProductFactory,
     PurchaseOrderItemFactory,
     PurchaseReceiveRecordFactory,
     SupplierFactory,
     UserFactory,
     WorkOrderFactory,
     WorkOrderMaterialFactory,
+    WorkOrderProcessFactory,
 )
 
 
@@ -76,6 +81,300 @@ class TestMaterialPlanning:
         assert result.planned_parent_quantity == Decimal("1050")
         assert result.purchase_quantity == Decimal("950")
         assert result.planning_status == "calculated"
+
+    def test_calculate_plan_creates_hidden_job_specific_stock_specification(self):
+        result = WorkOrderMaterialService.calculate_plan(
+            wom=self.wom,
+            purchase_material=None,
+            custom_parent_width_mm=Decimal("920"),
+            custom_parent_height_mm=Decimal("1250"),
+            custom_supplier=self.supplier,
+            custom_unit_price=Decimal("3.25"),
+            cut_width_mm=Decimal("443"),
+            cut_height_mm=Decimal("595"),
+            required_cut_quantity=Decimal("4000"),
+            wastage_rate=Decimal("5"),
+        )
+
+        custom = result.purchase_material
+        assert custom is not None
+        assert custom.is_temporary is True
+        assert custom.is_active is True
+        assert custom.base_material == self.requirement
+        assert custom.temporary_for_work_order_material == self.wom
+        assert custom.sheet_width_mm == Decimal("920")
+        assert custom.sheet_height_mm == Decimal("1250")
+        assert custom.default_supplier == self.supplier
+        assert custom.unit_price == Decimal("3.25")
+        assert result.parent_sheet_width_mm == Decimal("920")
+        assert result.parent_sheet_height_mm == Decimal("1250")
+
+    def test_recalculate_custom_plan_reuses_job_specific_stock_specification(self):
+        first = WorkOrderMaterialService.calculate_plan(
+            wom=self.wom,
+            purchase_material=None,
+            custom_parent_width_mm=Decimal("920"),
+            custom_parent_height_mm=Decimal("1250"),
+            custom_supplier=self.supplier,
+            cut_width_mm=Decimal("443"),
+            cut_height_mm=Decimal("595"),
+            required_cut_quantity=Decimal("4000"),
+        )
+        custom_id = first.purchase_material_id
+
+        second = WorkOrderMaterialService.calculate_plan(
+            wom=self.wom,
+            purchase_material=None,
+            custom_parent_width_mm=Decimal("930"),
+            custom_parent_height_mm=Decimal("1260"),
+            custom_supplier=self.supplier,
+            cut_width_mm=Decimal("443"),
+            cut_height_mm=Decimal("595"),
+            required_cut_quantity=Decimal("4000"),
+        )
+
+        assert second.purchase_material_id == custom_id
+        assert second.purchase_material.sheet_width_mm == Decimal("930")
+        assert second.purchase_material.sheet_height_mm == Decimal("1260")
+
+    def test_job_specific_specification_flows_into_purchase_order(self):
+        calculated = WorkOrderMaterialService.calculate_plan(
+            wom=self.wom,
+            purchase_material=None,
+            custom_parent_width_mm=Decimal("920"),
+            custom_parent_height_mm=Decimal("1250"),
+            custom_supplier=self.supplier,
+            custom_unit_price=Decimal("3.25"),
+            cut_width_mm=Decimal("443"),
+            cut_height_mm=Decimal("595"),
+            required_cut_quantity=Decimal("4000"),
+        )
+        WorkOrderMaterialService.confirm_plan(wom=calculated, user=self.user)
+
+        result = PurchaseOrderService.create_from_work_order(
+            work_order_id=self.work_order.pk
+        )
+
+        assert result["created_item_count"] == 1
+        purchase_order = result["purchase_orders"][0]
+        item = self.work_order.purchase_orders.get(pk=purchase_order["id"]).items.get()
+        assert item.material_id == calculated.purchase_material_id
+        assert item.material.is_temporary is True
+        assert item.material.sheet_width_mm == Decimal("920")
+        assert item.material.sheet_height_mm == Decimal("1250")
+        assert item.unit_price == Decimal("3.25")
+
+        serializer = MaterialSerializer(
+            item.material,
+            data={"name": "不允许手工改名"},
+            partial=True,
+        )
+        assert serializer.is_valid() is False
+        assert "由物料规划维护" in str(serializer.errors)
+
+    def test_product_material_auto_defers_non_paper_specification(self):
+        rope_requirement = MaterialFactory(
+            specification_level="requirement",
+            material_type="packing",
+            name="手挽绳要求",
+        )
+        serializer = ProductMaterialSerializer(
+            data={
+                "product": ProductFactory().pk,
+                "material": rope_requirement.pk,
+            }
+        )
+
+        assert serializer.is_valid(), serializer.errors
+        item = serializer.save()
+        assert item.calculation_mode == "specification_selection"
+        assert item.preparation_mode == "pending"
+        assert item.planning_required is True
+
+    def test_product_material_auto_defers_paper_to_imposition(self):
+        serializer = ProductMaterialSerializer(
+            data={
+                "product": ProductFactory().pk,
+                "material": self.requirement.pk,
+            }
+        )
+
+        assert serializer.is_valid(), serializer.errors
+        item = serializer.save()
+        assert item.calculation_mode == "sheet_imposition"
+        assert item.preparation_mode == "pending"
+        assert item.planning_required is True
+        assert item.need_cutting is False
+
+    def test_product_material_ignores_professional_mode_input(self):
+        serializer = ProductMaterialSerializer(
+            data={
+                "product": ProductFactory().pk,
+                "material": self.requirement.pk,
+                "calculation_mode": "sheet_imposition",
+                "preparation_mode": "direct",
+            }
+        )
+
+        assert serializer.is_valid(), serializer.errors
+        item = serializer.save()
+        assert item.calculation_mode == "sheet_imposition"
+        assert item.preparation_mode == "pending"
+
+    def test_legacy_planning_flags_map_to_supplier_cutting(self):
+        serializer = ProductMaterialSerializer(
+            data={
+                "product": ProductFactory().pk,
+                "material": self.requirement.pk,
+                "planning_required": True,
+                "need_cutting": False,
+            }
+        )
+
+        assert serializer.is_valid(), serializer.errors
+        item = serializer.save()
+        assert item.calculation_mode == "sheet_imposition"
+        assert item.preparation_mode == "pending"
+
+    def test_resolve_non_paper_requirement_selects_concrete_specification(self):
+        rope_requirement = MaterialFactory(
+            specification_level="requirement",
+            material_type="packing",
+            name="手挽绳",
+            unit="条",
+        )
+        rope_stock = MaterialFactory(
+            specification_level="stock",
+            base_material=rope_requirement,
+            material_type="packing",
+            name="手挽绳 6mm 红色 40cm",
+            specification="6mm/红色/40cm",
+            unit="条",
+            stock_quantity=Decimal("100"),
+            default_supplier=self.supplier,
+        )
+        rope_plan = WorkOrderMaterialFactory(
+            work_order=self.work_order,
+            material=rope_requirement,
+            calculation_mode="specification_selection",
+            preparation_mode="pending",
+            planning_required=True,
+            planning_status="draft",
+        )
+
+        calculated = WorkOrderMaterialService.resolve_specification(
+            wom=rope_plan,
+            purchase_material=rope_stock,
+            required_quantity=Decimal("300"),
+        )
+        confirmed = WorkOrderMaterialService.confirm_plan(
+            wom=calculated,
+            user=self.user,
+        )
+
+        rope_stock.refresh_from_db()
+        assert confirmed.purchase_material == rope_stock
+        assert confirmed.planned_material_quantity == Decimal("300")
+        assert confirmed.reserved_quantity == Decimal("100")
+        assert confirmed.purchase_quantity == Decimal("200")
+        assert confirmed.preparation_mode == "direct"
+        assert rope_stock.reserved_quantity == Decimal("100")
+
+        rope_stock.stock_quantity = Decimal("300")
+        rope_stock.save(update_fields=["stock_quantity"])
+        WorkOrderMaterialService.allocate_received_inventory(
+            material=rope_stock,
+            quantity=Decimal("200"),
+            preferred_wom=confirmed,
+        )
+
+        confirmed.refresh_from_db()
+        rope_stock.refresh_from_db()
+        assert confirmed.reserved_quantity == Decimal("300")
+        assert confirmed.purchase_status == "received"
+        assert rope_stock.reserved_quantity == Decimal("300")
+
+    def test_calculate_plan_rejects_non_paper_legacy_planning(self):
+        rope_requirement = MaterialFactory(
+            specification_level="requirement",
+            material_type="packing",
+            name="手挽绳要求",
+        )
+        rope_plan = WorkOrderMaterialFactory(
+            material=rope_requirement,
+            planning_required=True,
+            planning_status="draft",
+            need_cutting=False,
+        )
+        rope_stock = MaterialFactory(
+            specification_level="stock",
+            base_material=rope_requirement,
+            material_type="packing",
+        )
+
+        with pytest.raises(ServiceError, match="只有纸张类物料"):
+            WorkOrderMaterialService.calculate_plan(
+                wom=rope_plan,
+                purchase_material=rope_stock,
+                cut_width_mm=1,
+                cut_height_mm=1,
+                required_cut_quantity=1,
+            )
+
+    def test_resolve_specification_api_returns_calculated_plan(self):
+        rope_requirement = MaterialFactory(
+            specification_level="requirement",
+            material_type="packing",
+            unit="条",
+        )
+        rope_stock = MaterialFactory(
+            specification_level="stock",
+            base_material=rope_requirement,
+            material_type="packing",
+            unit="条",
+        )
+        rope_plan = WorkOrderMaterialFactory(
+            material=rope_requirement,
+            calculation_mode="specification_selection",
+            preparation_mode="pending",
+            planning_required=True,
+            planning_status="draft",
+        )
+        admin = UserFactory(is_staff=True, is_superuser=True)
+        client = APIClient()
+        client.force_authenticate(admin)
+
+        response = client.post(
+            f"/api/v1/workorder-materials/{rope_plan.id}/resolve_specification/",
+            {
+                "purchase_material": rope_stock.id,
+                "required_quantity": "300",
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["data"]["planning_status"] == "calculated"
+        assert response.json()["data"]["planned_material_quantity"] == "300.000"
+
+    def test_supplier_cutting_does_not_generate_internal_cutting_task(self):
+        process = WorkOrderProcessFactory(
+            work_order=self.work_order,
+            process__code="CUT",
+            tasks=0,
+        )
+        self.wom.calculation_mode = "sheet_imposition"
+        self.wom.preparation_mode = "supplier_cutting"
+        self.wom.planning_required = True
+        self.wom.need_cutting = False
+        self.wom.planning_status = "confirmed"
+        self.wom.planned_parent_quantity = 100
+        self.wom.purchase_material = self.stock_material
+        self.wom.save()
+
+        tasks = TaskGenerationService.build_task_objects(process)
+
+        assert tasks == []
 
     def test_confirm_plan_reserves_available_inventory_atomically(self):
         WorkOrderMaterialService.calculate_plan(

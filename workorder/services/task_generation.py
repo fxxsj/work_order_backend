@@ -8,6 +8,11 @@
 import logging
 from django.db import transaction
 from ..models import WorkOrderTask
+from ..models.material_modes import (
+    requires_internal_cutting,
+    requires_material_planning,
+    requires_sheet_planning,
+)
 from ..process_codes import ProcessCodes
 
 logger = logging.getLogger(__name__)
@@ -222,14 +227,18 @@ class TaskGenerationService:
         elif process_code == ProcessCodes.CUT:
             # 开料工序：为需要开料的物料每个生成一个任务
             for material_item in work_order.materials.all():
-                if material_item.need_cutting:
-                    if material_item.planning_required:
+                if requires_internal_cutting(material_item):
+                    if requires_material_planning(material_item):
                         if (
                             material_item.planning_status
                             != material_item.PlanningStatus.CONFIRMED
                         ):
                             continue
-                        quantity = int(material_item.planned_parent_quantity)
+                        quantity = int(
+                            material_item.planned_parent_quantity
+                            if requires_sheet_planning(material_item)
+                            else material_item.planned_material_quantity
+                        )
                         task_material = material_item.purchase_material
                     else:
                         quantity = TaskGenerationService._parse_material_usage(

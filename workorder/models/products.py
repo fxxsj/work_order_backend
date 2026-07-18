@@ -13,6 +13,10 @@ from django.contrib.auth.models import User
 from django.db import models, transaction
 from workorder.models.audit import AuditMixin
 from workorder.models.base import TimeStampedModel, GenerateCodeMixin
+from workorder.models.material_modes import (
+    MaterialCalculationMode,
+    MaterialPreparationMode,
+)
 from workorder.upload_paths import product_image_upload_to
 
 
@@ -383,6 +387,18 @@ class ProductMaterial(models.Model):
         "需拼版后规划",
         default=False,
         help_text="产品阶段仅确定材料要求，拼版确认后再选择采购规格和计算数量",
+    )
+    calculation_mode = models.CharField(
+        "需求计算方式",
+        max_length=30,
+        choices=MaterialCalculationMode.choices,
+        default=MaterialCalculationMode.FIXED,
+    )
+    preparation_mode = models.CharField(
+        "备料方式",
+        max_length=30,
+        choices=MaterialPreparationMode.choices,
+        default=MaterialPreparationMode.DIRECT,
     )
     notes = models.TextField("备注", blank=True)
     sort_order = models.IntegerField("排序", default=0)

@@ -36,6 +36,7 @@ from ..models.core import (
 )
 from ..models.sales import SalesOrder, SalesOrderItem
 from ..models.inventory import ProductStock
+from ..models.material_modes import requires_material_planning
 from ..models.system import (
     WorkOrderApprovalLog,
 )
@@ -1049,9 +1050,11 @@ class WorkOrderFlowService:
                     material_usage=product_material.material_usage,
                     need_cutting=product_material.need_cutting,
                     planning_required=product_material.planning_required,
+                    calculation_mode=product_material.calculation_mode,
+                    preparation_mode=product_material.preparation_mode,
                     planning_status=(
                         WorkOrderMaterial.PlanningStatus.DRAFT
-                        if product_material.planning_required
+                        if requires_material_planning(product_material)
                         else WorkOrderMaterial.PlanningStatus.NOT_REQUIRED
                     ),
                     notes=f"从产品 {product_item.product.name} 自动生成",

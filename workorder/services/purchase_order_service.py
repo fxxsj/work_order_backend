@@ -5,6 +5,7 @@ from rest_framework import status
 
 from workorder.constants.status import MaterialPurchaseStatus
 from workorder.models.core import WorkOrder
+from workorder.models.material_modes import requires_material_planning
 from workorder.models.materials import (
     PurchaseOrder,
     PurchaseOrderItem,
@@ -120,7 +121,7 @@ class PurchaseOrderService:
         unconfirmed_plans = [
             wom
             for wom in wo_materials
-            if wom.planning_required
+            if requires_material_planning(wom)
             and wom.planning_status != wom.PlanningStatus.CONFIRMED
         ]
         if unconfirmed_plans:
@@ -164,7 +165,7 @@ class PurchaseOrderService:
         no_shortage_ids = {
             wom.id
             for wom in wo_materials
-            if wom.planning_required and wom.purchase_quantity <= 0
+            if requires_material_planning(wom) and wom.purchase_quantity <= 0
         }
         if no_shortage_ids:
             skipped_items.extend(
@@ -231,7 +232,7 @@ class PurchaseOrderService:
                     procurement_material = wom.purchase_material or wom.material
                     default_quantity = (
                         wom.purchase_quantity
-                        if wom.planning_required
+                        if requires_material_planning(wom)
                         else TaskGenerationService._parse_material_usage(
                             wom.material_usage or ""
                         )

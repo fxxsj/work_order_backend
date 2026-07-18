@@ -96,6 +96,7 @@ class MaterialViewSet(BaseViewSet):
         "specification_level",
         "material_type",
         "base_material",
+        "is_temporary",
     ]
     search_fields = ["name", "code", "specification"]
     ordering_fields = [
@@ -111,6 +112,9 @@ class MaterialViewSet(BaseViewSet):
     def get_queryset(self):
         """优化查询性能"""
         queryset = super().get_queryset()
+        include_temporary = self.request.query_params.get("include_temporary", "")
+        if include_temporary.lower() not in {"1", "true", "yes"}:
+            queryset = queryset.filter(is_temporary=False)
         return queryset.select_related("default_supplier", "base_material")
 
     @action(detail=False, methods=["get"])

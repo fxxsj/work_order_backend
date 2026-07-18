@@ -7,6 +7,12 @@
 from django.db import models
 from django.utils import timezone
 
+from .material_modes import (
+    requires_internal_cutting,
+    requires_material_planning,
+    requires_sheet_planning,
+)
+
 
 class WorkOrderValidator:
     """
@@ -207,14 +213,18 @@ class WorkOrderValidator:
         materials = self.work_order.materials.select_related("material").all()
         for material_item in materials:
             if (
-                material_item.planning_required
+                requires_material_planning(material_item)
                 and material_item.planning_status != "confirmed"
             ):
                 self.errors.append(
-                    f'物料"{material_item.material.name}"的拼版物料计划尚未确认'
+                    f'物料"{material_item.material.name}"的规格计划尚未确认'
                 )
                 continue
-            if material_item.need_cutting and not material_item.material_usage:
+            if (
+                requires_internal_cutting(material_item)
+                and not requires_sheet_planning(material_item)
+                and not material_item.material_usage
+            ):
                 self.errors.append(
                     f'物料"{material_item.material.name}"需要开料，请填写物料用量'
                 )

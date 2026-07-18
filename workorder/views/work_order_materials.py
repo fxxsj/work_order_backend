@@ -13,6 +13,7 @@ from ..permissions import WorkOrderMaterialPermission
 from ..serializers.core import (
     MaterialPlanCalculateSerializer,
     MaterialPlanInvalidateSerializer,
+    MaterialSpecificationResolveSerializer,
     WorkOrderMaterialSerializer,
 )
 from ..services.work_order_material_service import WorkOrderMaterialService
@@ -43,6 +44,22 @@ class WorkOrderMaterialViewSet(viewsets.ModelViewSet):
         return APIResponse.success(
             data=self.get_serializer(wom).data,
             message="物料计划计算完成",
+        )
+
+    @action(detail=True, methods=["post"])
+    @handle_service_error
+    def resolve_specification(self, request, pk=None):
+        """为非纸材料要求选择具体库存/采购规格。"""
+        input_serializer = MaterialSpecificationResolveSerializer(
+            data=request.data
+        )
+        input_serializer.is_valid(raise_exception=True)
+        wom = WorkOrderMaterialService.resolve_specification(
+            wom=self.get_object(), **input_serializer.validated_data
+        )
+        return APIResponse.success(
+            data=self.get_serializer(wom).data,
+            message="物料规格已选择，请核对后确认",
         )
 
     @action(detail=True, methods=["post"])

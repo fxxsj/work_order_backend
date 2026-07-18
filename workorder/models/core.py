@@ -37,6 +37,10 @@ from workorder.models.base import (
     _SignalSafeQuerySet,
     ApprovalFieldsMixin,
 )
+from workorder.models.material_modes import (
+    MaterialCalculationMode,
+    MaterialPreparationMode,
+)
 from workorder.upload_paths import work_order_design_upload_to
 
 # 配置日志记录器
@@ -947,6 +951,18 @@ class WorkOrderMaterial(models.Model):
     planning_required = models.BooleanField(
         "需拼版后规划", default=False
     )
+    calculation_mode = models.CharField(
+        "需求计算方式",
+        max_length=30,
+        choices=MaterialCalculationMode.choices,
+        default=MaterialCalculationMode.FIXED,
+    )
+    preparation_mode = models.CharField(
+        "备料方式",
+        max_length=30,
+        choices=MaterialPreparationMode.choices,
+        default=MaterialPreparationMode.DIRECT,
+    )
     planning_status = models.CharField(
         "物料规划状态",
         max_length=20,
@@ -979,6 +995,13 @@ class WorkOrderMaterial(models.Model):
     )
     planned_parent_quantity = models.DecimalField(
         "计划原纸数量", max_digits=12, decimal_places=3, default=0
+    )
+    planned_material_quantity = models.DecimalField(
+        "计划物料数量",
+        max_digits=12,
+        decimal_places=3,
+        default=0,
+        help_text="非纸物料规格确认后的计划需求量",
     )
     reserved_quantity = models.DecimalField(
         "已预留数量", max_digits=12, decimal_places=3, default=0

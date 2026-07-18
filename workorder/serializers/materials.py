@@ -37,6 +37,10 @@ class MaterialSerializer(serializers.ModelSerializer):
     class Meta:
         model = Material
         fields = "__all__"
+        read_only_fields = [
+            "is_temporary",
+            "temporary_for_work_order_material",
+        ]
 
     def validate_code(self, value):
         """验证物料编码格式"""
@@ -101,6 +105,10 @@ class MaterialSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         """对象级业务规则验证"""
+        if self.instance and self.instance.is_temporary:
+            raise serializers.ValidationError(
+                "施工单专用规格由物料规划维护，不能在物料主数据中直接修改"
+            )
         stock_quantity = attrs.get("stock_quantity", 0)
         min_stock_quantity = attrs.get("min_stock_quantity", 0)
 
