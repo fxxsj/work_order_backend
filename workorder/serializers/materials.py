@@ -283,6 +283,9 @@ class MaterialSupplierSerializer(serializers.ModelSerializer):
 
     material_name = serializers.CharField(source="material.name", read_only=True)
     material_code = serializers.CharField(source="material.code", read_only=True)
+    material_specification = serializers.CharField(
+        source="material.specification", read_only=True
+    )
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     supplier_code = serializers.CharField(source="supplier.code", read_only=True)
 
@@ -350,6 +353,10 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
 
     material_name = serializers.CharField(source="material.name", read_only=True)
     material_code = serializers.CharField(source="material.code", read_only=True)
+    material_specification = serializers.CharField(
+        source="material.specification", read_only=True
+    )
+    material_unit = serializers.CharField(source="material.unit", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     subtotal = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     remaining_quantity = serializers.DecimalField(
@@ -535,6 +542,9 @@ class PurchaseReceiveRecordSerializer(serializers.ModelSerializer):
     # 关联信息（只读）
     material_name = serializers.CharField(source="material.name", read_only=True)
     material_code = serializers.CharField(source="material.code", read_only=True)
+    material_specification = serializers.CharField(
+        source="material.specification", read_only=True
+    )
     material_unit = serializers.CharField(source="material.unit", read_only=True)
     purchase_order_number = serializers.CharField(
         source="purchase_order.order_number", read_only=True

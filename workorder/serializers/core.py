@@ -501,6 +501,7 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
     procurement_material_id = serializers.SerializerMethodField()
     procurement_material_name = serializers.SerializerMethodField()
     procurement_material_code = serializers.SerializerMethodField()
+    procurement_material_specification = serializers.SerializerMethodField()
     procurement_material_unit = serializers.SerializerMethodField()
     procurement_supplier_id = serializers.SerializerMethodField()
     procurement_supplier_name = serializers.SerializerMethodField()
@@ -526,6 +527,7 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
             "procurement_material_id",
             "procurement_material_name",
             "procurement_material_code",
+            "procurement_material_specification",
             "procurement_material_unit",
             "procurement_supplier_id",
             "procurement_supplier_name",
@@ -587,6 +589,9 @@ class WorkOrderMaterialSerializer(serializers.ModelSerializer):
 
     def get_procurement_material_code(self, obj):
         return get_procurement_material(obj).code
+
+    def get_procurement_material_specification(self, obj):
+        return get_procurement_material(obj).specification
 
     def get_procurement_material_unit(self, obj):
         return get_procurement_material(obj).unit
