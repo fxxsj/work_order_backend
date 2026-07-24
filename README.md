@@ -63,6 +63,31 @@ python manage.py load_initial_users
 python manage.py loaddata workorder/fixtures/initial_products.json
 ```
 
+## 生产环境一键更新
+
+已完成首次 Docker Compose 部署的主机，可在后端仓库根目录执行：
+
+```bash
+bash scripts/update.sh
+```
+
+脚本会检查工作区、备份 PostgreSQL、从当前分支对应的远端拉取
+fast-forward 更新、构建镜像、执行 Django 检查和 migration、收集静态
+文件、重建后端容器并等待健康检查。脚本不会覆盖 `.env`、生产 Compose
+文件、媒体目录或数据库 volume。成功后会用已忽略的 `.deploy-state`
+记录已部署 commit；若上次更新中断，重新执行脚本会继续部署而不会误判完成。
+
+默认要求仓库根目录存在 `.env` 和 `docker-compose.prod.yml`。常用覆盖项：
+
+```bash
+COMPOSE_FILE=compose.production.yml bash scripts/update.sh
+UPDATE_REMOTE=origin UPDATE_BRANCH=main bash scripts/update.sh
+HEALTHCHECK_URL=http://127.0.0.1:8000/api/health/ bash scripts/update.sh
+```
+
+更新失败时，先查看脚本输出的数据库备份路径和容器日志。数据库 migration
+不能安全地通用自动回滚，修复版本应优先使用向前 migration。
+
 ## 开发约定
 
 - View 层只做参数校验、权限检查和响应格式化。

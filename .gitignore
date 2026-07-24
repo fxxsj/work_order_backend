@@ -28,6 +28,8 @@ db.sqlite3-journal
 db.sqlite3.backup*
 /media
 /staticfiles
+/.deploy-backups/
+/.deploy-state
 
 # 环境变量
 .env
