@@ -40,5 +40,5 @@ EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD curl -f http://localhost:8000/api/health/ || exit 1
 
-# Start with Daphne (HTTP + WebSocket)
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
+# Apply migrations, initialize required system data, then start Daphne.
+CMD ["bash", "scripts/container-start.sh"]

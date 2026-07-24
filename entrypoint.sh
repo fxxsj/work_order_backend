@@ -27,6 +27,11 @@ fi
 echo "🔄 Running database migrations..."
 python manage.py migrate --noinput
 
+# Sync required production system data. This command is idempotent and does
+# not create demo users, sample products, or business records.
+echo "🧱 Syncing required system data..."
+python manage.py init_system_data
+
 # Create superuser if needed
 if [ "$CREATE_SUPERUSER" = "True" ]; then
     echo "👤 Creating superuser..."

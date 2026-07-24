@@ -229,6 +229,10 @@ main() {
     "${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --no-deps -T \
         "$BACKEND_SERVICE" python manage.py migrate --noinput
 
+    CURRENT_STEP="同步系统基础数据"
+    "${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --no-deps -T \
+        "$BACKEND_SERVICE" python manage.py init_system_data
+
     CURRENT_STEP="检查静态目录权限"
     install -d media staticfiles
     if ! "${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --no-deps -T \

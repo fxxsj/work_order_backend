@@ -144,6 +144,8 @@ run_migrate() {
 
     echo -e "${GREEN}检查数据库迁移状态...${NC}"
     $VENV_PYTHON manage.py migrate --skip-checks
+    echo -e "${GREEN}同步系统基础数据...${NC}"
+    $VENV_PYTHON manage.py init_system_data
 }
 
 # 运行 Django 管理命令，失败时显示警告但不中断脚本
@@ -180,10 +182,6 @@ load_initial_data() {
         choice=${choice:-2}
         case $choice in
             1)
-                run_mgmt_cmd reset_processes --force
-                run_mgmt_cmd init_departments
-                run_mgmt_cmd init_groups
-                run_mgmt_cmd load_assignment_rules
                 run_mgmt_cmd load_initial_users
                 echo -e "${GREEN}加载产品 fixtures...${NC}"
                 if [ -f "workorder/fixtures/initial_products.json" ]; then

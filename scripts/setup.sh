@@ -48,6 +48,11 @@ else
     echo -e "${YELLOW}! 数据库迁移可能失败（数据库未启动？）${NC}"
 fi
 
+# 正式系统基础数据（不包含测试用户、示例产品或演示业务数据）
+echo -e "${BLUE}同步系统基础数据...${NC}"
+python manage.py init_system_data
+echo -e "${GREEN}✓ 系统基础数据同步完成${NC}"
+
 echo ""
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  Backend 安装完成${NC}"

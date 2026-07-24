@@ -38,12 +38,15 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py reset_processes --force
-python manage.py init_departments
-python manage.py init_groups
-python manage.py load_assignment_rules
+python manage.py init_system_data
 python manage.py runserver
 ```
+
+`init_system_data` 会幂等同步正式环境必需的业务角色与权限、21 个预设工序、
+12 个预设部门及工序关系、56 条任务分派规则。该命令不会创建测试用户、
+示例产品或演示业务数据，可在首次部署和后续更新时安全重复执行。Docker
+容器首次启动时会自动执行数据库迁移和该初始化命令；已有工序、部门和分派
+规则的业务配置不会被覆盖。
 
 默认服务地址：
 
