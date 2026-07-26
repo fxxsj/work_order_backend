@@ -8,6 +8,7 @@ from typing import List
 
 from rest_framework import serializers
 
+from ..models.products import Product
 from ..models.sales import SalesOrder, SalesOrderItem
 
 
@@ -341,7 +342,68 @@ class SalesOrderDetailSerializer(serializers.ModelSerializer):
                 {"delivery_date": "交货日期不能早于订单日期"}
             )
 
+        # 校验订单明细中的产品是否对该客户可用
+        # 规则：客户限定产品必须关联该客户；通用产品（无客户关联）所有客户可用
+        items = attrs.get("items")
+        customer = attrs.get("customer")
+        if customer is None and self.instance:
+            customer = self.instance.customer
+
+        if items and customer is not None:
+            self._validate_items_product_scope(items, customer)
+
         return attrs
+
+    def _validate_items_product_scope(self, items, customer):
+        """校验订单明细中的产品是否对该客户可用。
+
+        - 通用产品（无客户关联）：所有客户可用
+        - 客户限定产品：必须关联该客户
+        禁止下单该客户不可用的产品，约束后续新增/修改，不影响历史已保存订单。
+        """
+        customer_id = customer.id if hasattr(customer, "id") else customer
+        product_ids = []
+        for item in items:
+            product = item.get("product") if isinstance(item, dict) else None
+            if product is None:
+                continue
+            product_ids.append(product.id if hasattr(product, "id") else product)
+
+        if not product_ids:
+            return
+
+        product_ids = list(set(product_ids))
+
+        # 通用产品集合（无任何客户关联）
+        global_product_ids = set(
+            Product.objects.filter(
+                id__in=product_ids, customers__isnull=True
+            ).values_list("id", flat=True)
+        )
+        # 该客户关联的产品集合
+        customer_product_ids = set(
+            Product.objects.filter(
+                id__in=product_ids, customers=customer_id
+            ).values_list("id", flat=True)
+        )
+
+        for idx, item in enumerate(items, start=1):
+            if not isinstance(item, dict):
+                continue
+            product = item.get("product")
+            if product is None:
+                continue
+            pid = product.id if hasattr(product, "id") else product
+            if pid in global_product_ids or pid in customer_product_ids:
+                continue
+            raise serializers.ValidationError(
+                {
+                    "items": (
+                        f"第 {idx} 个产品（ID {pid}）不在该客户可用产品范围内，"
+                        f"请先在产品管理中关联该客户或设为通用产品"
+                    )
+                }
+            )
 
     def create(self, validated_data):
         """创建客户订单及其明细"""

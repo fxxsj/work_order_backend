@@ -384,3 +384,86 @@ class ProductMaterialAPITest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["data"]["results"]), 1)
+
+
+class ProductCustomerRelationTest(APITestCase):
+    """产品-客户多对多关系测试"""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(username="admin2", password="admin123")
+        from workorder.models.base import Customer
+
+        self.customer_a = Customer.objects.create(name="客户A", code="CA001")
+        self.customer_b = Customer.objects.create(name="客户B", code="CB001")
+        # 通用产品（无客户关联）
+        self.global_product = Product.objects.create(code="G-001", name="通用白盒")
+        # 客户A专属产品
+        self.exclusive_product = Product.objects.create(code="E-001", name="客户A专属")
+        self.exclusive_product.customers.add(self.customer_a)
+        # 多客户共享产品
+        self.shared_product = Product.objects.create(code="S-001", name="共享包装")
+        self.shared_product.customers.add(self.customer_a, self.customer_b)
+
+    def test_customer_scope_derived(self):
+        """范围由关联数量派生，不入库"""
+        self.assertEqual(self.global_product.customer_scope, "global")
+        self.assertEqual(self.exclusive_product.customer_scope, "exclusive")
+        self.assertEqual(self.shared_product.customer_scope, "shared")
+        self.assertEqual(self.global_product.customer_scope_display, "通用产品")
+
+    def test_filter_by_customer(self):
+        """按客户过滤返回 通用 + 该客户关联产品"""
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.get(f"/api/v1/products/?customer={self.customer_a.id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        codes = {p["code"] for p in resp.data["data"]["results"]}
+        # 客户A可用：通用 + A专属 + 共享；不含 B 独有
+        self.assertIn("G-001", codes)
+        self.assertIn("E-001", codes)
+        self.assertIn("S-001", codes)
+
+
+class ProductCustomerScopeValidationTest(TestCase):
+    """销售订单保存校验产品-客户可用关系"""
+
+    def setUp(self):
+        from workorder.models.base import Customer
+
+        self.customer_a = Customer.objects.create(name="客户A", code="CA01")
+        self.customer_b = Customer.objects.create(name="客户B", code="CB01")
+        self.global_product = Product.objects.create(code="G", name="通用")
+        self.exclusive_a = Product.objects.create(code="EA", name="A专属")
+        self.exclusive_a.customers.add(self.customer_a)
+        self.exclusive_b = Product.objects.create(code="EB", name="B专属")
+        self.exclusive_b.customers.add(self.customer_b)
+
+    def _serialize(self, customer, items):
+        from workorder.serializers.sales import SalesOrderDetailSerializer
+
+        data = {
+            "customer": customer.id,
+            "order_date": "2026-07-26",
+            "delivery_date": "2026-08-26",
+            "items": items,
+        }
+        return SalesOrderDetailSerializer(data=data)
+
+    def test_global_and_own_exclusive_allowed(self):
+        """客户可用：通用产品 + 自己专属产品"""
+        s = self._serialize(
+            self.customer_a,
+            [
+                {"product": self.global_product.id, "quantity": 1, "unit_price": 10},
+                {"product": self.exclusive_a.id, "quantity": 1, "unit_price": 5},
+            ],
+        )
+        self.assertTrue(s.is_valid(), s.errors)
+
+    def test_other_customer_exclusive_rejected(self):
+        """客户不能用其他客户的专属产品"""
+        s = self._serialize(
+            self.customer_a,
+            [{"product": self.exclusive_b.id, "quantity": 1, "unit_price": 5}],
+        )
+        self.assertFalse(s.is_valid())
+        self.assertIn("items", s.errors)

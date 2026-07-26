@@ -4,6 +4,7 @@
 包含产品、产品物料、产品组等视图集。
 """
 
+import django_filters
 from rest_framework import status
 from rest_framework.decorators import action
 
@@ -38,6 +39,40 @@ from workorder.docs.products import (
 )
 
 
+class ProductFilter(django_filters.FilterSet):
+    """产品过滤：支持按客户筛选可用产品（通用 + 该客户关联）。"""
+
+    # customer 参数：返回该客户可下单/生产的产品（通用产品 + 关联该客户的产品）
+    customer = django_filters.NumberFilter(method="filter_customer")
+    customer_scope = django_filters.CharFilter(method="filter_customer_scope")
+
+    class Meta:
+        model = Product
+        fields = ["is_active", "product_type"]
+
+    def filter_customer(self, queryset, name, value):
+        from django.db.models import Q
+
+        return queryset.filter(
+            Q(customers=value) | Q(customers__isnull=True)
+        ).distinct()
+
+    def filter_customer_scope(self, queryset, name, value):
+        from django.db.models import Count
+
+        if value == "global":
+            return queryset.filter(customers__isnull=True)
+        if value == "exclusive":
+            return queryset.annotate(
+                cust_count=Count("customers")
+            ).filter(cust_count=1)
+        if value == "shared":
+            return queryset.annotate(
+                cust_count=Count("customers")
+            ).filter(cust_count__gte=2)
+        return queryset
+
+
 @product_docs
 class ProductViewSet(ImageAssetActionsMixin, BaseViewSet):
     """产品视图集"""
@@ -47,7 +82,7 @@ class ProductViewSet(ImageAssetActionsMixin, BaseViewSet):
     image_model = ProductImage
     image_serializer_class = ProductImageSerializer
     image_parent_field = "product"
-    filterset_fields = ["is_active"]
+    filterset_class = ProductFilter
     search_fields = ["name", "code", "specification"]
     permission_classes = [SuperuserFriendlyModelPermissions]
     ordering_fields = ["code", "created_at"]
@@ -56,7 +91,10 @@ class ProductViewSet(ImageAssetActionsMixin, BaseViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         return queryset.prefetch_related(
-            "default_materials__material", "default_processes", "images"
+            "default_materials__material",
+            "default_processes",
+            "images",
+            "customer_links__customer",
         )
 
     @action(detail=False, methods=["get"])

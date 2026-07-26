@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from django.db import transaction
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from rest_framework import serializers
 
 from ..models.assets import Artwork, ArtworkProduct
@@ -1297,6 +1297,26 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
         validated_products_data = []
         requested_quantities_by_sales_item = {}
 
+        # 确定施工单客户，用于校验产品-客户可用关系
+        customer = None
+        if sales_order is not None:
+            customer = sales_order.customer
+        elif instance is not None:
+            customer = instance.customer
+
+        # 预取产品可用性集合（通用产品 + 该客户关联产品）
+        all_product_ids = set()
+        for item in products_data:
+            if not isinstance(item, dict):
+                continue
+            pid = item.get("product")
+            if pid is None:
+                continue
+            all_product_ids.add(pid.id if hasattr(pid, "id") else pid)
+        available_product_ids = self._resolve_available_product_ids(
+            all_product_ids, customer
+        )
+
         for index, item in enumerate(products_data, start=1):
             if not isinstance(item, dict):
                 raise serializers.ValidationError(
@@ -1331,6 +1351,7 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
                 product_id = normalized_item.get("product")
                 if not product_id:
                     normalized_item["product"] = sales_order_item.product_id
+                    product_id = sales_order_item.product_id
                 elif int(product_id) != sales_order_item.product_id:
                     raise serializers.ValidationError(
                         {
@@ -1359,6 +1380,24 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             else:
                 normalized_item["sales_order_item"] = None
 
+            # 校验产品-客户可用关系
+            pid_for_check = normalized_item.get("product")
+            if pid_for_check is not None and customer is not None:
+                pid_val = (
+                    pid_for_check.id
+                    if hasattr(pid_for_check, "id")
+                    else int(pid_for_check)
+                )
+                if pid_val not in available_product_ids:
+                    raise serializers.ValidationError(
+                        {
+                            "products_data": (
+                                f"第 {index} 个产品（ID {pid_val}）不在该客户可用"
+                                f"产品范围内，请先在产品管理中关联该客户或设为通用产品"
+                            )
+                        }
+                    )
+
             validated_products_data.append(normalized_item)
 
         if requested_quantities_by_sales_item:
@@ -1367,6 +1406,33 @@ class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
             )
 
         return validated_products_data
+
+    @staticmethod
+    def _resolve_available_product_ids(product_ids, customer):
+        """返回传入产品 ID 中对该客户可用的集合。
+
+        通用产品（无客户关联）+ 该客户关联产品。
+        """
+        if not product_ids:
+            return set()
+        if customer is None:
+            # 无客户上下文（如库存生产施工单未关联客户）：仅放行通用产品
+            return set(
+                Product.objects.filter(
+                    id__in=product_ids, customers__isnull=True
+                ).values_list("id", flat=True)
+            )
+        customer_id = customer.id if hasattr(customer, "id") else customer
+        return set(
+            Product.objects.filter(
+                id__in=product_ids,
+            )
+            .filter(
+                # 通用产品（无关联）或关联该客户
+                Q(customers__isnull=True) | Q(customers=customer_id)
+            )
+            .values_list("id", flat=True)
+        )
 
     def _validate_sales_order_item_quantities(
         self, requested_quantities_by_sales_item, instance

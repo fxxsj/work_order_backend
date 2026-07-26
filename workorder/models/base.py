@@ -128,6 +128,15 @@ class Customer(AuditMixin, TimeStampedModel, models.Model):
     """客户信息"""
 
     name = models.CharField("客户名称", max_length=200)
+    # 客户编码：用于产品导入匹配、跨系统对接，避免仅靠 name 匹配的重名歧义
+    code = models.CharField(
+        "客户编码",
+        max_length=50,
+        unique=True,
+        blank=True,
+        null=True,
+        help_text="客户编码，用于导入匹配；历史数据迁移时自动回填，可留空",
+    )
     contact_person = models.CharField("联系人", max_length=100, blank=True)
     phone = models.CharField("联系电话", max_length=50, blank=True)
     email = models.EmailField("邮箱", blank=True)
@@ -159,6 +168,7 @@ class Customer(AuditMixin, TimeStampedModel, models.Model):
         indexes = [
             models.Index(fields=["name"], name="customer_name_idx"),
             models.Index(fields=["phone"], name="customer_phone_idx"),
+            models.Index(fields=["code"], name="customer_code_idx"),
             models.Index(
                 fields=["salesperson"], name="customer_salesperson_idx"
             ),

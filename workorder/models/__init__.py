@@ -70,6 +70,7 @@ from .materials import (
 )
 from .products import (
     Product,
+    ProductCustomer,
     ProductImage,
     ProductGroup,
     ProductGroupItem,
@@ -96,6 +97,7 @@ __all__ = [
     "APPROVED_ORDER_EDITABLE_FIELDS",
     # 产品模型
     "Product",
+    "ProductCustomer",
     "ProductImage",
     "ProductGroup",
     "ProductGroupItem",

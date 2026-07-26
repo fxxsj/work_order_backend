@@ -81,6 +81,9 @@ class ImportConfig:
     pre_save_hook: Optional[
         Callable[["models.Model", Dict[str, Any]], None]
     ] = None  # 保存前钩子
+    post_save_hook: Optional[
+        Callable[["models.Model", Dict[str, Any], Dict[str, Any]], None]
+    ] = None  # 保存后钩子，接收 (instance, data, result) 用于回写错误
     unique_field_case_insensitive: bool = True  # 唯一字段是否不区分大小写
 
 
@@ -345,6 +348,8 @@ def import_model(file, config: ImportConfig, user=None) -> Dict[str, Any]:
                 )
                 existing = config.model.objects.filter(**filter_kwargs).first()
 
+                row_result = {"errors": []}
+
                 if existing:
                     # 更新现有记录
                     for field_name in config.update_fields:
@@ -353,6 +358,8 @@ def import_model(file, config: ImportConfig, user=None) -> Dict[str, Any]:
                     if config.pre_save_hook:
                         config.pre_save_hook(existing, data)
                     existing.save()
+                    if config.post_save_hook:
+                        config.post_save_hook(existing, data, row_result)
                     updated_count += 1
                 else:
                     # 创建新记录
@@ -375,8 +382,16 @@ def import_model(file, config: ImportConfig, user=None) -> Dict[str, Any]:
                             ]
                     if config.pre_save_hook:
                         config.pre_save_hook(None, create_data)
-                    config.model.objects.create(**create_data)
+                    created = config.model.objects.create(**create_data)
+                    if config.post_save_hook:
+                        config.post_save_hook(created, data, row_result)
                     created_count += 1
+
+                # 回写 post_save_hook 的错误到全局错误列表
+                if row_result.get("errors"):
+                    for msg in row_result["errors"]:
+                        errors.append(f"第{row_num}行: {msg}")
+                    error_count += len(row_result["errors"])
 
             except Exception as e:
                 errors.append(f"第{row_num}行: {str(e)}")

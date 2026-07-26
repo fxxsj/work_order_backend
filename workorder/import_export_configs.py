@@ -88,6 +88,19 @@ def product_pre_save_hook(instance, data):
         data.pop("product_group_name", None)
 
 
+def product_post_save_hook(instance, data, result=None):
+    """产品保存后钩子：同步客户关系（导入专用）。
+
+    result 可选字典，用于回写 import 错误信息。
+    """
+    customer_codes = data.get("customer_codes")
+    if customer_codes is None:
+        return
+    errors = sync_product_customers(instance, customer_codes)
+    if result is not None and errors:
+        result.setdefault("errors", []).extend(errors)
+
+
 def parse_product_type(val):
     """解析产品类型"""
     if val is None:
@@ -110,6 +123,77 @@ def parse_bool(val):
     if val is None:
         return True
     return str(val).strip().lower() in ("是", "yes", "true", "1", "启用")
+
+
+# 产品-客户关系导入用分隔符：选用 "|" 避开客户名/编码中常见逗号
+CUSTOMER_SCOPE_SEPARATOR = "|"
+
+# 产品范围导入映射
+PRODUCT_SCOPE_MAP = {
+    "通用": "global",
+    "通用产品": "global",
+    "global": "global",
+    "专属": "exclusive",
+    "客户专属": "exclusive",
+    "exclusive": "exclusive",
+    "共享": "shared",
+    "多客户共享": "shared",
+    "shared": "shared",
+}
+
+
+def parse_customer_codes(val):
+    """解析所属客户列：按分隔符拆分为客户编码列表。"""
+    if val is None:
+        return []
+    raw = str(val).strip()
+    if not raw:
+        return []
+    return [
+        part.strip()
+        for part in raw.split(CUSTOMER_SCOPE_SEPARATOR)
+        if part.strip()
+    ]
+
+
+def sync_product_customers(instance, customer_codes):
+    """根据导入的客户编码列表同步产品的客户关系。
+
+    - 编码解析为 Customer（按 code 精确匹配，找不到则跳过并记入 import 错误上下文）
+    - 整体替换：清除不在列表中的关联，新增缺失的关联
+    - 通用产品（编码列表为空）：清除所有客户关联
+    """
+    from .models.products import ProductCustomer
+    from .models.base import Customer
+
+    if instance is None:
+        return []
+
+    errors = []
+    resolved_customers = []
+    for code in customer_codes:
+        customer = Customer.objects.filter(code=code).first()
+        if customer is None:
+            # 兼容历史未回填 code 的客户：按 name 兜底匹配
+            customer = Customer.objects.filter(name=code).first()
+        if customer is None:
+            errors.append(f"客户 '{code}' 未找到，已跳过")
+            continue
+        resolved_customers.append(customer)
+
+    existing = set(instance.customer_links.values_list("customer_id", flat=True))
+    new_ids = {c.id for c in resolved_customers}
+
+    # 删除不再关联的
+    instance.customer_links.exclude(customer_id__in=new_ids).delete()
+    # 新增缺失的
+    for customer in resolved_customers:
+        if customer.id not in existing:
+            ProductCustomer.objects.create(
+                product=instance, customer=customer
+            )
+
+    return errors
 
 
 PRODUCT_EXPORT_CONFIG = ExportConfig(
@@ -136,11 +220,26 @@ PRODUCT_EXPORT_CONFIG = ExportConfig(
         ExportField(
             "产品组", lambda x: x.product_group.name if x.product_group else ""
         ),
+        ExportField(
+            "产品范围",
+            lambda x: {
+                "global": "通用产品",
+                "exclusive": "客户专属",
+                "shared": "多客户共享",
+            }.get(x.customer_scope, ""),
+        ),
+        ExportField(
+            "所属客户",
+            lambda x: CUSTOMER_SCOPE_SEPARATOR.join(
+                link.customer.code or link.customer.name
+                for link in x.customer_links.all()
+            ),
+        ),
         ExportField("描述", lambda x: x.description),
         ExportField("是否启用", lambda x: "是" if x.is_active else "否"),
         ExportField("创建时间", lambda x: x.created_at),
     ],
-    column_widths=[15, 20, 20, 8, 10, 10, 10, 12, 15, 30, 10, 20],
+    column_widths=[15, 20, 20, 8, 10, 10, 10, 12, 15, 12, 25, 30, 10, 20],
 )
 
 
@@ -265,6 +364,18 @@ def get_product_import_config(model_class):
                 strip_val,
             ),
             ImportField(
+                ["产品范围", "scope", "customer_scope"],
+                "customer_scope",
+                lambda v: PRODUCT_SCOPE_MAP.get(
+                    str(v).strip().lower(), ""
+                ),
+            ),
+            ImportField(
+                ["所属客户", "customers", "customer_codes"],
+                "customer_codes",
+                parse_customer_codes,
+            ),
+            ImportField(
                 ["描述", "description", "desc"], "description", strip_val
             ),
             ImportField(
@@ -285,6 +396,7 @@ def get_product_import_config(model_class):
             "is_active",
         ],
         pre_save_hook=product_pre_save_hook,
+        post_save_hook=product_post_save_hook,
         unique_field_case_insensitive=True,
     )
     return config

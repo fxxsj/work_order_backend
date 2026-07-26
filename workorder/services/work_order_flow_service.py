@@ -811,6 +811,35 @@ class WorkOrderFlowService:
                 sales_order
             )
 
+        # 校验产品-客户可用关系（销售订单复制路径，避免绕过 serializer 校验）
+        customer = work_order.customer or sales_order.customer
+        if customer is not None:
+            product_ids = [
+                item["product"].id
+                for item in production_items
+                if item.get("product")
+            ]
+            if product_ids:
+                from ..models.products import Product
+                from django.db.models import Q
+
+                available_ids = set(
+                    Product.objects.filter(id__in=product_ids)
+                    .filter(
+                        Q(customers__isnull=True) | Q(customers=customer)
+                    )
+                    .values_list("id", flat=True)
+                )
+                unavailable = [
+                    pid for pid in product_ids if pid not in available_ids
+                ]
+                if unavailable:
+                    raise ServiceError(
+                        f"产品 {unavailable} 不在该客户可用产品范围内，"
+                        f"无法复制到施工单",
+                        code=status.HTTP_400_BAD_REQUEST,
+                    )
+
         created_count = 0
         for item in production_items:
             WorkOrderProduct.objects.create(

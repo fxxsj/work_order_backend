@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from rest_framework import serializers
 
-from ..models.base import Process
+from ..models.base import Customer, Process
 from ..models.material_modes import (
     derive_product_material_modes,
     normalize_material_modes,
@@ -17,6 +17,7 @@ from ..models.material_modes import (
 )
 from ..models.products import (
     Product,
+    ProductCustomer,
     ProductGroup,
     ProductGroupItem,
     ProductImage,
@@ -107,9 +108,37 @@ class ProductSerializer(serializers.ModelSerializer):
     available_group_stock = serializers.SerializerMethodField()
     group_items = serializers.SerializerMethodField()
 
+    # 产品-客户关系相关字段
+    customer_scope = serializers.CharField(read_only=True)
+    customer_scope_display = serializers.CharField(read_only=True)
+    customer_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Customer.objects.all(),
+        source="customers",
+        required=False,
+    )
+    customers_detail = serializers.SerializerMethodField()
+
     class Meta:
         model = Product
         fields = "__all__"
+
+    def get_customers_detail(self, obj) -> List[Dict[str, Any]]:
+        """产品关联客户列表（含客户编码、内部货号、专属单价）。"""
+        return [
+            {
+                "id": link.customer_id,
+                "name": link.customer.name,
+                "code": link.customer.code,
+                "customer_product_code": link.customer_product_code,
+                "default_unit_price": (
+                    str(link.default_unit_price)
+                    if link.default_unit_price is not None
+                    else None
+                ),
+            }
+            for link in obj.customer_links.select_related("customer")
+        ]
 
     def get_available_group_stock(self, obj) -> Optional[float]:
         """获取套装可用库存（仅对套装主产品有效）"""
@@ -219,6 +248,40 @@ class ProductSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+
+    def create(self, validated_data):
+        """创建产品（支持 customers 嵌套写入）"""
+        from django.db import transaction
+
+        customers_data = validated_data.pop("customers", [])
+        with transaction.atomic():
+            product = Product.objects.create(**validated_data)
+            if customers_data:
+                for customer in customers_data:
+                    ProductCustomer.objects.get_or_create(
+                        product=product, customer=customer
+                    )
+        return product
+
+    def update(self, instance, validated_data):
+        """更新产品（支持 customers 嵌套写入，整体替换）"""
+        from django.db import transaction
+
+        customers_data = validated_data.pop("customers", None)
+        with transaction.atomic():
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
+            if customers_data is not None:
+                # 整体替换客户关系
+                instance.customer_links.exclude(
+                    customer__in=customers_data
+                ).delete()
+                for customer in customers_data:
+                    ProductCustomer.objects.get_or_create(
+                        product=instance, customer=customer
+                    )
+        return instance
 
 
 class ProductGroupItemSerializer(serializers.ModelSerializer):

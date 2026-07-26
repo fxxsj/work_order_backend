@@ -11,6 +11,7 @@
 
 from django.contrib.auth.models import User
 from django.db import models, transaction
+from django.db.models import Q
 from workorder.models.audit import AuditMixin
 from workorder.models.base import TimeStampedModel, GenerateCodeMixin
 from workorder.models.material_modes import (
@@ -88,6 +89,20 @@ class Product(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
 
+    # 产品-客户多对多关系（通过中间表 ProductCustomer）
+    # - 关联 0 个客户 = 通用产品（所有客户可用）
+    # - 关联 1 个客户 = 客户专属产品
+    # - 关联多个客户 = 多客户共享产品
+    # 注：不引入 customer_scope 字段，避免与关联数量双写不一致；范围通过派生属性推断。
+    customers = models.ManyToManyField(
+        "workorder.Customer",
+        through="ProductCustomer",
+        related_name="products",
+        blank=True,
+        verbose_name="所属客户",
+        help_text="关联客户为空表示通用产品；关联一个为专属；多个为共享",
+    )
+
     class Meta:
         verbose_name = "产品"
         verbose_name_plural = "产品管理"
@@ -104,6 +119,63 @@ class Product(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
 
     def get_audit_log_repr(self):
         return f"产品 {self.code} - {self.name}"
+
+    # ===== 产品范围（派生属性） =====
+
+    CUSTOMER_SCOPE_GLOBAL = "global"  # 通用产品：无客户关联
+    CUSTOMER_SCOPE_EXCLUSIVE = "exclusive"  # 客户专属：关联 1 个客户
+    CUSTOMER_SCOPE_SHARED = "shared"  # 多客户共享：关联多个客户
+
+    @property
+    def customer_scope(self):
+        """产品范围派生属性：global / exclusive / shared。
+
+        不入库，由 customers 关联数量推断，避免双写不一致。
+        """
+        count = self.customers.count()
+        if count == 0:
+            return self.CUSTOMER_SCOPE_GLOBAL
+        if count == 1:
+            return self.CUSTOMER_SCOPE_EXCLUSIVE
+        return self.CUSTOMER_SCOPE_SHARED
+
+    @property
+    def customer_scope_display(self):
+        """产品范围显示名称。"""
+        return {
+            self.CUSTOMER_SCOPE_GLOBAL: "通用产品",
+            self.CUSTOMER_SCOPE_EXCLUSIVE: "客户专属",
+            self.CUSTOMER_SCOPE_SHARED: "多客户共享",
+        }.get(self.customer_scope, "未知")
+
+    @classmethod
+    def available_for_customer(cls, customer):
+        """返回该客户可用的产品 QuerySet：客户专属/共享 + 通用产品。
+
+        Args:
+            customer: Customer 实例或 id
+
+        Returns:
+            QuerySet: 该客户可下单/生产的产品集合
+        """
+        return cls.objects.filter(
+            Q(customers=customer) | Q(customers__isnull=True)
+        ).distinct()
+
+    @classmethod
+    def is_product_available_for_customer(cls, product, customer):
+        """校验单个产品是否对该客户可用。
+
+        通用产品（无客户关联）对所有客户可用；客户限定产品需在关联列表中。
+        """
+        if product is None or customer is None:
+            return False
+        # 通用产品：无任何客户关联
+        if not cls.objects.filter(pk=product.pk, customers__isnull=True).exists():
+            # 客户限定产品：必须关联该客户
+            if not cls.objects.filter(pk=product.pk, customers=customer).exists():
+                return False
+        return True
 
     def save(self, *args, **kwargs):
         if not self.code:
@@ -278,6 +350,76 @@ class Product(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
                 ),
                 priority="high",
             )
+
+
+class ProductCustomer(TimeStampedModel, models.Model):
+    """产品-客户关联中间表。
+
+    通过显式 through 表，容纳客户内部货号、客户专属价格等差异化属性。
+    - Product.unit_price 是全局参考价；下单默认取价优先用此处的 default_unit_price。
+    - 通用产品（无客户关联）不在此表建行。
+    """
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="customer_links",
+        verbose_name="产品",
+    )
+    customer = models.ForeignKey(
+        "workorder.Customer",
+        on_delete=models.CASCADE,
+        related_name="product_links",
+        verbose_name="客户",
+    )
+    # 客户内部货号（客户对该产品的叫法/料号），与 Customer.code 区分
+    customer_product_code = models.CharField(
+        "客户内部货号",
+        max_length=50,
+        blank=True,
+        help_text="客户对该产品的内部料号/名称，区别于客户编码",
+    )
+    # 客户专属价格，下单默认取价优先于此值；为空时回退到 Product.unit_price
+    default_unit_price = models.DecimalField(
+        "客户专属单价",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="该客户对该产品的默认单价；为空时使用产品全局单价",
+    )
+    notes = models.TextField("备注", blank=True)
+
+    class Meta:
+        verbose_name = "产品客户关联"
+        verbose_name_plural = "产品客户关联管理"
+        ordering = ["product", "customer"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "customer"],
+                name="unique_product_customer",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["product"], name="pc_product_idx"),
+            models.Index(fields=["customer"], name="pc_customer_idx"),
+            models.Index(
+                fields=["product", "customer"], name="pc_product_customer_idx"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.product.code} - {self.customer.name}"
+
+    @classmethod
+    def get_customer_price(cls, product, customer):
+        """获取客户专属价格，无关联或未设价则返回 None（回退到产品全局价）。"""
+        link = cls.objects.filter(
+            product=product, customer=customer
+        ).first()
+        if link and link.default_unit_price is not None:
+            return link.default_unit_price
+        return None
 
 
 class ProductImage(TimeStampedModel, models.Model):
