@@ -137,7 +137,7 @@ class ProductSerializer(serializers.ModelSerializer):
                     else None
                 ),
             }
-            for link in obj.customer_links.select_related("customer")
+            for link in obj.customer_links.all()
         ]
 
     def get_available_group_stock(self, obj) -> Optional[float]:

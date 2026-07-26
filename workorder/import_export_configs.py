@@ -13,6 +13,7 @@ CUSTOMER_EXPORT_CONFIG = ExportConfig(
     filename="customers",
     sheet_title="客户列表",
     fields=[
+        ExportField("编码", lambda x: x.code),
         ExportField("名称", lambda x: x.name),
         ExportField("联系人", lambda x: x.contact_person),
         ExportField("电话", lambda x: x.phone),
@@ -24,7 +25,7 @@ CUSTOMER_EXPORT_CONFIG = ExportConfig(
         ExportField("备注", lambda x: x.notes),
         ExportField("创建时间", lambda x: x.created_at),
     ],
-    column_widths=[20, 12, 15, 25, 30, 12, 30, 20],
+    column_widths=[15, 20, 12, 15, 25, 30, 12, 30, 20],
 )
 
 
@@ -41,6 +42,7 @@ CUSTOMER_IMPORT_CONFIG = ImportConfig(
     model=None,  # 动态设置
     unique_field="name",
     field_mappings=[
+        ImportField(["编码", "code"], "code", strip_val),
         ImportField(["名称", "name"], "name", strip_val),
         ImportField(["联系人", "contact"], "contact_person", strip_val),
         ImportField(["电话", "phone"], "phone", strip_val),
@@ -48,7 +50,14 @@ CUSTOMER_IMPORT_CONFIG = ImportConfig(
         ImportField(["地址", "address"], "address", strip_val),
         ImportField(["备注", "notes"], "notes", strip_val),
     ],
-    update_fields=["contact_person", "phone", "email", "address", "notes"],
+    update_fields=[
+        "code",
+        "contact_person",
+        "phone",
+        "email",
+        "address",
+        "notes",
+    ],
     create_defaults={
         "salesperson": lambda user: (
             user if user and user.is_authenticated else None
@@ -86,19 +95,31 @@ def product_pre_save_hook(instance, data):
     else:
         data["product_group"] = group
         data.pop("product_group_name", None)
+        # 以下字段用于保存后的关系同步，不是 Product 模型字段。
+        data.pop("customer_scope", None)
+        data.pop("customer_codes", None)
 
 
 def product_post_save_hook(instance, data, result=None):
     """产品保存后钩子：同步客户关系（导入专用）。
 
-    result 可选字典，用于回写 import 错误信息。
+    产品范围和客户关系不一致、或客户不存在时抛错，由单行事务回滚。
     """
-    customer_codes = data.get("customer_codes")
-    if customer_codes is None:
+    if "customer_codes" not in data:
         return
+    customer_codes = data.get("customer_codes") or []
+    customer_scope = data.get("customer_scope") or ""
+    relation_count = len(set(customer_codes))
+    if customer_scope == "global" and relation_count:
+        raise ValueError("通用产品不能填写所属客户")
+    if customer_scope == "exclusive" and relation_count != 1:
+        raise ValueError("客户专属产品必须且只能关联一个客户")
+    if customer_scope == "shared" and relation_count < 2:
+        raise ValueError("多客户共享产品必须关联至少两个客户")
+
     errors = sync_product_customers(instance, customer_codes)
-    if result is not None and errors:
-        result.setdefault("errors", []).extend(errors)
+    if errors:
+        raise ValueError("；".join(errors))
 
 
 def parse_product_type(val):
@@ -142,6 +163,17 @@ PRODUCT_SCOPE_MAP = {
 }
 
 
+def parse_product_scope(val):
+    """解析并严格校验产品范围。"""
+    if val is None or not str(val).strip():
+        return ""
+    raw = str(val).strip().lower()
+    scope = PRODUCT_SCOPE_MAP.get(raw)
+    if scope is None:
+        raise ValueError(f"无法识别的产品范围: {val}")
+    return scope
+
+
 def parse_customer_codes(val):
     """解析所属客户列：按分隔符拆分为客户编码列表。"""
     if val is None:
@@ -159,7 +191,7 @@ def parse_customer_codes(val):
 def sync_product_customers(instance, customer_codes):
     """根据导入的客户编码列表同步产品的客户关系。
 
-    - 编码解析为 Customer（按 code 精确匹配，找不到则跳过并记入 import 错误上下文）
+    - 编码解析为 Customer（按 code 精确匹配，找不到则整行失败）
     - 整体替换：清除不在列表中的关联，新增缺失的关联
     - 通用产品（编码列表为空）：清除所有客户关联
     """
@@ -177,9 +209,12 @@ def sync_product_customers(instance, customer_codes):
             # 兼容历史未回填 code 的客户：按 name 兜底匹配
             customer = Customer.objects.filter(name=code).first()
         if customer is None:
-            errors.append(f"客户 '{code}' 未找到，已跳过")
+            errors.append(f"客户 '{code}' 未找到")
             continue
         resolved_customers.append(customer)
+
+    if errors:
+        return errors
 
     existing = set(instance.customer_links.values_list("customer_id", flat=True))
     new_ids = {c.id for c in resolved_customers}
@@ -307,6 +342,7 @@ def get_customer_import_config(model_class):
         model=model_class,
         unique_field="name",
         field_mappings=[
+            ImportField(["编码", "code"], "code", strip_val),
             ImportField(["名称", "name"], "name", strip_val),
             ImportField(["联系人", "contact"], "contact_person", strip_val),
             ImportField(["电话", "phone"], "phone", strip_val),
@@ -314,7 +350,14 @@ def get_customer_import_config(model_class):
             ImportField(["地址", "address"], "address", strip_val),
             ImportField(["备注", "notes"], "notes", strip_val),
         ],
-        update_fields=["contact_person", "phone", "email", "address", "notes"],
+        update_fields=[
+            "code",
+            "contact_person",
+            "phone",
+            "email",
+            "address",
+            "notes",
+        ],
         create_defaults={
             "salesperson": lambda user: (
                 user if user and user.is_authenticated else None
@@ -366,9 +409,7 @@ def get_product_import_config(model_class):
             ImportField(
                 ["产品范围", "scope", "customer_scope"],
                 "customer_scope",
-                lambda v: PRODUCT_SCOPE_MAP.get(
-                    str(v).strip().lower(), ""
-                ),
+                parse_product_scope,
             ),
             ImportField(
                 ["所属客户", "customers", "customer_codes"],

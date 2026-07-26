@@ -124,7 +124,7 @@ class GenerateCodeMixin(models.Model):
         abstract = True
 
 
-class Customer(AuditMixin, TimeStampedModel, models.Model):
+class Customer(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
     """客户信息"""
 
     name = models.CharField("客户名称", max_length=200)
@@ -137,6 +137,9 @@ class Customer(AuditMixin, TimeStampedModel, models.Model):
         null=True,
         help_text="客户编码，用于导入匹配；历史数据迁移时自动回填，可留空",
     )
+    code_prefix = "C"
+    code_date_format = ""
+    code_sequence_length = 6
     contact_person = models.CharField("联系人", max_length=100, blank=True)
     phone = models.CharField("联系电话", max_length=50, blank=True)
     email = models.EmailField("邮箱", blank=True)
@@ -179,6 +182,11 @@ class Customer(AuditMixin, TimeStampedModel, models.Model):
 
     def get_audit_log_repr(self):
         return f"客户 {self.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = self.generate_code()
+        super().save(*args, **kwargs)
 
 
 class Department(TimeStampedModel, models.Model):

@@ -132,7 +132,14 @@ class Product(AuditMixin, TimeStampedModel, GenerateCodeMixin, models.Model):
 
         不入库，由 customers 关联数量推断，避免双写不一致。
         """
-        count = self.customers.count()
+        prefetched_links = getattr(self, "_prefetched_objects_cache", {}).get(
+            "customer_links"
+        )
+        count = (
+            len(prefetched_links)
+            if prefetched_links is not None
+            else self.customer_links.count()
+        )
         if count == 0:
             return self.CUSTOMER_SCOPE_GLOBAL
         if count == 1:

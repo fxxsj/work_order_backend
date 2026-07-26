@@ -94,6 +94,7 @@ class ProductViewSet(ImageAssetActionsMixin, BaseViewSet):
             "default_materials__material",
             "default_processes",
             "images",
+            "customers",
             "customer_links__customer",
         )
 

@@ -36,7 +36,7 @@
 
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Type
-from django.db import models
+from django.db import models, transaction
 from rest_framework import status
 
 
@@ -350,42 +350,48 @@ def import_model(file, config: ImportConfig, user=None) -> Dict[str, Any]:
 
                 row_result = {"errors": []}
 
-                if existing:
-                    # 更新现有记录
-                    for field_name in config.update_fields:
-                        if field_name in data and data[field_name] is not None:
-                            setattr(existing, field_name, data[field_name])
-                    if config.pre_save_hook:
-                        config.pre_save_hook(existing, data)
-                    existing.save()
-                    if config.post_save_hook:
-                        config.post_save_hook(existing, data, row_result)
-                    updated_count += 1
-                else:
-                    # 创建新记录
-                    create_data = {}
-                    for (
-                        field_name,
-                        default_val,
-                    ) in config.create_defaults.items():
-                        if callable(default_val):
-                            create_data[field_name] = default_val(user)
-                        else:
-                            create_data[field_name] = default_val
-                    for import_field in config.field_mappings:
-                        if (
-                            import_field.model_field in data
-                            and data[import_field.model_field] is not None
-                        ):
-                            create_data[import_field.model_field] = data[
-                                import_field.model_field
-                            ]
-                    if config.pre_save_hook:
-                        config.pre_save_hook(None, create_data)
-                    created = config.model.objects.create(**create_data)
-                    if config.post_save_hook:
-                        config.post_save_hook(created, data, row_result)
-                    created_count += 1
+                # 每一行独立事务：保存后钩子失败时必须回滚主记录和关联关系，
+                # 避免产品导入失败后残留为“通用产品”。
+                with transaction.atomic():
+                    if existing:
+                        # 更新现有记录
+                        for field_name in config.update_fields:
+                            if (
+                                field_name in data
+                                and data[field_name] is not None
+                            ):
+                                setattr(existing, field_name, data[field_name])
+                        if config.pre_save_hook:
+                            config.pre_save_hook(existing, data)
+                        existing.save()
+                        if config.post_save_hook:
+                            config.post_save_hook(existing, data, row_result)
+                        updated_count += 1
+                    else:
+                        # 创建新记录
+                        create_data = {}
+                        for (
+                            field_name,
+                            default_val,
+                        ) in config.create_defaults.items():
+                            if callable(default_val):
+                                create_data[field_name] = default_val(user)
+                            else:
+                                create_data[field_name] = default_val
+                        for import_field in config.field_mappings:
+                            if (
+                                import_field.model_field in data
+                                and data[import_field.model_field] is not None
+                            ):
+                                create_data[import_field.model_field] = data[
+                                    import_field.model_field
+                                ]
+                        if config.pre_save_hook:
+                            config.pre_save_hook(None, create_data)
+                        created = config.model.objects.create(**create_data)
+                        if config.post_save_hook:
+                            config.post_save_hook(created, data, row_result)
+                        created_count += 1
 
                 # 回写 post_save_hook 的错误到全局错误列表
                 if row_result.get("errors"):

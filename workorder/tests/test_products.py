@@ -390,7 +390,9 @@ class ProductCustomerRelationTest(APITestCase):
     """产品-客户多对多关系测试"""
 
     def setUp(self):
-        self.admin = User.objects.create_superuser(username="admin2", password="admin123")
+        self.admin = User.objects.create_superuser(
+            username="admin2", password="admin123"
+        )
         from workorder.models.base import Customer
 
         self.customer_a = Customer.objects.create(name="客户A", code="CA001")
