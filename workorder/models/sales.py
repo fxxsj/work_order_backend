@@ -18,6 +18,7 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
 
     STATUS_CHOICES = [
         ("pending", "待处理"),
+        ("approved", "已审核"),
         ("in_production", "生产中"),
         ("completed", "已完成"),
         ("cancelled", "已取消"),

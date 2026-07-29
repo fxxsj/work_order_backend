@@ -27,7 +27,7 @@ class SalesOrderService:
             draft_count=Count("id", filter=Q(approval_status="draft")),
             submitted_count=Count("id", filter=Q(approval_status="submitted")),
             approved_count=Count(
-                "id", filter=Q(approval_status="approved", status="pending")
+                "id", filter=Q(approval_status="approved", status="approved")
             ),
             rejected_count=Count("id", filter=Q(approval_status="rejected")),
             in_production_count=Count("id", filter=Q(status="in_production")),
@@ -45,7 +45,11 @@ class SalesOrderService:
     def submit_for_approval(
         *, sales_order: SalesOrder, user, auto_approve: bool = False
     ):
-        """提交客户订单审核。"""
+        """提交客户订单审核。
+
+        若模块审核关闭或请求自动审核，ApprovalService 会系统自动通过，
+        此时需同步把业务 status 从 pending 推进到 approved。
+        """
         if sales_order.approval_status not in ["draft", "rejected"]:
             raise ServiceError(
                 "只有草稿或已拒绝状态的订单才能提交",
@@ -64,6 +68,13 @@ class SalesOrderService:
         sales_order = service.submit_for_approval(
             sales_order, user, auto_approve=auto_approve
         )
+        # 系统自动通过路径下 approval_status 已变为 approved，同步推进 status
+        if (
+            sales_order.approval_status == "approved"
+            and sales_order.status == "pending"
+        ):
+            sales_order.status = "approved"
+            sales_order.save(update_fields=["status"])
         sales_order.rejection_reason = ""
         sales_order.save(update_fields=["rejection_reason"])
         return sales_order
@@ -87,8 +98,16 @@ class SalesOrderService:
 
         service = ApprovalService(SalesOrder)
         sales_order = service.approve(sales_order, user, comment)
+        # 审批通过后将业务状态从待处理推进为已审核，
+        # 使其满足创建施工单的前置条件（status in [approved, in_production]）。
+        # 注：status 与 approval_status 是两条轴，此处同步推进 status 以统一状态语义。
+        update_fields = []
+        if sales_order.status == "pending":
+            sales_order.status = "approved"
+            update_fields.append("status")
         sales_order.completion_reason = ""
-        sales_order.save(update_fields=["completion_reason"])
+        update_fields.append("completion_reason")
+        sales_order.save(update_fields=update_fields)
         return sales_order
 
     @staticmethod

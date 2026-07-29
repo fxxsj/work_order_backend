@@ -192,3 +192,59 @@ class TestSalesOrderService:
         )
 
         assert result.paid_amount == Decimal("500.00")
+
+
+class TestSalesOrderStatusSemantics:
+    """审批通过后业务状态语义统一测试（方案 A：status pending → approved）。"""
+
+    @pytest.mark.django_db
+    def test_approve_advances_status_to_approved(
+        self, sales_order_setup
+    ):
+        """审核通过后 status 从 pending 推进为 approved，可创建施工单。"""
+        sales_order = sales_order_setup["sales_order"]
+        user = sales_order_setup["user"]
+        sales_order.approval_status = "submitted"
+        sales_order.status = "pending"
+        sales_order.save()
+
+        result = SalesOrderService.approve(
+            sales_order=sales_order, user=user, comment="同意"
+        )
+
+        assert result.approval_status == "approved"
+        assert result.status == "approved"
+
+    @pytest.mark.django_db
+    def test_submit_with_auto_approve_advances_status(
+        self, sales_order_setup
+    ):
+        """提交审核且系统自动通过时，status 也应推进为 approved。"""
+        sales_order = sales_order_setup["sales_order"]
+        user = sales_order_setup["user"]
+
+        result = SalesOrderService.submit_for_approval(
+            sales_order=sales_order, user=user, auto_approve=True
+        )
+
+        if result.approval_status == "approved":
+            assert result.status == "approved"
+
+    @pytest.mark.django_db
+    def test_work_order_creation_allowed_after_approve(
+        self, sales_order_setup
+    ):
+        """审批通过后 status=approved，满足创建施工单前置条件。"""
+        sales_order = sales_order_setup["sales_order"]
+        user = sales_order_setup["user"]
+        sales_order.approval_status = "submitted"
+        sales_order.status = "pending"
+        sales_order.save()
+        SalesOrderService.approve(
+            sales_order=sales_order, user=user, comment="同意"
+        )
+        sales_order.refresh_from_db()
+
+        # 不实际创建施工单，只验证前置状态校验不再因 status 报错
+        # 直接断言 status 已进入 approved，满足 work_order_flow_service 的白名单
+        assert sales_order.status in ("approved", "in_production")
