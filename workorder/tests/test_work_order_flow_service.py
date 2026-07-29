@@ -622,3 +622,101 @@ class WorkOrderFlowIntegrationTest(TestCase):
 
         # 完整流程验证成功！
         self.assertTrue(True)
+
+
+class WorkOrderDetailSerializerEchoTest(TestCase):
+    """施工单详情接口回显测试：编辑页所需字段默认返回。"""
+
+    def setUp(self):
+        self.customer = Customer.objects.create(name="回显客户")
+        self.product = Product.objects.create(name="回显产品", code="ECHO001")
+        self.process = Process.objects.create(
+            name="回显工序",
+            code="ECHO_PROC",
+            artwork_required=False,
+            die_required=False,
+            foiling_plate_required=False,
+            embossing_plate_required=False,
+        )
+        self.product.default_processes.add(self.process)
+        self.sales_order = SalesOrder.objects.create(
+            order_number="SO_ECHO_001",
+            customer=self.customer,
+            order_date=timezone.now().date(),
+            delivery_date=timezone.now().date() + timedelta(days=7),
+            total_amount=500.0,
+            status=SalesOrderStatus.APPROVED,
+        )
+        SalesOrderItem.objects.create(
+            sales_order=self.sales_order,
+            product=self.product,
+            quantity=50,
+            unit_price=10.0,
+        )
+        self.creator = User.objects.create_user(
+            username="echo_creator", password="123456"
+        )
+        self.work_order = WorkOrderFlowService.create_from_sales_order(
+            sales_order_id=self.sales_order.id,
+            production_quantity=50,
+            delivery_date=timezone.now().date() + timedelta(days=7),
+            priority="normal",
+            created_by=self.creator,
+        )
+
+    def test_detail_returns_products_processes_materials_by_default(self):
+        """详情接口默认（无 expand）返回编辑页回显所需的关联数据。"""
+        from rest_framework.test import APIRequestFactory
+        from rest_framework.request import Request
+        from workorder.serializers.core import WorkOrderDetailSerializer
+
+        factory = APIRequestFactory()
+        request = Request(factory.get("/"))
+        # 模拟 viewset retrieve 默认 context（含默认 expand）
+        context = {
+            "request": request,
+            "expand": (
+                "customer,products,processes,materials,assets,financial,"
+                "approval,progress"
+            ),
+        }
+        data = WorkOrderDetailSerializer(
+            self.work_order, context=context
+        ).data
+
+        # 关键字段存在
+        self.assertIn("products", data)
+        self.assertIn("order_processes", data)
+        self.assertIn("materials", data)
+        self.assertIn("sales_order_id", data)
+        self.assertIn("process_ids", data)
+
+        # 客户订单号回显
+        self.assertEqual(data["sales_order_id"], self.sales_order.id)
+
+        # 产品回显：名称/编码
+        self.assertEqual(len(data["products"]), 1)
+        self.assertEqual(data["products"][0]["product_name"], "回显产品")
+        self.assertEqual(data["products"][0]["product_code"], "ECHO001")
+
+        # 工序回显：process_ids 含已自动生成的工序
+        self.assertIn(self.process.id, data["process_ids"])
+        self.assertEqual(len(data["order_processes"]), 1)
+        self.assertEqual(
+            data["order_processes"][0]["process_name"], "回显工序"
+        )
+
+    def test_detail_sales_order_id_field_stable_without_expand(self):
+        """sales_order_id 是标量字段，不依赖 expand 也能返回。"""
+        from rest_framework.test import APIRequestFactory
+        from rest_framework.request import Request
+        from workorder.serializers.core import WorkOrderDetailSerializer
+
+        factory = APIRequestFactory()
+        request = Request(factory.get("/"))
+        # 完全不带 expand context（模拟旧前端调用）
+        data = WorkOrderDetailSerializer(
+            self.work_order, context={"request": request}
+        ).data
+
+        self.assertEqual(data["sales_order_id"], self.sales_order.id)

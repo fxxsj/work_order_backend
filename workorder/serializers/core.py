@@ -852,6 +852,13 @@ class WorkOrderDetailSerializer(WorkOrderProductInfoMixin, serializers.ModelSeri
         many=True, read_only=True
     )  # 一个施工单包含的多个产品
     materials = WorkOrderMaterialSerializer(many=True, read_only=True)
+    # 编辑页回显用：稳定的标量字段，避免前端依赖嵌套对象或裸外键名
+    sales_order_id = serializers.IntegerField(
+        read_only=True,
+        allow_null=True,
+    )
+    # 已配置工序的 ID 列表，由 order_processes 派生，编辑页回显工序勾选状态
+    process_ids = serializers.SerializerMethodField()
     # 审核历史记录
     approval_logs = serializers.SerializerMethodField()
     sales_order_numbers = serializers.SerializerMethodField()
@@ -893,7 +900,7 @@ class WorkOrderDetailSerializer(WorkOrderProductInfoMixin, serializers.ModelSeri
             "embossing_plate_names",
             "embossing_plate_codes",
         ],
-        "processes": ["order_processes"],
+        "processes": ["order_processes", "process_ids"],
         "products": ["products"],
         "materials": ["materials"],
         "financial": [
@@ -962,6 +969,13 @@ class WorkOrderDetailSerializer(WorkOrderProductInfoMixin, serializers.ModelSeri
             for sales_order in sales_orders
             if sales_order.order_number
         ]
+
+    def get_process_ids(self, obj) -> List[int]:
+        """已配置工序的 ID 列表，供编辑页回显工序勾选状态。
+
+        从 order_processes 关联派生；若已 prefetch 则零额外查询。
+        """
+        return [op.process_id for op in obj.order_processes.all() if op.process_id]
 
     def get_quality_inspection_numbers(self, obj) -> List[str]:
         """获取关联质检单号"""
@@ -1058,15 +1072,29 @@ class WorkOrderDetailSerializer(WorkOrderProductInfoMixin, serializers.ModelSeri
     def get_purchase_order_summaries(self, obj) -> List[Dict[str, Any]]:
         """获取关联采购单摘要"""
         if hasattr(obj, "prefetched_purchase_orders"):
-            purchase_orders = obj.prefetched_purchase_orders.annotate(
-                items_count=Count("items")
-            )
-        else:
-            purchase_orders = (
-                obj.purchase_orders.select_related("supplier")
-                .annotate(items_count=Count("items"))
-                .all()
-            )
+            # to_attr 预取的是 list，无法再 annotate；items_count 单独计数
+            purchase_orders = obj.prefetched_purchase_orders
+            result = []
+            for po in purchase_orders:
+                result.append(
+                    {
+                        "id": po.id,
+                        "number": po.order_number,
+                        "status": po.status,
+                        "status_display": po.get_status_display(),
+                        "supplier_name": (
+                            po.supplier.name if po.supplier else None
+                        ),
+                        "total_amount": str(po.total_amount),
+                        "items_count": po.items.count(),
+                    }
+                )
+            return result
+        purchase_orders = (
+            obj.purchase_orders.select_related("supplier")
+            .annotate(items_count=Count("items"))
+            .all()
+        )
         return [
             {
                 "id": po.id,

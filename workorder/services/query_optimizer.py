@@ -79,12 +79,18 @@ class QueryOptimizer:
         if include_details:
             # 详细信息需要更复杂的prefetch_related
             from ..models.materials import PurchaseOrder
+            from ..models.core import (
+                WorkOrderProduct,
+                WorkOrderProcess,
+                WorkOrderMaterial,
+                WorkOrderTask,
+            )
 
             queryset = queryset.prefetch_related(
                 # 产品信息
                 Prefetch(
                     "products",
-                    queryset=WorkOrder.products.through.objects.select_related(
+                    queryset=WorkOrderProduct.objects.select_related(
                         "product"
                     ).order_by("sort_order"),
                     to_attr="ordered_products",
@@ -92,13 +98,13 @@ class QueryOptimizer:
                 # 工序信息（包含任务）
                 Prefetch(
                     "order_processes",
-                    queryset=WorkOrder.order_processes.through.objects.select_related(  # noqa: E501
+                    queryset=WorkOrderProcess.objects.select_related(
                         "process", "department", "operator"
                     )
                     .prefetch_related(
                         Prefetch(
                             "tasks",
-                            queryset=WorkOrder.order_processes.through.tasks.through.objects.select_related(  # noqa: E501
+                            queryset=WorkOrderTask.objects.select_related(
                                 "assigned_operator",
                                 "assigned_department",
                                 "product",
@@ -122,7 +128,7 @@ class QueryOptimizer:
                 # 物料信息
                 Prefetch(
                     "materials",
-                    queryset=WorkOrder.materials.through.objects.select_related(  # noqa: E501
+                    queryset=WorkOrderMaterial.objects.select_related(
                         "material",
                         "material__default_supplier",
                         "purchase_material",

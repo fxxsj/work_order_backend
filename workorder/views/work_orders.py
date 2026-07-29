@@ -337,6 +337,13 @@ class WorkOrderViewSet(
             expand = self.request.query_params.get("expand")
             if expand is not None:
                 context["expand"] = expand
+            else:
+                # 详情接口默认返回编辑页回显所需的完整字段，
+                # 避免前端必须显式传 expand 才能拿到产品/工序/物料/客户/财务信息。
+                context["expand"] = (
+                    "customer,products,processes,materials,assets,financial,"
+                    "approval,progress"
+                )
         return context
 
     def update(self, request, *args, **kwargs):
@@ -356,10 +363,12 @@ class WorkOrderViewSet(
         """根据用户权限过滤查询集，使用查询优化器提升性能"""
         from ..services.query_optimizer import QueryOptimizer
 
+        # 详情接口需要完整的关联数据（产品/工序/物料/财务），列表视图只需轻量字段。
+        include_details = self.action == "retrieve"
         # 使用查询优化器获取基础查询集
         queryset = QueryOptimizer.optimize_workorder_queryset(
             super().get_queryset(),
-            include_details=False,  # 列表视图不需要详细信息
+            include_details=include_details,
         )
 
         user = self.request.user
