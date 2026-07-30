@@ -226,6 +226,55 @@ class ProductAPITest(APITestCase):
         self.assertEqual(product.name, "更新后的产品名称")
         self.assertEqual(float(product.unit_price), 15.00)
 
+    def test_update_product_code_succeeds(self):
+        """编辑产品时应允许修改编码（外键引用不会断裂）"""
+        self.client.force_authenticate(user=self.admin_user)
+        product = Product.objects.create(**self.product_data)
+
+        response = self.client.patch(
+            f"/api/v1/products/{product.id}/",
+            {"code": "PROD-002"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        product.refresh_from_db()
+        self.assertEqual(product.code, "PROD-002")
+
+    def test_update_product_code_rejects_duplicate(self):
+        """编辑产品时改为已占用编码应被拒绝并给出友好提示"""
+        self.client.force_authenticate(user=self.admin_user)
+        Product.objects.create(**self.product_data)
+        other_data = self.product_data.copy()
+        other_data["code"] = "PROD-002"
+        other = Product.objects.create(**other_data)
+
+        response = self.client.patch(
+            f"/api/v1/products/{other.id}/",
+            {"code": "PROD-001"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("code", response.data)
+        other.refresh_from_db()
+        self.assertEqual(other.code, "PROD-002")
+
+    def test_update_product_code_unchanged_is_valid(self):
+        """编辑产品提交原编码应通过（不误判为重复）"""
+        self.client.force_authenticate(user=self.admin_user)
+        product = Product.objects.create(**self.product_data)
+
+        response = self.client.patch(
+            f"/api/v1/products/{product.id}/",
+            {"code": "PROD-001", "name": "改名"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        product.refresh_from_db()
+        self.assertEqual(product.name, "改名")
+
     def test_update_product_replaces_default_processes(self):
         """编辑产品时应整体替换默认工序"""
         self.client.force_authenticate(user=self.admin_user)

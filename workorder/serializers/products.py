@@ -178,6 +178,14 @@ class ProductSerializer(serializers.ModelSerializer):
         if len(value) > 50:
             raise serializers.ValidationError("产品编码不能超过50个字符")
 
+        # 更新时检查编码是否与其他产品重复（DB unique 会兜底，此处提前给友好提示）
+        if self.instance:
+            qs = Product.objects.filter(code=value).exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError(
+                    f"产品编码 {value} 已被其他产品占用，请使用其他编码"
+                )
+
         return value
 
     def validate_name(self, value):
