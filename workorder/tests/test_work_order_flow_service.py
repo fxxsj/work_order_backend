@@ -32,18 +32,12 @@ class WorkOrderFlowServiceTest(TestCase):
         self.salesperson = User.objects.create_user(
             username="salesperson", password="123456"
         )
-        self.creator = User.objects.create_user(
-            username="creator", password="123456"
-        )
-        self.approver = User.objects.create_user(
-            username="approver", password="123456"
-        )
+        self.creator = User.objects.create_user(username="creator", password="123456")
+        self.approver = User.objects.create_user(username="approver", password="123456")
         self.approver.is_superuser = True
         self.approver.is_staff = True
         self.approver.save(update_fields=["is_superuser", "is_staff"])
-        self.operator = User.objects.create_user(
-            username="operator", password="123456"
-        )
+        self.operator = User.objects.create_user(username="operator", password="123456")
 
         # 创建客户
         self.customer = Customer.objects.create(
@@ -106,21 +100,13 @@ class WorkOrderFlowServiceTest(TestCase):
         self.assertEqual(work_order.customer, self.customer)
         self.assertEqual(work_order.sales_order, self.sales_order)
         self.assertEqual(work_order.order_date, self.sales_order.order_date)
-        self.assertEqual(
-            work_order.delivery_date, self.sales_order.delivery_date
-        )
+        self.assertEqual(work_order.delivery_date, self.sales_order.delivery_date)
         self.assertEqual(work_order.production_quantity, 100)
-        self.assertEqual(
-            work_order.total_amount, self.sales_order.total_amount
-        )
+        self.assertEqual(work_order.total_amount, self.sales_order.total_amount)
         self.assertEqual(work_order.status, WorkOrderStatus.PENDING)
-        self.assertEqual(
-            work_order.approval_status, WorkOrderApprovalStatus.DRAFT
-        )
+        self.assertEqual(work_order.approval_status, WorkOrderApprovalStatus.DRAFT)
         self.assertEqual(work_order.products.count(), 1)
-        self.assertEqual(
-            work_order.products.first().source_type, "sales_order"
-        )
+        self.assertEqual(work_order.products.first().source_type, "sales_order")
         self.assertEqual(
             work_order.products.first().sales_order_item_id,
             self.sales_order.items.first().id,
@@ -129,6 +115,20 @@ class WorkOrderFlowServiceTest(TestCase):
         # 验证施工单号格式
         self.assertTrue(work_order.order_number.startswith("WO"))
         self.assertTrue(work_order.order_number.endswith("001"))
+
+    def test_create_from_pending_sales_order_success(self):
+        """新录入的客户订单无需审核即可生成施工单。"""
+        self.sales_order.status = SalesOrderStatus.PENDING
+        self.sales_order.approval_status = "draft"
+        self.sales_order.save(update_fields=["status", "approval_status"])
+
+        work_order = WorkOrderFlowService.create_from_sales_order(
+            sales_order_id=self.sales_order.id,
+            production_quantity=100,
+            created_by=self.creator,
+        )
+
+        self.assertEqual(work_order.sales_order, self.sales_order)
 
     def test_create_from_sales_order_invalid_status(self):
         """测试客户订单状态不正确时创建失败"""
@@ -145,7 +145,7 @@ class WorkOrderFlowServiceTest(TestCase):
             )
 
         self.assertIn(
-            "只有已审核或生产中的客户订单才能创建施工单",
+            "已取消或已完成的客户订单不能创建施工单",
             str(context.exception),
         )
 
@@ -203,16 +203,10 @@ class WorkOrderFlowServiceTest(TestCase):
         self.assertEqual(work_order.production_quantity, 60)
         self.assertEqual(work_order.products.count(), 1)
         self.assertEqual(work_order.products.first().quantity, 60)
-        self.assertEqual(
-            work_order.products.first().source_type, "sales_order"
-        )
-        self.assertEqual(
-            work_order.products.first().sales_order_item_id, sales_item.id
-        )
+        self.assertEqual(work_order.products.first().source_type, "sales_order")
+        self.assertEqual(work_order.products.first().sales_order_item_id, sales_item.id)
         self.sales_order.refresh_from_db()
-        self.assertEqual(
-            self.sales_order.status, SalesOrderStatus.IN_PRODUCTION
-        )
+        self.assertEqual(self.sales_order.status, SalesOrderStatus.IN_PRODUCTION)
 
     def test_create_from_sales_order_allows_split_quantities(self):
         """同一订单明细可按数量拆成多张施工单。"""
@@ -312,15 +306,13 @@ class WorkOrderFlowServiceTest(TestCase):
         )
 
         self.sales_order.refresh_from_db()
-        self.assertEqual(
-            self.sales_order.status, SalesOrderStatus.IN_PRODUCTION
-        )
+        self.assertEqual(self.sales_order.status, SalesOrderStatus.IN_PRODUCTION)
 
         work_order.status = WorkOrderStatus.COMPLETED
         work_order.save()
 
         self.sales_order.refresh_from_db()
-        self.assertEqual(self.sales_order.status, SalesOrderStatus.APPROVED)
+        self.assertEqual(self.sales_order.status, SalesOrderStatus.READY_TO_DELIVER)
 
     def test_work_order_fk_relation_syncs_sales_order_status(self):
         """测试仅通过 sales_order FK 关联时也能同步客户订单状态"""
@@ -337,15 +329,13 @@ class WorkOrderFlowServiceTest(TestCase):
         )
 
         self.sales_order.refresh_from_db()
-        self.assertEqual(
-            self.sales_order.status, SalesOrderStatus.IN_PRODUCTION
-        )
+        self.assertEqual(self.sales_order.status, SalesOrderStatus.IN_PRODUCTION)
 
         work_order.status = WorkOrderStatus.COMPLETED
         work_order.save()
 
         self.sales_order.refresh_from_db()
-        self.assertEqual(self.sales_order.status, SalesOrderStatus.APPROVED)
+        self.assertEqual(self.sales_order.status, SalesOrderStatus.READY_TO_DELIVER)
 
     def test_sales_order_related_work_orders_uses_fk_relation(self):
         """测试客户订单读取关联施工单时基于 FK 返回结果。"""
@@ -362,8 +352,7 @@ class WorkOrderFlowServiceTest(TestCase):
         )
 
         related_ids = {
-            item.id
-            for item in self.sales_order.get_related_work_orders_queryset()
+            item.id for item in self.sales_order.get_related_work_orders_queryset()
         }
         self.assertEqual(related_ids, {work_order.id})
 
@@ -394,9 +383,7 @@ class WorkOrderFlowServiceTest(TestCase):
             updated_work_order.approval_status,
             WorkOrderApprovalStatus.APPROVED,
         )
-        self.assertEqual(
-            updated_work_order.status, WorkOrderStatus.IN_PROGRESS
-        )
+        self.assertEqual(updated_work_order.status, WorkOrderStatus.IN_PROGRESS)
         self.assertEqual(updated_work_order.approved_by, self.approver)
         self.assertIsNotNone(updated_work_order.approved_at)
 
@@ -450,9 +437,9 @@ class WorkOrderFlowServiceTest(TestCase):
         )
 
         # 完成所有任务
-        WorkOrderTask.objects.filter(
-            work_order_process__work_order=work_order
-        ).update(status=TaskStatus.COMPLETED)
+        WorkOrderTask.objects.filter(work_order_process__work_order=work_order).update(
+            status=TaskStatus.COMPLETED
+        )
 
         # 检查并完成
         is_completed = WorkOrderFlowService.check_and_complete_workorder(
@@ -482,9 +469,7 @@ class WorkOrderFlowServiceTest(TestCase):
         )
 
         # 只完成部分任务
-        tasks = WorkOrderTask.objects.filter(
-            work_order_process__work_order=work_order
-        )
+        tasks = WorkOrderTask.objects.filter(work_order_process__work_order=work_order)
         if tasks.exists():
             tasks.first().status = TaskStatus.COMPLETED
             tasks.first().save()
@@ -505,24 +490,16 @@ class WorkOrderFlowServiceTest(TestCase):
         """测试有效的状态转换"""
         # 不应该抛出异常
         WorkOrderFlowService._validate_status_transition("draft", "submitted")
-        WorkOrderFlowService._validate_status_transition(
-            "submitted", "approved"
-        )
-        WorkOrderFlowService._validate_status_transition(
-            "rejected", "submitted"
-        )
+        WorkOrderFlowService._validate_status_transition("submitted", "approved")
+        WorkOrderFlowService._validate_status_transition("rejected", "submitted")
 
     def test_validate_status_transition_invalid(self):
         """测试无效的状态转换"""
         with self.assertRaises(ServiceError):
-            WorkOrderFlowService._validate_status_transition(
-                "completed", "in_progress"
-            )
+            WorkOrderFlowService._validate_status_transition("completed", "in_progress")
 
         with self.assertRaises(ServiceError):
-            WorkOrderFlowService._validate_status_transition(
-                "approved", "draft"
-            )
+            WorkOrderFlowService._validate_status_transition("approved", "draft")
 
 
 # ========== 集成测试：完整流程 ==========
@@ -533,9 +510,7 @@ class WorkOrderFlowIntegrationTest(TestCase):
 
     def setUp(self):
         """测试数据准备"""
-        self.user = User.objects.create_user(
-            username="testuser", password="123456"
-        )
+        self.user = User.objects.create_user(username="testuser", password="123456")
         self.user.is_superuser = True
         self.user.is_staff = True
         self.user.save(update_fields=["is_superuser", "is_staff"])
@@ -593,9 +568,7 @@ class WorkOrderFlowIntegrationTest(TestCase):
             work_order_id=work_order.id,
             submitted_by=self.user,
         )
-        self.assertEqual(
-            work_order.approval_status, WorkOrderApprovalStatus.SUBMITTED
-        )
+        self.assertEqual(work_order.approval_status, WorkOrderApprovalStatus.SUBMITTED)
 
         # 3. 审核通过（自动分派任务）
         work_order = WorkOrderFlowService.handle_approval_passed(
@@ -603,15 +576,13 @@ class WorkOrderFlowIntegrationTest(TestCase):
             approved_by=self.user,
             comment="审核通过",
         )
-        self.assertEqual(
-            work_order.approval_status, WorkOrderApprovalStatus.APPROVED
-        )
+        self.assertEqual(work_order.approval_status, WorkOrderApprovalStatus.APPROVED)
         self.assertEqual(work_order.status, WorkOrderStatus.IN_PROGRESS)
 
         # 4. 完成所有任务
-        WorkOrderTask.objects.filter(
-            work_order_process__work_order=work_order
-        ).update(status=TaskStatus.COMPLETED)
+        WorkOrderTask.objects.filter(work_order_process__work_order=work_order).update(
+            status=TaskStatus.COMPLETED
+        )
 
         # 5. 检查并完成施工单
         is_completed = WorkOrderFlowService.check_and_complete_workorder(
@@ -680,9 +651,7 @@ class WorkOrderDetailSerializerEchoTest(TestCase):
                 "approval,progress"
             ),
         }
-        data = WorkOrderDetailSerializer(
-            self.work_order, context=context
-        ).data
+        data = WorkOrderDetailSerializer(self.work_order, context=context).data
 
         # 关键字段存在
         self.assertIn("products", data)
@@ -702,9 +671,7 @@ class WorkOrderDetailSerializerEchoTest(TestCase):
         # 工序回显：process_ids 含已自动生成的工序
         self.assertIn(self.process.id, data["process_ids"])
         self.assertEqual(len(data["order_processes"]), 1)
-        self.assertEqual(
-            data["order_processes"][0]["process_name"], "回显工序"
-        )
+        self.assertEqual(data["order_processes"][0]["process_name"], "回显工序")
 
     def test_detail_sales_order_id_field_stable_without_expand(self):
         """sales_order_id 是标量字段，不依赖 expand 也能返回。"""

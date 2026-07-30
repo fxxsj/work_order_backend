@@ -15,6 +15,9 @@ from workorder.models.sales import SalesOrder, SalesOrderItem
 from workorder.models.base import Customer
 from workorder.models.products import Product
 from workorder.services.sales_order_service import SalesOrderService
+from workorder.services.sales_order_status_service import (
+    SalesOrderStatusService,
+)
 from workorder.services.service_errors import ServiceError
 
 
@@ -24,14 +27,10 @@ def sales_order_setup(db):
     customer = Customer.objects.create(
         name="测试客户", contact_person="张", phone="138"
     )
-    user = User.objects.create_user(
-        username="sales_test_user", password="test"
-    )
+    user = User.objects.create_user(username="sales_test_user", password="test")
     user.is_superuser = True
     user.save()
-    product = Product.objects.create(
-        name="测试产品", code="TEST001", unit="件"
-    )
+    product = Product.objects.create(name="测试产品", code="TEST001", unit="件")
 
     sales_order = SalesOrder.objects.create(
         customer=customer,
@@ -76,9 +75,7 @@ class TestSalesOrderService:
         sales_order.save()
 
         with pytest.raises(ServiceError) as exc_info:
-            SalesOrderService.submit_for_approval(
-                sales_order=sales_order, user=user
-            )
+            SalesOrderService.submit_for_approval(sales_order=sales_order, user=user)
 
         assert exc_info.value.code == 400
 
@@ -114,9 +111,7 @@ class TestSalesOrderService:
         sales_order.save()
 
         with pytest.raises(ServiceError) as exc_info:
-            SalesOrderService.reject(
-                sales_order=sales_order, user=user, reason=""
-            )
+            SalesOrderService.reject(sales_order=sales_order, user=user, reason="")
 
         assert exc_info.value.code == 400
 
@@ -138,9 +133,7 @@ class TestSalesOrderService:
         assert sales_order.status == "completed"
         assert sales_order.actual_delivery_date is not None
 
-    def test_complete_requires_reason_when_not_all_delivered(
-        self, sales_order_setup
-    ):
+    def test_complete_requires_reason_when_not_all_delivered(self, sales_order_setup):
         """测试未全部发货时人工完结需要原因"""
         sales_order = sales_order_setup["sales_order"]
         sales_order.approval_status = "approved"
@@ -161,9 +154,7 @@ class TestSalesOrderService:
         """测试取消订单成功"""
         sales_order = sales_order_setup["sales_order"]
 
-        result = SalesOrderService.cancel(
-            sales_order=sales_order, reason="客户取消"
-        )
+        result = SalesOrderService.cancel(sales_order=sales_order, reason="客户取消")
 
         assert result.status == "cancelled"
         assert result.rejection_reason == "客户取消"
@@ -198,9 +189,7 @@ class TestSalesOrderStatusSemantics:
     """审批通过后业务状态语义统一测试（方案 A：status pending → approved）。"""
 
     @pytest.mark.django_db
-    def test_approve_advances_status_to_approved(
-        self, sales_order_setup
-    ):
+    def test_approve_advances_status_to_approved(self, sales_order_setup):
         """审核通过后 status 从 pending 推进为 approved，可创建施工单。"""
         sales_order = sales_order_setup["sales_order"]
         user = sales_order_setup["user"]
@@ -216,9 +205,7 @@ class TestSalesOrderStatusSemantics:
         assert result.status == "approved"
 
     @pytest.mark.django_db
-    def test_submit_with_auto_approve_advances_status(
-        self, sales_order_setup
-    ):
+    def test_submit_with_auto_approve_advances_status(self, sales_order_setup):
         """提交审核且系统自动通过时，status 也应推进为 approved。"""
         sales_order = sales_order_setup["sales_order"]
         user = sales_order_setup["user"]
@@ -231,20 +218,53 @@ class TestSalesOrderStatusSemantics:
             assert result.status == "approved"
 
     @pytest.mark.django_db
-    def test_work_order_creation_allowed_after_approve(
-        self, sales_order_setup
-    ):
+    def test_work_order_creation_allowed_after_approve(self, sales_order_setup):
         """审批通过后 status=approved，满足创建施工单前置条件。"""
         sales_order = sales_order_setup["sales_order"]
         user = sales_order_setup["user"]
         sales_order.approval_status = "submitted"
         sales_order.status = "pending"
         sales_order.save()
-        SalesOrderService.approve(
-            sales_order=sales_order, user=user, comment="同意"
-        )
+        SalesOrderService.approve(sales_order=sales_order, user=user, comment="同意")
         sales_order.refresh_from_db()
 
         # 不实际创建施工单，只验证前置状态校验不再因 status 报错
         # 直接断言 status 已进入 approved，满足 work_order_flow_service 的白名单
         assert sales_order.status in ("approved", "in_production")
+
+
+@pytest.mark.django_db
+class TestSimplifiedSalesOrderStatus:
+    """客户订单不经审核，由生产和送货进度自动驱动状态。"""
+
+    def test_partial_delivery_has_priority_over_production(self, sales_order_setup):
+        sales_order = sales_order_setup["sales_order"]
+        sales_order.status = "in_production"
+        sales_order.save(update_fields=["status"])
+        item = sales_order.items.get()
+        item.delivered_quantity = 3
+        item.save(update_fields=["delivered_quantity"])
+
+        result = SalesOrderStatusService.sync_status(sales_order)
+
+        assert result == "partially_delivered"
+
+    def test_completed_work_order_without_delivery_is_ready_to_deliver(
+        self, sales_order_setup
+    ):
+        from workorder.models.core import WorkOrder
+
+        sales_order = sales_order_setup["sales_order"]
+        WorkOrder.objects.create(
+            customer=sales_order.customer,
+            sales_order=sales_order,
+            order_date=sales_order.order_date,
+            delivery_date=sales_order.delivery_date,
+            production_quantity=10,
+            status="completed",
+            created_by=sales_order_setup["user"],
+        )
+
+        result = SalesOrderStatusService.sync_status(sales_order)
+
+        assert result == "ready_to_deliver"

@@ -15,8 +15,11 @@ class SalesOrderStatusService:
 
     TERMINAL_STATUSES = {SalesOrderStatus.CANCELLED}
     WORKFLOW_STATUSES = {
+        SalesOrderStatus.PENDING,
         SalesOrderStatus.APPROVED,
         SalesOrderStatus.IN_PRODUCTION,
+        SalesOrderStatus.READY_TO_DELIVER,
+        SalesOrderStatus.PARTIALLY_DELIVERED,
         SalesOrderStatus.COMPLETED,
     }
     UNFINISHED_WORK_ORDER_STATUSES = {
@@ -44,15 +47,16 @@ class SalesOrderStatusService:
         return all(item.is_fully_delivered for item in items)
 
     @staticmethod
+    def has_delivered_items(sales_order: SalesOrder) -> bool:
+        """是否已有任一产品发生送货。"""
+        return sales_order.items.filter(delivered_quantity__gt=0).exists()
+
+    @staticmethod
     def has_unfinished_work_orders(sales_order: SalesOrder) -> bool:
         """是否存在未完成的关联施工单。"""
         return (
             SalesOrderStatusService.get_work_orders_queryset(sales_order)
-            .filter(
-                status__in=(
-                    SalesOrderStatusService.UNFINISHED_WORK_ORDER_STATUSES
-                )
-            )
+            .filter(status__in=(SalesOrderStatusService.UNFINISHED_WORK_ORDER_STATUSES))
             .exists()
         )
 
@@ -60,9 +64,7 @@ class SalesOrderStatusService:
     def sync_status_for_work_order(work_order) -> list[str]:
         """同步某个施工单关联的所有客户订单状态。"""
         statuses = []
-        for (
-            sales_order
-        ) in SalesOrderStatusService.get_sales_orders_for_work_order(
+        for sales_order in SalesOrderStatusService.get_sales_orders_for_work_order(
             work_order
         ):
             statuses.append(SalesOrderStatusService.sync_status(sales_order))
@@ -92,11 +94,13 @@ class SalesOrderStatusService:
         if current_status not in SalesOrderStatusService.WORKFLOW_STATUSES:
             return current_status
 
-        all_delivered = SalesOrderStatusService.all_items_delivered(
+        all_delivered = SalesOrderStatusService.all_items_delivered(sales_order)
+        has_delivered_items = SalesOrderStatusService.has_delivered_items(sales_order)
+        has_work_orders = SalesOrderStatusService.get_work_orders_queryset(
             sales_order
-        )
-        unfinished_work_orders = (
-            SalesOrderStatusService.has_unfinished_work_orders(sales_order)
+        ).exists()
+        unfinished_work_orders = SalesOrderStatusService.has_unfinished_work_orders(
+            sales_order
         )
 
         update_fields = []
@@ -107,10 +111,7 @@ class SalesOrderStatusService:
             if sales_order.actual_delivery_date is None:
                 sales_order.actual_delivery_date = timezone.now().date()
                 update_fields.append("actual_delivery_date")
-            if (
-                not preserve_manual_completion
-                and sales_order.completion_reason
-            ):
+            if not preserve_manual_completion and sales_order.completion_reason:
                 sales_order.completion_reason = ""
                 update_fields.append("completion_reason")
         elif (
@@ -119,13 +120,23 @@ class SalesOrderStatusService:
             and sales_order.completion_reason.strip()
         ):
             next_status = SalesOrderStatus.COMPLETED
+        elif has_delivered_items:
+            next_status = SalesOrderStatus.PARTIALLY_DELIVERED
+            if sales_order.actual_delivery_date is not None:
+                sales_order.actual_delivery_date = None
+                update_fields.append("actual_delivery_date")
         elif unfinished_work_orders:
             next_status = SalesOrderStatus.IN_PRODUCTION
             if sales_order.actual_delivery_date is not None:
                 sales_order.actual_delivery_date = None
                 update_fields.append("actual_delivery_date")
+        elif has_work_orders:
+            next_status = SalesOrderStatus.READY_TO_DELIVER
+            if sales_order.actual_delivery_date is not None:
+                sales_order.actual_delivery_date = None
+                update_fields.append("actual_delivery_date")
         else:
-            next_status = SalesOrderStatus.APPROVED
+            next_status = SalesOrderStatus.PENDING
             if sales_order.actual_delivery_date is not None:
                 sales_order.actual_delivery_date = None
                 update_fields.append("actual_delivery_date")

@@ -350,12 +350,22 @@ class DeliveryOrder(TimeStampedModel, models.Model):
     delivery_address = models.TextField("送货地址")
 
     # 物流信息
-    logistics_company = models.CharField(
-        "物流公司", max_length=100, blank=True
-    )
+    logistics_company = models.CharField("物流公司", max_length=100, blank=True)
     tracking_number = models.CharField("物流单号", max_length=100, blank=True)
-    freight = models.DecimalField(
-        "运费", max_digits=10, decimal_places=2, default=0
+    freight = models.DecimalField("运费", max_digits=10, decimal_places=2, default=0)
+    subtotal = models.DecimalField(
+        "未税金额", max_digits=12, decimal_places=2, default=0
+    )
+    tax_rate = models.DecimalField(
+        "税率",
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        help_text="整张送货单税率百分比，如13表示13%",
+    )
+    tax_amount = models.DecimalField("税额", max_digits=12, decimal_places=2, default=0)
+    total_amount = models.DecimalField(
+        "价税合计", max_digits=12, decimal_places=2, default=0
     )
 
     # 签收信息
@@ -399,6 +409,25 @@ class DeliveryOrder(TimeStampedModel, models.Model):
             self.order_number = self.generate_order_number()
         super().save(*args, **kwargs)
 
+    def update_totals(self):
+        """根据送货明细计算未税金额、税额和价税合计。"""
+        from decimal import Decimal
+        from django.db.models import Sum
+
+        subtotal = self.items.aggregate(total=Sum("subtotal"))["total"] or Decimal("0")
+        tax_rate = Decimal(str(self.tax_rate or 0))
+        self.subtotal = subtotal
+        self.tax_amount = subtotal * tax_rate / Decimal("100")
+        self.total_amount = self.subtotal + self.tax_amount
+        self.save(
+            update_fields=[
+                "subtotal",
+                "tax_amount",
+                "total_amount",
+                "updated_at",
+            ]
+        )
+
 
 class DeliveryItem(models.Model):
     """送货明细"""
@@ -422,12 +451,8 @@ class DeliveryItem(models.Model):
     )
     quantity = models.DecimalField("发货数量", max_digits=10, decimal_places=2)
     unit = models.CharField("单位", max_length=20, default="件")
-    unit_price = models.DecimalField(
-        "单价", max_digits=10, decimal_places=2, default=0
-    )
-    subtotal = models.DecimalField(
-        "小计", max_digits=12, decimal_places=2, default=0
-    )
+    unit_price = models.DecimalField("单价", max_digits=10, decimal_places=2, default=0)
+    subtotal = models.DecimalField("小计", max_digits=12, decimal_places=2, default=0)
 
     # 关联库存批次
     stock_batch = models.CharField("库存批次号", max_length=50, blank=True)
@@ -480,9 +505,7 @@ class QualityInspection(models.Model):
     inspection_number = models.CharField(
         "质检单号", max_length=50, unique=True, editable=False
     )
-    inspection_type = models.CharField(
-        "检验类型", max_length=20, choices=TYPE_CHOICES
-    )
+    inspection_type = models.CharField("检验类型", max_length=20, choices=TYPE_CHOICES)
     work_order = models.ForeignKey(
         "workorder.WorkOrder",
         on_delete=models.SET_NULL,
@@ -564,9 +587,7 @@ class QualityInspection(models.Model):
         ]
 
     def __str__(self):
-        return (
-            f"{self.inspection_number} - {self.get_inspection_type_display()}"
-        )
+        return f"{self.inspection_number} - {self.get_inspection_type_display()}"
 
     def save(self, *args, **kwargs):
         if not self.inspection_number:

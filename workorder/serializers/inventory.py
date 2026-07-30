@@ -10,6 +10,7 @@
 - QualityInspection: 质量检验
 """
 
+from decimal import Decimal, InvalidOperation
 from typing import List, Optional
 
 from rest_framework import serializers
@@ -19,6 +20,7 @@ from workorder.models import (
     DeliveryOrder,
     ProductStock,
     QualityInspection,
+    SalesOrderItem,
     StockIn,
     StockOut,
 )
@@ -49,9 +51,7 @@ def parse_delivery_exception_resolution(notes: Optional[str]) -> dict:
     resolution, resolution_notes, resolved_by, resolved_at = parts
     return {
         "resolution": resolution,
-        "resolution_display": _DELIVERY_EXCEPTION_LABELS.get(
-            resolution, resolution
-        ),
+        "resolution_display": _DELIVERY_EXCEPTION_LABELS.get(resolution, resolution),
         "resolution_notes": resolution_notes,
         "resolved_by": resolved_by,
         "resolved_at": resolved_at,
@@ -97,9 +97,7 @@ class ProductStockSerializer(serializers.ModelSerializer):
     work_order_number = serializers.CharField(
         source="work_order.order_number", read_only=True, allow_null=True
     )
-    status_display = serializers.CharField(
-        source="get_status_display", read_only=True
-    )
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
     is_expired = serializers.BooleanField(read_only=True)
     days_until_expiry = serializers.SerializerMethodField()
 
@@ -196,12 +194,8 @@ class ProductStockAdjustSerializer(serializers.Serializer):
         ("set", "设置为"),
     ]
 
-    adjust_type = serializers.ChoiceField(
-        choices=ADJUST_TYPE_CHOICES, required=True
-    )
-    quantity = serializers.DecimalField(
-        max_digits=10, decimal_places=2, min_value=0
-    )
+    adjust_type = serializers.ChoiceField(choices=ADJUST_TYPE_CHOICES, required=True)
+    quantity = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0)
     reason = serializers.CharField(max_length=500, required=True)
 
     def validate(self, data):
@@ -221,9 +215,7 @@ class ProductStockAdjustSerializer(serializers.Serializer):
 class StockInSerializer(serializers.ModelSerializer):
     """入库单序列化器"""
 
-    status_display = serializers.CharField(
-        source="get_status_display", read_only=True
-    )
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
     work_order_number = serializers.CharField(
         source="work_order.order_number", read_only=True
     )
@@ -271,9 +263,7 @@ class StockOutSerializer(serializers.ModelSerializer):
     out_type_display = serializers.CharField(
         source="get_out_type_display", read_only=True
     )
-    status_display = serializers.CharField(
-        source="get_status_display", read_only=True
-    )
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
     delivery_order_number = serializers.CharField(
         source="delivery_order.order_number", read_only=True, allow_null=True
     )
@@ -331,26 +321,20 @@ class DeliveryItemSerializer(serializers.ModelSerializer):
         """验证发货明细"""
         quantity = data.get("quantity")
         if quantity is not None and quantity <= 0:
-            raise serializers.ValidationError(
-                {"quantity": "发货数量必须大于0"}
-            )
+            raise serializers.ValidationError({"quantity": "发货数量必须大于0"})
         return data
 
 
 class DeliveryOrderSerializer(serializers.ModelSerializer):
     """送货单序列化器"""
 
-    status_display = serializers.CharField(
-        source="get_status_display", read_only=True
-    )
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
 
     # 关联信息
     sales_order_number = serializers.CharField(
         source="sales_order.order_number", read_only=True
     )
-    customer_name = serializers.CharField(
-        source="customer.name", read_only=True
-    )
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
     created_by_name = serializers.CharField(
         source="created_by.username", read_only=True, allow_null=True
     )
@@ -367,7 +351,12 @@ class DeliveryOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryOrder
         fields = "__all__"
-        read_only_fields = ["order_number"]
+        read_only_fields = [
+            "order_number",
+            "subtotal",
+            "tax_amount",
+            "total_amount",
+        ]
 
     def get_items_count(self, obj) -> int:
         """获取发货明细数量"""
@@ -389,39 +378,25 @@ class DeliveryOrderSerializer(serializers.ModelSerializer):
         return parse_delivery_exception_resolution(obj.notes).get("resolution")
 
     def get_exception_resolution_display(self, obj) -> Optional[str]:
-        return parse_delivery_exception_resolution(obj.notes).get(
-            "resolution_display"
-        )
+        return parse_delivery_exception_resolution(obj.notes).get("resolution_display")
 
     def get_exception_resolution_notes(self, obj) -> Optional[str]:
-        return parse_delivery_exception_resolution(obj.notes).get(
-            "resolution_notes"
-        )
+        return parse_delivery_exception_resolution(obj.notes).get("resolution_notes")
 
     def get_exception_closed(self, obj) -> bool:
-        return bool(
-            parse_delivery_exception_resolution(obj.notes).get("closed")
-        )
+        return bool(parse_delivery_exception_resolution(obj.notes).get("closed"))
 
 
 class DeliveryOrderListSerializer(serializers.ModelSerializer):
     """送货单列表序列化器（精简版）"""
 
-    status_display = serializers.CharField(
-        source="get_status_display", read_only=True
-    )
-    customer_name = serializers.CharField(
-        source="customer.name", read_only=True
-    )
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
     sales_order_number = serializers.CharField(
         source="sales_order.order_number", read_only=True
     )
-    sales_order_id = serializers.IntegerField(
-        source="sales_order.id", read_only=True
-    )
-    customer_id = serializers.IntegerField(
-        source="customer.id", read_only=True
-    )
+    sales_order_id = serializers.IntegerField(source="sales_order.id", read_only=True)
+    customer_id = serializers.IntegerField(source="customer.id", read_only=True)
     items_count = serializers.SerializerMethodField()
     total_quantity = serializers.SerializerMethodField()
     invoice_count = serializers.SerializerMethodField()
@@ -451,6 +426,10 @@ class DeliveryOrderListSerializer(serializers.ModelSerializer):
             "exception_closed",
             "logistics_company",
             "tracking_number",
+            "subtotal",
+            "tax_rate",
+            "tax_amount",
+            "total_amount",
             "created_at",
         ]
 
@@ -470,19 +449,13 @@ class DeliveryOrderListSerializer(serializers.ModelSerializer):
         return parse_delivery_exception_resolution(obj.notes).get("resolution")
 
     def get_exception_resolution_display(self, obj) -> Optional[str]:
-        return parse_delivery_exception_resolution(obj.notes).get(
-            "resolution_display"
-        )
+        return parse_delivery_exception_resolution(obj.notes).get("resolution_display")
 
     def get_exception_resolution_notes(self, obj) -> Optional[str]:
-        return parse_delivery_exception_resolution(obj.notes).get(
-            "resolution_notes"
-        )
+        return parse_delivery_exception_resolution(obj.notes).get("resolution_notes")
 
     def get_exception_closed(self, obj) -> bool:
-        return bool(
-            parse_delivery_exception_resolution(obj.notes).get("closed")
-        )
+        return bool(parse_delivery_exception_resolution(obj.notes).get("closed"))
 
 
 class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
@@ -493,8 +466,7 @@ class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False,
         help_text=(
-            "发货明细数据，格式：["
-            '{"product": id, "quantity": 1, "unit_price": 100}]'
+            "发货明细数据，格式：[" '{"product": id, "quantity": 1, "unit_price": 100}]'
         ),
     )
 
@@ -510,6 +482,7 @@ class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
             "logistics_company",
             "tracking_number",
             "freight",
+            "tax_rate",
             "package_count",
             "package_weight",
             "notes",
@@ -522,31 +495,84 @@ class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
         if not data.get("customer"):
             raise serializers.ValidationError({"customer": "必须选择客户"})
         if not data.get("sales_order"):
-            raise serializers.ValidationError(
-                {"sales_order": "必须选择客户订单"}
-            )
+            raise serializers.ValidationError({"sales_order": "必须选择客户订单"})
         sales_order = data.get("sales_order")
-        allowed_statuses = {"approved", "in_production", "completed"}
-        if sales_order and sales_order.status not in allowed_statuses:
+        blocked_statuses = {"completed", "cancelled"}
+        if sales_order and sales_order.status in blocked_statuses:
             raise serializers.ValidationError(
-                {
-                    "sales_order": "只有已审核、生产中或已完成的客户订单才能创建送货单"
-                }
+                {"sales_order": "已完成或已取消的客户订单不能创建送货单"}
             )
+        if sales_order and data.get("customer") != sales_order.customer:
+            raise serializers.ValidationError({"customer": "所选客户与客户订单不一致"})
+
+        tax_rate = data.get("tax_rate", 0)
+        if tax_rate < 0 or tax_rate > 100:
+            raise serializers.ValidationError({"tax_rate": "税率必须在0-100之间"})
+
+        items_data = data.get("items_data", [])
+        sales_items = {
+            item.id: item
+            for item in SalesOrderItem.objects.filter(
+                sales_order=sales_order
+            ).select_related("product")
+        }
+        sales_items_by_product = {}
+        for item in sales_items.values():
+            sales_items_by_product.setdefault(item.product_id, []).append(item)
+
+        requested_by_item = {}
+        for index, raw_item in enumerate(items_data, start=1):
+            try:
+                product_id = int(raw_item.get("product"))
+                quantity = Decimal(str(raw_item.get("quantity")))
+            except (TypeError, ValueError, InvalidOperation):
+                raise serializers.ValidationError(
+                    {"items_data": f"第 {index} 条送货明细数据无效"}
+                )
+            if quantity <= 0:
+                raise serializers.ValidationError(
+                    {"items_data": f"第 {index} 条送货数量必须大于0"}
+                )
+
+            sales_item_id = raw_item.get("sales_order_item")
+            sales_item = None
+            if sales_item_id not in (None, ""):
+                try:
+                    sales_item = sales_items.get(int(sales_item_id))
+                except (TypeError, ValueError):
+                    sales_item = None
+            else:
+                matches = sales_items_by_product.get(product_id, [])
+                if len(matches) == 1:
+                    sales_item = matches[0]
+
+            if sales_item is None or sales_item.product_id != product_id:
+                raise serializers.ValidationError(
+                    {"items_data": (f"第 {index} 条明细未正确关联该客户订单的产品")}
+                )
+
+            requested_by_item[sales_item.id] = (
+                requested_by_item.get(sales_item.id, Decimal("0")) + quantity
+            )
+            remaining = sales_item.quantity - sales_item.delivered_quantity
+            if requested_by_item[sales_item.id] > remaining:
+                raise serializers.ValidationError(
+                    {
+                        "items_data": (
+                            f"产品“{sales_item.product.name}”送货数量超过"
+                            f"剩余可送数量 {remaining}"
+                        )
+                    }
+                )
+            raw_item["sales_order_item"] = sales_item.id
 
         # 收货人信息必填
         if not data.get("receiver_name"):
-            raise serializers.ValidationError(
-                {"receiver_name": "收货人不能为空"}
-            )
+            raise serializers.ValidationError({"receiver_name": "收货人不能为空"})
         if not data.get("receiver_phone"):
-            raise serializers.ValidationError(
-                {"receiver_phone": "联系电话不能为空"}
-            )
+            raise serializers.ValidationError({"receiver_phone": "联系电话不能为空"})
         if not data.get("delivery_address"):
-            raise serializers.ValidationError(
-                {"delivery_address": "送货地址不能为空"}
-            )
+            raise serializers.ValidationError({"delivery_address": "送货地址不能为空"})
 
         return data
 
@@ -562,6 +588,7 @@ class DeliveryOrderCreateSerializer(serializers.ModelSerializer):
                 **self._normalize_item_data(item_data),
             )
 
+        delivery_order.update_totals()
         return delivery_order
 
     def _normalize_item_data(self, item_data):
@@ -596,6 +623,7 @@ class DeliveryOrderUpdateSerializer(serializers.ModelSerializer):
             "logistics_company",
             "tracking_number",
             "freight",
+            "tax_rate",
             "received_date",
             "received_notes",
             "receiver_signature",
@@ -626,6 +654,7 @@ class DeliveryOrderUpdateSerializer(serializers.ModelSerializer):
                     **self._normalize_item_data(item_data),
                 )
 
+        instance.update_totals()
         return instance
 
     def _normalize_item_data(self, item_data):
@@ -648,9 +677,7 @@ class QualityInspectionSerializer(serializers.ModelSerializer):
     inspection_type_display = serializers.CharField(
         source="get_inspection_type_display", read_only=True
     )
-    result_display = serializers.CharField(
-        source="get_result_display", read_only=True
-    )
+    result_display = serializers.CharField(source="get_result_display", read_only=True)
 
     # 关联信息
     work_order_number = serializers.CharField(
@@ -753,15 +780,9 @@ class InventoryStatsSerializer(serializers.Serializer):
     product_code = serializers.CharField()
     product_name = serializers.CharField()
     total_quantity = serializers.DecimalField(max_digits=10, decimal_places=2)
-    available_quantity = serializers.DecimalField(
-        max_digits=10, decimal_places=2
-    )
-    reserved_quantity = serializers.DecimalField(
-        max_digits=10, decimal_places=2
-    )
-    defective_quantity = serializers.DecimalField(
-        max_digits=10, decimal_places=2
-    )
+    available_quantity = serializers.DecimalField(max_digits=10, decimal_places=2)
+    reserved_quantity = serializers.DecimalField(max_digits=10, decimal_places=2)
+    defective_quantity = serializers.DecimalField(max_digits=10, decimal_places=2)
     locations = serializers.ListField(child=serializers.CharField())
     expired_count = serializers.IntegerField()
     expiring_soon_count = serializers.IntegerField()
@@ -777,9 +798,7 @@ class DeliveryStatsSerializer(serializers.Serializer):
     pending_orders = serializers.IntegerField()
     shipped_orders = serializers.IntegerField()
     received_orders = serializers.IntegerField()
-    on_time_delivery_rate = serializers.DecimalField(
-        max_digits=5, decimal_places=2
-    )
+    on_time_delivery_rate = serializers.DecimalField(max_digits=5, decimal_places=2)
 
 
 # ==================== 导出所有序列化器 ====================

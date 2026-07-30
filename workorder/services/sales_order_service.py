@@ -24,6 +24,11 @@ class SalesOrderService:
         """获取客户订单汇总统计。"""
         summary = queryset.aggregate(
             total_count=Count("id"),
+            pending_count=Count("id", filter=Q(status="pending")),
+            ready_to_deliver_count=Count("id", filter=Q(status="ready_to_deliver")),
+            partially_delivered_count=Count(
+                "id", filter=Q(status="partially_delivered")
+            ),
             draft_count=Count("id", filter=Q(approval_status="draft")),
             submitted_count=Count("id", filter=Q(approval_status="submitted")),
             approved_count=Count(
@@ -35,9 +40,7 @@ class SalesOrderService:
             cancelled_count=Count("id", filter=Q(status="cancelled")),
         )
         status_stats = (
-            queryset.values("status")
-            .annotate(count=Count("id"))
-            .order_by("status")
+            queryset.values("status").annotate(count=Count("id")).order_by("status")
         )
         return {"summary": summary, "by_status": list(status_stats)}
 
@@ -111,9 +114,7 @@ class SalesOrderService:
         return sales_order
 
     @staticmethod
-    def reject(
-        *, sales_order: SalesOrder, user, reason: str = "", comment: str = ""
-    ):
+    def reject(*, sales_order: SalesOrder, user, reason: str = "", comment: str = ""):
         """拒绝客户订单。"""
         if sales_order.approval_status != "submitted":
             raise ServiceError(
@@ -122,9 +123,7 @@ class SalesOrderService:
             )
 
         if not reason:
-            raise ServiceError(
-                "请提供拒绝原因", code=status.HTTP_400_BAD_REQUEST
-            )
+            raise ServiceError("请提供拒绝原因", code=status.HTTP_400_BAD_REQUEST)
 
         service = ApprovalService(SalesOrder)
         sales_order = service.reject(sales_order, user, reason, comment)
@@ -135,12 +134,9 @@ class SalesOrderService:
     @staticmethod
     def start_production(*, sales_order: SalesOrder):
         """根据关联施工单同步生产状态。"""
-        if (
-            sales_order.approval_status != "approved"
-            or sales_order.status in ["completed", "cancelled"]
-        ):
+        if sales_order.status in ["completed", "cancelled"]:
             raise ServiceError(
-                "只有已审核且未完成/取消的订单才能同步生产状态",
+                "已完成或已取消的订单不能同步生产状态",
                 code=status.HTTP_400_BAD_REQUEST,
             )
         if not sales_order.get_related_work_orders_queryset().exists():
@@ -155,18 +151,13 @@ class SalesOrderService:
     @staticmethod
     def complete(*, sales_order: SalesOrder, completion_reason: str = ""):
         """完成客户订单。"""
-        if (
-            sales_order.approval_status != "approved"
-            or sales_order.status in ["completed", "cancelled"]
-        ):
+        if sales_order.status in ["completed", "cancelled"]:
             raise ServiceError(
-                "只有已审核且未完成/取消的订单才能完成",
+                "已完成或已取消的订单不能再次完成",
                 code=status.HTTP_400_BAD_REQUEST,
             )
 
-        all_delivered = SalesOrderStatusService.all_items_delivered(
-            sales_order
-        )
+        all_delivered = SalesOrderStatusService.all_items_delivered(sales_order)
         completion_reason = str(completion_reason).strip()
         if not all_delivered and not completion_reason:
             raise ServiceError(
@@ -175,9 +166,7 @@ class SalesOrderService:
             )
 
         sales_order.status = "completed"
-        sales_order.completion_reason = (
-            "" if all_delivered else completion_reason
-        )
+        sales_order.completion_reason = "" if all_delivered else completion_reason
         update_fields = ["status", "completion_reason"]
         if all_delivered and sales_order.actual_delivery_date is None:
             sales_order.actual_delivery_date = timezone.now().date()

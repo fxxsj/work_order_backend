@@ -170,20 +170,26 @@ class StockTransactionStatus:
 class SalesOrderStatus:
     """客户订单状态常量"""
 
+    PENDING = "pending"
     DRAFT = "draft"
     SUBMITTED = "submitted"
     APPROVED = "approved"
     REJECTED = "rejected"
     IN_PRODUCTION = "in_production"
+    READY_TO_DELIVER = "ready_to_deliver"
+    PARTIALLY_DELIVERED = "partially_delivered"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
     CHOICES = [
+        (PENDING, _("待处理")),
         (DRAFT, _("草稿")),
         (SUBMITTED, _("已提交")),
         (APPROVED, _("已审核")),
         (REJECTED, _("已拒绝")),
         (IN_PRODUCTION, _("生产中")),
+        (READY_TO_DELIVER, _("待送货")),
+        (PARTIALLY_DELIVERED, _("部分送货")),
         (COMPLETED, _("已完成")),
         (CANCELLED, _("已取消")),
     ]

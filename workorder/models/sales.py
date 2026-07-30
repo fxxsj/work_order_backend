@@ -20,6 +20,8 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
         ("pending", "待处理"),
         ("approved", "已审核"),
         ("in_production", "生产中"),
+        ("ready_to_deliver", "待送货"),
+        ("partially_delivered", "部分送货"),
         ("completed", "已完成"),
         ("cancelled", "已取消"),
     ]
@@ -70,9 +72,7 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
         default=0,
         help_text="税率百分比，如13表示13%",
     )
-    tax_amount = models.DecimalField(
-        "税额", max_digits=12, decimal_places=2, default=0
-    )
+    tax_amount = models.DecimalField("税额", max_digits=12, decimal_places=2, default=0)
     discount_amount = models.DecimalField(
         "折扣金额", max_digits=12, decimal_places=2, default=0
     )
@@ -83,9 +83,7 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
     # 订单日期
     order_date = models.DateField("订单日期", default=timezone.now)
     delivery_date = models.DateField("预计交货日期")
-    actual_delivery_date = models.DateField(
-        "实际交货日期", null=True, blank=True
-    )
+    actual_delivery_date = models.DateField("实际交货日期", null=True, blank=True)
 
     # 付款信息
     deposit_amount = models.DecimalField(
@@ -163,13 +161,9 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
         if update_fields is None:
             from decimal import Decimal
 
-            tax_rate = (
-                Decimal(str(self.tax_rate)) if self.tax_rate else Decimal("0")
-            )
+            tax_rate = Decimal(str(self.tax_rate)) if self.tax_rate else Decimal("0")
             self.tax_amount = self.subtotal * (tax_rate / Decimal("100"))
-            self.total_amount = (
-                self.subtotal + self.tax_amount - self.discount_amount
-            )
+            self.total_amount = self.subtotal + self.tax_amount - self.discount_amount
 
             # 根据已付金额更新付款状态
             if self.total_amount > 0:
@@ -183,33 +177,23 @@ class SalesOrder(TimeStampedModel, ApprovalFieldsMixin, models.Model):
         super().save(*args, **kwargs)
 
     def update_totals(self):
-        """更新订单总金额（从订单明细汇总）"""
-        from decimal import Decimal
+        """更新客户订单未税金额（从订单明细汇总）。"""
         from django.db.models import Sum
 
         items_total = (
-            self.items.aggregate(subtotal_sum=Sum("subtotal"))["subtotal_sum"]
-            or 0
-        )
-
-        discount_total = (
-            self.items.aggregate(discount_sum=Sum("discount_amount"))[
-                "discount_sum"
-            ]
-            or 0
+            self.items.aggregate(subtotal_sum=Sum("subtotal"))["subtotal_sum"] or 0
         )
 
         self.subtotal = items_total
-        self.discount_amount = discount_total
-        tax_rate = (
-            Decimal(str(self.tax_rate)) if self.tax_rate else Decimal("0")
-        )
-        self.tax_amount = items_total * (tax_rate / Decimal("100"))
-        self.total_amount = items_total + self.tax_amount - discount_total
+        self.tax_rate = 0
+        self.tax_amount = 0
+        self.discount_amount = 0
+        self.total_amount = items_total
 
         self.save(
             update_fields=[
                 "subtotal",
+                "tax_rate",
                 "tax_amount",
                 "discount_amount",
                 "total_amount",
@@ -280,9 +264,7 @@ class SalesOrderItem(TimeStampedModel, models.Model):
     discount_amount = models.DecimalField(
         "折扣金额", max_digits=10, decimal_places=2, default=0
     )
-    subtotal = models.DecimalField(
-        "小计", max_digits=12, decimal_places=2, default=0
-    )
+    subtotal = models.DecimalField("小计", max_digits=12, decimal_places=2, default=0)
     notes = models.TextField("备注", blank=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
