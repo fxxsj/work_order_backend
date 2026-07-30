@@ -13,7 +13,7 @@ from workorder.models.products import (
     Product,
     ProductMaterial,
 )
-from workorder.models import Material
+from workorder.models import Material, Process
 
 
 class ProductSerializerTest(TestCase):
@@ -162,6 +162,25 @@ class ProductAPITest(APITestCase):
         self.assertEqual(Product.objects.count(), 1)
         self.assertEqual(Product.objects.get().code, "PROD-001")
 
+    def test_create_product_with_default_processes(self):
+        """创建产品时应保存默认工序多对多关系"""
+        self.client.force_authenticate(user=self.admin_user)
+        process = Process.objects.create(name="印刷", code="PRINT")
+        product_data = {
+            **self.product_data,
+            "default_processes": [process.id],
+        }
+
+        response = self.client.post(
+            "/api/v1/products/", product_data, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        product = Product.objects.get(code="PROD-001")
+        self.assertQuerySetEqual(
+            product.default_processes.all(), [process]
+        )
+
     def test_create_product_with_invalid_code(self):
         """测试创建产品时使用无效编码"""
         self.client.force_authenticate(user=self.admin_user)
@@ -206,6 +225,41 @@ class ProductAPITest(APITestCase):
         product.refresh_from_db()
         self.assertEqual(product.name, "更新后的产品名称")
         self.assertEqual(float(product.unit_price), 15.00)
+
+    def test_update_product_replaces_default_processes(self):
+        """编辑产品时应整体替换默认工序"""
+        self.client.force_authenticate(user=self.admin_user)
+        old_process = Process.objects.create(name="旧工序", code="OLD")
+        new_process = Process.objects.create(name="新工序", code="NEW")
+        product = Product.objects.create(**self.product_data)
+        product.default_processes.add(old_process)
+
+        response = self.client.patch(
+            f"/api/v1/products/{product.id}/",
+            {"default_processes": [new_process.id]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertQuerySetEqual(
+            product.default_processes.all(), [new_process]
+        )
+
+    def test_update_product_clears_default_processes(self):
+        """编辑产品提交空列表时应清空默认工序"""
+        self.client.force_authenticate(user=self.admin_user)
+        process = Process.objects.create(name="待清空工序", code="CLEAR")
+        product = Product.objects.create(**self.product_data)
+        product.default_processes.add(process)
+
+        response = self.client.patch(
+            f"/api/v1/products/{product.id}/",
+            {"default_processes": []},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(product.default_processes.exists())
 
     def test_delete_product(self):
         """测试删除产品"""

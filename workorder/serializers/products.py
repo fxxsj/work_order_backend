@@ -254,8 +254,12 @@ class ProductSerializer(serializers.ModelSerializer):
         from django.db import transaction
 
         customers_data = validated_data.pop("customers", [])
+        default_processes_data = validated_data.pop(
+            "default_processes", []
+        )
         with transaction.atomic():
             product = Product.objects.create(**validated_data)
+            product.default_processes.set(default_processes_data)
             if customers_data:
                 for customer in customers_data:
                     ProductCustomer.objects.get_or_create(
@@ -268,10 +272,15 @@ class ProductSerializer(serializers.ModelSerializer):
         from django.db import transaction
 
         customers_data = validated_data.pop("customers", None)
+        default_processes_data = validated_data.pop(
+            "default_processes", None
+        )
         with transaction.atomic():
             for attr, value in validated_data.items():
                 setattr(instance, attr, value)
             instance.save()
+            if default_processes_data is not None:
+                instance.default_processes.set(default_processes_data)
             if customers_data is not None:
                 # 整体替换客户关系
                 instance.customer_links.exclude(
